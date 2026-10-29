@@ -6,7 +6,8 @@ import { useState, useTransition } from "react";
 import { Button } from "@/registry/components/button/button";
 import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { Textarea } from "@/registry/components/textarea/textarea";
-import { addVoiceExample, removeVoiceExample, saveVoiceNote } from "@/app/(app)/actions";
+import { addPastedVoiceExample, addVoiceExample, removeVoiceExample, saveVoiceNote } from "@/app/(app)/actions"
+import { MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT } from "@/lib/voice-limits"
 import styles from "./voice-view.module.css";
 
 const EXAMPLES = [
@@ -34,6 +35,8 @@ export function VoiceView(props: ({ mode: "example" } | ({ mode: "live" } & Voic
 function LiveVoice({ candidates, examples, note }: VoiceLive) {
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState(note ?? "");
+  const [pasted, setPasted] = useState("")
+  const [pasteMessage, setPasteMessage] = useState<{ ok: boolean, text: string } | null>(null)
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const picked = new Set(examples.map((e) => e.postId));
   const run = (fn: () => Promise<{ ok: boolean; message?: string }>, done?: string) =>
@@ -60,7 +63,7 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
             run(() => saveVoiceNote(draft), "Saved.");
           }}
         >
-          <Textarea label="Your note" description="For example: short, plain, no emojis, one link at the end." value={draft} maxLength={500} onChange={(e) => setDraft(e.target.value)} />
+          <Textarea label="Your note" description="For example: short, plain, no emojis, one link at the end." value={draft} maxLength={MAX_NOTE} onChange={(e) => setDraft(e.target.value)} />
           <Button type="submit" variant="secondary" disabled={pending}>Save note</Button>
         </form>
       </section>
@@ -70,7 +73,7 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
           <h2 id="examples" className={styles.h2}>Example posts ({examples.length} of 8)</h2>
         </div>
         {examples.length === 0 ? (
-          <p className={styles.muted}>None picked yet. Choose from your recent posts below.</p>
+          <p className={styles.muted}>Paste something you wrote or choose a recent post below.</p>
         ) : (
           <ul className={styles.examples}>
             {examples.map((e) => (
@@ -85,8 +88,20 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
       </section>
 
       <section aria-labelledby="recent" className={styles.block}>
+        <form className={styles.noteForm} onSubmit={(e) => {
+          e.preventDefault()
+          start(async () => {
+            const result = await addPastedVoiceExample(pasted)
+            setPasteMessage({ ok: result.ok, text: result.ok ? "Example added." : result.message })
+            if (result.ok) setPasted("")
+          })
+        }}>
+          <Textarea label="Paste a post you wrote" description={`Up to ${MAX_PASTED_TEXT} characters.`} value={pasted} maxLength={MAX_PASTED_TEXT} disabled={pending} onChange={(e) => setPasted(e.target.value)} />
+          <Button type="submit" variant="secondary" disabled={pending || !pasted.trim() || examples.length >= MAX_EXAMPLES}>Add example</Button>
+          {pasteMessage && <p className={pasteMessage.ok ? styles.muted : styles.bad} role="status">{pasteMessage.text}</p>}
+        </form>
         <div className={styles.blockHead}>
-          <h2 id="recent" className={styles.h2}>Your recent posts</h2>
+          <h2 id="recent" className={styles.h2}>Add from Buffer</h2>
         </div>
         {candidates.length === 0 ? (
           <EmptyState title="No sent posts yet" description="Your posts appear here after Buffer publishes something. Pick a few that sound like you, and your AI writes like them." />

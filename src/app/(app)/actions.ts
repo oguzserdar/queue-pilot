@@ -17,11 +17,11 @@ import { wroteIds } from "@/lib/written-store";
 import { listRecentSent, type Post } from "@/lib/buffer/queries";
 import { youtubeTranscript } from "@/lib/transcripts";
 import { supadataKey } from "@/lib/env";
-import { FeedError, readFeed } from "@/lib/feeds";
+import { FeedError, feedUrl, readFeed } from "@/lib/feeds"
 import { revokeApp } from "@/lib/ai-access";
 import { getAuth } from "@/lib/auth";
 import { deleteAccount } from "@/lib/delete-account";
-import { exampleFromQueue, postgresVoiceStore, TooManyExamplesError } from "@/lib/voice-store";
+import { addPastedExample, exampleFromQueue, InvalidVoiceExampleError, MAX_NOTE, postgresVoiceStore, TooManyExamplesError } from "@/lib/voice-store"
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram";
 import { postgresEchoStore, postgresTelegramCodes } from "@/lib/echo-store";
@@ -96,8 +96,9 @@ export async function addSource(url: string): Promise<SourceActionResult> {
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (typeof url !== "string" || url.length > 2000) return { ok: false, message: "That is not a web address." };
   try {
-    const feed = await readFeed(url.trim());
-    const source = await postgresSourceStore().add(userId, url.trim(), feed.title ?? new URL(url.trim()).hostname);
+    const address = feedUrl(url.trim())
+    const feed = await readFeed(address)
+    const source = await postgresSourceStore().add(userId, address, feed.title ?? new URL(address).hostname)
     revalidatePath("/sources");
     return { ok: true, title: source.title };
   } catch (e) {
@@ -195,6 +196,21 @@ export async function addVoiceExample(postId: string): Promise<SourceActionResul
   return { ok: true };
 }
 
+/** Saves a post the signed-in person pasted to teach their writing style. */
+export async function addPastedVoiceExample(text: string): Promise<SourceActionResult> {
+  const userId = await signedInUserId()
+  if (!userId) return { ok: false, message: "Sign in with Buffer first." }
+  try {
+    await addPastedExample(postgresVoiceStore(), userId, text)
+  } catch (e) {
+    if (e instanceof TooManyExamplesError || e instanceof InvalidVoiceExampleError) return { ok: false, message: e.message }
+    console.error(JSON.stringify({ event: "qp-voice-paste-failed", message: e instanceof Error ? e.message : String(e) }))
+    return { ok: false, message: "Could not save that just now. Try again in a minute." }
+  }
+  revalidatePath("/voice")
+  return { ok: true }
+}
+
 /** Stops using one post as a voice example. */
 export async function removeVoiceExample(postId: string): Promise<SourceActionResult> {
   const userId = await signedInUserId();
@@ -214,7 +230,7 @@ export async function removeVoiceExample(postId: string): Promise<SourceActionRe
 export async function saveVoiceNote(note: string): Promise<SourceActionResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof note !== "string" || note.length > 2000) return { ok: false, message: "That note is too long." };
+  if (typeof note !== "string" || note.length > MAX_NOTE) return { ok: false, message: "That note is too long." }
   try {
     await postgresVoiceStore().setNote(userId, note);
   } catch (e) {
