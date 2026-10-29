@@ -1,0 +1,26 @@
+.page { display: flex; flex-direction: column; gap: var(--space-6); max-width: 960px; }
+.head { display: flex; flex-direction: column; gap: var(--space-2); }
+.title { font-size: var(--text-2xl); line-height: 1.2; max-width: 30ch; }
+.sub { color: var(--text-secondary); max-width: 64ch; line-height: 1.5; }
+.list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface);; overflow: clip; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: var(--space-6); padding: var(--row-padding); align-items: start; }
+.item + .item { border-top: 1px solid var(--border-subtle); }
+.main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.by { font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+.h2 { font-size: var(--text-lg); line-height: 1.35; font-weight: 600; max-width: 60ch; }
+/* The label runs inline with the reason, so a long reason wraps under it instead of dropping to its own line. */
+.why { color: var(--text-secondary); }
+.label { color: var(--text-muted); font-size: var(--text-xs); margin-right: 4px; }
+.link { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: var(--text-xs); width: fit-content; }
+.link:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; border-radius: 2px; }
+.side { display: flex; justify-content: flex-end; padding-top: 2px; }
+.slot { display: inline-flex; align-items: center; gap: 8px; font-size: var(--text-xs); color: var(--text-secondary); font-weight: 500; text-align: right; white-space: nowrap; }
+.mark { width: 7px; height: 7px; border-radius: 2px; background: var(--qp-crimson); flex: none; }
+@media (max-width: 760px) { .item { grid-template-columns: 1fr; } .side { justify-content: flex-start; } }
+
+/* The page's one action, drawn as the primary button. */
+.action { align-self: flex-start; display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: var(--radius-control); background: var(--accent); color: var(--accent-foreground); font-weight: 600; font-size: var(--text-sm); text-decoration: none; transition: background-color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
+.action:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.action:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .action:hover { background: var(--accent-strong); } }
+@media (prefers-reduced-motion: reduce) { .action:active { transform: none; } }

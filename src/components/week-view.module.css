@@ -1,0 +1,116 @@
+.page { display: flex; flex-direction: column; gap: var(--space-6); max-width: 1320px; }
+.head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-6); flex-wrap: wrap; }
+.headActions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.title { font-size: var(--text-2xl); line-height: 1.2; text-wrap: balance; }
+.sub { color: var(--text-secondary); margin-top: var(--space-2); max-width: 64ch; line-height: 1.5; }
+.h3 { font-size: var(--text-sm); font-weight: 600; }
+
+.layout { display: grid; grid-template-columns: 1fr; gap: var(--space-6); align-items: start; container: week / inline-size; }
+
+.gridWrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); }
+.grid { display: grid; min-width: 760px; }
+.row { display: contents; }
+.corner, .day { padding: 10px var(--space-3); border-bottom: 1px solid var(--border); background: var(--surface-muted); }
+.day { font-weight: 600; color: var(--text-secondary); font-size: var(--text-xs); }
+.day[data-empty="true"] { color: var(--text-muted); font-weight: 500; text-align: center; padding-inline: 0; }
+.channel { padding: var(--space-3); border-bottom: 1px solid var(--border-subtle); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.chip svg { flex: none; }
+.zone { font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.cell { padding: 6px; border-bottom: 1px solid var(--border-subtle); box-shadow: inset 1px 0 0 var(--border-subtle); display: flex; flex-direction: column; gap: 6px; min-height: 112px; }
+
+.empty { all: unset; box-sizing: border-box; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; border: 1px dashed var(--border-control); border-radius: 8px; color: var(--text-muted); font-size: var(--text-xs); padding: 8px; transition: border-color 160ms var(--ease-standard), color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
+.empty:focus-visible { outline: 2px solid var(--qp-crimson); outline-offset: 2px; }
+.empty > span { white-space: nowrap; }
+.addCue { font-weight: 500; }
+.composer { display: flex; flex-direction: column; gap: var(--space-3); }
+.composerFoot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-xs); }
+.over { color: var(--danger); font-weight: 600; }
+.composerActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.existing { border-radius: 8px; padding: 8px; font-size: var(--text-xs); color: var(--text-secondary); background: var(--surface-muted); display: flex; flex-direction: column; gap: 2px; line-height: 1.35; }
+
+.draft { all: unset; box-sizing: border-box; cursor: pointer; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border-strong); font-size: var(--text-xs); transition: border-color 160ms var(--ease-standard), background-color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
+.draft:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.draft[data-selected="true"] { border-color: var(--qp-crimson); box-shadow: 0 0 0 1px var(--qp-crimson); }
+.draft[data-tone="danger"] { background: var(--qp-danger-wash); border-color: color-mix(in oklab, var(--danger) 45%, var(--surface)); }
+.draft[data-approved="true"] { background: var(--qp-success-wash); border-color: color-mix(in oklab, var(--success) 40%, var(--surface)); }
+
+.time { color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.state { margin-left: auto; font-weight: 500; color: var(--success); }
+.dot { width: 7px; height: 7px; border-radius: 2px; background: var(--success); flex: none; }
+.draft[data-tone="warning"] .dot { background: var(--warning); transform: rotate(45deg); }
+.draft[data-tone="warning"] .state { color: var(--warning); }
+.draft[data-tone="danger"] .dot { background: var(--danger); border-radius: 50%; }
+.draft[data-tone="danger"] .state { color: var(--danger); }
+.draft[data-approved="true"] .state { color: var(--success); }
+.text { color: var(--foreground); font-size: var(--text-sm); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.src { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); align-self: flex-start; }
+
+/* The draft opens over the week in a dialog wide enough for the post beside its rules and checks. */
+.dialog { --dialog-width: 760px; }
+.panel { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-4) var(--space-8); }
+/* Two columns that stack what they hold: the post on the left, rules, checks and actions on the right. */
+.panelMain, .panelSide { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+@media (max-width: 700px) { .panel { display: flex; flex-direction: column; } }
+.postText { font-size: var(--text-lg); line-height: 1.5; max-width: 60ch; }
+.sourceBox { display: flex; gap: var(--space-3); padding: 10px 12px; border-radius: 8px; background: var(--surface-muted); color: var(--text-secondary); }
+.sourceBox strong { color: var(--foreground); font-weight: 600; }
+.muted { color: var(--text-muted); font-size: var(--text-xs); margin-top: 2px; }
+.checks { display: flex; flex-direction: column; gap: 10px; }
+.check { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-2); }
+.actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+.rulesLink { font-size: var(--text-sm); color: var(--qp-crimson); text-underline-offset: 3px; }
+.rulesLink:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.channel { min-width: 120px; }
+.panelSide > .actions { margin-top: auto; }
+.editor { display: grid; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
+
+/* When the week's own area is narrower than the grid needs (760px plus the channel column), the grid gives way to a
+   list by day, as most schedulers and calendars do on phones. A container query, so the sidebar's width counts too. */
+.list { display: none; }
+@container week (max-width: 799px) {
+  .gridWrap { display: none; }
+  .list { display: grid; gap: var(--space-6); }
+  .listDay { display: grid; gap: var(--space-3); }
+  .listHead { font-size: var(--text-base); font-weight: 650; margin: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+  .listChannel { display: grid; gap: var(--space-2); justify-items: stretch; }
+  .listChannel > :not(button):not(div) { justify-self: start; }
+}
+
+/* On a phone a draft opens full screen, as post editors do there, not as a small centred box. */
+@media (max-width: 767px) {
+  .dialog.dialog { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
+}
+.existing .state { color: var(--text-muted); }
+.existing[data-status="error"] { background: var(--surface); border: 1px solid var(--danger); }
+.existing[data-status="error"] .state { color: var(--danger); font-weight: 600; }
+.reason { color: var(--danger); overflow-wrap: anywhere; }
+
+.problem { margin: 0; color: var(--danger); font-size: var(--text-sm); }
+@media (hover: hover) and (pointer: fine) {
+  .empty:hover { border-color: var(--qp-crimson); color: var(--qp-crimson); }
+  .draft:hover { border-color: var(--text-muted); }
+}
+/* Press feedback: the interface answers the click at once. */
+.empty:active:not(:disabled) { transform: scale(0.98); }
+.draft:active:not(:disabled) { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) { .empty:active:not(:disabled), .draft:active:not(:disabled) { transform: none; } }
+
+/* The one action on an empty week: connect a channel in Buffer (opens Buffer's Channels page). */
+.connect { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: var(--radius-control); background: var(--accent); color: var(--accent-foreground); font-weight: 600; font-size: var(--text-sm); text-decoration: none; transition: background-color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
+.connect:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.connect:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .connect:hover { background: var(--accent-strong); } }
+@media (prefers-reduced-motion: reduce) { .connect:active { transform: none; } }
+
+/* The external-link icon sits on the text baseline, a little apart from the words. */
+.connect > svg { flex-shrink: 0; margin-left: 4px; }
+
+/* The "would fail" button and its list: one red dot says what kind of news it is, the list says which posts. */
+.issues { gap: 8px; }
+.issueDot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex: none; }
+.issueList { width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: var(--space-3); }
+.issue { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--text-sm); line-height: 1.45; color: var(--text-secondary); }
+.issue strong { color: var(--foreground); font-weight: 600; }
+.issue + .issue { padding-top: var(--space-3); border-top: 1px solid var(--border); }

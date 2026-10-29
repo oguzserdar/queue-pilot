@@ -1,0 +1,17 @@
+.page { display: flex; flex-direction: column; gap: var(--space-8); max-width: 860px; }
+.head { display: flex; flex-direction: column; gap: var(--space-2); }
+.title { font-size: var(--text-2xl); line-height: 1.2; }
+.sub { color: var(--text-secondary); max-width: 64ch; line-height: 1.5; }
+.block { display: flex; flex-direction: column; gap: var(--space-3); }
+.blockHead { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
+.h2 { font-size: var(--text-lg); }
+.muted { color: var(--text-muted); font-size: var(--text-sm); }
+.examples { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3); }
+.example { border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.example p { margin: 0; line-height: 1.5; }
+.channel { font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); }
+@media (max-width: 640px) { .row { flex-direction: column; align-items: flex-start; } }
+.noteForm { display: grid; gap: 10px; justify-items: start; max-width: 640px; }
+.noteForm > :first-child { width: 100%; }
+.example button { align-self: flex-start; }
+.bad { color: var(--danger); font-size: var(--text-sm); }

@@ -1,0 +1,49 @@
+.page { display: flex; flex-direction: column; gap: var(--space-8); max-width: 860px; }
+.head { display: flex; flex-direction: column; gap: 4px; }
+.greet { color: var(--text-secondary); }
+.title { font-size: var(--text-2xl); line-height: 1.15; }
+.needs { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface);; overflow: clip; }
+.need { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: var(--row-padding); }
+.need + .need { border-top: 1px solid var(--border-subtle); }
+.mark { width: 9px; height: 9px; border-radius: 2px; background: var(--success); }
+.need[data-tone="warning"] .mark { background: var(--warning); transform: rotate(45deg) scale(0.85); }
+.need[data-tone="danger"] .mark { background: transparent; border: 2px solid var(--danger); border-radius: 50%; width: 11px; height: 11px; }
+.needText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.needText strong { font-weight: 600; }
+.muted { color: var(--text-muted); font-size: var(--text-sm); }
+.action { font-weight: 600; font-size: var(--text-sm); color: var(--qp-crimson); text-decoration: none; white-space: nowrap; padding: 6px 10px; border-radius: var(--radius-control); transition: background-color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
+.action:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.ready { display: flex; flex-direction: column; gap: 12px; }
+.readyHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.h2 { font-size: var(--text-lg); }
+.progress { color: var(--text-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.bar { height: 6px; border-radius: 3px; background: var(--surface-muted); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--qp-crimson); }
+.steps { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface);; overflow: clip; }
+.step { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: var(--row-padding); }
+.step + .step { border-top: 1px solid var(--border-subtle); }
+.check { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border-strong); display: grid; place-items: center; font-size: var(--text-xs); font-weight: 700; color: oklch(1 0 0); }
+.step[data-state="done"] .check { background: var(--success); border-color: var(--success); }
+.step[data-state="done"] strong { color: var(--text-secondary); }
+.step[data-state="check"] .check { border-color: var(--warning); color: var(--warning); }
+@media (max-width: 640px) { .need, .step { grid-template-columns: 12px minmax(0, 1fr); } .need .action, .step .action { grid-column: 2; justify-self: start; padding-left: 0; } }
+@media (hover: hover) and (pointer: fine) {
+  .action:hover { background: var(--qp-crimson-wash); }
+}
+/* Press feedback: the interface answers the click at once. */
+.action:active:not(:disabled) { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .action:active:not(:disabled) { transform: none; } }
+
+/* Setup steps: numbered; the next step is outlined in crimson and carries the page's one primary button. */
+.lede { margin: 6px 0 0; color: var(--text-secondary); max-width: 60ch; }
+.step .check { font-size: var(--text-xs); font-weight: 700; color: var(--text-secondary); }
+.step[data-next] { background: color-mix(in oklab, var(--qp-crimson) 4%, var(--surface)); }
+.step[data-next] .check { border-color: var(--qp-crimson); color: var(--qp-crimson); }
+.primary { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: var(--radius-control); background: var(--accent); color: var(--accent-foreground); font-weight: 600; font-size: var(--text-sm); text-decoration: none; white-space: nowrap; transition: background-color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
+.primary:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.primary:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .primary:hover { background: var(--accent-strong); } }
+@media (prefers-reduced-motion: reduce) { .primary:active { transform: none; } }
+
+/* The external-link icon sits on the text baseline, a little apart from the words. */
+.primary > svg, .action > svg { flex-shrink: 0; margin-left: 4px; }

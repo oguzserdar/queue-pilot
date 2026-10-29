@@ -1,0 +1,59 @@
+.page { display: flex; flex-direction: column; gap: var(--space-8); max-width: 820px; }
+.title { font-size: var(--text-2xl); line-height: 1.2; }
+.block { display: flex; flex-direction: column; gap: var(--space-3); }
+.h2 { font-size: var(--text-lg); scroll-margin-top: var(--space-6); }
+.rows { border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface);; overflow: clip; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); padding: var(--row-padding); }
+.row + .row { border-top: 1px solid var(--border-subtle); }
+.name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.name strong { font-weight: 600; }
+.muted { color: var(--text-muted); font-size: var(--text-xs); line-height: 1.45; }
+.profile { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.confirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.deviceActions { display: flex; margin-top: 10px; }
+.deleteForm { display: grid; gap: 10px; max-width: 360px; margin-top: 10px; }
+.deleteActions { display: flex; gap: 8px; align-items: center; }
+
+.events {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.events li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+}
+
+.download {
+  align-self: flex-start;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  text-decoration: none; transition: transform 160ms var(--ease-standard); }
+.download:focus-visible { outline: 2px solid var(--qp-crimson); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .download:hover { background: var(--surface-muted); }
+}
+/* Press feedback: the interface answers the click at once. */
+.download:active:not(:disabled) { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .download:active:not(:disabled) { transform: none; } }
+
+@media (hover: hover) and (pointer: fine) { .jumpLink:hover { border-color: var(--accent); color: var(--accent); } }
+.problem { margin: 0; font-size: var(--text-sm); color: var(--danger); }
+
+/* One tab holds its sections, spaced like the page. */
+.tab { display: flex; flex-direction: column; gap: var(--space-8); padding-top: var(--space-5); }
+
+
+/* Settings → AI: what drafting runs on, then its two gauges, then the way to switch to an own key. */
+.usageCard { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-5) var(--space-6); border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.usageLabel { font-size: var(--text-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); }
+.usageSource { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: var(--text-md, 16px); font-weight: 600; }
+.usageFoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-secondary); }
