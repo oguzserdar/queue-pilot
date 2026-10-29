@@ -17,7 +17,11 @@ RUN pnpm build
 FROM node:24-alpine3.24 AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 MIGRATE_ON_START=1 PORT=3000 HOSTNAME=0.0.0.0
-RUN addgroup -S app && adduser -S app -G app
+# The app runs with node alone. npm and corepack ship in the base image with their own dependencies, and every
+# vulnerability in those would block the release scan, so the final image leaves them out.
+RUN addgroup -S app && adduser -S app -G app \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
