@@ -24,7 +24,7 @@ Read `get_my_voice`, `get_playbook` and `read_material` before drafting. `save_d
   <img alt="Next week: one row per Buffer channel, posting times, and the empty times highlighted" src="docs/media/week.png">
 </picture>
 
-**2. Your AI writes drafts into the empty times.** From your newsletter, your videos and your own past posts. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes anything.
+**2. Your AI writes drafts into the empty times.** From your newsletter, your videos and your own past posts. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes on its own. Only your Approve schedules.
 
 ![A draft opened from the week: the rules it follows and the problem that would stop it in Buffer](docs/media/draft-check.png)
 
@@ -81,10 +81,10 @@ When Buffer sends a post, Queue Pilot can copy it to your Telegram channel and y
 
 ## How it uses Buffer's API
 
-![How Queue Pilot uses Buffer's API: screens and AI apps read one saved copy of your queue, it refreshes when old, re-reads before writing, and Buffer saves drafts only](docs/media/diagram-api.png)
+![How Queue Pilot uses Buffer's API: screens and AI apps read one saved copy of your queue, it refreshes when old, re-reads before writing, and new posts are saved as drafts](docs/media/diagram-api.png)
 
-- **Drafts only.** Every write is a draft. Queue Pilot never schedules or publishes.
-- **Only its own drafts.** It edits or deletes a draft only when it wrote that draft.
+- **Drafts first.** Queue Pilot never schedules or publishes on its own. Only your Approve schedules.
+- **Only its own drafts.** It approves, edits or deletes a draft only when it wrote that draft.
 - **One saved copy per person.** Channels, posting times and posts from 7 days back to 14 days ahead. Screens and the connector read the copy, so browsing costs no requests.
 - **Polling, not webhooks.** Buffer has no webhooks, so the copy refreshes when it is older than 5 minutes, from the Refresh button, and once a day.
 - **Within Buffer's limits.** Each app gets 500 requests a day plus 25 for every person who signs in ([API limits](https://developers.buffer.com/guides/api-limits)). A whole first session costs 21:

@@ -28,7 +28,8 @@ Notes for the next person building a Buffer app, written while building Queue Pi
 
 ## Changing only your own drafts
 
-- Every post has `via: api | buffer | network`. A draft someone typed in Buffer is `buffer`. Queue Pilot changes or deletes a draft only when it is `api` (`src/lib/edit-drafts.ts`), so a person's hand-written drafts are never touched. Note that `api` also covers other apps that use the API.
+- Every post has `via: api | buffer | network`, but `api` also includes other apps. Approve, edit and delete require a saved writing record for the signed-in person (`src/lib/written-store.ts`). A draft from another app or typed in Buffer is refused.
+- Queue Pilot never schedules or publishes on its own. Only your Approve schedules. The Approve action uses `editPost` with `saveToDraft: false` and keeps the slot time (`src/lib/approve-drafts.ts`). Connector tools cannot schedule.
 - `editPost` with `saveToDraft: true` keeps the post a draft at its slot. `deletePost` returns `DeletePostSuccess` or an error, so count only success.
 
 ## Reading failures

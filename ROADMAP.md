@@ -2,8 +2,8 @@
 
 Where Queue Pilot is heading. What has shipped is in [CHANGELOG.md](CHANGELOG.md).
 
-Three promises hold in every release: drafts only, changes only to drafts Queue Pilot wrote, and a small number of
-Buffer requests per person.
+Queue Pilot never schedules or publishes on its own. Only your Approve schedules. It approves, changes or deletes
+only drafts it wrote, and keeps Buffer requests per person low.
 
 ## Now
 
