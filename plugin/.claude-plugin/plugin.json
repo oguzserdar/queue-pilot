@@ -1,0 +1,9 @@
+{
+  "name": "queue-pilot",
+  "description": "Fill your empty Buffer times with drafts written from your own newsletter, blog or releases, in your voice, checked against your playbook.",
+  "version": "0.1.0",
+  "author": { "name": "Queue Pilot" },
+  "repository": "https://github.com/oguzserdar/queue-pilot",
+  "license": "MIT",
+  "keywords": ["buffer", "social", "drafts", "newsletter", "mcp"]
+}
