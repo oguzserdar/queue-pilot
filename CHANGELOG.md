@@ -5,6 +5,8 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-29 Security fix and link previews
+
 ### Added
 - Link previews: shared links to Queue Pilot show its name, a short description and a picture of the week.
 
