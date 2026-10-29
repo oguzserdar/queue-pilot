@@ -15,6 +15,10 @@ const skills = readdirSync(skillsDir).map((name) => ({ name, body: readFileSync(
 describe("skills pack", () => {
   it("finds the registered tools and the skills (control)", () => {
     expect(tools.has("save_drafts")).toBe(true);
+    for (const tool of ["save_my_voice_note", "add_voice_example", "add_material"]) {
+      expect(tools.has(tool)).toBe(true)
+      expect(skills.some((skill) => skill.body.includes(`\`${tool}\``))).toBe(true)
+    }
     expect(skills.length).toBeGreaterThan(0);
   });
 

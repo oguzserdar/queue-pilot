@@ -13,6 +13,8 @@ export const SKILL_DESCRIPTION =
 /** The connector tools and what each is for, in the order the loop uses them. */
 const TOOLS: [string, string][] = [
   ["get_my_voice", "How the person writes: their note and example posts. Match it."],
+  ["save_my_voice_note", "Save how the person says they write when they ask you to remember it. Up to 500 characters."],
+  ["add_voice_example", "Save a post the person wrote when they ask you to learn their style. Up to 2000 characters and eight examples."],
   ["get_playbook", "Their rules per network, learned from fixes they made more than once. Follow every one."],
   ["list_new_material", "What they published recently (newsletter, blog, YouTube, releases) that no post covers yet."],
   ["read_material", "The full text of one item from list_new_material."],
@@ -23,6 +25,7 @@ const TOOLS: [string, string][] = [
   ["show_next_week", "Monday to Sunday of their queue, slot by slot."],
   ["show_last_week_delivery", "Which posts went out last week, with Buffer's reason for any that did not."],
   ["add_source", "Adds a feed address as material."],
+  ["add_material", "Keep research text with a title and optional link. Read it with read_material before drafting."],
 ];
 
 /**
