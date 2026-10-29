@@ -5,6 +5,8 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-29 Sign in with Buffer
+
 ### Added
 - First public version: sign in with Buffer, see the week from your Buffer queue, and write drafts into Buffer with your
   own AI key or the hosted one. Drafts only, and changes only to drafts Queue Pilot wrote.
