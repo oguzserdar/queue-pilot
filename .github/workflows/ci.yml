@@ -68,19 +68,37 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
-  # The release only tags an image that starts and answers its health check. Build and start it here too, so a broken
-  # image is caught on the push that breaks it instead of at release time.
-  image:
+  # A self-hoster's first run, as the README describes it: copy .env.example, fill in the required values, run
+  # docker compose up. Passes only when the image builds, the migrations apply to a real Postgres, the app reports
+  # ready and the home page loads. A broken image or migration is caught on the push that breaks it.
+  self-host:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build the image
-        run: docker build -t qp:ci .
-      - name: Smoke test the image
+      - name: Fill in .env the way the README says
         run: |
-          docker run -d --name qp -p 3000:3000 -e MIGRATE_ON_START=0 qp:ci
-          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/api/health && exit 0; sleep 2; done
-          docker logs qp; exit 1
+          cp .env.example .env
+          sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -hex 32)|" .env
+          sed -i "s|^SETTINGS_KEY=.*|SETTINGS_KEY=$(openssl rand -hex 32)|" .env
+          sed -i "s|^CRON_SECRET=.*|CRON_SECRET=$(openssl rand -hex 32)|" .env
+          sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" .env
+      - name: docker compose up
+        run: docker compose up -d --build app db
+      - name: The app reports ready, with the database reachable
+        run: |
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/api/health/ready && exit 0; sleep 3; done
+          docker compose logs app; exit 1
+      - name: Every migration was applied
+        run: |
+          files=$(ls drizzle/*.sql | wc -l)
+          applied=$(docker compose exec -T db psql -U queuepilot -d queuepilot -tAc 'select count(*) from public."__drizzle_migrations__"')
+          echo "migrations in repo: $files, applied: $applied"
+          test "$files" -eq "$applied"
+      - name: The home page loads (the example account)
+        run: curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:3000/
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
