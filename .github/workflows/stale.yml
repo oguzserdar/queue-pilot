@@ -1,0 +1,20 @@
+name: Stale
+on:
+  schedule:
+    - cron: "30 3 * * *"
+permissions:
+  contents: read
+jobs:
+  stale:
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          days-before-stale: 30
+          days-before-close: 7
+          exempt-issue-labels: "pinned,security,roadmap"
+          stale-issue-message: "No activity for 30 days. This closes in 7 days unless someone comments."
+          stale-pr-message: "No activity for 30 days. This closes in 7 days unless someone comments."

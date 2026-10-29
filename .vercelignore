@@ -1,0 +1,8 @@
+.data
+.env*
+!.env.example
+node_modules
+.next
+scripts/*
+!scripts/migrate-on-deploy.mjs
+.local

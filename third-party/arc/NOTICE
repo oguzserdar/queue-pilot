@@ -1,0 +1,3 @@
+Arc (https://github.com/kuratlielia/arc-library) at commit 55c0d3ebd7cc643ec118c4d8a11413e6fadcc7df, MIT, Copyright (c) 2026 Elia Kuratli.
+Copied: registry/ -> src/registry, lib/ -> src/lib. Unmodified unless noted here.
+Not copied: registry/blocks (page blocks; unused, and blog-grid has an upstream type error).

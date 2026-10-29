@@ -1,0 +1,21 @@
+name: Something is wrong
+description: Queue Pilot did something it should not, or did not do something it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw. Leave out tokens and keys.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom of Settings, or the Docker image tag
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where it runs
+      options: [Queue Pilot hosted, Vercel, Docker, Other]

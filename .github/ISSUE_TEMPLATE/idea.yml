@@ -1,0 +1,11 @@
+name: Idea
+description: Something Queue Pilot could do for you
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The job, in your words. What do you do by hand today?
+    validations:
+      required: true

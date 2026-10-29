@@ -1,0 +1,41 @@
+# Run Queue Pilot on your own machine or server: copy .env.example to .env, fill it in (each line says how to
+# generate its value), then `docker compose up -d`. Check it with /api/health/ready.
+# Postgres keeps its data in the `db` volume. The `cron` service calls the daily job the way Vercel Cron does.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://queuepilot:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/queuepilot
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: queuepilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: queuepilot
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U queuepilot"]
+      interval: 5s
+      retries: 10
+
+  cron:
+    image: curlimages/curl:8.23.0
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - app
+    # Once a day at 17:00 UTC, like vercel.json.
+    entrypoint: ["sh", "-c", "while true; do now=$$(date -u +%H%M); if [ \"$$now\" = \"1700\" ]; then curl -fsS -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/echo; sleep 60; fi; sleep 30; done"]
+
+volumes:
+  db:
