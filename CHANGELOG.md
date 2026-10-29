@@ -5,6 +5,10 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+- undici 8.12.3, the HTTP client behind the guard on feed addresses you add, fixing nine high-severity issues in 7.16.0.
+- The MCP SDK, Vercel functions and two packages they pull in (body-parser, zod) moved to versions with their fixes.
+
 ## [0.1.1] - 2026-10-29 Security fix and link previews
 
 ### Added
