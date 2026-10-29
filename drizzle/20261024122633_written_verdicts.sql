@@ -1,0 +1,1 @@
+ALTER TABLE "qp_written" ADD COLUMN "verdicts" jsonb;
