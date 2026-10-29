@@ -6,6 +6,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Desktop: no blank strip under the sidebar when the page is scrolled.
 - Phones: the page scrolls once instead of twice, so there is no blank space below it, and the top bar stays pinned.
 - Phones: the next setup step's button no longer squeezes into a narrow column.
 
