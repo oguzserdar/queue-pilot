@@ -5,6 +5,13 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Page-view analytics for the deployment's own Vercel dashboard, without cookies.
+
+### Added
+- /admin has a People tab: accounts, people active today and this week, and new accounts. Counts only, never names.
+- Page-view analytics for the deployment's own Vercel dashboard, without cookies.
+
 ### Fixed
 - The Docker image starts again: the migration step that runs first now has the database packages it needs.
 

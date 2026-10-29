@@ -42,6 +42,7 @@
     "@radix-ui/react-tooltip": "^1.2.16",
     "@rowanmanning/feed-parser": "2.1.5",
     "@tabler/icons-react": "3.50.0",
+    "@vercel/analytics": "2.0.1",
     "@vercel/functions": "3.10.4",
     "ai": "7.0.154",
     "better-auth": "1.7.14",

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { Analytics } from "@vercel/analytics/next";
 import { Schibsted_Grotesk } from "next/font/google";
 import { publicOrigin } from "@/lib/origin";
 import "./globals.css";
@@ -25,7 +26,11 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={schibsted.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Page views for the deployment's own Vercel dashboard. Cookie-free, and it does nothing off Vercel. */}
+        <Analytics />
+      </body>
     </html>
   );
 }
