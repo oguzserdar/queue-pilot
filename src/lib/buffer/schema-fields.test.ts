@@ -110,7 +110,7 @@ describe("Buffer inputs we send", () => {
 
   it("approving drafts sends only documented fields", async () => {
     const draft = { id: "p1", channelId: "x", status: "draft", text: "hi", dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null } as Post;
-    const sent = await sentInputs((q) => approveDrafts("t", ["p1"], [draft], new Date("2026-11-01T00:00:00Z"), q));
+    const sent = await sentInputs((q) => approveDrafts("t", ["p1"], [draft], new Date("2026-11-01T00:00:00Z"), new Set(["p1"]), q));
     expect(sent).toHaveLength(1);
     expect(unknownKeys(sent[0].input, "EditPostInput")).toEqual([]);
   });

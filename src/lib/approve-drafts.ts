@@ -1,6 +1,6 @@
 /**
  * Approving a draft schedules it at its own slot time: Buffer's editPost with saveToDraft false, keeping dueAt
- * (developers.buffer.com reference, EditPostInput). Only drafts the caller already holds in their own Buffer data are
+ * (developers.buffer.com reference, EditPostInput). Only drafts recorded as written by Queue Pilot for this person are
  * approved; anything else is refused, so a crafted id cannot schedule someone else's post or a post that already went.
  * Buffer checks its posting limits when a post leaves draft and its own reason is passed back unchanged.
  */
@@ -24,12 +24,13 @@ const EDIT_POST = `mutation ($input: EditPostInput!) {
   }
 }`;
 
-/** Approves the given draft ids found in `posts` (the caller's own, freshly read posts). */
+/** Schedules drafts on approval. `posts` and `wrote` must both come from the signed-in person. */
 export async function approveDrafts(
   token: string,
   ids: string[],
   posts: Post[],
   now: Date,
+  wrote: ReadonlySet<string>,
   q: Query = bufferQuery,
   checkImage: (url: string) => Promise<Check> = (url) => imageLinkCheck(url),
 ): Promise<ApproveResult> {
@@ -45,6 +46,7 @@ export async function approveDrafts(
     const p = byId.get(id);
     if (!p) { refused.push({ id, reason: "This post is no longer in your Buffer queue." }); continue; }
     if (p.status !== "draft") { refused.push({ id, reason: "This post is not a draft any more." }); continue; }
+    if (!wrote.has(id)) { refused.push({ id, reason: "Queue Pilot did not write this draft. Schedule it in Buffer." }); continue; }
     if (!p.dueAt || Date.parse(p.dueAt) <= now.getTime()) { refused.push({ id, reason: "Its time has passed; pick a new time in Buffer." }); continue; }
     // A broken image link fails at publish time, so it is caught here instead (at most four images per post).
     const images = (p.assets ?? []).filter((a) => a.type === "image").slice(0, 4);

@@ -76,7 +76,7 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
   try {
     const b = await freshBufferForCurrentUser();
     if (!b) return { ok: false, kind: "signedOut" };
-    const res = await approveInBuffer(b.token, ids, b.posts, new Date());
+    const res = await approveInBuffer(b.token, ids, b.posts, new Date(), await wroteIds(b.userId, ...ids));
     await b.markScheduled(res.approved);
     revalidatePath("/", "layout");
     return { ok: true, ...res };

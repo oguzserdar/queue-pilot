@@ -117,7 +117,7 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
             </div>
           ) : null}
           <div className={styles.row}>
-            <div className={styles.name}><strong>Nothing is scheduled until you approve it</strong><span className={styles.muted}>Your AI can only save drafts. A post is scheduled when you press Approve. This cannot be turned off.</span></div>
+            <div className={styles.name}><strong>Only your Approve schedules</strong><span className={styles.muted}>Queue Pilot never schedules or publishes on its own. Your AI can only save drafts. Approve schedules only drafts Queue Pilot wrote.</span></div>
           </div>
         </div>
       </section>

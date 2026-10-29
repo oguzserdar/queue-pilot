@@ -62,7 +62,12 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
       if (close) { setDialogOpen(false); toast({ type: "success", title: done, description: r.title }); }
     });
   // Example mode shows its own edits and deletions on screen; live mode refreshes from the server instead.
-  const posts = week.posts.filter((p) => !gone.has(p.id)).map((p) => (edited[p.id] ? { ...p, text: edited[p.id] } : p));
+  const posts = week.posts.filter((p) => !gone.has(p.id)).map((p) => ({
+    ...p,
+    text: edited[p.id] ?? p.text,
+    // Live verdict entries come from this person's writing records, including drafts saved unchecked.
+    ours: live ? Object.hasOwn(verdicts, p.id) : p.ours,
+  }));
   const drafts = posts.filter((p) => p.status === "draft");
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | undefined>();
@@ -71,9 +76,9 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
   const opener = useRef<HTMLButtonElement | null>(null);
   const current = posts.find((p) => p.id === selected);
   const open = countOpenSlots({ ...week, posts });
-  const ready = drafts.filter((p) => worstTone(p) !== "danger" && !approved.has(p.id));
+  const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !approved.has(p.id));
   const blocked = drafts.filter((p) => worstTone(p) === "danger");
-  const waiting = drafts.filter((p) => !approved.has(p.id)).length;
+  const waiting = drafts.filter((p) => p.ours !== false && !approved.has(p.id)).length;
 
 
   // The empty slot whose composer is open.
@@ -165,7 +170,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             {channels.length === 0
               ? "Nothing to fill yet."
               : drafts.length > 0
-              ? `${live ? (waiting ? `${waiting} waiting for your approval` : "Every draft is approved") : "Written from your newsletter, each one checked against your playbook"}${blocked.length ? `. ${blocked.length} can't go out until ${blocked.length === 1 ? "its" : "their"} problem is fixed` : ""}.`
+              ? `${live ? (waiting ? `${waiting} waiting for your approval` : "No drafts from Queue Pilot are waiting for approval") : "Written from your newsletter, each one checked against your playbook"}${blocked.length ? `. ${blocked.length} can't go out until ${blocked.length === 1 ? "its" : "their"} problem is fixed` : ""}.`
               : "Connect your AI, then pick \"Fill my week\" in it to draft the open slots."}
           </p>
         </div>
@@ -201,12 +206,14 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </>
             ) : (
               <Button variant="primary" size="lg" disabled={ready.length === 0 || pending} onClick={() => setConfirmAll(true)}>
-                {pending ? "Approving…" : ready.length > 0 ? `Approve ${ready.length} draft${ready.length === 1 ? "" : "s"}` : waiting > 0 ? "Nothing ready to approve" : "All approved"}
+                {pending ? "Approving…" : ready.length > 0 ? `Approve ${ready.length} draft${ready.length === 1 ? "" : "s"}` : waiting > 0 || !approved.size ? "Nothing ready to approve" : "All approved"}
               </Button>
             )
           )}
         </div>
       </header>
+
+      <p className={styles.muted}>Queue Pilot never schedules or publishes on its own. Only your Approve schedules.</p>
 
       {composed && <p className={styles.muted} role="status">{composed}</p>}
 
@@ -334,7 +341,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             ))}
           </div>
           <div className={styles.actions}>
-            <Button variant="primary" disabled={worstTone(current) === "danger" || approved.has(current.id) || pending} aria-describedby={worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
+            <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || approved.has(current.id) || pending} aria-describedby={current.ours === false ? "approve-foreign" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
               {approved.has(current.id) ? "Approved" : "Approve this post"}
             </Button>
             {current.ours !== false && !approved.has(current.id) && (
@@ -347,7 +354,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
           {worstTone(current) === "danger" && !approved.has(current.id) && (
             <p id="approve-off" className={styles.muted}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
           )}
-          {current.ours === false && <p className={styles.muted}>You wrote this draft in Buffer, so change it there. Queue Pilot only changes drafts it wrote.</p>}
+          {current.ours === false && <p id="approve-foreign" className={styles.muted}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>}
           {editing !== null && (
             <div className={styles.editor}>
               <Textarea label="Draft text" value={editing} onChange={(e) => setEditing(e.target.value)} rows={4} />

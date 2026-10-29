@@ -46,3 +46,13 @@ describe("copy rules", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+it("does not claim the app can never schedule when Approve schedules", () => {
+  const root = join(__dirname, "..");
+  const absoluteClaim = /Queue Pilot never schedules or publishes(?: anything)?\./i;
+  expect(absoluteClaim.test("Queue Pilot never schedules or publishes.")).toBe(true);
+  expect(absoluteClaim.test("Queue Pilot never schedules or publishes on its own.")).toBe(false);
+  const publicDocs = ["README.md", "CONTRIBUTING.md", "ROADMAP.md", "docs/buffer-api-notes.md"];
+  const all = [...files(root), ...publicDocs.map((file) => join(root, "..", file))];
+  expect(all.filter((file) => absoluteClaim.test(readFileSync(file, "utf8")))).toEqual([]);
+});

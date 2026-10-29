@@ -21,5 +21,5 @@ export function fillWeekPrompt(focus?: string): string {
 ${note}
 ${FILL_WEEK_STEPS.map((step, i) => `${i + 1}. ${step}`).join("\n")}
 
-They are saved in Buffer as drafts. I approve them in Queue Pilot or in Buffer.`;
+They are saved in Buffer as drafts. The connector cannot schedule or publish. I press Approve in Queue Pilot to schedule them, or schedule them directly in Buffer.`;
 }

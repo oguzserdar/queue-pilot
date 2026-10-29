@@ -51,7 +51,7 @@ Add this remote MCP server (Streamable HTTP) and sign in with Buffer when asked:
 
 ${origin}/api/mcp
 
-Nothing you save is scheduled. Drafts wait in Buffer until the person approves them in Queue Pilot or in Buffer.
+The connector only saves drafts. Queue Pilot never schedules or publishes on its own. Only your Approve schedules. The person can also schedule drafts directly in Buffer.
 
 ## Fill the week
 
