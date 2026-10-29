@@ -172,16 +172,15 @@ export function withScheduled(snapshot: Snapshot, ids: string[]): Snapshot {
 }
 
 /**
- * Marks slots just filled with drafts, so the saved copy stops listing them as empty before the next real read of
- * Buffer. Without this, a second "fill my week" within the refresh interval could draft the same slots twice. The
- * placeholder ids start with "pending:" and disappear when the next real read replaces the posts.
+ * Keeps saved drafts visible before the next Buffer read. A missing id gets a temporary placeholder.
  */
-export function withSavedDrafts(snapshot: Snapshot, slots: { channelId: string; at: string }[]): Snapshot {
+export function withSavedDrafts(snapshot: Snapshot, slots: { channelId: string, at: string, postId?: string | null, text?: string }[]): Snapshot {
   const added = slots.map((s) => ({
-    id: `pending:${s.channelId}@${s.at}`,
+    id: s.postId ?? `pending:${s.channelId}@${s.at}`,
     channelId: s.channelId,
     status: "draft" as const,
-    text: "",
+    text: s.text ?? "",
+    via: "api" as const,
     dueAt: s.at,
     sentAt: null,
     externalLink: null,

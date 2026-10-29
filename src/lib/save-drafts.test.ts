@@ -18,30 +18,7 @@ const MON = "2026-11-02T09:00:00.000Z";
 const TUE = "2026-11-03T09:00:00.000Z";
 const open = [slot("x", MON), slot("li", MON), slot("x", TUE), slot("bs", TUE)];
 
-type Call = { query: string; variables: Record<string, any> };
-
-/**
- * A fake Buffer that records every mutation and answers it the way the test says. Daily-limit checks are recorded
- * apart in `limitCalls` and answered by `limits` (default: nobody is at the limit).
- */
-function fakeBuffer(answer: (call: Call) => unknown, limits: (call: Call) => unknown = (c) => ({ dailyPostingLimits: c.variables.input.channelIds.map((channelId: string) => ({ channelId, isAtLimit: false, limit: null, scheduled: 0, sent: 0 })) })) {
-  const calls: Call[] = [];
-  const limitCalls: Call[] = [];
-  const q = (async (_token: string, query: string, variables?: Record<string, unknown>) => {
-    const call = { query, variables: variables ?? {} };
-    if (query.includes("dailyPostingLimits")) {
-      limitCalls.push(call);
-      const l = limits(call);
-      if (l instanceof Error) throw l;
-      return l;
-    }
-    calls.push(call);
-    const a = answer(call);
-    if (a instanceof Error) throw a;
-    return a;
-  }) as any;
-  return { q, calls, limitCalls };
-}
+import { fakeBuffer, type Call } from "../test/fake-buffer"
 
 const ok = (call: Call) =>
   call.query.includes("createContentItem")

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { BODY_CHARS, FeedError, itemsFromXml, newItems, plainText, readCapped, readFeed, scopeKeys, splitKey } from "./feeds";
+import { BODY_CHARS, FeedError, feedUrl, itemsFromXml, newItems, plainText, readCapped, readFeed, scopeKeys, splitKey } from "./feeds"
+
+describe("release feed addresses", () => {
+  it("uses the release feed for a page and leaves other hosts and feeds alone", () => {
+    expect(feedUrl("https://github.com/example/app/releases/?page=2#top")).toBe("https://github.com/example/app/releases.atom")
+    expect(feedUrl("https://github.com/example/app/releases.atom")).toBe("https://github.com/example/app/releases.atom")
+    expect(feedUrl("https://example.com/team/app/releases")).toBe("https://example.com/team/app/releases")
+    expect(() => feedUrl("not a url")).toThrow(FeedError)
+  })
+})
 
 // Shapes taken from the live feeds checked on 21 Oct 2026: Substack /feed (RSS 2.0) and GitHub releases.atom (Atom).
 const RSS = `<?xml version="1.0"?><rss version="2.0"><channel><title>Pennyrow notes</title>

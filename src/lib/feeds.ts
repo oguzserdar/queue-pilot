@@ -116,11 +116,27 @@ export async function readCapped(res: Response, max: number): Promise<string> {
   return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
+/** Turns a repository release page into its feed address. Other addresses stay as given. */
+export function feedUrl(url: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new FeedError("That is not a web address.")
+  }
+  if (parsed.hostname === "github.com" && /^\/[^/]+\/[^/]+\/releases\/?$/.test(parsed.pathname)) {
+    parsed.pathname = `${parsed.pathname.replace(/\/$/, "")}.atom`
+    parsed.search = ""
+    parsed.hash = ""
+  }
+  return parsed.toString()
+}
+
 /** Fetches and parses a feed URL. Errors carry a sentence the user can act on. */
 export async function readFeed(url: string): Promise<{ title: string | null; items: FeedItem[] }> {
   let parsed: URL;
   try {
-    parsed = new URL(url);
+    parsed = new URL(feedUrl(url))
   } catch {
     throw new FeedError("That is not a web address.");
   }

@@ -100,7 +100,10 @@ export async function saveDraftsForUser(
   const toSave = [...gate.keep, ...unknown];
   const res = toSave.length ? await saveDrafts(accessToken, { title: input.title, drafts: toSave, open: input.open }) : { saved: [], refused: [], requests: 0 };
   if (res.saved.length) {
-    const filled = res.saved.map((x) => parseSlotId(x.slotId)).filter((x): x is { channelId: string; at: string } => x !== null);
+    const filled = res.saved.flatMap((x) => {
+      const slot = parseSlotId(x.slotId)
+      return slot ? [{ ...slot, postId: x.postId, text: x.text }] : []
+    })
     try {
       const store = postgresSnapshotStore();
       const latest = await store.get(userId);

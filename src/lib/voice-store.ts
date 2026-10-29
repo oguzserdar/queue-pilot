@@ -3,27 +3,66 @@
  * The connector's get_my_voice hands both to the AI before it drafts.
  */
 import { and, asc, count, eq, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto"
 import { db } from "../db";
 import { voiceExample, voiceNote } from "../db/schema";
 
-export const MAX_EXAMPLES = 8;
-export const MAX_NOTE = 500;
+import { MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT } from "./voice-limits"
+export { MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT } from "./voice-limits"
 
+/** One post the user chose to teach their writing style. */
 export type VoiceExample = { postId: string; channel: string; text: string };
+/** The user's writing examples and note. */
 export type Voice = { examples: VoiceExample[]; note: string | null };
 
+/** The user must remove an example before adding another. */
 export class TooManyExamplesError extends Error {
   constructor() {
     super(`Up to ${MAX_EXAMPLES} example posts. Remove one to add another.`);
   }
 }
 
+/** Voice reads and writes scoped to one person. */
 export type VoiceStore = {
   get(userId: string): Promise<Voice>;
   addExample(userId: string, example: VoiceExample): Promise<void>;
   removeExample(userId: string, postId: string): Promise<void>;
   setNote(userId: string, note: string): Promise<void>;
 };
+
+/** A pasted post failed the shared input checks. */
+export class InvalidVoiceExampleError extends Error {}
+
+/** Saves visible writing without requiring a past Buffer post. */
+export async function addPastedExample(store: VoiceStore, userId: string, text: string): Promise<void> {
+  if (typeof text !== "string" || text.length > MAX_PASTED_TEXT)
+    throw new InvalidVoiceExampleError(`Use up to ${MAX_PASTED_TEXT} characters for an example.`)
+  const clean = visibleText(text).trim()
+  if (!clean) throw new InvalidVoiceExampleError("Paste a post you wrote first.")
+  await store.addExample(userId, { postId: `pasted:${randomUUID()}`, channel: "Pasted", text: clean })
+}
+
+/** A private voice store for tests, with the same example limit. */
+export function memoryVoiceStore(): VoiceStore {
+  const voices = new Map<string, Voice>()
+  const get = (userId: string) => voices.get(userId) ?? { note: null, examples: [] }
+  return {
+    async get(userId) { return structuredClone(get(userId)) },
+    async addExample(userId, example) {
+      const voice = get(userId)
+      if (voice.examples.some((e) => e.postId === example.postId)) return
+      if (voice.examples.length >= MAX_EXAMPLES) throw new TooManyExamplesError()
+      voices.set(userId, { ...voice, examples: [...voice.examples, { ...example, text: visibleText(example.text).slice(0, 5000) }] })
+    },
+    async removeExample(userId, postId) {
+      const voice = get(userId)
+      voices.set(userId, { ...voice, examples: voice.examples.filter((e) => e.postId !== postId) })
+    },
+    async setNote(userId, note) {
+      voices.set(userId, { ...get(userId), note: note.trim().slice(0, MAX_NOTE) || null })
+    },
+  }
+}
 
 /** Voice in Postgres through Drizzle; every statement is scoped to the user id. */
 export function postgresVoiceStore(): VoiceStore {
