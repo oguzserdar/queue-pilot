@@ -15,6 +15,8 @@ const { postgresSourceStore, MAX_SOURCES, TooManySourcesError } = await import("
 const { postgresSnapshotStore } = await import("./buffer/snapshot-store");
 const { forgetSettings, postgresSettingsStore, recentSettingChanges, SETTINGS_TTL_MS } = await import("./db");
 const { postgresVoiceStore, MAX_EXAMPLES, MAX_NOTE, TooManyExamplesError } = await import("./voice-store");
+const { addPastedExample } = await import("./voice-store")
+const { postgresMaterialStore } = await import("./material-store")
 const { approvedApps, recordAppUse, revokeApp, stillApproved } = await import("./ai-access");
 const { deleteAccount } = await import("./delete-account");
 const { connectCodeFor } = await import("./telegram");
@@ -168,6 +170,17 @@ describe("settings store on real Postgres", () => {
 });
 
 describe("voice store on real Postgres", () => {
+  it("stores pasted examples without Buffer and removes only the owner's copy", async () => {
+    const store = postgresVoiceStore()
+    await addPastedExample(store, "u3", "  My\u200b post\nMore text  ")
+    const example = (await store.get("u3")).examples[0]
+    expect(example).toEqual({ postId: expect.stringMatching(/^pasted:/), channel: "Pasted", text: "My post\nMore text" })
+    await store.removeExample("u4", example.postId)
+    expect((await store.get("u3")).examples).toHaveLength(1)
+    await store.removeExample("u3", example.postId)
+    expect((await store.get("u3")).examples).toEqual([])
+  })
+
   it("keeps examples once each, caps them, and keeps users apart", async () => {
     const v = postgresVoiceStore();
     await v.addExample("u6", { postId: "p1", channel: "X", text: "Shipped CSV export." });
@@ -201,6 +214,24 @@ describe("voice store on real Postgres", () => {
     expect((await v.get("u8")).note).toBeNull();
   });
 });
+
+describe("research material on real Postgres", () => {
+  it("scopes reads, retries and used keys to the person", async () => {
+    const store = postgresMaterialStore()
+    const input = { title: "Notes", text: "The full release text", link: "https://example.com/release" }
+    const item = await store.add("u1", input)
+    expect(await store.add("u1", input)).toEqual(item)
+    expect(await store.get("u2", item.key)).toBeNull()
+    expect(await store.list("u1")).toEqual([item])
+    await store.add("u2", input)
+    await postgresSourceStore().markUsed("u1", [item.key])
+    expect(await store.list("u1")).toEqual([])
+    expect(await store.list("u2")).toEqual([item])
+    expect(await store.get("u1", item.key)).toEqual(item)
+    await expect(store.add("u1", { title: " ", text: "x" })).rejects.toThrow()
+    await expect(store.add("u1", { title: "Notes", text: "x".repeat(12_001) })).rejects.toThrow()
+  })
+})
 
 describe("AI app access on real Postgres", () => {
   it("lists a user's approved apps and revoke removes the approval and that app's tokens for that user only", async () => {

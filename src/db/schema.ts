@@ -52,6 +52,20 @@ export const sourceUsed = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.itemKey] })],
 );
 
+/** Research text supplied through the connector. */
+export const material = pgTable(
+  "qp_material",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    title: text("title").notNull(),
+    text: text("text").notNull(),
+    link: text("link"),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+)
+
 /** Where a user's sent posts are copied: one Telegram channel and one Discord channel at most. */
 export const echoDestination = pgTable(
   "qp_echo_destination",
