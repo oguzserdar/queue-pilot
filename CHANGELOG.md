@@ -5,6 +5,9 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- The Docker image starts again: the migration step that runs first now has the database packages it needs.
+
 ## [0.1.2] - 2026-10-29 Security updates
 
 ### Security

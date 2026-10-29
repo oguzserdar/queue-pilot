@@ -67,3 +67,20 @@ jobs:
       - run: pnpm build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+  # The release only tags an image that starts and answers its health check. Build and start it here too, so a broken
+  # image is caught on the push that breaks it instead of at release time.
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image
+        run: docker build -t qp:ci .
+      - name: Smoke test the image
+        run: |
+          docker run -d --name qp -p 3000:3000 -e MIGRATE_ON_START=0 qp:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/api/health && exit 0; sleep 2; done
+          docker logs qp; exit 1

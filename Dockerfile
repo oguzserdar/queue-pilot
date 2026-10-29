@@ -14,6 +14,14 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
+# The migration script runs before the server and imports pg and drizzle-orm directly. The standalone output keeps
+# only what the server traces, so these two are installed on their own, at the versions package.json pins.
+FROM base AS migrator
+COPY package.json ./
+RUN npm install --omit=dev --no-save --no-package-lock --prefix /migrator \
+  "pg@$(node -p "require('./package.json').dependencies.pg")" \
+  "drizzle-orm@$(node -p "require('./package.json').dependencies['drizzle-orm']")"
+
 FROM node:24-alpine3.24 AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 MIGRATE_ON_START=1 PORT=3000 HOSTNAME=0.0.0.0
@@ -27,6 +35,7 @@ COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 COPY --from=build --chown=app:app /app/drizzle ./drizzle
 COPY --from=build --chown=app:app /app/scripts/migrate-on-deploy.mjs ./scripts/migrate-on-deploy.mjs
+COPY --from=migrator --chown=app:app /migrator/node_modules ./scripts/node_modules
 COPY --from=build --chown=app:app /app/src/lib/env-check.mjs ./src/lib/env-check.mjs
 USER app
 EXPOSE 3000
