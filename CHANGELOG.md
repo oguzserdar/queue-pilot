@@ -12,6 +12,9 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Phones: the next setup step's button no longer squeezes into a narrow column.
 
 ### Added
+- Paste your own posts on the Voice screen to teach your writing style.
+- Your AI can save your writing note and examples through the connector.
+- Your AI can save research text as material for drafts.
 - Page-view analytics for the deployment's own Vercel dashboard, without cookies.
 
 ### Added

@@ -8,6 +8,11 @@ Your AI writes next week's posts into Buffer as drafts. When you fix the same th
 
 ![Needs you: the drafts to approve, a fix made twice, a post that would fail, and an empty slot, in one list](docs/media/hero.png)
 
+Teach your voice with a short note and pasted posts on the Voice screen, even with no sent posts.
+Through the connector, use `save_my_voice_note` and `add_voice_example` when you want your AI to remember your style.
+Use `add_source` for a feed or releases page, or `add_material` for research text with a title and optional link.
+Read `get_my_voice`, `get_playbook` and `read_material` before drafting. `save_drafts` returns the checks and any refusals.
+
 ## See it work
 
 ![One week with Queue Pilot: it reads your Buffer week, your AI writes a draft, Queue Pilot checks it, you fix it in Buffer, a repeated fix becomes a rule, and every AI follows it next week](docs/media/diagram-flow.png)
