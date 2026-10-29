@@ -77,10 +77,6 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
     <KeyboardShortcuts />
     <MaybeSync account={account}>
     <div className={styles.frame}>
-      {account ? <SyncBanner /> : (
-        <div className={styles.demo}>Example account: Mark writes Weeknight Dinners, a cooking newsletter. Sign in with Buffer to see your own queue.</div>
-      )}
-      <div className={styles.body}>
         <aside className={styles.side}>
           <Link href="/" className={styles.brand} aria-label="Queue Pilot home">Queue Pilot<span className={styles.brandDot} aria-hidden="true">.</span></Link>
           <nav ref={navRef} className={styles.nav} aria-label="Main">
@@ -117,8 +113,12 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
             )}
           </div>
         </aside>
-        <main className={styles.main}>{children}</main>
-      </div>
+        <div className={styles.column}>
+          {account ? <SyncBanner /> : (
+            <div className={styles.demo}>Example account: Mark writes Weeknight Dinners, a cooking newsletter. Sign in with Buffer to see your own queue.</div>
+          )}
+          <main className={styles.main}>{children}</main>
+        </div>
     </div>
     </MaybeSync>
     {/* Confirms a change after it happens; errors stay next to the button that caused them. */}
