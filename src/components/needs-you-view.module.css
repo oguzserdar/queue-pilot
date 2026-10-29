@@ -26,7 +26,7 @@
 .step[data-state="done"] .check { background: var(--success); border-color: var(--success); }
 .step[data-state="done"] strong { color: var(--text-secondary); }
 .step[data-state="check"] .check { border-color: var(--warning); color: var(--warning); }
-@media (max-width: 640px) { .need, .step { grid-template-columns: 12px minmax(0, 1fr); } .need .action, .step .action { grid-column: 2; justify-self: start; padding-left: 0; } }
+@media (max-width: 640px) { .need, .step { grid-template-columns: 12px minmax(0, 1fr); } .need .action, .step .action, .step .primary { grid-column: 2; justify-self: start; } .need .action, .step .action { padding-left: 0; } }
 @media (hover: hover) and (pointer: fine) {
   .action:hover { background: var(--qp-crimson-wash); }
 }
