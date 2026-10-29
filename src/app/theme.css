@@ -1,0 +1,53 @@
+/* Queue Pilot theme over Arc's tokens.
+   Mood: an editor's proof desk on a Monday morning. White pages; a crimson proof mark only where a decision is needed.
+   Strategy: restrained. Pure white content, one rose-tinted second neutral, crimson for actions and selection only.
+   States never rely on color alone: each also has its own glyph and word. */
+:root {
+  --qp-crimson: oklch(0.46 0.165 357);
+  --qp-crimson-strong: oklch(0.38 0.15 357);
+  --qp-crimson-wash: oklch(0.965 0.018 357);
+
+  --background: oklch(1 0 0);
+  --surface: oklch(1 0 0);
+  --surface-raised: oklch(1 0 0);
+  --surface-muted: oklch(0.975 0.004 357);
+  --qp-desk: oklch(0.962 0.006 357);
+  --foreground: oklch(0.2 0.012 357);
+  --text-secondary: oklch(0.42 0.012 357);
+  --text-muted: oklch(0.5 0.01 357);
+  --border: oklch(0.91 0.006 357);
+  --border-subtle: oklch(0.945 0.005 357);
+  --border-strong: oklch(0.82 0.008 357);
+
+  --accent: var(--qp-crimson);
+  /* Edge of a field or an empty slot: 3:1 against white, the minimum for a control boundary. */
+  --border-control: oklch(0.64 0.008 357);
+  /* One padding for every list row, so lists line up from screen to screen. */
+  --row-padding: 14px 18px;
+  --accent-strong: var(--qp-crimson-strong);
+  --accent-subtle: var(--qp-crimson-wash);
+  --accent-foreground: oklch(1 0 0);
+  --control-on: var(--qp-crimson);
+
+  --success: oklch(0.5 0.12 160);
+  --warning: oklch(0.55 0.13 70);
+  --danger: oklch(0.52 0.19 28);
+  --qp-success-wash: oklch(0.965 0.025 160);
+  --qp-warning-wash: oklch(0.97 0.035 80);
+  --qp-danger-wash: oklch(0.965 0.025 28);
+
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-surface: 14px;
+
+  --shadow-resting: none;
+  --shadow-raised: 0 1px 2px oklch(0.2 0.02 357 / 0.08);
+  --shadow-floating: 0 8px 24px oklch(0.2 0.02 357 / 0.12);
+
+  --font-display: var(--font-schibsted), "Helvetica Neue", Arial, sans-serif;
+  --font-body: var(--font-schibsted), "Helvetica Neue", Arial, sans-serif;
+  --tracking-display: -0.015em;
+  --tracking-body: 0;
+
+  --focus-outline: var(--qp-crimson);
+}

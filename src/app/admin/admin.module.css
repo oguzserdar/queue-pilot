@@ -1,0 +1,70 @@
+.page { max-width: 820px; margin: 0 auto; padding: 72px max(16px, 4vw) 64px; display: flex; flex-direction: column; gap: var(--space-4); }
+.head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
+.title { font-size: var(--text-2xl); line-height: 1.2; }
+.sub { color: var(--text-secondary); line-height: 1.55; max-width: 64ch; }
+.error { color: var(--danger); }
+.ok { color: var(--success); font-weight: 600; }
+.unlock { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.label { width: 100%; font-weight: 600; font-size: var(--text-sm); }
+.input { font: inherit; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); min-width: 0; flex: 1; }
+.input:focus-visible { outline: none; border-color: var(--qp-crimson); }
+.quiet { font: inherit; background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 6px 4px; text-decoration: underline; text-underline-offset: 3px; }
+.rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: var(--space-4); align-items: center; padding: 14px 18px; }
+.row + .row { border-top: 1px solid var(--border-subtle); }
+.name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.muted { color: var(--text-muted); font-size: var(--text-xs); }
+.code { font-family: ui-monospace, monospace; color: var(--text-secondary); }
+.field { display: flex; gap: 8px; min-width: 0; }
+@media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
+.section { display: grid; gap: var(--space-3); padding-top: var(--space-6); border-top: 1px solid var(--border); justify-items: start; }
+.sectionTitle { font-size: var(--text-lg); }
+
+.group { display: flex; flex-direction: column; gap: var(--space-3); padding-top: var(--space-4); }
+.change { display: flex; gap: var(--space-4); padding: 10px 18px; font-size: var(--text-sm); flex-wrap: wrap; }
+.change + .change { border-top: 1px solid var(--border-subtle); }
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover { background: var(--qp-crimson-strong); }
+}
+/* Press feedback: the interface answers the click at once. */
+@media (prefers-reduced-motion: reduce) { .primary:active:not(:disabled) { transform: none; } }
+
+/* First-run setup: a card with two numbered steps; a done step turns into a tick. */
+.setup { display: flex; flex-direction: column; gap: var(--space-4); max-width: 560px; }
+.mark { font-weight: 700; font-size: var(--text-lg); letter-spacing: -0.01em; margin: 0 0 var(--space-4); }
+.mark span { color: var(--qp-crimson); }
+.steps { list-style: none; margin: var(--space-2) 0 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface);; overflow: clip; }
+.step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: var(--space-5); }
+.step + .step { border-top: 1px solid var(--border); }
+.num { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: var(--text-sm); font-weight: 700; border: 1.5px solid var(--border-control); color: var(--text-secondary); }
+.step[data-done] .num { background: var(--success); border-color: var(--success); color: oklch(1 0 0); }
+.step[data-current] .num { border-color: var(--qp-crimson); color: var(--qp-crimson); }
+.stepBody { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.stepBody .primary { margin-top: 4px; }
+
+/* Settings, the reference shape: header, tabs, one card per setting that saves itself. */
+.head { align-items: flex-start; }
+.back { font-size: var(--text-sm); color: var(--text-secondary); text-decoration: none; white-space: nowrap; }
+.back:hover { color: var(--foreground); }
+.section { display: flex; flex-direction: column; gap: var(--space-4); padding-top: var(--space-5); max-width: 720px; }
+.card { list-style: none; margin: 0; display: flex; flex-direction: column; gap: 8px; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.cardHead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.cardTitle { font-size: var(--text-base); font-weight: 600; margin: 0; }
+.help { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.5; }
+.current { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.cardFoot { display: flex; align-items: flex-end; gap: var(--space-2); flex-wrap: wrap; padding-top: var(--space-2); }
+.field { display: flex; align-items: flex-end; gap: var(--space-2); flex: 1; min-width: 0; }
+.field > div { flex: 1; min-width: 0; }
+.field > button { flex: none; }
+
+/* Where a value comes from: the three sources in order, the one in use marked, a lower one shown as ignored. */
+.layers { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-control); overflow: clip; font-size: var(--text-sm); }
+.layer { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) 64px; align-items: center; gap: var(--space-3); padding: 8px 12px; color: var(--text-secondary); }
+.layer + .layer { border-top: 1px solid var(--border); }
+.layer[data-in-use] { background: color-mix(in oklab, var(--qp-crimson) 6%, var(--surface)); color: var(--foreground); }
+.layerNum { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-muted); font-size: var(--text-xs); font-weight: 600; }
+.layer[data-in-use] .layerNum { background: var(--qp-crimson); color: #fff; }
+.layerName, .layerValue { min-width: 0; overflow-wrap: anywhere; }
+.layerState { justify-self: end; font-size: var(--text-xs); font-weight: 600; }
+.layer[data-in-use] .layerState { color: var(--qp-crimson); }
+.none { color: var(--text-tertiary, var(--text-secondary)); font-style: italic; }
