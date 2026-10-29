@@ -5,6 +5,13 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Link previews: shared links to Queue Pilot show its name, a short description and a picture of the week.
+
+### Security
+- Next.js 16.4.3, which fixes a critical issue in 16.3.5 (GHSA-2464-fhr4-w9xw).
+- The Docker image no longer ships npm or corepack, which the app never uses.
+
 ## [0.1.0] - 2026-10-29 Sign in with Buffer
 
 ### Added
