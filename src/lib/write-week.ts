@@ -9,9 +9,9 @@ import type { Rule } from "./rules";
 import { PLAYBOOK_REFUSAL, type Flag, type PlaybookCheck } from "./save-for-user";
 import type { SaveResult } from "./save-drafts";
 import type { Voice } from "./voice-store";
+import { nextWeekRange } from "./week-from-buffer";
 
 export const MAX_SLOTS = 10;
-const WEEK_MS = 7 * 24 * 3600 * 1000;
 
 type Saved = SaveResult & { flags: Flag[]; check: PlaybookCheck };
 
@@ -27,16 +27,20 @@ export type WriteWeekResult =
   | { kind: "nothing"; reason: "no-slots" | "no-material" }
   | { kind: "done"; saved: SaveResult["saved"]; refused: SaveResult["refused"]; flags: Flag[]; retried: number; check: PlaybookCheck };
 
-/** The empty slots worth writing now: the next seven days, soonest first, at most MAX_SLOTS. */
-export function slotsToWrite(open: OpenSlot[], now: Date): OpenSlot[] {
-  const until = now.getTime() + WEEK_MS;
-  return open.filter((s) => { const t = Date.parse(s.at); return t > now.getTime() && t <= until; }).sort((a, b) => a.at.localeCompare(b.at)).slice(0, MAX_SLOTS);
+/** Only known empty slots: the displayed next week, or the exact future slot the person chose. */
+export function slotsToWrite(open: OpenSlot[], now: Date, timeZone: string, only?: string): OpenSlot[] {
+  const range = nextWeekRange(now, timeZone);
+  return open.filter((s) => {
+    const t = Date.parse(s.at);
+    return t > now.getTime() && (only ? s.id === only : t >= range.start.getTime() && t < range.end.getTime());
+  }).sort((a, b) => a.at.localeCompare(b.at)).slice(0, MAX_SLOTS);
 }
 
 const keysOf = (drafts: WrittenDraft[]) => [...new Set(drafts.flatMap((d) => (d.sourceKey ? [d.sourceKey] : [])))];
 
 export async function writeWeek(open: OpenSlot[], now: Date, deps: WriteWeekDeps): Promise<WriteWeekResult> {
-  const slots = slotsToWrite(open, now);
+  // The caller selected the displayed week or one specific slot from the known Buffer range.
+  const slots = open.filter((s) => Date.parse(s.at) > now.getTime()).sort((a, b) => a.at.localeCompare(b.at)).slice(0, MAX_SLOTS);
   if (!slots.length) return { kind: "nothing", reason: "no-slots" };
   const material = await deps.material();
   if (!material.length) return { kind: "nothing", reason: "no-material" };

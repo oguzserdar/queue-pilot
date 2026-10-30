@@ -34,6 +34,7 @@ export type BufferContext = {
   needsRefresh: boolean;
   /** Buffer's RateLimit windows as of fetchedAt. */
   rateLimit: RateLimitWindow[];
+  range: { start: Date; end: Date };
 };
 
 /**
@@ -148,13 +149,13 @@ export async function freshBufferForCurrentUser(): Promise<{ userId: string; tok
 }
 
 /** A fresh read of the signed-in user's Buffer account, for actions that write drafts: id, token, channels, posts and range. */
-export async function bufferForWriting(): Promise<{ userId: string; token: string; channels: Channel[]; posts: Post[]; range: { start: Date; end: Date } } | null> {
+export async function bufferForWriting(): Promise<{ userId: string; token: string; channels: Channel[]; posts: Post[]; timeZone: string; range: { start: Date; end: Date } } | null> {
   const { auth, userId } = await sessionUser();
   if (!auth || !userId) return null;
   const token = await bufferAccessToken(auth, userId);
   const snap = await refreshSnapshot(userId, token, { store: postgresSnapshotStore() }, { force: true });
   if (!snap) return null;
-  return { userId, token, channels: snap.data.channels, posts: snap.data.posts, range: knownRange(snap.data, new Date()) };
+  return { userId, token, channels: snap.data.channels, posts: snap.data.posts, timeZone: snap.data.channels[0]?.timezone || snap.data.timezone || "UTC", range: knownRange(snap.data, new Date()) };
 }
 
 /** The Refresh button: re-reads Buffer now (a copy under 30 seconds old is kept). False when nobody is signed in. */
@@ -179,7 +180,7 @@ export const getCurrentUser = cache(async (): Promise<{ signInOpen: boolean; use
       signInOpen: true,
       user: {
         email: d.email, timeZone: d.channels[0]?.timezone || d.timezone || "UTC", organizationIds: d.organizationIds, channels: d.channels, posts: d.posts,
-        fetchedAt: snap.fetchedAt, needsRefresh: Date.now() - snap.fetchedAt.getTime() > MIN_REFRESH_MS, rateLimit: snap.rateLimit,
+        fetchedAt: snap.fetchedAt, needsRefresh: Date.now() - snap.fetchedAt.getTime() > MIN_REFRESH_MS, rateLimit: snap.rateLimit, range: knownRange(d, new Date()),
       },
     };
   } catch (e) {

@@ -123,7 +123,7 @@ export async function judgeModelFor(userId: string, opts: { ownKeyOnly?: boolean
  * Today's use of the built-in key for this person and what is left of the shared budget, for Settings. Null when
  * this copy has no built-in key or no budget, since the key is then off.
  */
-export async function allowanceFor(userId: string, now: Date = new Date()): Promise<{ used: number; cap: number; budgetUsd: number; leftUsd: number } | null> {
+export async function allowanceFor(userId: string, now: Date = new Date()): Promise<{ used: number; cap: number; budgetUsd: number; leftUsd: number; totalRemaining: number } | null> {
   const master = process.env.SETTINGS_KEY;
   if (!master || !hasDatabase()) return null;
   const fallback = await resolveSetting(postgresSettingsStore(), "fallback_ai_key", master).catch(() => null);
@@ -132,5 +132,5 @@ export async function allowanceFor(userId: string, now: Date = new Date()): Prom
   if (!budget) return null;
   const store = postgresAllowanceStore();
   const [limits, used, spent] = await Promise.all([caps(master), store.used(userId, utcDay(now)), store.spentMicros()]);
-  return { used: used.mine, cap: limits.perPerson, budgetUsd: budget / 1_000_000, leftUsd: Math.max(0, budget - spent) / 1_000_000 };
+  return { used: used.mine, cap: limits.perPerson, budgetUsd: budget / 1_000_000, leftUsd: Math.max(0, budget - spent) / 1_000_000, totalRemaining: Math.max(0, limits.total - used.total) };
 }

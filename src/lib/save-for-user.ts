@@ -7,7 +7,7 @@
  */
 import { withSavedDrafts } from "./buffer/snapshot";
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
-import { judgeDrafts, type JudgeInput, type Verdict } from "./judge";
+import { judgeDrafts, rulesFor, type JudgeInput, type Verdict } from "./judge";
 import { AiCapError, judgeModelFor, type JudgeModel } from "./judge-model";
 import { parseSlotId, type OpenSlot } from "./open-slots";
 import type { Rule } from "./rules";
@@ -36,24 +36,37 @@ export async function applyPlaybook(
   cappedReason: string | null = null,
 ): Promise<{ keep: DraftInput[]; refused: RefusedDraft[]; verdicts: Map<string, Verdict[]>; check: PlaybookCheck }> {
   const none = { keep: drafts, refused: [], verdicts: new Map<string, Verdict[]>() };
-  if (rules === null) return { ...none, check: "no-playbook" };
+  if (rules === null) return { ...none, keep: [], refused: drafts.map((d) => ({ slotId: d.slotId, reason: "Not saved: your playbook could not be read. Try again." })), check: "no-playbook" };
   if (!rules.length) return { ...none, check: "no-rules" };
-  // Out of AI actions with a "do not save" rule in the playbook: refuse rather than save drafts nobody checked.
-  if (!judge && cappedReason && rules.some((r) => r.level === "block"))
-    return { keep: [], refused: drafts.map((d) => ({ slotId: d.slotId, reason: cappedReason })), verdicts: new Map(), check: "no-model" };
-  if (!judge) return { ...none, check: "no-model" };
   const service = new Map(open.map((s) => [s.id, s.service]));
+  const applicable = (d: DraftInput) => rulesFor(rules, service.get(d.slotId) ?? "");
+  const unchecked = (check: "no-model" | "failed") => ({
+    ...none,
+    keep: drafts.filter((d) => !applicable(d).some((r) => r.level === "block")),
+    refused: drafts.filter((d) => applicable(d).some((r) => r.level === "block")).map((d) => ({ slotId: d.slotId, reason: cappedReason ?? 'Not saved: your "do not save" rules could not be checked. Try again when AI is available.' })),
+    check,
+  });
+  if (!judge) return unchecked("no-model");
   let verdicts: Map<string, Verdict[]>;
   try {
     verdicts = await judge(drafts.map((d) => ({ slotId: d.slotId, text: d.text, network: service.get(d.slotId) ?? "" })), rules);
   } catch (e) {
     console.warn(JSON.stringify({ event: "qp-judge-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ...none, check: "failed" };
+    return unchecked("failed");
   }
   const keep: DraftInput[] = [];
   const refused: RefusedDraft[] = [];
   for (const d of drafts) {
-    const block = (verdicts.get(d.slotId) ?? []).filter((v) => v.verdict === "fail" && v.level === "block");
+    const answers = applicable(d).map((r) => (verdicts.get(d.slotId) ?? []).find((v) => v.ruleId === r.id) ?? {
+      ruleId: r.id, rule: r.text, level: r.level, verdict: "unsure" as const, probability: null, quote: "", reason: "The check gave no answer for this rule.", unavailable: true,
+    });
+    verdicts.set(d.slotId, answers);
+    const missing = answers.filter((v) => v.unavailable && v.level === "block");
+    if (missing.length) {
+      refused.push({ slotId: d.slotId, reason: `Not saved: the check gave no answer for ${missing.map((v) => `"${v.rule}"`).join(", ")}. Try again.` });
+      continue;
+    }
+    const block = answers.filter((v) => v.verdict === "fail" && v.level === "block");
     if (block.length) refused.push({ slotId: d.slotId, reason: `${PLAYBOOK_REFUSAL}: ${block.map((v) => `"${v.rule}" (found "${v.quote}"). ${v.reason}`).join(" ")}` });
     else keep.push(d);
   }
@@ -123,7 +136,7 @@ export async function saveDraftsForUser(
 
 /** What to tell the person about how their playbook was applied; undefined when it was judged or there are no rules. */
 export function checkNote(check: PlaybookCheck): string | undefined {
-  if (check === "no-model") return "Not checked against your playbook: add your AI key in Settings so a model can judge each draft.";
+  if (check === "no-model") return "Not checked against your playbook: AI is unavailable. Check the allowance or your own key in Settings. Drafts needing a mandatory check were not saved.";
   if (check === "failed") return "Not checked against your playbook: the check could not run just now.";
   if (check === "no-playbook") return "Not checked against your playbook: it could not be read just now.";
   return undefined;

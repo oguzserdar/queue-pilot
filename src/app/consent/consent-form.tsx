@@ -22,11 +22,11 @@ export function ConsentForm() {
   return (
     <div className={styles.actions}>
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
-      <button type="button" className={styles.allow} onClick={() => answer(true)} disabled={busy !== null}>
-        {busy === "allow" ? "Connecting…" : "Allow"}
-      </button>
       <button type="button" className={styles.deny} onClick={() => answer(false)} disabled={busy !== null}>
         Deny
+      </button>
+      <button type="button" className={styles.allow} onClick={() => answer(true)} disabled={busy !== null}>
+        {busy === "allow" ? "Connecting…" : "Allow"}
       </button>
     </div>
   );

@@ -16,7 +16,7 @@ import type { Rule } from "./rules";
 export const MIN_PROBABILITY = 0.8;
 const TIMEOUT_MS = 20_000;
 
-export type Verdict = { ruleId: string; rule: string; level: Rule["level"]; verdict: "pass" | "fail" | "unsure"; probability: number | null; quote: string; reason: string };
+export type Verdict = { ruleId: string; rule: string; level: Rule["level"]; verdict: "pass" | "fail" | "unsure"; probability: number | null; quote: string; reason: string; unavailable?: boolean };
 export type JudgeInput = { slotId: string; text: string; network: string };
 /**
  * The two models a judgment needs: a decision model for verdicts, a language model to explain failures. A provider
@@ -107,7 +107,7 @@ async function judgeOne(m: Judges, draft: JudgeInput, rules: Rule[]): Promise<Ve
       const a = (answers as Record<string, { choice?: string; probabilities?: Record<string, number> } | undefined>)[`rule_${r.id}`];
       const choice = a?.choice === "pass" || a?.choice === "fail" ? a.choice : "unsure";
       const probability = a?.probabilities?.[choice] ?? null;
-      if (!a) return { ...base, verdict: "unsure", probability: null, quote: "", reason: "The check gave no answer for this rule." };
+      if (!a) return { ...base, verdict: "unsure", probability: null, quote: "", reason: "The check gave no answer for this rule.", unavailable: true };
       if (choice !== "unsure" && probability !== null && probability < MIN_PROBABILITY)
         return { ...base, verdict: "unsure", probability, quote: "", reason: `The check leaned ${choice} but was only ${Math.round(probability * 100)}% sure.` };
       if (choice !== "fail") return { ...base, verdict: choice, probability, quote: "", reason: choice === "unsure" ? "The check could not tell whether the rule applies." : "" };

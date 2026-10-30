@@ -20,11 +20,26 @@ function deps(over: Partial<WriteWeekDeps> = {}): WriteWeekDeps {
 }
 
 describe("slotsToWrite", () => {
-  it("keeps the coming seven days only, soonest first, capped", () => {
-    const open = [slot("late", "2026-11-05T09:00:00Z"), slot("b", "2026-10-28T09:00:00Z"), slot("past", "2026-10-25T09:00:00Z"), slot("a", "2026-10-27T09:00:00Z")];
-    expect(slotsToWrite(open, now).map((s) => s.id)).toEqual(["a", "b"]);
-    const many = Array.from({ length: 20 }, (_, i) => slot(`s${i}`, new Date(now.getTime() + (i + 1) * 3600_000).toISOString()));
-    expect(slotsToWrite(many, now)).toHaveLength(MAX_SLOTS);
+  it("keeps the displayed next Monday to Sunday only, soonest first, capped", () => {
+    const open = [slot("late", "2026-11-08T09:00:00Z"), slot("b", "2026-11-05T09:00:00Z"), slot("past", "2026-10-25T09:00:00Z"), slot("a", "2026-11-02T09:00:00Z"), slot("this-week", "2026-10-30T09:00:00Z"), slot("after", "2026-11-09T00:00:00Z")];
+    expect(slotsToWrite(open, now, "UTC").map((s) => s.id)).toEqual(["a", "b", "late"]);
+    const many = Array.from({ length: 20 }, (_, i) => slot(`s${i}`, new Date(Date.parse("2026-11-02T00:00:00Z") + (i + 1) * 3600_000).toISOString()));
+    expect(slotsToWrite(many, now, "UTC")).toHaveLength(MAX_SLOTS);
+  });
+
+  it("honors an exact future slot beyond seven days without substituting another", async () => {
+    const chosen = slot("chosen", "2026-11-08T09:00:00Z");
+    const targets = slotsToWrite([chosen, slot("earlier", "2026-11-02T09:00:00Z")], now, "UTC", "chosen");
+    const d = deps();
+    await writeWeek(targets, now, d);
+    expect(d.write).toHaveBeenCalledWith(expect.objectContaining({ slots: [expect.objectContaining({ id: "chosen" })] }));
+    expect(slotsToWrite([chosen], now, "UTC", "unknown")).toEqual([]);
+  });
+
+  it("uses local week boundaries across the autumn clock change and only supplied known slots", () => {
+    const open = [slot("before", "2026-10-26T05:59:00Z"), slot("start", "2026-10-26T06:00:00Z"), slot("sunday", "2026-11-02T06:59:00Z"), slot("after", "2026-11-02T07:00:00Z")];
+    expect(slotsToWrite(open, new Date("2026-10-22T12:00:00Z"), "America/Edmonton").map((s) => s.id)).toEqual(["start", "sunday"]);
+    expect(slotsToWrite(open.slice(0, 2), new Date("2026-10-22T12:00:00Z"), "America/Edmonton").map((s) => s.id)).toEqual(["start"]);
   });
 });
 

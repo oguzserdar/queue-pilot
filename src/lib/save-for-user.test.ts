@@ -17,9 +17,10 @@ describe("applyPlaybook", () => {
     expect(r.refused.map((x) => x.slotId)).toEqual(["a", "c"]);
     expect(r.refused[0].reason).toBe("Not saved: out of AI actions.");
   });
-  it("still saves, marked unchecked, when only flag-it rules exist or there is simply no key", async () => {
+  it("saves warning-only drafts unchecked, but holds mandatory checks even without a key", async () => {
     expect((await applyPlaybook(drafts, [slot("a"), slot("c")], [warn], null, "capped")).keep).toHaveLength(2);
     expect((await applyPlaybook(drafts, [slot("a"), slot("c")], [block], null, null)).check).toBe("no-model");
+    expect((await applyPlaybook(drafts, [slot("a"), slot("c")], [block], null)).keep).toEqual([]);
   });
   it("refuses a draft that fails a do-not-save rule, with the rule and the quoted words", async () => {
     const judge = vi.fn(async () => new Map([["a", [v("b", "block", "fail", "Brühe")]], ["c", [v("b", "block", "pass")]]]));
@@ -31,20 +32,39 @@ describe("applyPlaybook", () => {
   });
 
   it("keeps a draft that fails only a flag-it rule, or is unsure, and flags it", async () => {
-    const verdicts = new Map([["a", [v("w", "warn", "fail", "Brühe")]], ["c", [v("b", "block", "unsure")]]]);
+    const verdicts = new Map([["a", [v("w", "warn", "fail", "Brühe"), v("b", "block", "pass")]], ["c", [v("b", "block", "unsure"), v("w", "warn", "pass")]]]);
     const r = await applyPlaybook(drafts, [slot("a"), slot("c")], [block, warn], async () => verdicts);
     expect(r.keep).toHaveLength(2);
     expect(flagsFor(r.keep, r.verdicts).map((f) => [f.slotId, f.verdict])).toEqual([["a", "fail"], ["c", "unsure"]]);
   });
 
-  it("saves unchecked, and says why, when there is no model, no rule, no playbook or the check fails", async () => {
+  it("holds drafts when the playbook cannot be read or mandatory checking fails", async () => {
     expect((await applyPlaybook(drafts, [], [block], null)).check).toBe("no-model");
     expect((await applyPlaybook(drafts, [], [], vi.fn())).check).toBe("no-rules");
-    expect((await applyPlaybook(drafts, [], null, vi.fn())).check).toBe("no-playbook");
+    expect(await applyPlaybook(drafts, [], null, vi.fn())).toMatchObject({ check: "no-playbook", keep: [] });
     const failed = await applyPlaybook(drafts, [], [block], async () => { throw new Error("401"); });
-    expect(failed).toMatchObject({ check: "failed", refused: [] });
-    expect(failed.keep).toHaveLength(2);
-    expect(checkNote("no-model")).toContain("add your AI key");
+    expect(failed).toMatchObject({ check: "failed", keep: [] });
+    expect(failed.refused).toHaveLength(2);
+    expect(checkNote("no-model")).toContain("AI is unavailable");
     expect(checkNote("judged")).toBeUndefined();
+  });
+
+  it("holds only networks with mandatory rules when one judge in the batch fails", async () => {
+    const r = await applyPlaybook(drafts, [slot("a"), slot("c", "twitter")], [{ ...block, channels: ["linkedin"] }, warn], async () => {
+      await Promise.all([Promise.resolve([v("b", "block", "fail")]), Promise.reject(new Error("Provider unavailable"))]);
+      return new Map();
+    });
+    expect(r.keep.map((d) => d.slotId)).toEqual(["c"]);
+    expect(r.refused.map((d) => d.slotId)).toEqual(["a"]);
+    expect(r.check).toBe("failed");
+  });
+
+  it("holds missing mandatory results, including a judge answer marked unavailable", async () => {
+    for (const answer of [new Map<string, Verdict[]>(), new Map([["a", [{ ...v("b", "block", "unsure"), unavailable: true }]]])]) {
+      const r = await applyPlaybook(drafts, [slot("a"), slot("c")], [block], async () => answer);
+      expect(r.keep).toEqual([]);
+      expect(r.refused).toHaveLength(2);
+      expect(r.refused[0].reason).not.toContain(PLAYBOOK_REFUSAL);
+    }
   });
 });

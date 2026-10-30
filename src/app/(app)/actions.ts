@@ -8,7 +8,7 @@ import { writeDrafts } from "@/lib/ai-writer";
 import { aiErrorMessage } from "@/lib/ai-model";
 import { APICallError, NoObjectGeneratedError } from "ai";
 import { listModels, ModelListError } from "@/lib/ai-models";
-import { writeWeek } from "@/lib/write-week";
+import { slotsToWrite, writeWeek } from "@/lib/write-week";
 import { newMaterial } from "@/lib/new-material";
 import { openSlots, parseSlotId } from "@/lib/open-slots";
 import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
@@ -498,15 +498,17 @@ async function writeSlots(only?: string): Promise<WriteWeekActionResult> {
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
     // Checked before an AI action is taken, so a click with nothing to write costs the person nothing.
     const open = openSlots(b.channels, b.posts, b.range).slots;
-    const slots = only ? open.filter((x) => x.id === only) : open;
+    const now = new Date();
+    const slots = slotsToWrite(open, now, b.timeZone, only);
     if (only && !slots.length) return { ok: false, message: "That time is no longer empty. Refresh the week." };
+    if (!slots.length) return { ok: false, message: "No known empty times next week. Sync with Buffer and check the week." };
     const ai = await aiFor(b.userId);
     if (ai) { giveBack = ai.giveBack; settle = ai.settle; }
-    if (!ai) return { ok: false, message: "Add your AI key in Settings first." };
+    if (!ai) return { ok: false, message: "AI writing is unavailable just now. Check built-in AI or your own key in Settings." };
     provider = ai.cfg.provider;
     const model = ai.language;
     const supadata = await supadataKey();
-    const r = await writeWeek(slots, new Date(), {
+    const r = await writeWeek(slots, now, {
       material: async () => {
         const items = await newMaterial(b.userId);
         // A YouTube item carries only its description; with a Supadata key the transcript is added.
@@ -521,7 +523,7 @@ async function writeSlots(only?: string): Promise<WriteWeekActionResult> {
     revalidatePath("/", "layout");
     if (r.kind === "nothing") {
       await giveBack();
-      return { ok: false, message: r.reason === "no-slots" ? "Your next seven days have no empty times in Buffer." : "No new material in your feeds. Add a feed under New material, or wait for your next post." };
+      return { ok: false, message: r.reason === "no-slots" ? "No empty times remain in the chosen week." : "No new material to write from. Add research under New material or connect a feed." };
     }
     const where = (slotId: string) => { const s = r.saved.find((x) => x.slotId === slotId); return s ? `${s.local} · ${s.channel}` : slotId; };
     return {

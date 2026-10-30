@@ -6,6 +6,10 @@ All notable changes to Queue Pilot are recorded here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- The page where you allow an AI to connect is a clear card: both apps side by side, your account, and what it can and cannot do.
+- Fill next week uses built-in AI when its allowance is available, shows the draft count, and writes into the displayed week.
+- A chosen empty slot late next week can be written without the old seven-day cutoff.
+- Missing mandatory playbook checks prevent saves and edits, with a reason to retry. Warning-only checks remain optional.
 - Phones: the next setup button fills its row and account details have room above the sign-in action.
 - Approve schedules only drafts Queue Pilot wrote. Drafts from Buffer or another app stay untouched.
 - The app and instructions explain that Approve schedules, while AI tools only save drafts.
@@ -16,6 +20,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - The Docker image starts again: the migration step that runs first now has the database packages it needs.
 
 ### Added
+- Connect your AI links to the skill it uses, including learning voice from the person's authorized writing sources.
 - Paste your own posts on the Voice screen to teach your writing style.
 - Your AI can save your writing note and examples through the connector.
 - Your AI can save research text as material for drafts.

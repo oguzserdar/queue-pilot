@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
 import { getAuth } from "@/lib/auth";
+import { Check, Link2 } from "lucide-react";
 import { ConsentForm } from "./consent-form";
 import styles from "./consent.module.css";
 
@@ -39,17 +40,37 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
     );
   }
 
-  const clientId = String(params.client_id ?? "");
+  const client = clientLabel(String(params.client_id ?? ""));
   const scopes = String(params.scope ?? "").split(" ").filter(Boolean);
+  const { name, email, image } = session.user;
   return (
     <main className={styles.page}>
-      <div className={styles.mark}>Queue Pilot<span>.</span></div>
-      <h1 className={styles.title}>Allow {clientLabel(clientId)} to work with your Buffer queue?</h1>
-      <p className={styles.sub}>Signed in as {session.user.email}. It can read your posting slots and posts, and save drafts. It cannot schedule or publish anything: you approve every post.</p>
-      <ul className={styles.scopes}>
-        {scopes.map((s) => <li key={s}>{SCOPE_TEXT[s] ?? s}</li>)}
-      </ul>
-      <ConsentForm />
+      <section className={styles.card} aria-labelledby="consent-title">
+        {/* The asking app and Queue Pilot side by side, the way sign-in consent screens show who connects to whom. */}
+        <div className={styles.pair} aria-hidden="true">
+          <span className={styles.clientTile}>{client.replace(/^www\./, "").charAt(0).toUpperCase()}</span>
+          <span className={styles.link}><Link2 size={16} strokeWidth={2} /></span>
+          {/* eslint-disable-next-line @next/next/no-img-element -- a fixed local icon, no optimisation needed */}
+          <img className={styles.appTile} src="/icon-192.png" alt="" width={56} height={56} />
+        </div>
+        <h1 id="consent-title" className={styles.title}><strong>{client}</strong> wants to work with your Buffer queue</h1>
+        <div className={styles.account}>
+          {image
+            ? /* eslint-disable-next-line @next/next/no-img-element -- the person's own Buffer picture */ <img className={styles.avatar} src={image} alt="" width={32} height={32} />
+            : <span className={styles.avatar} aria-hidden="true">{(name || email).charAt(0).toUpperCase()}</span>}
+          <span className={styles.who}><span className={styles.name}>{name || email}</span>{name ? <span className={styles.email}>{email}</span> : null}</span>
+        </div>
+        <div className={styles.can}>
+          <p className={styles.canTitle}>It will be able to</p>
+          <ul className={styles.scopes}>
+            <li><Check size={16} strokeWidth={2.5} aria-hidden="true" />Read your posting slots and posts</li>
+            <li><Check size={16} strokeWidth={2.5} aria-hidden="true" />Save drafts in your queue</li>
+            {scopes.map((s) => <li key={s}><Check size={16} strokeWidth={2.5} aria-hidden="true" />{SCOPE_TEXT[s] ?? s}</li>)}
+          </ul>
+        </div>
+        <p className={styles.note}>It cannot schedule or publish anything. Only your Approve schedules a post.</p>
+        <ConsentForm />
+      </section>
     </main>
   );
 }

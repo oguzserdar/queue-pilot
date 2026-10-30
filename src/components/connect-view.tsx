@@ -99,6 +99,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, no
         </div>
         <span className={styles.onboardMarks} aria-hidden="true">{CODING_AGENTS.map((n) => <AiMark key={n} name={n} size={18} />)}</span>
         <CopyButton value={setupLine(connectorUrl.replace(/\/api\/mcp$/, ""))} label="Copy setup prompt" />
+        <a href={`${connectorUrl.replace(/\/api\/mcp$/, "")}/.well-known/agent-skills/queue-pilot/SKILL.md`} target="_blank" rel="noreferrer">Read the Queue Pilot skill</a>
       </section>
 
       <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
