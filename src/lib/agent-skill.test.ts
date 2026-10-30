@@ -12,7 +12,7 @@ const origin = "https://qp.example.com";
 
 describe("agent skill", () => {
   it("describes every tool the connector registers, and no tool it does not", () => {
-    const route = readFileSync(join(__dirname, "../app/api/mcp/route.ts"), "utf8");
+    const route = readFileSync(join(__dirname, "../app/api/mcp/route.ts"), "utf8") + readFileSync(join(__dirname, "mcp-controls.ts"), "utf8");
     const registered = [...route.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((m) => m[1]).sort();
     expect(registered.length).toBeGreaterThan(5);
     expect([...SKILL_TOOL_NAMES].sort()).toEqual(registered);

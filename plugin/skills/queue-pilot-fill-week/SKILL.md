@@ -47,3 +47,23 @@ The Queue Pilot tools must be connected. If they are missing, or a call says acc
 - `list_open_slots` covers the next 14 days. `show_next_week` covers next Monday to Sunday only.
 - `read_material` has a YouTube transcript only when the host set one up. Otherwise it has the title and description. Do not claim to have watched the video.
 - A person can have up to 10 feeds.
+
+## Queue Pilot's own writer
+
+Start with `get_setup_status`, `get_my_voice`, `get_playbook`, `list_new_material` and `list_open_slots`.
+If the person explicitly asks Queue Pilot to write and save drafts, call `get_ai_usage`, then `write_my_week`.
+This uses the app's own metered writer and the same playbook gate, writes up to 10 drafts per run, and retries refused drafts once.
+Read `list_my_drafts` and `show_next_week` afterward. Report saved, flagged, refused and remaining slots exactly; do not repeat automatically.
+The show-and-confirm step above still applies to drafts you write yourself with `save_drafts`.
+
+## Playbook and account controls
+
+- `add_rule` and `remove_rule` change rules only as requested; use IDs from `get_playbook`.
+- `check_draft` checks without saving. It spends an AI action. Report uncertainty as uncertainty; a save checks again.
+- `list_rule_suggestions` can read repeated fixes or use AI to find rules in rewrites or past posts. Show the evidence; use `keep_suggestion` or `dismiss_suggestion` only for the person's choice and with the exact returned token.
+- `read_rule` returns stored evidence where available. Never invent evidence for an older or manually added rule.
+- `remove_material` deletes requested saved research by key, leaving drafts and usage history intact.
+- `list_sources` and `remove_source` manage requested feed cleanup. Removing a feed leaves drafts intact.
+- `list_channels` shows posting times and channel state. `refresh_buffer` refreshes within the shared request allowance.
+- `get_setup_status` must match the screen. A drafts-only demo does not finish the human approval step.
+- Approve, scheduling, account deletion, keys and model settings, app revocation, admin and echo destinations remain human-only.

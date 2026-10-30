@@ -5,6 +5,9 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Your AI can now do everything you do in Queue Pilot except approve, schedule and account settings: add and remove playbook rules, check a draft before saving, keep or dismiss suggested rules, see setup progress, run Write my week, list its drafts with their checks, manage sources and material, refresh Buffer, and see what built-in AI is left.
+
 Visual progress: [29 October connection setup](docs/releases/2026-10-29/README.md), including the cleaned sharing image and original capture. These are preparation images, not completed-connection proof.
 
 ### Fixed

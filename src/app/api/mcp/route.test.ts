@@ -13,23 +13,24 @@ vi.mock("@better-auth/mcp", () => ({
     return sub ? handler(req, { sub, azp: "test-client" }) : new Response("Unauthorized", { status: 401 })
   },
 }))
-vi.mock("@/lib/ai-access", () => ({ stillApproved: async () => true, recordAppUse: async () => {} }))
+vi.mock("@/lib/ai-access", () => ({ stillApproved: async () => true, recordAppUse: async () => {}, approvedApps: async () => [{ name: "ChatGPT", lastUsedAt: "2026-10-29T12:00:00Z" }] }))
 vi.mock("@/lib/rate-limit", () => ({ limit: async () => ({ ok: true }), limitHeaders: () => ({}) }))
 vi.mock("@/lib/buffer-token", () => ({ bufferAccessToken: async (_auth: unknown, userId: string) => userId }))
 vi.mock("@/lib/buffer/snapshot-store", () => ({ postgresSnapshotStore: () => snapshots }))
 vi.mock("@/lib/voice-store", async (original) => ({ ...await original<typeof import("@/lib/voice-store")>(), postgresVoiceStore: () => voices }))
 vi.mock("@/lib/sources-store", async (original) => ({ ...await original<typeof import("@/lib/sources-store")>(), postgresSourceStore: () => sources }))
 vi.mock("@/lib/material-store", async (original) => ({ ...await original<typeof import("@/lib/material-store")>(), postgresMaterialStore: () => material }))
-vi.mock("@/lib/rules-store", () => ({ postgresRulesStore: () => ({ list: async (id: string) => rules.get(id) ?? [] }) }))
+vi.mock("@/lib/rules-store", async original => ({ ...await original<typeof import("@/lib/rules-store")>(), postgresRulesStore: () => ruleStore }))
 vi.mock("@/lib/written-store", () => ({
-  postgresWrittenStore: () => ({ record: async (id: string, drafts: Written[]) => written.set(id, [...(written.get(id) ?? []), ...drafts]) }),
+  postgresWrittenStore: () => ({ get: async (id: string, ids: string[]) => (written.get(id) ?? []).filter(w => ids.includes(w.postId)), record: async (id: string, drafts: Written[]) => written.set(id, [...(written.get(id) ?? []), ...drafts]) }),
   wroteIds: async (id: string, ...ids: string[]) => new Set((written.get(id) ?? []).filter((p) => ids.includes(p.postId)).map((p) => p.postId)),
 }))
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: (...args: unknown[]) => buffer.q(...args) }))
 vi.mock("@/lib/safe-fetch", () => ({ safeFetch: vi.fn(), BlockedAddressError: class extends Error {} }))
-vi.mock("@/lib/judge-model", () => ({ AiCapError: class extends Error {}, judgeModelFor: async () => ({
+const aiCalls = vi.hoisted(() => ({ settle: vi.fn(async () => {}), giveBack: vi.fn(async () => {}) }));
+vi.mock("@/lib/judge-model", () => ({ AiCapError: class extends Error {}, allowanceFor: async () => ({ used: 1, cap: 20, budgetUsd: 100, leftUsd: 99.95, totalRemaining: 100 }), aiFor: async () => ({ cfg: { provider: "openai", key: "never-display", model: "test" }, language: answering({ quote: "broth", reason: "Use stock." }), decider: judge.model, source: "Queue Pilot key", ...aiCalls }), judgeModelFor: async () => ({
   judges: { decider: judge.model, explainer: answering({ quote: "broth", reason: "Use stock." }) },
-  source: "your key", settle: async () => {},
+  source: "your key", cfg: { provider: "openai" }, ...aiCalls,
 }) }))
 
 const { memoryVoiceStore, MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT } = await import("@/lib/voice-store")
@@ -45,6 +46,14 @@ let material = memoryMaterialStore()
 let snapshots = memorySnapshotStore()
 const written = new Map<string, Written[]>()
 const rules = new Map<string, Rule[]>()
+const dismissed = new Map<string, Set<string>>()
+const ruleStore = {
+  list: async (id: string) => rules.get(id) ?? [],
+  add: async (id: string, rule: import("@/lib/rules").NewRule, fixes = 0) => { const key = `rule-${++serial}`; rules.set(id, [...(rules.get(id) ?? []), { ...rule, id: key, fixes } as Rule & { fixes: number }]); return key },
+  remove: async (id: string, key: string) => { rules.set(id, (rules.get(id) ?? []).filter(r => r.id !== key)) },
+  dismissed: async (id: string) => dismissed.get(id) ?? new Set<string>(),
+  dismiss: async (id: string, key: string) => { const mine = dismissed.get(id) ?? new Set<string>(); mine.add(key); dismissed.set(id, mine) },
+}
 let posts: Post[] = []
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
@@ -100,19 +109,24 @@ beforeEach(() => {
   snapshots = memorySnapshotStore()
   written.clear()
   rules.clear()
+  dismissed.clear()
+  aiCalls.settle.mockClear()
+  aiCalls.giveBack.mockClear()
+  vi.stubEnv("SESSION_SECRET", "test-only-signing-key")
   posts = []
   buffer.calls.length = 0
   buffer.limitCalls.length = 0
   vi.mocked(safeFetch).mockImplementation(async () => new Response(releaseXml))
 })
-afterEach(() => { vi.useRealTimers() })
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
 
 describe("connector voice writes", () => {
   it("lists all tools with serializable input schemas", async () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(15)
+    expect(tools).toHaveLength(31)
+    expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
     expect(tools.find((t: { name: string }) => t.name === "save_my_voice_note").inputSchema.properties.note.maxLength).toBe(MAX_NOTE)
   })
@@ -257,3 +271,141 @@ describe("connector draft chain", () => {
     }
   })
 })
+
+describe("connector controls", () => {
+  it("adds a validated rule, exposes its ID, and rejects cross-user reads and removal", async () => {
+    const input = { kind: "replace", from: "broth", to: "stock", channels: ["linkedin"], level: "block", userId: "person-b" };
+    const added = JSON.parse(answer(await call("add_rule", input)));
+    expect(added.id).toBeTruthy();
+    expect(answer(await call("get_playbook"))).toContain(added.id);
+    expect((await call("read_rule", { id: added.id }, "person-b")).isError).toBe(true);
+    expect((await call("remove_rule", { id: added.id }, "person-b")).isError).toBe(true);
+    expect(rules.get("person-a")).toHaveLength(1);
+    expect((await call("add_rule", { ...input, channels: ["not-a-network"] })).isError).toBe(true);
+    expect((await call("add_rule", { ...input, from: "" })).isError).toBe(true);
+    await call("remove_rule", { id: added.id });
+    expect(rules.get("person-a")).toHaveLength(0);
+  });
+  it("checks refusal, correction and warning without writing a Buffer post", async () => {
+    rules.set("person-a", [{ id: "stock", kind: "replace", from: "broth", to: "stock", channels: "all", level: "block", text: "Say stock." }]);
+    const bad = await call("check_draft", { text: "Use broth", network: "linkedin" });
+    expect(bad.isError).toBe(true);
+    expect(JSON.parse(answer(bad))).toMatchObject({ status: "refused", saved: false });
+    expect(JSON.parse(answer(await call("check_draft", { text: "Use stock", network: "linkedin" })))).toMatchObject({ status: "passed", saved: false });
+    rules.get("person-a")![0].level = "warn";
+    expect(JSON.parse(answer(await call("check_draft", { text: "Use broth", network: "linkedin" })))).toMatchObject({ status: "flagged", saved: false });
+    expect(aiCalls.settle).toHaveBeenCalledTimes(3);
+    expect(posts).toHaveLength(0);
+    expect(buffer.calls).toHaveLength(0);
+    expect(JSON.parse(answer(await call("check_draft", { text: "Use stock", network: "linkedin" }, "person-b"))).status).toBe("not_checked");
+  });
+  it("lists and removes only the token owner's sources", async () => {
+    const a = await sources.add("person-a", "https://a.example/feed", "A");
+    const b = await sources.add("person-b", "https://b.example/feed", "B");
+    expect(answer(await call("list_sources"))).toContain(a.id);
+    expect(answer(await call("list_sources"))).not.toContain(b.id);
+    expect((await call("remove_source", { id: b.id, userId: "person-b" })).isError).toBe(true);
+    await call("remove_source", { id: a.id });
+    expect(await sources.list("person-a")).toHaveLength(0);
+    expect(await sources.list("person-b")).toHaveLength(1);
+  });
+  it("reports the screen's true readiness and keeps human approval incomplete", async () => {
+    expect(JSON.parse(answer(await call("get_setup_status")))).toMatchObject({ done: 2, total: 5 });
+    await voices.addExample("person-a", { postId: "sample", channel: "Pasted", text: "Shipped this." });
+    expect(JSON.parse(answer(await call("get_setup_status"))).done).toBe(3);
+    await sources.add("person-a", "https://a.example/feed", "A");
+    const status = JSON.parse(answer(await call("get_setup_status")));
+    expect(status.done).toBe(4);
+    expect(status.steps.find((s: { id: string }) => s.id === "approve").state).toBe("todo");
+    expect(JSON.parse(answer(await call("get_setup_status", {}, "person-b"))).done).toBe(2);
+  });
+  it("keeps and dismisses signed suggestions with tenant isolation and stored evidence", async () => {
+    const { signSuggestion } = await import("@/lib/rule-suggestions");
+    const token = signSuggestion("person-a", { key: "first:test", rule: { kind: "guidance", text: "Use short sentences.", channels: "all", level: "warn" }, fixes: 2, evidence: [{ before: "Long", after: "Short" }] });
+    expect((await call("keep_suggestion", { token }, "person-b")).isError).toBe(true);
+    expect((await call("dismiss_suggestion", { token }, "person-b")).isError).toBe(true);
+    const r = JSON.parse(answer(await call("keep_suggestion", { token })));
+    expect(r.ok).toBe(true);
+    expect(answer(await call("read_rule", { id: r.id }))).toContain('"before": "Long"');
+    await call("keep_suggestion", { token });
+    expect(rules.get("person-a")).toHaveLength(1);
+    await call("dismiss_suggestion", { token });
+    expect(dismissed.get("person-a")?.has("first:test")).toBe(true);
+    expect((await call("keep_suggestion", { token })).isError).toBe(true);
+  });
+  it("runs the built-in writer through real playbook refusal, retry, Buffer draft saves and readback", async () => {
+    const writer = await import("@/lib/ai-writer");
+    const draftWriter = vi.spyOn(writer, "writeDrafts").mockImplementation(async (_model, brief) => brief.slots.map(s => ({ slotId: s.id, text: brief.retry ? "Use stock for this recipe." : "Use broth for this recipe.", sourceKey: brief.material[0].key })));
+    try {
+      rules.set("person-a", [{ id: "stock", kind: "replace", from: "broth", to: "stock", channels: "all", level: "block", text: "Say stock." }]);
+      await material.add("person-a", { title: "Recipe", text: "Use stock for this recipe." });
+      const r = await call("write_my_week", { userId: "person-b" });
+      expect(r.isError).not.toBe(true);
+      expect(JSON.parse(answer(r))).toMatchObject({ ok: true, retried: 2, refused: [] });
+      expect(posts).toHaveLength(2);
+      expect(posts.every(p => p.status === "draft" && p.text.includes("stock"))).toBe(true);
+      expect(draftWriter).toHaveBeenCalledTimes(2);
+      expect(aiCalls.settle).toHaveBeenCalledTimes(1);
+      const drafts = JSON.parse(answer(await call("list_my_drafts"))).drafts;
+      expect(drafts).toHaveLength(2);
+      expect(drafts[0].verdicts[0].verdict).toBe("pass");
+      expect(JSON.parse(answer(await call("list_my_drafts", {}, "person-b"))).drafts).toHaveLength(0);
+      posts[0].text = "Manually changed";
+      vi.setSystemTime(new Date("2026-10-29T12:02:00Z"));
+      await call("refresh_buffer");
+      expect(JSON.parse(answer(await call("list_my_drafts"))).drafts[0]).toMatchObject({ changedSinceCheck: true, verdicts: null });
+      expect(buffer.calls.some(c => /schedulePost|publishPost/.test(c.query))).toBe(false);
+    } finally { draftWriter.mockRestore(); }
+  });
+  it("gives back the AI action when the built-in writer has no material", async () => {
+    const r = await call("write_my_week");
+    expect(r.isError).toBe(true);
+    expect(answer(r)).toContain("No new material");
+    expect(aiCalls.giveBack).toHaveBeenCalledTimes(1);
+    expect(aiCalls.settle).toHaveBeenCalledTimes(1);
+    expect(posts).toHaveLength(0);
+  });
+  it("hides storage failures from new controls", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fail = vi.spyOn(ruleStore, "list").mockRejectedValue(new Error("private person-a SQL details"));
+    try {
+      const r = await call("read_rule", { id: "secret" });
+      expect(r.isError).toBe(true);
+      expect(answer(r)).not.toMatch(/person-a|SQL|secret/);
+    } finally { fail.mockRestore(); log.mockRestore(); }
+  });
+});
+
+
+describe("remaining account controls", () => {
+  it("removes only owned research and preserves existing drafts", async () => {
+    const a = await material.add("person-a", { title: "A", text: "My research" });
+    const b = await material.add("person-b", { title: "B", text: "Private research" });
+    expect((await call("remove_material", { key: b.key, userId: "person-b" })).isError).toBe(true);
+    await call("remove_material", { key: a.key });
+    expect(await material.get("person-a", a.key)).toBeNull();
+    expect(await material.get("person-b", b.key)).not.toBeNull();
+    expect(buffer.calls).toHaveLength(0);
+  });
+  it("lists genuine repeated fixes from only the authenticated user's written drafts", async () => {
+    posts = [1, 2].map(i => ({ id: `p${i}`, channelId: "ch", status: "draft" as const, via: "api" as const, text: `Use stock to make soup number ${i} for dinner.`, dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
+    written.set("person-a", posts.map(p => ({ postId: p.id, text: p.text.replace("stock", "broth"), network: "linkedin" })));
+    await call("refresh_buffer");
+    const found = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    expect(found.suggestions).toHaveLength(1);
+    expect(found.suggestions[0].rule).toMatchObject({ kind: "replace", from: "broth", to: "stock" });
+    expect(found.suggestions[0].evidence.examples).toHaveLength(2);
+    expect(JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" }, "person-b"))).suggestions).toHaveLength(0);
+    await call("dismiss_suggestion", { token: found.suggestions[0].token });
+    expect(JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" }))).suggestions).toHaveLength(0);
+  });
+  it("reads channels and AI allowance without consuming an AI action", async () => {
+    vi.stubEnv("SETTINGS_KEY", "");
+    const channels = JSON.parse(answer(await call("list_channels")));
+    expect(channels.channels[0]).toMatchObject({ id: "ch", isDisconnected: false, isQueuePaused: false });
+    const usage = answer(await call("get_ai_usage"));
+    expect(JSON.parse(usage)).toMatchObject({ ownKeySaved: false, builtIn: { budgetUsd: 100, leftUsd: 99.95 } });
+    expect(usage).not.toContain("never-display");
+    expect(aiCalls.settle).not.toHaveBeenCalled();
+  });
+});

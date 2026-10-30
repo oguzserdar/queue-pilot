@@ -12,6 +12,23 @@ export const SKILL_DESCRIPTION =
 
 /** The connector tools and what each is for, in the order the loop uses them. */
 const TOOLS: [string, string][] = [
+  ["get_setup_status", "The same setup steps and true done count as Needs you. Approval remains a human step."],
+  ["add_rule", "Add a rule the person requests, with block or warn behavior."],
+  ["remove_rule", "Remove a rule the person requests by its playbook ID."],
+  ["read_rule", "Read a rule and any stored evidence from keeping it; never invent missing evidence."],
+  ["check_draft", "Check a draft without saving it, using the metered AI and current rules."],
+  ["list_rule_suggestions", "Find repeated fixes, larger rewrites or habits from past posts, with evidence and signed tokens."],
+  ["keep_suggestion", "Keep a suggestion the person chose, using its exact token."],
+  ["dismiss_suggestion", "Set aside a suggestion the person does not want."],
+  ["list_sources", "List every configured feed and its ID."],
+  ["remove_material", "Remove requested saved research by key, leaving existing drafts and usage history intact."],
+  ["remove_source", "Remove a requested feed; leave existing drafts intact."],
+  ["write_my_week", "Ask Queue Pilot to write and save up to 10 drafts next week with its built-in writer and metered AI; only when the person requests this action."],
+  ["list_my_drafts", "Read next week’s Queue Pilot drafts with stored verdicts; mark changed text as needing a new check."],
+  ["refresh_buffer", "Refresh the saved Buffer account within the shared request limit."],
+  ["list_channels", "Read channels, posting times and paused, locked or disconnected status."],
+  ["get_ai_usage", "Read today’s allowance and shared dollar budget; never expose keys."],
+
   ["get_my_voice", "How the person writes: their note and example posts. Match it."],
   ["save_my_voice_note", "Save how the person says they write when they ask you to remember it. Up to 500 characters."],
   ["add_voice_example", "Save a post the person wrote when they ask you to learn their style. Up to 2000 characters and eight examples."],
@@ -57,6 +74,12 @@ The connector only saves drafts. Queue Pilot never schedules or publishes on its
 ## Fill the week
 
 ${FILL_WEEK_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n")}
+
+## Built-in writer and controls
+
+Start with get_setup_status, get_my_voice, get_playbook, new material and list_open_slots. When the person asks Queue Pilot to do the writing and save drafts, use get_ai_usage then write_my_week. This is the same writer as the app button, with up to 10 drafts per run and one rewrite of refused drafts. Read list_my_drafts and show_next_week afterward. Report remaining slots; do not repeat automatically. For drafts you write yourself, show them and get agreement before save_drafts.
+
+Use check_draft to demonstrate a real refusal and correction without saving. A subsequent save judges again. Learned suggestions are proposals: only keep the ones the person chooses. Approve, scheduling, account deletion, AI keys, app revocation and admin stay human-only.
 
 ## Tools
 
