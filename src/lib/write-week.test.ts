@@ -37,9 +37,10 @@ describe("slotsToWrite", () => {
   });
 
   it("uses local week boundaries across the autumn clock change and only supplied known slots", () => {
-    const open = [slot("before", "2026-10-26T05:59:00Z"), slot("start", "2026-10-26T06:00:00Z"), slot("sunday", "2026-11-02T06:59:00Z"), slot("after", "2026-11-02T07:00:00Z")];
-    expect(slotsToWrite(open, new Date("2026-10-22T12:00:00Z"), "America/Edmonton").map((s) => s.id)).toEqual(["start", "sunday"]);
-    expect(slotsToWrite(open.slice(0, 2), new Date("2026-10-22T12:00:00Z"), "America/Edmonton").map((s) => s.id)).toEqual(["start"]);
+    // Historical transition: Alberta stopped changing clocks in November 2026.
+    const open = [slot("before", "2025-10-27T05:59:00Z"), slot("start", "2025-10-27T06:00:00Z"), slot("sunday", "2025-11-03T06:59:00Z"), slot("after", "2025-11-03T07:00:00Z")];
+    expect(slotsToWrite(open, new Date("2025-10-23T12:00:00Z"), "America/Edmonton").map((s) => s.id)).toEqual(["start", "sunday"]);
+    expect(slotsToWrite(open.slice(0, 2), new Date("2025-10-23T12:00:00Z"), "America/Edmonton").map((s) => s.id)).toEqual(["start"]);
   });
 });
 
