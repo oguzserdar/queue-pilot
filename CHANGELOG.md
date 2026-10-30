@@ -5,36 +5,28 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+Built-in writing is free during Buffer Commit, with $100 of Anthropic AI credits I put in. I'll top it up if it runs low. Bring your own key any time.
+
 ### Added
-- Your AI can now do everything you do in Queue Pilot except approve, schedule and account settings: add and remove playbook rules, check a draft before saving, keep or dismiss suggested rules, see setup progress, run Write my week, list its drafts with their checks, manage sources and material, refresh Buffer, and see what built-in AI is left.
-
-
-- Your AI can remove a saved writing example by its exact ID through the connector, without deleting the original post or other examples.
-- Reusable ChatGPT plugin metadata includes Queue Pilot's logo and website alongside the existing Claude package and skills.
-- Connect your AI links to the skill it uses, including learning voice from the person's authorized writing sources.
-- Paste your own posts on the Voice screen to teach your writing style.
-- Your AI can save your writing note and examples through the connector.
-- Your AI can save research text as material for drafts.
-- Page-view analytics for the deployment's own Vercel dashboard, without cookies.
-- /admin has a People tab: accounts, people active today and this week, and new accounts. Counts only, never names.
-- Built-in writing is available during Commit without a personal API key, supported by $100 in Anthropic AI credits. The owner will top it up if it runs low.
+- Your AI can run Queue Pilot for you through 31 connector tools: learn your voice, add sources and research, add and remove playbook rules, check a draft before saving, keep or dismiss suggested rules, see setup progress, run Write my week, and list its drafts with their checks. Approving, scheduling and account settings stay with you.
+- Teach your voice without past posts: paste what you wrote on the Voice screen, or let your AI read your writing and save examples.
+- A GitHub releases page works as a source, and research your AI finds can be handed over as material.
+- Your AI can remove a voice example it saved.
+- The ChatGPT and Claude packages carry Queue Pilot's logo, website and the skill they use.
+- Cookie-free page-view counts for the deployment's own Vercel dashboard.
 
 ### Fixed
-- Opening the connector address in a browser now shows how to connect your AI instead of an error.
-- The page where you allow an AI to connect is a clear card: both apps side by side, your account, and what it can and cannot do.
-- Fill next week uses built-in AI when its allowance is available, shows the draft count, and writes into the displayed week.
-- A chosen empty slot late next week can be written without the old seven-day cutoff.
-- Missing mandatory playbook checks prevent saves and edits, with a reason to retry. Warning-only checks remain optional.
-- Phones: the next setup button fills its row and account details have room above the sign-in action.
-- Approve schedules only drafts Queue Pilot wrote. Drafts from Buffer or another app stay untouched.
-- The app and instructions explain that Approve schedules, while AI tools only save drafts.
-- One page layout at every screen size: the page scrolls and the sidebar stays pinned, the way most apps work.
-- Desktop: no blank strip under the sidebar when the page is scrolled.
-- Phones: the page scrolls once instead of twice, so there is no blank space below it, and the top bar stays pinned.
-- Phones: the next setup step's button no longer squeezes into a narrow column.
-- The Docker image starts again: the migration step that runs first now has the database packages it needs.
-- A completed draft check returns refused or passed as a normal result. A refusal no longer appears as a failed connector call.
-- Connector initialization includes the Queue Pilot name, website and logo for clients that read this metadata.
+- Approve schedules only drafts Queue Pilot wrote, and every screen and tool says so: AI tools save drafts, only your Approve schedules.
+- A draft refused by a playbook rule comes back as a normal refusal with the rule and the reason, not as a failed call.
+- Only recent feed items count as news, so drafts no longer re-announce old releases.
+- Fill next week uses built-in AI when available, shows the draft count, and writes into the week shown. A late empty slot can be written too.
+- Missing mandatory playbook checks stop saves and edits, with a reason to retry.
+- The Docker image starts: the migration step now has its database packages, and CI runs the full self-host path on every push.
+- One layout at every screen size: the page scrolls and the sidebar stays pinned. No blank space below the page on phones or desktop.
+- Phones: setup buttons fill their row and the account row has room.
+- Fill next week and Approve sit in one aligned row.
+- The page where you allow an AI to connect is a clear card: both apps, your account, and what it can and cannot do.
+- Opening the connector address in a browser shows how to connect your AI instead of an error.
 
 ## [0.1.2] - 2026-10-29 Security updates
 
