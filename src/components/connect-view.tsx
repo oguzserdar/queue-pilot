@@ -41,7 +41,7 @@ const AIS: AiSetup[] = [
   {
     name: "Claude",
     plan: "Works on every Claude plan. Free allows one custom connector",
-    does: "Use your writing and sources to prepare Buffer drafts with Claude.",
+    does: "Pick \"Fill my week\" and Claude drafts your empty times from your newsletter.",
     steps: [
       "Go to Customize, Connectors, press + Add, then Add custom connector. Name it Queue Pilot",
       "Paste the URL above and press Continue. Keep Sign in now, then press Add",
@@ -76,7 +76,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, no
     <div className={styles.page}>
       <header className={styles.head}>
         <h1 className={styles.title}>Connect your AI</h1>
-        <p className={styles.sub}>Connect the AI you use to your writing voice, playbook and Buffer drafts. It can prepare your week. You decide what gets scheduled.</p>
+        <p className={styles.sub}>Your AI does the writing. Queue Pilot gives it your Buffer slots, your schedule and your material, and checks what it writes before you approve.</p>
         {!example && !approved?.length && <p className={styles.sub} role="status">No AI app is connected yet.</p>}
         {!example && !!approved?.length && (
           <ul className={styles.used} aria-label="Your connected AI apps">
@@ -92,7 +92,17 @@ export function ConnectView({ connectorUrl, example = false, approved = null, no
         )}
       </header>
 
-      <h2 className={styles.chatTitle}>Connect a chat app</h2>
+      <section className={styles.onboard} aria-labelledby="onboard-title">
+        <div>
+          <h2 id="onboard-title" className={styles.onboardTitle}>Onboard your coding agent</h2>
+          <p className={styles.muted}>Copy one line into Claude Code, Codex or Cursor. It installs the Queue Pilot skill and connects itself.</p>
+        </div>
+        <span className={styles.onboardMarks} aria-hidden="true">{CODING_AGENTS.map((n) => <AiMark key={n} name={n} size={18} />)}</span>
+        <CopyButton value={setupLine(connectorUrl.replace(/\/api\/mcp$/, ""))} label="Copy setup prompt" />
+        <a href={`${connectorUrl.replace(/\/api\/mcp$/, "")}/.well-known/agent-skills/queue-pilot/SKILL.md`} target="_blank" rel="noreferrer">Read the Queue Pilot skill</a>
+      </section>
+
+      <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
       <div className={styles.address}>
         <span className={styles.label}>Connector URL</span>
         <code className={styles.code}>{connectorUrl}</code>
@@ -112,15 +122,6 @@ export function ConnectView({ connectorUrl, example = false, approved = null, no
         ))}
       </ul>
 
-      <section className={styles.onboard} aria-labelledby="onboard-title">
-        <div>
-          <h2 id="onboard-title" className={styles.onboardTitle}>Connect a coding agent</h2>
-          <p className={styles.muted}>Copy the setup prompt into Claude Code, Codex or Cursor to install the Queue Pilot skill and connect.</p>
-        </div>
-        <span className={styles.onboardMarks} aria-hidden="true">{CODING_AGENTS.map((n) => <AiMark key={n} name={n} size={18} />)}</span>
-        <CopyButton value={setupLine(connectorUrl.replace(/\/api\/mcp$/, ""))} label="Copy setup prompt" />
-        <a href={`${connectorUrl.replace(/\/api\/mcp$/, "")}/.well-known/agent-skills/queue-pilot/SKILL.md`} target="_blank" rel="noreferrer">Read the Queue Pilot skill</a>
-      </section>
 
       <Dialog open={current !== undefined} onOpenChange={(o) => { if (!o) setOpen(null); }}>
         {current && (
