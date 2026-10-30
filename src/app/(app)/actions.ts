@@ -3,20 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { BufferRateLimitedError } from "@/lib/buffer/client";
 import { bufferForWriting, forceRefreshCurrentUser, freshBufferForCurrentUser, signedInUserId } from "@/lib/current-user";
-import { postgresAiKeyStore, providerOf, type Provider } from "@/lib/ai-key-store";
-import { writeDrafts } from "@/lib/ai-writer";
+import { postgresAiKeyStore, providerOf } from "@/lib/ai-key-store";
+import { writeSlotsForUser, type WriteWeekActionResult } from "@/lib/write-slots-for-user";
 import { aiErrorMessage } from "@/lib/ai-model";
 import { APICallError, NoObjectGeneratedError } from "ai";
 import { listModels, ModelListError } from "@/lib/ai-models";
-import { slotsToWrite, writeWeek } from "@/lib/write-week";
-import { newMaterial } from "@/lib/new-material";
 import { openSlots, parseSlotId } from "@/lib/open-slots";
 import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
 import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
 import { wroteIds } from "@/lib/written-store";
 import { listRecentSent, type Post } from "@/lib/buffer/queries";
-import { youtubeTranscript } from "@/lib/transcripts";
-import { supadataKey } from "@/lib/env";
 import { FeedError, feedUrl, readFeed } from "@/lib/feeds"
 import { revokeApp } from "@/lib/ai-access";
 import { getAuth } from "@/lib/auth";
@@ -34,7 +30,7 @@ import { postgresRulesStore, TooManyRulesError } from "@/lib/rules-store";
 import { NETWORKS, parseNewRule, type NewRule, ruleInput } from "@/lib/rules";
 import { structureRule } from "@/lib/structure-rule";
 import { judgeDrafts, type Verdict } from "@/lib/judge";
-import { AiCapError, aiFor, judgeModelFor } from "@/lib/judge-model";
+import { AiCapError, judgeModelFor } from "@/lib/judge-model";
 import { limit, type Action, type Limited } from "@/lib/rate-limit";
 import { currentOffers, currentRewrites } from "@/lib/read-back";
 import { proposeRules } from "@/lib/rewrite-rules";
@@ -450,9 +446,7 @@ export async function setAiModel(model: string): Promise<SourceActionResult> {
   return { ok: true };
 }
 
-export type WriteWeekActionResult =
-  | { ok: true; saved: { local: string; channel: string }[]; refused: { slotId: string; reason: string }[]; retried: number; flags: { where: string; rule: string; verdict: "fail" | "unsure"; reason: string }[]; note?: string }
-  | { ok: false; message: string };
+export type { WriteWeekActionResult } from "@/lib/write-slots-for-user";
 
 /** The "Write drafts with my AI" button: the coming week's empty slots, written by the person's AI, saved as Buffer drafts. */
 export async function writeMyWeek(): Promise<WriteWeekActionResult> {
@@ -490,65 +484,9 @@ export async function saveSlotDraft(slotId: string, text: string): Promise<Sourc
 /** Writes and saves drafts for the coming week's empty slots, or only for one slot. */
 async function writeSlots(only?: string): Promise<WriteWeekActionResult> {
   { const l = await overLimit("ai"); if (l) return tooMany(l); }
-  let provider: Provider = "anthropic";
-  let giveBack = async () => {};
-  let settle = async () => {};
-  try {
-    const b = await bufferForWriting();
-    if (!b) return { ok: false, message: "Sign in with Buffer first." };
-    // Checked before an AI action is taken, so a click with nothing to write costs the person nothing.
-    const open = openSlots(b.channels, b.posts, b.range).slots;
-    const now = new Date();
-    const slots = slotsToWrite(open, now, b.timeZone, only);
-    if (only && !slots.length) return { ok: false, message: "That time is no longer empty. Refresh the week." };
-    if (!slots.length) return { ok: false, message: "No known empty times next week. Sync with Buffer and check the week." };
-    const ai = await aiFor(b.userId);
-    if (ai) { giveBack = ai.giveBack; settle = ai.settle; }
-    if (!ai) return { ok: false, message: "AI writing is unavailable just now. Check built-in AI or your own key in Settings." };
-    provider = ai.cfg.provider;
-    const model = ai.language;
-    const supadata = await supadataKey();
-    const r = await writeWeek(slots, now, {
-      material: async () => {
-        const items = await newMaterial(b.userId);
-        // A YouTube item carries only its description; with a Supadata key the transcript is added.
-        return Promise.all(items.map(async (m) => (supadata && m.url && /youtu\.?be/.test(m.url) ? { ...m, text: `${m.text}\n\nTranscript:\n${(await youtubeTranscript(m.url, supadata)) ?? "(none)"}` } : m)));
-      },
-      voice: () => postgresVoiceStore().get(b.userId).catch(() => ({ note: null, examples: [] })),
-      rules: () => postgresRulesStore().list(b.userId).catch(() => []),
-      write: (brief) => writeDrafts(model, brief),
-      // The playbook check is part of this one action, so it judges with the same AI instead of taking another.
-      save: (drafts, sourceKeys) => saveDraftsForUser(b.userId, b.token, { title: "Written by Queue Pilot", drafts, open: slots, sourceKeys }, { ...ai, judges: { decider: ai.decider, explainer: ai.language } }),
-    });
-    revalidatePath("/", "layout");
-    if (r.kind === "nothing") {
-      await giveBack();
-      return { ok: false, message: r.reason === "no-slots" ? "No empty times remain in the chosen week." : "No new material to write from. Add research under New material or connect a feed." };
-    }
-    const where = (slotId: string) => { const s = r.saved.find((x) => x.slotId === slotId); return s ? `${s.local} · ${s.channel}` : slotId; };
-    return {
-      ok: true,
-      saved: r.saved.map((s) => ({ local: s.local, channel: s.channel })),
-      refused: r.refused,
-      retried: r.retried,
-      flags: r.flags.map((f) => ({ where: where(f.slotId), rule: f.rule, verdict: f.verdict, reason: f.reason })),
-      note: checkNote(r.check),
-    };
-  } catch (e) {
-    if (e instanceof AiCapError || e instanceof ModelListError) return { ok: false, message: e.message };
-    if (e instanceof BufferRateLimitedError) {
-      await giveBack();
-      return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
-    }
-    if (APICallError.isInstance(e) || NoObjectGeneratedError.isInstance(e)) {
-      await giveBack();
-      return { ok: false, message: aiErrorMessage(e, provider) };
-    }
-    console.error(JSON.stringify({ event: "qp-write-week-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Could not write the drafts just now. Try again." };
-  } finally {
-    await settle();
-  }
+  const result = await writeSlotsForUser(bufferForWriting, only);
+  revalidatePath("/", "layout");
+  return result;
 }
 
 export type TryDraftResult = { ok: true; verdicts: Verdict[]; judgedWith: string } | { ok: false; message: string };
