@@ -5,7 +5,10 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+Visual progress: [29 October connection setup](docs/releases/2026-10-29/README.md), including the cleaned sharing image and original capture. These are preparation images, not completed-connection proof.
+
 ### Fixed
+- Opening the connector address in a browser now shows how to connect your AI instead of an error.
 - The page where you allow an AI to connect is a clear card: both apps side by side, your account, and what it can and cannot do.
 - Fill next week uses built-in AI when its allowance is available, shows the draft count, and writes into the displayed week.
 - A chosen empty slot late next week can be written without the old seven-day cutoff.

@@ -487,3 +487,12 @@ async function handle(req: Request): Promise<Response> {
 }
 
 export const POST = handle;
+
+/**
+ * A person who opens the connector address in a browser lands on the page that explains how to add it to their AI.
+ * AI apps never ask for HTML; they get 405, which tells them this server does not stream over GET.
+ */
+export function GET(request: Request): Response {
+  if ((request.headers.get("accept") ?? "").includes("text/html")) return Response.redirect(new URL("/connect", request.url), 307);
+  return new Response(null, { status: 405, headers: { allow: "POST" } });
+}
