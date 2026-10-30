@@ -13,19 +13,14 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Desktop: no blank strip under the sidebar when the page is scrolled.
 - Phones: the page scrolls once instead of twice, so there is no blank space below it, and the top bar stays pinned.
 - Phones: the next setup step's button no longer squeezes into a narrow column.
+- The Docker image starts again: the migration step that runs first now has the database packages it needs.
 
 ### Added
 - Paste your own posts on the Voice screen to teach your writing style.
 - Your AI can save your writing note and examples through the connector.
 - Your AI can save research text as material for drafts.
 - Page-view analytics for the deployment's own Vercel dashboard, without cookies.
-
-### Added
 - /admin has a People tab: accounts, people active today and this week, and new accounts. Counts only, never names.
-- Page-view analytics for the deployment's own Vercel dashboard, without cookies.
-
-### Fixed
-- The Docker image starts again: the migration step that runs first now has the database packages it needs.
 
 ## [0.1.2] - 2026-10-29 Security updates
 
