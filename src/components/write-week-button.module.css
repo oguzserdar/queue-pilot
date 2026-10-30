@@ -1,0 +1,5 @@
+.group { display: grid; gap: 12px; justify-items: start; }
+.inline { display: contents; }
+.help { font-size: var(--text-sm); color: var(--text-muted); }
+.inline > .help { order: 2; flex-basis: 100%; }
+.inline > .result { order: 3; flex-basis: 100%; min-width: 0; }

@@ -8,7 +8,16 @@ All notable changes to Queue Pilot are recorded here. The format follows
 ### Added
 - Your AI can now do everything you do in Queue Pilot except approve, schedule and account settings: add and remove playbook rules, check a draft before saving, keep or dismiss suggested rules, see setup progress, run Write my week, list its drafts with their checks, manage sources and material, refresh Buffer, and see what built-in AI is left.
 
-Visual progress: [29 October connection setup](docs/releases/2026-10-29/README.md), including the cleaned sharing image and original capture. These are preparation images, not completed-connection proof.
+
+- Your AI can remove a saved writing example by its exact ID through the connector, without deleting the original post or other examples.
+- Reusable ChatGPT plugin metadata includes Queue Pilot's logo and website alongside the existing Claude package and skills.
+- Connect your AI links to the skill it uses, including learning voice from the person's authorized writing sources.
+- Paste your own posts on the Voice screen to teach your writing style.
+- Your AI can save your writing note and examples through the connector.
+- Your AI can save research text as material for drafts.
+- Page-view analytics for the deployment's own Vercel dashboard, without cookies.
+- /admin has a People tab: accounts, people active today and this week, and new accounts. Counts only, never names.
+- Built-in writing is available during Commit without a personal API key, supported by $100 in Anthropic AI credits. The owner will top it up if it runs low.
 
 ### Fixed
 - Opening the connector address in a browser now shows how to connect your AI instead of an error.
@@ -24,16 +33,8 @@ Visual progress: [29 October connection setup](docs/releases/2026-10-29/README.m
 - Phones: the page scrolls once instead of twice, so there is no blank space below it, and the top bar stays pinned.
 - Phones: the next setup step's button no longer squeezes into a narrow column.
 - The Docker image starts again: the migration step that runs first now has the database packages it needs.
-
-### Added
-- Your AI can remove a saved writing example by its exact ID through the connector, without deleting the original post or other examples.
-- Reusable ChatGPT plugin metadata includes Queue Pilot's logo and website alongside the existing Claude package and skills.
-- Connect your AI links to the skill it uses, including learning voice from the person's authorized writing sources.
-- Paste your own posts on the Voice screen to teach your writing style.
-- Your AI can save your writing note and examples through the connector.
-- Your AI can save research text as material for drafts.
-- Page-view analytics for the deployment's own Vercel dashboard, without cookies.
-- /admin has a People tab: accounts, people active today and this week, and new accounts. Counts only, never names.
+- A completed draft check returns refused or passed as a normal result. A refusal no longer appears as a failed connector call.
+- Connector initialization includes the Queue Pilot name, website and logo for clients that read this metadata.
 
 ## [0.1.2] - 2026-10-29 Security updates
 

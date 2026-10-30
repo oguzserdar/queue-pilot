@@ -196,7 +196,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </PopoverContent>
             </Popover>
           )}
-          {live && open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} />}
+          {live && open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions />}
           {drafts.length > 0 && (
             confirmAll ? (
               <>
