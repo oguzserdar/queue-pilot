@@ -23,6 +23,8 @@ import { ToastStack, ToastStackProvider } from "@/registry/components/toast-stac
 import { KeyboardShortcuts } from "./keyboard-shortcuts";
 import { NavItem } from "./nav-item";
 import styles from "./app-shell.module.css";
+import { ChannelIcon } from "./channel-icon";
+import { channels as exampleChannels } from "@/lib/example-channels";
 
 /** Sidebar sections, grouped by what the person is doing: planning, learning, connecting, settings. */
 const NAV_GROUPS = [
@@ -46,7 +48,7 @@ const NAV_GROUPS = [
 /** The signed-in account the frame shows; null for the example account. */
 export type ShellAccount = {
   email: string;
-  channelCount: number;
+  channels: { id: string; name: string; service: string }[];
   fetchedAt: string;
   needsRefresh: boolean;
   /** Name and picture from the person's Buffer account, for the account menu. */
@@ -57,6 +59,16 @@ export type ShellAccount = {
   /** Development states page only. */
   syncPreview?: SyncStatus;
 } | null;
+
+/** The same compact channel identity for real and example accounts. */
+function ChannelStatus({ channels }: { channels: NonNullable<ShellAccount>["channels"] }) {
+  if (!channels.length) return <span className={styles.statusLine}>No channels in Buffer <a className={styles.statusLink} href={BUFFER_CHANNELS_URL} target="_blank" rel="noreferrer">Add</a></span>;
+  const names = channels.map(c => `${c.name} (${c.service})`).join(", ");
+  return <Link href="/sources" className={styles.channelStatus} title={names} aria-label={`Buffer channels: ${names}`}>
+    {channels.length <= 2 ? channels.map(c => <span key={c.id} className={styles.channelName}><ChannelIcon service={c.service} /><span>{c.name}</span></span>) :
+      <span className={styles.channelSummary}><span className={styles.channelLogos} aria-hidden="true">{channels.slice(0, 4).map(c => <span key={c.id}><ChannelIcon service={c.service} size={14} /></span>)}</span><span>{channels.length} channels</span></span>}
+  </Link>;
+}
 
 /** Sync state exists only for a signed-in account; example data has nothing to sync. */
 function MaybeSync({ account, children }: { account: ShellAccount; children: ReactNode }) {
@@ -94,9 +106,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
             {account ? (
               <>
                 <div className={`${styles.syncRow} ${styles.statusCard}`}>
-                  {account.channelCount === 0
-                    ? <span className={styles.statusLine}>No channels in Buffer <a className={styles.statusLink} href={BUFFER_CHANNELS_URL} target="_blank" rel="noreferrer">Add</a></span>
-                    : <span className={styles.statusLine}>{account.channelCount} channel{account.channelCount === 1 ? "" : "s"} in Buffer</span>}
+                  <ChannelStatus channels={account.channels} />
                   <SyncIndicator />
                 </div>
                 <div className={styles.menuRow}><AccountMenu name={account.name} email={account.email} image={account.image} isAdmin={account.isAdmin} /></div>
@@ -105,7 +115,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
               <>
                 {/* The same status card as a signed-in account, describing the example one. */}
                 <div className={`${styles.syncRow} ${styles.statusCard}`}>
-                  <span className={styles.statusLine}>4 channels in Buffer</span>
+                  <ChannelStatus channels={exampleChannels.map(c => ({ ...c, name: c.handle }))} />
                   <span className={styles.statusNote}>Example account: Mark Evans</span>
                 </div>
                 {signInOpen ? <SignInButton variant="primary" size="md" className={styles.signIn} /> : <span className={`${styles.aiNote} ${styles.who}`}>Sign in with Buffer opens shortly.</span>}

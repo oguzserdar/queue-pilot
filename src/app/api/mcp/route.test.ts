@@ -375,6 +375,13 @@ describe("connector controls", () => {
       expect(buffer.calls.some(c => /schedulePost|publishPost/.test(c.query))).toBe(false);
     } finally { draftWriter.mockRestore(); }
   });
+  it("lists owned drafts even when Buffer reports via=buffer, excluding other apps and scheduled posts", async () => {
+    posts = ["ours", "foreign", "scheduled"].map(id => ({ id, channelId: "ch", status: id === "scheduled" ? "scheduled" : "draft", via: "buffer", text: "A useful release for builders.", dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null } as Post));
+    written.set("person-a", [{ postId: "ours", text: posts[0].text!, network: "twitter" }, { postId: "scheduled", text: posts[2].text!, network: "twitter" }]);
+    written.set("person-b", [{ postId: "foreign", text: posts[1].text!, network: "twitter" }]);
+    const result = JSON.parse(answer(await call("list_my_drafts")));
+    expect(result.drafts.map((p: { postId: string }) => p.postId)).toEqual(["ours"]);
+  });
   it("gives back the AI action when the built-in writer has no material", async () => {
     const r = await call("write_my_week");
     expect(r.isError).toBe(true);
@@ -409,6 +416,11 @@ describe("remaining account controls", () => {
     posts = [1, 2].map(i => ({ id: `p${i}`, channelId: "ch", status: "draft" as const, via: "api" as const, text: `Use stock to make soup number ${i} for dinner.`, dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
     written.set("person-a", posts.map(p => ({ postId: p.id, text: p.text.replace("stock", "broth"), network: "linkedin" })));
     await call("refresh_buffer");
+    posts = posts.map(p => ({ ...p, text: p.text!.replace("stock", "broth") }));
+    vi.setSystemTime(new Date("2026-10-29T12:02:00Z"));
+    await call("refresh_buffer");
+    posts = posts.map(p => ({ ...p, text: p.text!.replace("broth", "stock") }));
+    vi.setSystemTime(new Date("2026-10-29T12:03:00Z"));
     const found = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
     expect(found.suggestions).toHaveLength(1);
     expect(found.suggestions[0].rule).toMatchObject({ kind: "replace", from: "broth", to: "stock" });
@@ -416,6 +428,17 @@ describe("remaining account controls", () => {
     expect(JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" }, "person-b"))).suggestions).toHaveLength(0);
     await call("dismiss_suggestion", { token: found.suggestions[0].token });
     expect(JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" }))).suggestions).toHaveLength(0);
+  });
+  it("learns a repeated emoji removal through the connector and keeps its real evidence", async () => {
+    posts = [1, 2].map(i => ({ id: `emoji-${i}`, channelId: "ch", status: "draft" as const, via: "buffer" as const, text: `A useful release for builders today, part ${i}.`, dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
+    written.set("person-a", posts.map(p => ({ postId: p.id, text: `${p.text} 🚀`, network: "twitter" })));
+    const found = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    expect(found.suggestions).toHaveLength(1);
+    expect(found.suggestions[0].rule).toMatchObject({ kind: "banned", phrases: ["🚀"], level: "block" });
+    expect(found.suggestions[0].evidence.examples).toHaveLength(2);
+    const kept = JSON.parse(answer(await call("keep_suggestion", { token: found.suggestions[0].token })));
+    expect(kept.ok).toBe(true);
+    expect(answer(await call("read_rule", { id: kept.id }))).toContain("🚀");
   });
   it("reads channels and AI allowance without consuming an AI action", async () => {
     vi.stubEnv("SETTINGS_KEY", "");

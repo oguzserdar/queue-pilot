@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const [{ user, signInOpen }, profile] = await Promise.all([getCurrentUser(), signedInProfile()]);
   return (
-    <AppShell account={user ? { email: user.email, channelCount: user.channels.length, fetchedAt: user.fetchedAt.toISOString(), needsRefresh: user.needsRefresh, name: profile?.name ?? user.email, image: profile?.image ?? null, isAdmin: profile?.isAdmin } : null} signInOpen={signInOpen}>
+    <AppShell account={user ? { email: user.email, channels: user.channels.map(({ id, name, service }) => ({ id, name, service })), fetchedAt: user.fetchedAt.toISOString(), needsRefresh: user.needsRefresh, name: profile?.name ?? user.email, image: profile?.image ?? null, isAdmin: profile?.isAdmin } : null} signInOpen={signInOpen}>
       {children}
     </AppShell>
   );

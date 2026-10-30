@@ -5,6 +5,15 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Learn repeated emoji removals without producing an empty rule, and refresh Buffer before looking for edits.
+- Include Queue Pilot's recorded drafts when Buffer labels them as created in Buffer.
+- Show channel names and network logos in the sidebar's Buffer status card.
+
+- Connection permissions describe voice, playbook, source and draft changes. Claude's consent card uses its logo, and expired requests have a compact recovery card.
+- Connect puts chat apps before coding-agent setup and makes the scheduling boundary clear.
+
 ## [0.2.0] - 2026-10-29 Your AI runs your Buffer week
 
 Built-in writing is free during Buffer Commit. I put in $100 of Anthropic AI credits as a shared budget, with a daily allowance per person. I'll top it up if it runs low. Bring your own key any time.

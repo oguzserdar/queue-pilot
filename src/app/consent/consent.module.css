@@ -6,7 +6,9 @@
 .clientTile { display: grid; place-items: center; background: var(--surface-muted); border: 1px solid var(--border); font-weight: 700; font-size: 24px; color: var(--foreground); }
 .appTile { display: block; }
 .link { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; color: var(--text-muted); border: 1px dashed var(--border-strong); }
-.title { font-size: var(--text-lg); font-weight: 500; line-height: 1.3; text-align: center; text-wrap: balance; }
+.title { font-size: var(--text-lg); font-weight: 500; line-height: 1.3; text-align: center; text-wrap: balance; overflow-wrap: anywhere; }
+.expiredIcon { align-self: center; border-radius: 14px; }
+.helpLink { text-align: center; color: var(--qp-crimson); font-weight: 600; }
 .title strong { font-weight: 700; }
 .account { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
 .avatar { width: 32px; height: 32px; border-radius: 999px; flex: none; display: grid; place-items: center; background: var(--surface-muted); font-weight: 600; object-fit: cover; }

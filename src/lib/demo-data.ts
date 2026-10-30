@@ -4,21 +4,12 @@
  * and an optional error. Drafts also carry, when Mark changed one, his edit.
  */
 
+import { channels, type Channel, type ChannelId } from "./example-channels";
+export { channels, type Channel, type ChannelId } from "./example-channels";
+
 import type { WeekModel } from "./week-model";
 import { channelCheck } from "./preflight";
 import { countFor, limitFor, tooLong } from "./char-limits";
-
-export type ChannelId = "linkedin" | "instagram" | "bluesky" | "x";
-
-export type Channel = {
-  id: ChannelId;
-  name: string;
-  /** Buffer's network name, as on a real channel. */
-  service: string;
-  handle: string;
-  isDisconnected: boolean;
-  isQueuePaused: boolean;
-};
 
 export type Source = {
   kind: "newsletter" | "blog" | "youtube" | "github";
@@ -49,12 +40,6 @@ export type Check = { tone: "success" | "warning" | "danger"; label: string };
 export const WEEK_LABEL = "Mon 26 Oct – Sun 1 Nov 2026";
 export const DAYS = ["Mon 26", "Tue 27", "Wed 28", "Thu 29", "Fri 30", "Sat 31", "Sun 1"];
 
-export const channels: Channel[] = [
-  { id: "linkedin", service: "linkedin", name: "LinkedIn", handle: "Mark Evans", isDisconnected: false, isQueuePaused: false },
-  { id: "instagram", service: "instagram", name: "Instagram", handle: "@weeknightdinners", isDisconnected: false, isQueuePaused: false },
-  { id: "bluesky", service: "bluesky", name: "Bluesky", handle: "weeknightdinners.bsky.social", isDisconnected: true, isQueuePaused: false },
-  { id: "x", service: "twitter", name: "X", handle: "@weeknightdinners", isDisconnected: false, isQueuePaused: false },
-];
 
 /** Posting slots from each channel's postingSchedule, as day index → times. */
 export const slots: Record<ChannelId, Record<number, string[]>> = {

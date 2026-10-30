@@ -82,3 +82,14 @@
 
 /* The status card's second line when there is no sync to show, as on the example account. */
 .statusNote { color: var(--text-muted); }
+
+/* Channel names stay readable in the narrow sidebar; larger accounts share a compact logo row. */
+.channelStatus { display: grid; gap: 6px; min-width: 0; color: var(--text-secondary); text-decoration: none; border-radius: 4px; }
+.channelStatus:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 3px; }
+.channelName { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.channelName svg { flex: none; }
+.channelName > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channelSummary { display: flex; align-items: center; gap: 8px; }
+.channelLogos { display: flex; padding-left: 0; }
+.channelLogos > span { display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid var(--surface); border-radius: 50%; background: var(--surface-muted); }
+.channelLogos > span + span { margin-left: -6px; }

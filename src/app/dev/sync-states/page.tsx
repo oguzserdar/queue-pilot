@@ -1,3 +1,4 @@
+import { channels as exampleChannels } from "@/lib/example-channels";
 import { notFound } from "next/navigation";
 import { AppShell, type ShellAccount } from "@/components/app-shell";
 import type { SyncStatus } from "@/components/buffer-sync";
@@ -16,7 +17,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const state = STATES[name] ?? STATES.fresh;
   const account: ShellAccount = {
     email: "mark@weeknightdinners.example",
-    channelCount: 3,
+    channels: exampleChannels.slice(0, 3).map(c => ({ ...c, name: c.handle })),
     fetchedAt: new Date(Date.now() - state.minutesAgo * 60_000).toISOString(),
     needsRefresh: false,
     name: "Mark Evans",

@@ -1,3 +1,4 @@
+import { channels as exampleChannels } from "@/lib/example-channels";
 import { notFound } from "next/navigation";
 import { AppShell, type ShellAccount } from "@/components/app-shell";
 import { SourcesView } from "@/components/sources-view";
@@ -6,7 +7,7 @@ import { SourcesView } from "@/components/sources-view";
 export default async function Page({ searchParams }: { searchParams: Promise<{ connected?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
   const connected = (await searchParams).connected === "1";
-  const account: ShellAccount = { email: "mark@weeknightdinners.example", channelCount: 3, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Mark Evans", image: null };
+  const account: ShellAccount = { email: "mark@weeknightdinners.example", channels: exampleChannels.slice(0, 3).map(c => ({ ...c, name: c.handle })), fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Mark Evans", image: null };
   return (
     <AppShell account={account} signInOpen>
       <SourcesView

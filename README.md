@@ -8,10 +8,7 @@ Your AI writes next week's posts into Buffer as drafts. When you fix the same th
 
 ![Needs you: the drafts to approve, a fix made twice, a post that would fail, and an empty slot, in one list](docs/media/hero.png)
 
-Teach your voice with a short note and pasted posts on the Voice screen, even with no sent posts.
-Through the connector, use `save_my_voice_note` and `add_voice_example` when you want your AI to remember your style.
-Use `add_source` for a feed or releases page, or `add_material` for research text with a title and optional link.
-Read `get_my_voice`, `get_playbook` and `read_material` before drafting. `save_drafts` returns the checks and any refusals.
+Teach Queue Pilot your voice by pasting something you've written, or ask your connected AI to learn it from writing you choose.
 
 ## See it work
 
@@ -67,7 +64,15 @@ https://getqueuepilot.com/api/mcp
 
 Then ask, for example: *"Fill my empty Buffer times next week from my newsletter's latest issue."*
 
-The connector can read your week and your material, save drafts, and change or delete only the drafts it wrote. It cannot schedule, publish, or touch a post you wrote yourself.
+### What your AI can do
+
+- **Learn your voice and use your material.** Save a style note and writing examples with `save_my_voice_note` and `add_voice_example`, add feeds with `add_source`, or keep research with `add_material`.
+- **Follow your playbook.** Read, add or remove rules when you ask, and try a draft against them with `check_draft` before saving it.
+- **Write your week.** Read the open slots, run Queue Pilot's writer with `write_my_week` for up to ten drafts, then read the drafts and their checks with `list_my_drafts`. It can also edit or delete drafts Queue Pilot wrote.
+
+Give your AI the [Fill my week skill](https://github.com/oguzserdar/queue-pilot/blob/main/plugin/skills/queue-pilot-fill-week/SKILL.md) for the steps to follow once connected.
+
+Approving and scheduling stay with you, along with account settings, AI keys and app access. The connector cannot schedule, publish, or change posts Queue Pilot did not write.
 
 ## Your AI key, or ours
 
@@ -141,7 +146,7 @@ The budget is enforced by Queue Pilot: before each built-in AI action it compare
 
 Next up, on the way to 1.0:
 
-- **More places to write from.** Claude, ChatGPT and Grok first, then your terminal and your editor.
+- **More places to write from.** Claude and ChatGPT connections are available. Next are Grok and coding agents, including Claude Code, Codex and Cursor.
 - **Rules from day one.** Your first rules come from the posts and notes already in Buffer.
 - **Your team's notes count.** A note left on a draft in Buffer becomes a rule too.
 

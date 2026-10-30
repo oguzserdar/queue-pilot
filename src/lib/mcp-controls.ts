@@ -78,7 +78,7 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
   });
   server.registerTool("list_rule_suggestions", {
     title: "Find rules in my edits and posts",
-    description: "List suggestions without keeping any. fixes reads repeated small edits from the saved queue; rewrites uses an AI action to learn from larger rewrites; past_posts reads recent Buffer posts and uses AI to find first rules. Show the evidence and ask which to keep. Use each returned token with keep_suggestion or dismiss_suggestion within an hour.",
+    description: "List suggestions without keeping any. fixes refreshes the queue within the shared request allowance and reads repeated small edits; rewrites uses an AI action to learn from larger rewrites; past_posts reads recent Buffer posts and uses AI to find first rules. Show the evidence and ask which to keep. Use each returned token with keep_suggestion or dismiss_suggestion within an hour.",
     inputSchema: z.object({ mode: z.enum(["fixes", "rewrites", "past_posts"]).default("fixes") }), annotations: { ...read, openWorldHint: true },
   }, async ({ mode }) => {
     if (mode !== "fixes") {
@@ -88,6 +88,16 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     if (mode === "past_posts") {
       const l = await limit("bufferWrite", userId);
       if (!l.ok) return result("Too many Buffer requests just now. Try again in a minute.", true);
+    }
+    // Learning must see edits made in Buffer, not just the last screen's saved copy.
+    // Forced refresh shares the same 30-second reuse window and per-person budget as the refresh tool.
+    if (mode !== "past_posts") {
+      const l = await limit("bufferWrite", userId);
+      if (!l.ok) return result("Too many Buffer requests just now. Try again in a minute.", true);
+      const b = await buffer(true);
+      const suggestions = await ruleSuggestions(userId, mode, () => buffer());
+      const retryAfterSeconds = Math.max(0, Math.ceil((b.fetchedAt.getTime() + 30_000 - Date.now()) / 1000));
+      return result({ ...suggestions, asOf: b.fetchedAt.toISOString(), ...(suggestions.suggestions.length === 0 && retryAfterSeconds > 0 ? { retryAfterSeconds, freshnessNote: "Buffer refreshes share a 30-second reuse window. If your edits are newer than asOf, try again after retryAfterSeconds." } : {}) });
     }
     return result(await ruleSuggestions(userId, mode, () => buffer()));
   });
@@ -117,7 +127,8 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
   });
   server.registerTool("list_my_drafts", { title: "Read Queue Pilot drafts and checks", description: "List next week's drafts written by Queue Pilot with stored playbook verdicts. Changed text is marked so old verdicts are not presented as a fresh check. Never includes another app's drafts.", annotations: read }, async () => {
     const b = await buffer(); const range = nextWeekRange(new Date(), b.timeZone);
-    const posts = postsBetween(b.posts, range.start, range.end).filter(p => p.status === "draft" && p.via === "api");
+    // Buffer can label our API-created drafts via=buffer. The account-scoped writing record proves ownership.
+    const posts = postsBetween(b.posts, range.start, range.end).filter(p => p.status === "draft");
     const written = await postgresWrittenStore().get(userId, posts.map(p => p.id));
     return result({ asOf: b.fetchedAt.toISOString(), drafts: posts.flatMap(p => {
       const w = written.find(w => w.postId === p.id);

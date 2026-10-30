@@ -22,10 +22,14 @@ const MAX_ENDING_WORDS = 12;
 const MAX_CHANGED_SHARE = 0.5;
 const MIN_REPEATS = 2;
 
-const words = (s: string) => s.trim().split(/\s+/).filter(Boolean);
-/** Compares words without case or trailing punctuation, so "Broth" and "broth," are the same word. */
-const norm = (w: string) => w.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
-const bare = (ws: string[]) => ws.map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")).join(" ");
+// Keep emoji graphemes intact (including skin tones, flags and joined families), even beside a word.
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+const emoji = /[\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u;
+const words = (s: string) => [...graphemes.segment(s)].map(({ segment }) => emoji.test(segment) ? ` ${segment} ` : segment).join("").trim().split(/\s+/).filter(Boolean);
+const clean = (w: string) => emoji.test(w) ? w : w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+/** Compare words without case or edge punctuation, preserving symbols so different emoji stay distinct. */
+const norm = (w: string) => clean(w).toLowerCase() || w;
+const bare = (ws: string[]) => ws.map(clean).filter(Boolean).join(" ");
 
 type Hunk = { removed: string[]; added: string[]; atEnd: boolean };
 
@@ -65,6 +69,9 @@ export function fixesIn(before: string, after: string): Fix[] {
   if (!hs.length || changed / Math.max(a.length, 1) > MAX_CHANGED_SHARE) return [];
   const fixes: Fix[] = [];
   for (const h of hs) {
+    // Punctuation-only changes are not word preferences and must never become empty rules.
+    if (h.removed.length && !bare(h.removed)) continue;
+    if (h.added.length && !bare(h.added)) continue;
     if (!h.removed.length && h.atEnd && h.added.length <= MAX_ENDING_WORDS) fixes.push({ kind: "ends_with", phrase: h.added.join(" ") });
     else if (h.removed.length && h.added.length && h.removed.length <= MAX_SWAP_WORDS && h.added.length <= MAX_SWAP_WORDS)
       fixes.push({ kind: "replace", from: bare(h.removed).toLowerCase(), to: bare(h.added).toLowerCase() });
