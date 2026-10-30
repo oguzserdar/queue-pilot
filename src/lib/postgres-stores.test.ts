@@ -228,6 +228,11 @@ describe("research material on real Postgres", () => {
     expect(await store.list("u1")).toEqual([])
     expect(await store.list("u2")).toEqual([item])
     expect(await store.get("u1", item.key)).toEqual(item)
+    await store.remove("u1", item.key)
+    expect(await store.get("u1", item.key)).toBeNull()
+    expect(await store.get("u2", item.key)).toEqual(item)
+    await store.add("u1", input)
+    expect(await store.list("u1")).toEqual([]) // used history survives cleanup
     await expect(store.add("u1", { title: " ", text: "x" })).rejects.toThrow()
     await expect(store.add("u1", { title: "Notes", text: "x".repeat(12_001) })).rejects.toThrow()
   })

@@ -7,6 +7,8 @@
 export type RuleLevel = "block" | "warn";
 
 type RuleBase = {
+  /** Evidence saved only by the server when a suggestion is kept. */
+  learnedFrom?: unknown;
   id: string;
   /** The rule as the person reads it in their playbook. */
   text: string;

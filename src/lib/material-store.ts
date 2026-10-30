@@ -20,6 +20,7 @@ export type MaterialStore = {
   add(userId: string, input: z.infer<typeof materialInput>): Promise<Material>
   list(userId: string): Promise<Material[]>
   get(userId: string, key: string): Promise<Material | null>
+  remove(userId: string, key: string): Promise<void>
 }
 
 function itemFor(input: z.infer<typeof materialInput>): Material {
@@ -42,6 +43,9 @@ export function postgresMaterialStore(): MaterialStore {
       const rows = await db().select().from(material).where(and(eq(material.userId, userId), notExists(used))).orderBy(desc(material.addedAt)).limit(20)
       return rows.map(fromRow)
     },
+    async remove(userId, key) {
+      await db().delete(material).where(and(eq(material.userId, userId), eq(material.key, key)))
+    },
     async get(userId, key) {
       const [row] = await db().select().from(material).where(and(eq(material.userId, userId), eq(material.key, key)))
       return row ? fromRow(row) : null
@@ -61,6 +65,7 @@ export function memoryMaterialStore(): MaterialStore {
       return { ...item }
     },
     async list(userId) { return [...(rows.get(userId)?.values() ?? [])].reverse().map((item) => ({ ...item })) },
+    async remove(userId, key) { rows.get(userId)?.delete(key) },
     async get(userId, key) { return structuredClone(rows.get(userId)?.get(key) ?? null) },
   }
 }
