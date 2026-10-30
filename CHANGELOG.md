@@ -5,26 +5,26 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-30 Your AI runs your Buffer week
+## [0.2.0] - 2026-10-29 Your AI runs your Buffer week
 
-Built-in writing is free during Buffer Commit, with $100 of Anthropic AI credits I put in. I'll top it up if it runs low. Bring your own key any time.
+Built-in writing is free during Buffer Commit. I put in $100 of Anthropic AI credits as a shared budget, with a daily allowance per person. I'll top it up if it runs low. Bring your own key any time.
 
 ### Added
 - Your AI can run Queue Pilot for you through 31 connector tools: learn your voice, add sources and research, add and remove playbook rules, check a draft before saving, keep or dismiss suggested rules, see setup progress, run Write my week, and list its drafts with their checks. Approving, scheduling and account settings stay with you.
 - Teach your voice without past posts: paste what you wrote on the Voice screen, or let your AI read your writing and save examples.
 - A GitHub releases page works as a source, and research your AI finds can be handed over as material.
 - Your AI can remove a voice example it saved.
-- The ChatGPT and Claude packages carry Queue Pilot's logo, website and the skill they use.
-- Cookie-free page-view counts for the deployment's own Vercel dashboard.
+- Connector metadata includes Queue Pilot's logo and website. The ChatGPT and Claude packages include the fill-week skill.
+- Vercel Web Analytics for page-view counts in the deployment's Vercel dashboard.
 
 ### Fixed
-- Approve schedules only drafts Queue Pilot wrote, and every screen and tool says so: AI tools save drafts, only your Approve schedules.
-- A draft refused by a playbook rule comes back as a normal refusal with the rule and the reason, not as a failed call.
-- Only recent feed items count as news, so drafts no longer re-announce old releases.
+- Approve checks that Queue Pilot wrote a draft before scheduling it. AI tools save drafts. Scheduling stays with you.
+- Check draft returns a playbook refusal as a normal verdict with the rule and the reason. Invalid inputs still return errors.
+- New feed material is limited to dated items from the last 14 days. GitHub releases feeds offer only their newest eligible release. Older items remain available as background.
 - Fill next week uses built-in AI when available, shows the draft count, and writes into the week shown. A late empty slot can be written too.
 - Missing mandatory playbook checks stop saves and edits, with a reason to retry.
-- The Docker image starts: the migration step now has its database packages, and CI runs the full self-host path on every push.
-- One layout at every screen size: the page scrolls and the sidebar stays pinned. No blank space below the page on phones or desktop.
+- The Docker migration step includes its database packages. CI checks self-hosted startup, migrations and readiness.
+- The page scrolls with a pinned desktop sidebar and a compact phone navigation bar.
 - Phones: setup buttons fill their row and the account row has room.
 - Fill next week and Approve sit in one aligned row.
 - The page where you allow an AI to connect is a clear card: both apps, your account, and what it can and cannot do.
