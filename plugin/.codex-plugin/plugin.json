@@ -1,0 +1,25 @@
+{
+  "name": "queue-pilot",
+  "version": "0.1.0",
+  "description": "Fill your empty Buffer times with drafts from your own material, in your voice, checked against your playbook.",
+  "author": {
+    "name": "Oguz Serdar",
+    "url": "https://getqueuepilot.com"
+  },
+  "homepage": "https://getqueuepilot.com",
+  "repository": "https://github.com/oguzserdar/queue-pilot",
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Queue Pilot",
+    "shortDescription": "Your voice. Your Buffer drafts.",
+    "longDescription": "Learn your writing voice, follow your playbook, and fill your Buffer week with drafts. You approve scheduling.",
+    "developerName": "Oguz Serdar",
+    "category": "Productivity",
+    "capabilities": [],
+    "websiteURL": "https://getqueuepilot.com",
+    "logo": "./assets/icon.png",
+    "composerIcon": "./assets/icon.png"
+  }
+}

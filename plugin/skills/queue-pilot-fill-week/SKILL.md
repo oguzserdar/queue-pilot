@@ -43,6 +43,7 @@ The Queue Pilot tools must be connected. If they are missing, or a call says acc
 
 ## Good to know
 
+- When the person asks to clear their voice, read `get_my_voice`, remove each requested example with `remove_voice_example` using its returned ID, and clear the note with `save_my_voice_note` using an empty string. Read `get_my_voice` again to verify. Never use browser forms or direct database edits as a substitute for missing connector tools.
 - `list_open_slots` covers the next 14 days. `show_next_week` covers next Monday to Sunday only.
 - `read_material` has a YouTube transcript only when the host set one up. Otherwise it has the title and description. Do not claim to have watched the video.
 - A person can have up to 10 feeds.

@@ -112,7 +112,7 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(14)
+    expect(tools).toHaveLength(15)
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
     expect(tools.find((t: { name: string }) => t.name === "save_my_voice_note").inputSchema.properties.note.maxLength).toBe(MAX_NOTE)
   })
@@ -126,6 +126,32 @@ describe("connector voice writes", () => {
     expect((await call("save_my_voice_note", { note: "x".repeat(MAX_NOTE) })).isError).not.toBe(true)
     await call("save_my_voice_note", { note: "" })
     expect((await voices.get("person-a")).note).toBeNull()
+  })
+
+  it("removes only the requested example owned by the token's person", async () => {
+    await voices.setNote("person-a", "Keep this note")
+    await voices.addExample("person-a", { postId: "a-1", channel: "Pasted", text: "First" })
+    await voices.addExample("person-a", { postId: "a-2", channel: "Pasted", text: "Second" })
+    await voices.addExample("person-b", { postId: "b-1", channel: "Pasted", text: "Private" })
+    expect(answer(await call("get_my_voice"))).toContain('Example ID: "a-1"')
+    expect(answer(await call("get_my_voice"))).not.toContain("b-1")
+    await call("remove_voice_example", { exampleId: "b-1", userId: "person-b" })
+    expect((await voices.get("person-b")).examples).toHaveLength(1)
+    expect(answer(await call("remove_voice_example", { exampleId: "a-1" }))).toContain("removed")
+    expect(await voices.get("person-a")).toEqual({ note: "Keep this note", examples: [{ postId: "a-2", channel: "Pasted", text: "Second" }] })
+    await call("remove_voice_example", { exampleId: "a-1" })
+    expect((await voices.get("person-a")).examples).toHaveLength(1)
+    expect(buffer.calls).toHaveLength(0)
+  })
+
+  it("hides storage failures when removing a writing example", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    await voices.addExample("person-a", { postId: "a-1", channel: "Pasted", text: "First" })
+    vi.spyOn(voices, "removeExample").mockRejectedValue(new Error("private person-a SQL failure"))
+    const result = await call("remove_voice_example", { exampleId: "a-1" })
+    expect(result.isError).toBe(true)
+    expect(answer(result)).toBe("Could not remove that example just now. Try again in a minute.")
+    log.mockRestore()
   })
 
   it("saves pasted posts and refuses blank, long or excess examples", async () => {

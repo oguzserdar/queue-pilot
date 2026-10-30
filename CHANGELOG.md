@@ -23,6 +23,8 @@ Visual progress: [29 October connection setup](docs/releases/2026-10-29/README.m
 - The Docker image starts again: the migration step that runs first now has the database packages it needs.
 
 ### Added
+- Your AI can remove a saved writing example by its exact ID through the connector, without deleting the original post or other examples.
+- Reusable ChatGPT plugin metadata includes Queue Pilot's logo and website alongside the existing Claude package and skills.
 - Connect your AI links to the skill it uses, including learning voice from the person's authorized writing sources.
 - Paste your own posts on the Voice screen to teach your writing style.
 - Your AI can save your writing note and examples through the connector.

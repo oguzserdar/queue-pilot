@@ -2,7 +2,7 @@
   "mcpServers": {
     "queue-pilot": {
       "type": "http",
-      "url": "https://queue-pilot-oguzserdars-projects.vercel.app/api/mcp"
+      "url": "https://getqueuepilot.com/api/mcp"
     }
   }
 }

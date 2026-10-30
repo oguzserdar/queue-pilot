@@ -15,6 +15,7 @@ const TOOLS: [string, string][] = [
   ["get_my_voice", "How the person writes: their note and example posts. Match it."],
   ["save_my_voice_note", "Save how the person says they write when they ask you to remember it. Up to 500 characters."],
   ["add_voice_example", "Save a post the person wrote when they ask you to learn their style. Up to 2000 characters and eight examples."],
+  ["remove_voice_example", "Remove a saved style example only when the person asks, using its exact ID from get_my_voice. Does not delete the original post."],
   ["get_playbook", "Their rules per network, learned from fixes they made more than once. Follow every one."],
   ["list_new_material", "What they published recently (newsletter, blog, YouTube, releases) that no post covers yet."],
   ["read_material", "The full text of one item from list_new_material."],
