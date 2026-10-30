@@ -95,7 +95,7 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
         <h2 id="buffer" className={styles.h2}>Buffer</h2>
         <p className={styles.muted}>You sign in with Buffer, so your name, email and picture come from your Buffer account. Change them in Buffer, and Queue Pilot picks them up the next time you sign in.</p>
         <div className={styles.rows}>
-          <div className={styles.row}>
+          <div className={`${styles.row} ${styles.accountRow}`}>
             <div className={styles.profile}>
               <Avatar name={account.name} src={account.image ?? undefined} size="lg" />
               <div className={styles.name}>
