@@ -13,7 +13,7 @@ import { postsBetween } from "@/lib/posts-between";
 import { deliveriesFromBuffer } from "@/lib/delivery-model";
 import { nextWeekRange, weekFromBuffer } from "@/lib/week-from-buffer";
 import { knownRange, openSlots } from "@/lib/open-slots";
-import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
+import { checkNote, judgeEdit, PLAYBOOK_REFUSAL, saveDraftsForUser } from "@/lib/save-for-user";
 import { limitFor } from "@/lib/char-limits";
 import { fillWeekPrompt } from "@/lib/fill-week-prompt";
 import { addPastedExample, InvalidVoiceExampleError, MAX_NOTE, MAX_PASTED_TEXT, postgresVoiceStore, TooManyExamplesError } from "@/lib/voice-store"
@@ -32,7 +32,7 @@ import type { Post } from "@/lib/buffer/queries";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { APIError } from "better-auth/api";
 import * as z from "zod";
-import { FeedError, feedUrl, newItems, readFeed, scopeKeys, splitKey } from "@/lib/feeds"
+import { FeedError, feedUrl, freshItems, readFeed, scopeKeys, splitKey } from "@/lib/feeds"
 import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
 
 type Auth = NonNullable<Awaited<ReturnType<typeof getAuth>>>;
@@ -88,9 +88,13 @@ const TOOL_LIMIT: Record<string, Action> = {
   read_material: "outbound",
 };
 
-function buildServer(auth: Auth, userId: string) {
+function buildServer(auth: Auth, userId: string, websiteUrl: string) {
   // Sent once when the AI connects; clients put it in the model's context, so the AI knows the order before any tool call.
-  const server = new McpServer({ name: "queue-pilot", version: "0.1.0" }, { instructions: SERVER_INSTRUCTIONS });
+  const server = new McpServer({
+    name: "queue-pilot", version: "0.1.0", title: "Queue Pilot",
+    websiteUrl,
+    icons: [{ src: `${websiteUrl}/icon-512.png`, mimeType: "image/png", sizes: ["512x512"] }],
+  }, { instructions: SERVER_INSTRUCTIONS });
   // Every tool runs behind one guard: Queue Pilot's own errors keep their wording, but a database error (whose message
   // carries SQL and the user id) is logged and replaced before anything reaches the chat.
   const register = server.registerTool.bind(server);
@@ -210,9 +214,9 @@ function buildServer(auth: Auth, userId: string) {
       const judged = res.check === "judged" && res.judgedWith ? [`Checked against the user's playbook by a model (${res.judgedWith}).`] : [];
       const unchecked = checkNote(res.check) ? [checkNote(res.check)!] : [];
       const answer = text([`${res.saved.length} saved, ${res.refused.length} not saved, as Buffer drafts (${res.requests} request${res.requests === 1 ? "" : "s"}).`, ...saved, ...notes, ...refused, ...judged, ...unchecked].join("\n"));
-      // A refused draft is a tool execution error, so the AI fixes it and calls again (MCP: isError results are given
-      // to the model for self-correction).
-      return res.refused.length ? { ...answer, isError: true } : answer;
+      // A completed playbook refusal is a normal verdict. Actual save failures still report an error.
+      const failed = res.refused.some(r => !r.reason.startsWith(PLAYBOOK_REFUSAL));
+      return failed ? { ...answer, isError: true } : answer;
     },
   );
 
@@ -311,7 +315,7 @@ function buildServer(auth: Auth, userId: string) {
       const blocks = sources.map((src, i) => {
         const r = results[i];
         if (r.status === "rejected") return `${src.title}: could not be read (${r.reason instanceof FeedError ? r.reason.message : "it did not answer properly"}).`;
-        const items = newItems(scopeKeys(src.id, r.value.items), used, 5);
+        const items = freshItems(scopeKeys(src.id, r.value.items), used, src.url, 5);
         return items.length
           ? `${src.title}:\n` + items.map((it) => `- key: ${it.key}\n  ${it.title}${it.published ? ` (${it.published.slice(0, 10)})` : ""}${it.url ? `\n  ${it.url}` : ""}${it.summary ? `\n  ${it.summary}` : ""}`).join("\n")
           : `${src.title}: nothing new.`;
@@ -487,7 +491,8 @@ function tooMany(action: Action, l: Limited): Response {
 async function handle(req: Request): Promise<Response> {
   const auth = await getAuth();
   if (!auth) return Response.json({ error: "Queue Pilot is not open yet" }, { status: 503 });
-  const resource = mcpResource((await auth.$context).baseURL.replace(/\/api\/auth\/?$/, ""));
+  const websiteUrl = (await auth.$context).baseURL.replace(/\/api\/auth\/?$/, "");
+  const resource = mcpResource(websiteUrl);
   const protectedHandler = requireMcpAuth(
     auth,
     async (request, claims) => {
@@ -502,7 +507,7 @@ async function handle(req: Request): Promise<Response> {
       const l = await limit("mcp", `${userId}:${clientId}`);
       if (!l.ok) return tooMany("mcp", l);
       // Older (2025) clients are served statelessly too, so ChatGPT and Claude work whichever protocol they speak.
-      const res = await createMcpHandler(() => buildServer(auth, userId), { legacy: "stateless" }).fetch(request);
+      const res = await createMcpHandler(() => buildServer(auth, userId, websiteUrl), { legacy: "stateless" }).fetch(request);
       const headers = new Headers(res.headers);
       for (const [k, v] of Object.entries(limitHeaders("mcp", l))) headers.set(k, v);
       return new Response(res.body, { status: res.status, statusText: res.statusText, headers });

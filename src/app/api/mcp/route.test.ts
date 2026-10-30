@@ -121,6 +121,14 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
 
 describe("connector voice writes", () => {
+  it("returns the product name, website and logo during connector initialization", async () => {
+    const response = await rpc("initialize", { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "test", version: "1" } });
+    expect(response.error).toBeUndefined();
+    expect(response.result.serverInfo).toMatchObject({
+      name: "queue-pilot", title: "Queue Pilot", websiteUrl: "https://app.example",
+      icons: [{ src: "https://app.example/icon-512.png", mimeType: "image/png", sizes: ["512x512"] }],
+    });
+  });
   it("lists all tools with serializable input schemas", async () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
@@ -214,7 +222,7 @@ describe("connector draft chain", () => {
     expect(answer(await call("get_playbook"))).toContain("enforced")
     const slotId = answer(await call("list_open_slots")).match(/ch@[^ ]+/)![0]
     const rejected = await call("save_drafts", { title: "Release", drafts: [{ slotId, text: "broth export" }] })
-    expect(rejected.isError).toBe(true)
+    expect(rejected.isError).not.toBe(true)
     expect(answer(rejected)).toContain("Breaks your playbook")
     expect(posts).toHaveLength(0)
     const saved = await call("save_drafts", { title: "Release", drafts: [{ slotId, text: "CSV export is live." }], sourceKeys: [key] })
@@ -289,7 +297,7 @@ describe("connector controls", () => {
   it("checks refusal, correction and warning without writing a Buffer post", async () => {
     rules.set("person-a", [{ id: "stock", kind: "replace", from: "broth", to: "stock", channels: "all", level: "block", text: "Say stock." }]);
     const bad = await call("check_draft", { text: "Use broth", network: "linkedin" });
-    expect(bad.isError).toBe(true);
+    expect(bad.isError).not.toBe(true);
     expect(JSON.parse(answer(bad))).toMatchObject({ status: "refused", saved: false });
     expect(JSON.parse(answer(await call("check_draft", { text: "Use stock", network: "linkedin" })))).toMatchObject({ status: "passed", saved: false });
     rules.get("person-a")![0].level = "warn";
@@ -298,6 +306,16 @@ describe("connector controls", () => {
     expect(posts).toHaveLength(0);
     expect(buffer.calls).toHaveLength(0);
     expect(JSON.parse(answer(await call("check_draft", { text: "Use stock", network: "linkedin" }, "person-b"))).status).toBe("not_checked");
+  });
+  it("returns a normal refusal for overlong text but keeps invalid tool inputs as errors", async () => {
+    const overlong = await call("check_draft", { text: "x".repeat(281), network: "twitter" });
+    expect(overlong.isError).not.toBe(true);
+    expect(JSON.parse(answer(overlong))).toMatchObject({ status: "refused", saved: false });
+    expect((await call("check_draft", { text: "", network: "twitter" })).isError).toBe(true);
+    expect((await call("check_draft", { text: "A valid draft", network: "unsupported" })).isError).toBe(true);
+    expect(aiCalls.settle).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(0);
+    expect(buffer.calls).toHaveLength(0);
   });
   it("lists and removes only the token owner's sources", async () => {
     const a = await sources.add("person-a", "https://a.example/feed", "A");

@@ -61,7 +61,7 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     inputSchema: z.object({ text: z.string().trim().min(1).max(5000), network }), annotations: read,
   }, async ({ text, network }) => {
     const max = limitFor(network);
-    if (max && text.length > max) return result({ status: "refused", reason: `Over ${network}'s ${max} character limit.`, saved: false }, true);
+    if (max && text.length > max) return result({ status: "refused", reason: `Over ${network}'s ${max} character limit.`, saved: false });
     const rules = rulesFor(await postgresRulesStore().list(userId), network);
     if (!rules.length) return result({ status: "not_checked", reason: "No rules apply to this network.", saved: false });
     const jm = await judgeModelFor(userId);
@@ -71,7 +71,8 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
       const blocked = verdicts.some(v => v.level === "block" && v.verdict === "fail");
       const incomplete = verdicts.length !== rules.length;
       const status = blocked ? "refused" : incomplete || verdicts.some(v => v.verdict === "unsure" || v.unavailable) ? "uncertain" : verdicts.some(v => v.verdict === "fail") ? "flagged" : "passed";
-      return result({ status, saved: false, verdicts, judgedWith: jm.source }, blocked);
+      // A completed check can refuse the text. That is its verdict, not a failed tool call.
+      return result({ status, saved: false, verdicts, judgedWith: jm.source });
     } catch (e) { await jm.giveBack(); throw e; }
     finally { await jm.settle(); }
   });
