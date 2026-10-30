@@ -5,6 +5,8 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-30 Your AI runs your Buffer week
+
 Built-in writing is free during Buffer Commit, with $100 of Anthropic AI credits I put in. I'll top it up if it runs low. Bring your own key any time.
 
 ### Added
