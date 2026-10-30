@@ -71,7 +71,7 @@ export function itemsFromXml(xml: string): { title: string | null; items: FeedIt
         key: it.id ?? it.url ?? title,
         title,
         url: it.url ?? null,
-        published: it.published ? it.published.toISOString() : null,
+        published: (it.published ?? it.updated)?.toISOString() ?? null,
         summary: summary.length > SUMMARY_CHARS ? `${summary.slice(0, SUMMARY_CHARS - 1)}…` : summary,
         body: full.length > BODY_CHARS ? `${full.slice(0, BODY_CHARS - 1)}…` : full,
       };
@@ -95,6 +95,20 @@ export function scopeKeys(sourceId: string, items: FeedItem[]): FeedItem[] {
 /** The items not used yet, newest first, at most `limit`. */
 export function newItems(items: FeedItem[], usedKeys: Set<string>, limit = 10): FeedItem[] {
   return items.filter((i) => !usedKeys.has(i.key)).slice(0, limit);
+}
+
+/** Old/undated items remain readable as background, but are not offered as fresh news. */
+export function freshItems(items: FeedItem[], usedKeys: Set<string>, sourceUrl: string, limit = 10, now = new Date()): FeedItem[] {
+  const cutoff = now.getTime() - 14 * 24 * 60 * 60 * 1000;
+  const recent = items.filter(item => {
+    const date = item.published ? Date.parse(item.published) : NaN;
+    return date >= cutoff && date <= now.getTime();
+  }).sort((a, b) => b.published!.localeCompare(a.published!));
+  const url = new URL(sourceUrl);
+  // Filter before checking usage: using the latest release must not expose an older version next time.
+  const candidates = url.hostname === "github.com" && /^\/[^/]+\/[^/]+\/releases(?:\.atom)?\/?$/.test(url.pathname)
+    ? recent.slice(0, 1) : recent;
+  return newItems(candidates, usedKeys, limit);
 }
 
 /** Reads a response body, stopping as soon as it passes `max` bytes, so an undeclared huge body is never held whole. */

@@ -2,7 +2,7 @@
  * The person's new material across their feeds, as the AI writer reads it: items not yet used for a post, with their
  * full text. A feed that fails to load is skipped, so one broken feed does not stop the others.
  */
-import { newItems, readFeed, scopeKeys } from "./feeds";
+import { freshItems, readFeed, scopeKeys } from "./feeds";
 import { postgresSourceStore } from "./sources-store";
 import type { BriefMaterial } from "./ai-writer";
 import { postgresMaterialStore } from "./material-store"
@@ -17,6 +17,6 @@ export async function newMaterial(userId: string): Promise<BriefMaterial[]> {
   return [...material.filter((item) => !used.has(item.key)).map((item) => ({ key: item.key, title: item.title, url: item.link ?? null, text: item.text })), ...sources.flatMap((src, i) => {
     const r = feeds[i];
     if (r.status === "rejected") return [];
-    return newItems(scopeKeys(src.id, r.value.items), used, PER_FEED).map((it) => ({ key: it.key, title: `${src.title}: ${it.title}`, url: it.url, text: it.body || it.summary }));
+    return freshItems(scopeKeys(src.id, r.value.items), used, src.url, PER_FEED).map((it) => ({ key: it.key, title: `${src.title}: ${it.title}`, url: it.url, text: `Source date: ${it.published}\n${it.body || it.summary}` }));
   })]
 }

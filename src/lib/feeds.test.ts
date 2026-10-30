@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BODY_CHARS, FeedError, feedUrl, itemsFromXml, newItems, plainText, readCapped, readFeed, scopeKeys, splitKey } from "./feeds"
+import { BODY_CHARS, FeedError, feedUrl, freshItems, itemsFromXml, newItems, plainText, readCapped, readFeed, scopeKeys, splitKey } from "./feeds"
 
 describe("release feed addresses", () => {
   it("uses the release feed for a page and leaves other hosts and feeds alone", () => {
@@ -43,6 +43,23 @@ describe("itemsFromXml", () => {
 });
 
 describe("newItems", () => {
+  it("offers only dated material from the last 14 days, leaving older material intact", () => {
+    const { items } = itemsFromXml(RSS);
+    const all = [...items, { ...items[0], key: "undated", published: null }, { ...items[0], key: "future", published: "2026-11-01T00:00:00Z" }];
+    expect(freshItems(all, new Set(), "https://example.com/feed", 5, new Date("2026-10-29T12:00:00Z")).map(i => i.key)).toEqual(["post-200"]);
+    expect(all).toHaveLength(4);
+    expect(freshItems(items, new Set(), "https://example.com/feed", 5, new Date("2026-11-03T08:00:00Z")).map(i => i.key)).toEqual(["post-200"]);
+    expect(freshItems(items, new Set(), "https://example.com/feed", 5, new Date("2026-11-03T08:00:00.001Z"))).toEqual([]);
+  });
+  it("does not promote an earlier GitHub version when the latest release is used", () => {
+    const latest = itemsFromXml(ATOM).items[0];
+    expect(latest.published).toBe("2026-10-21T10:00:00.000Z");
+    const previous = { ...latest, key: "v1.3.0", title: "v1.3.0", published: "2026-10-21T09:00:00.000Z" };
+    const url = "https://github.com/pennyrow/app/releases.atom";
+    const now = new Date("2026-10-29T12:00:00Z");
+    expect(freshItems([previous, latest], new Set(), url, 5, now)).toEqual([latest]);
+    expect(freshItems([previous, latest], new Set([latest.key]), url, 5, now)).toEqual([]);
+  });
   it("leaves out items already used and caps the list", () => {
     const { items } = itemsFromXml(RSS);
     expect(newItems(items, new Set(["post-200"])).map((i) => i.key)).toEqual(["post-csv"]);
