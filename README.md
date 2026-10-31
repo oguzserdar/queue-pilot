@@ -146,7 +146,7 @@ The budget is enforced by Queue Pilot: before each built-in AI action it compare
 
 Next up, on the way to 1.0:
 
-- **More places to write from.** Claude and ChatGPT connections are available. Next are Grok and coding agents, including Claude Code, Codex and Cursor.
+- **More places to write from.** Claude, ChatGPT, Grok and coding agents (Claude Code, Codex and Cursor) can all connect now. Next is a tested walkthrough for each one.
 - **Rules from day one.** Your first rules come from the posts and notes already in Buffer.
 - **Your team's notes count.** A note left on a draft in Buffer becomes a rule too.
 
