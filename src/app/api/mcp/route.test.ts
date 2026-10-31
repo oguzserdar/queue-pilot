@@ -37,6 +37,12 @@ vi.mock("@/lib/fix-verdicts", async (original) => ({ ...await original<typeof im
   put: async (u: string, k: string, t: string, v: unknown) => { if (savedVerdicts.get(`${u}|${k}`) === t) savedVerdicts.set(`${u}|${k}`, v); },
   release: async (u: string, k: string, t: string) => { if (savedVerdicts.get(`${u}|${k}`) === t) savedVerdicts.delete(`${u}|${k}`); },
 }) }));
+const reviews = vi.hoisted(() => ({ links: [] as { id: string; userId: string; drafts: { postId: string; network: string; channel: string; dueAt: string | null; text: string }[]; revokedAt: string | null; comments: { id: string; postId: string; name: string; text: string; quote: string | null; start: number | null; end: number | null; createdAt: string }[] }[] }));
+vi.mock("@/lib/review-store", async (original) => ({ ...await original<typeof import("@/lib/review-store")>(), postgresReviewStore: () => ({
+  create: async (userId: string, drafts: typeof reviews.links[number]["drafts"]) => { const l = { id: `link-${reviews.links.length + 1}`, userId, drafts, revokedAt: null, comments: [] }; reviews.links.push(l); return { ...l, createdAt: "2026-10-29T12:00:00Z" }; },
+  list: async (userId: string) => reviews.links.filter((l) => l.userId === userId).map((l) => ({ ...l, createdAt: "2026-10-29T12:00:00Z" })),
+  revoke: async (userId: string, id: string) => { const l = reviews.links.find((x) => x.id === id && x.userId === userId); if (l) l.revokedAt = "2026-10-29T12:00:00Z"; },
+}) }));
 const aiCalls = vi.hoisted(() => ({ settle: vi.fn(async () => {}), giveBack: vi.fn(async () => {}) }));
 vi.mock("@/lib/judge-model", () => ({ AiCapError: class extends Error {}, allowanceFor: async () => ({ used: 1, cap: 20, budgetUsd: 100, leftUsd: 99.95, totalRemaining: 100 }), aiFor: async () => ({ cfg: { provider: "openai", key: "never-display", model: "test" }, language: answering({ quote: "broth", reason: "Use stock." }), decider: judge.model, source: "Queue Pilot key", ...aiCalls }), judgeModelFor: async () => ({
   judges: { decider: judge.model, explainer: answering({ quote: "broth", reason: "Use stock." }) },
@@ -119,6 +125,7 @@ beforeEach(() => {
   material = memoryMaterialStore()
   snapshots = memorySnapshotStore()
   written.clear()
+  reviews.links.length = 0
   rules.clear()
   dismissed.clear()
   aiCalls.settle.mockClear()
@@ -144,7 +151,8 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(31)
+    expect(tools).toHaveLength(35)
+    expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
     expect(tools.find((t: { name: string }) => t.name === "save_my_voice_note").inputSchema.properties.note.maxLength).toBe(MAX_NOTE)
@@ -536,3 +544,34 @@ describe("remaining account controls", () => {
     expect(aiCalls.settle).not.toHaveBeenCalled();
   });
 });
+
+describe("connector review links", () => {
+  it("shares only the person's own drafts under a link on this site, lists the comments, and turns the link off", async () => {
+    posts = [{ id: "d1", channelId: "ch", status: "draft", via: "api", text: "Day 4 of Queue Pilot.", dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }]
+    await call("show_next_week")
+    expect((await call("share_for_review", { postIds: ["not-mine"] })).isError).toBe(true)
+    const shared = JSON.parse(answer(await call("share_for_review", { postIds: ["d1"] })))
+    expect(shared).toMatchObject({ link: "https://app.example/r/link-1", shared: 1 })
+    reviews.links[0].comments.push({ id: "c1", postId: "d1", name: "Ali", text: "just say QP", quote: "Queue Pilot", start: 9, end: 20, createdAt: "2026-10-29T12:01:00Z" })
+    const listed = JSON.parse(answer(await call("list_review_comments")))
+    expect(listed[0]).toMatchObject({ id: "link-1", on: true, drafts: [{ postId: "d1", comments: [{ name: "Ali", quote: "Queue Pilot", comment: "just say QP" }] }] })
+    expect(JSON.parse(answer(await call("list_review_comments", {}, "person-b")))).toEqual([])
+    await call("turn_off_review", { id: "link-1" }, "person-b")
+    expect(reviews.links[0].revokedAt).toBeNull()
+    await call("turn_off_review", { id: "link-1" })
+    expect(JSON.parse(answer(await call("list_review_comments")))[0].on).toBe(false)
+  })
+
+  it("spends no AI action carrying a rule across drafts when Queue Pilot wrote none", async () => {
+    const id = await ruleStore.add("person-a", { kind: "guidance", text: "Say QP.", channels: "all", level: "warn" })
+    await call("show_next_week")
+    expect(JSON.parse(answer(await call("propose_rule_fixes", { ruleId: id })))).toEqual({ ok: true, fixes: [], checked: 0 })
+    expect(aiCalls.settle).not.toHaveBeenCalled()
+  })
+
+  it("says there are no review comments yet without an AI action", async () => {
+    const r = JSON.parse(answer(await call("list_rule_suggestions", { mode: "comments" })))
+    expect(r.note).toContain("No review comments yet")
+    expect(aiCalls.settle).not.toHaveBeenCalled()
+  })
+})

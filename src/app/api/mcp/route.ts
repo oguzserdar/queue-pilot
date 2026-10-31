@@ -20,6 +20,7 @@ import { addPastedExample, InvalidVoiceExampleError, MAX_NOTE, MAX_PASTED_TEXT, 
 import { materialInput, postgresMaterialStore } from "@/lib/material-store"
 import { AiCapError } from "@/lib/judge-model";
 import { TooManyRulesError, postgresRulesStore } from "@/lib/rules-store";
+import { ruleScope } from "@/lib/rules";
 import { youtubeTranscript } from "@/lib/transcripts";
 import { supadataKey } from "@/lib/env";
 import { recordAppUse, stillApproved } from "@/lib/ai-access";
@@ -113,7 +114,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string) {
       } catch (e) {
         console.error(JSON.stringify({ event: "qp-tool-failed", tool: name, message: e instanceof Error ? e.message : String(e) }));
         if (name === "remove_voice_example") return { ...text("Could not remove that example just now. Try again in a minute."), isError: true }
-        const controls = ["add_rule", "remove_rule", "read_rule", "check_draft", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage"];
+        const controls = ["add_rule", "remove_rule", "read_rule", "check_draft", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage", "share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"];
         if (controls.includes(name) && (e instanceof AiCapError || e instanceof TooManyRulesError)) return { ...text(e.message), isError: true };
         if (controls.includes(name)) return { ...text("Could not complete that action just now. Read the current state before retrying."), isError: true };
         const privateWrite = ["save_my_voice_note", "add_voice_example", "add_material"].includes(name)
@@ -124,7 +125,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string) {
   registerControls(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { ...b, userId, token: b.accessToken };
-  });
+  }, websiteUrl);
 
   server.registerTool(
     "show_next_week",
@@ -376,7 +377,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string) {
       });
       if (rules === null) return { ...text("Could not read the playbook just now. Try again before writing drafts."), isError: true };
       if (!rules.length) return text("No rules yet. Use add_rule when the user requests a rule, or list_rule_suggestions to learn from their edits.");
-      return text(rules.map((r) => `- ID ${r.id}: ${r.text} [${r.channels === "all" ? "every network" : r.channels.join(", ")}; ${r.level === "block" ? "enforced: a draft that breaks it is not saved" : "checked: a draft that breaks it is saved and flagged"}]`).join("\n"));
+      return text(rules.map((r) => `- ID ${r.id}: ${r.text} [${ruleScope(r)}; ${r.level === "block" ? "enforced: a draft that breaks it is not saved" : "checked: a draft that breaks it is saved and flagged"}]`).join("\n"));
     },
   );
 
