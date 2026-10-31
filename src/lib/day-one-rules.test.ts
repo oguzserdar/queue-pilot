@@ -91,6 +91,20 @@ describe("proposeFirstRules", () => {
     expect(offers[0]).toMatchObject({ rule: { text: "Say stock, never broth.", channels: ["linkedin"] }, proof: { kind: "note", note: "Say stock, never broth, for this client.", by: "Sara", at: "2026-10-27T09:00:00Z" } });
   });
 
+  it("with notesOnly, learns from notes alone and never proposes a habit from the posts, which are not the person's writing", async () => {
+    const posts = [...linkedin.slice(0, 11), li(12, ["Say stock, never broth, for this client."])];
+    const writer = answering({ rules: [
+      { rule: "No exclamation marks.", network: "linkedin", from: "posts", posts: [1, 2, 3], note: null },
+      { rule: "Say stock, never broth.", network: "linkedin", from: "note", posts: [], note: 1 },
+    ] });
+    const judge = judgeWith(() => "pass");
+    const out = await proposeFirstRules(writer, { decider: judge.model, explainer: explainer() }, posts, [], { notesOnly: true });
+    expect(out.offers.map((o) => o.rule.text)).toEqual(["Say stock, never broth."]);
+    expect(out.skipped).toEqual([]);
+    expect(judge.calls).toHaveLength(0);
+    expect(JSON.stringify(writer.doGenerateCalls[0].prompt)).not.toContain("Post 1 (linkedin)");
+  });
+
   it("makes no model call when there is nothing to learn from", async () => {
     const writer = answering({ rules: [] });
     const out = await proposeFirstRules(writer, { decider: deciding(() => ({})).model, explainer: explainer() }, instagram, []);

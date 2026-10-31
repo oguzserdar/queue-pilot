@@ -114,10 +114,14 @@ export function buildFirstRulesPrompt(usable: PastPost[], notes: { note: string;
  * @param judges - The models that judge each rule against each post by meaning
  * @param posts - The person's recent sent posts, with notes
  * @param rules - The person's current rules, so none is proposed twice
+ * @param opts - `notesOnly` learns from the notes alone, for posts that are not the person's own writing
  * @returns Rules worth offering, each with its proof, and the networks skipped for having too few posts
  */
-export async function proposeFirstRules(writer: LanguageModel, judges: Judges, posts: PastPost[], rules: Rule[]): Promise<{ offers: FirstRule[]; skipped: string[] }> {
-  const { usable, notes, skipped } = material(posts);
+export async function proposeFirstRules(writer: LanguageModel, judges: Judges, posts: PastPost[], rules: Rule[], opts: { notesOnly?: boolean } = {}): Promise<{ offers: FirstRule[]; skipped: string[] }> {
+  const all = material(posts);
+  const { notes } = all;
+  const usable = opts.notesOnly ? [] : all.usable;
+  const skipped = opts.notesOnly ? [] : all.skipped;
   if (!usable.length && !notes.length) return { offers: [], skipped };
   const { system, prompt } = buildFirstRulesPrompt(usable, notes, rules);
   const { output } = await generateText({ model: writer, output: Output.object({ schema: Proposals }), system, prompt, maxRetries: 1 });

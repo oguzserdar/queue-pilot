@@ -11,6 +11,7 @@ import { listRecentSent } from "./buffer/queries";
 import { wroteIds } from "./written-store";
 import { postgresRulesStore } from "./rules-store";
 import { judgeModelFor } from "./judge-model";
+import { postgresReviewStore, reviewNotes } from "./review-store";
 import { parseNewRule, ruleInput, type NewRule } from "./rules";
 import type { WriteBuffer } from "./write-slots-for-user";
 
@@ -41,7 +42,7 @@ export function verifySuggestion(userId: string, token: string, now = Date.now()
   } catch { return null; }
 }
 
-export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites" | "past_posts", loadBuffer: () => Promise<WriteBuffer>) {
+export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites" | "past_posts" | "comments", loadBuffer: () => Promise<WriteBuffer>) {
   const store = postgresRulesStore();
   const dismissed = await store.dismissed(userId);
   let suggestions: Suggestion[] = [];
@@ -87,6 +88,9 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
   } else {
     // Gather evidence before reserving an AI action. An empty account costs nothing.
     const rewrites = mode === "rewrites" ? await currentRewrites(userId) : null;
+    // Reviewers' comments on review links, read as notes: their drafts are Queue Pilot's writing, never a style to learn.
+    const commented = mode === "comments" ? reviewNotes(await postgresReviewStore().list(userId)) : null;
+    if (commented && !commented.length) return { suggestions: [], note: "No review comments yet. Share drafts for review first." };
     const b = mode === "past_posts" ? await loadBuffer() : null;
     const sent = b ? (await Promise.all([...channelsByOrganization(b.channels)].map(([org, ids]) => listRecentSent(b.token, org, ids)))).flat() : [];
     if (rewrites && rewrites.rewrites.length < 2) return { suggestions: [], note: "Rewrite at least two Queue Pilot drafts in Buffer first." };
@@ -96,6 +100,9 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
     try {
       if (rewrites) {
         suggestions = (await proposeRules(jm.judges.explainer, rewrites.rewrites, rewrites.rules)).map(p => ({ key: firstRuleKey(p.rule), rule: p.rule, fixes: p.evidence.length, evidence: p.evidence }));
+      } else if (commented) {
+        const found = await proposeFirstRules(jm.judges.explainer, jm.judges, commented, await store.list(userId), { notesOnly: true });
+        suggestions = found.offers.map(p => ({ key: firstRuleKey(p.rule), rule: p.rule, fixes: 0, evidence: p.proof }));
       } else if (b) {
         const ours = await wroteIds(userId, ...sent.map(p => p.id));
         const found = await proposeFirstRules(jm.judges.explainer, jm.judges, pastPosts(b.channels, sent.filter(p => !ours.has(p.id))), await store.list(userId));
