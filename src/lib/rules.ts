@@ -39,8 +39,8 @@ export const NETWORKS: Record<string, string> = {
 };
 
 /** What happens to a draft that breaks the rule, in the words the Playbook shows. */
-export function ruleHold(rule: Rule): "Not saved" | "Flagged" {
-  return rule.level === "block" ? "Not saved" : "Flagged";
+export function ruleHold(rule: Rule): "Blocks drafts" | "Flags drafts" {
+  return rule.level === "block" ? "Blocks drafts" : "Flags drafts";
 }
 
 const MAX_PHRASE = 120;
