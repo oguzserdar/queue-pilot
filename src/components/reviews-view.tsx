@@ -39,13 +39,12 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
   const [off, setOff] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
-  const total = links?.reduce((n, l) => n + l.comments.length, 0) ?? 0;
 
   return (
     <div className={page.page}>
       <header className={page.head}>
-        <h1 className={page.title}>{links === null || total === 0 ? "Reviews" : `Reviews: ${total} comment${total === 1 ? "" : "s"}`}</h1>
-        <p className={page.sub}>Send drafts to anyone for feedback. No account needed. From any comment, preview the edits it implies, apply the ones you want, and keep lasting preferences as rules.</p>
+        <h1 className={page.title}>Reviews</h1>
+        <p className={page.sub}>What reviewers said on your drafts. Turn any comment into edits.</p>
       </header>
 
       {links === null ? (
@@ -98,7 +97,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                             <div className={page.who}>
                               <span className={page.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>
                               <strong>{c.name}</strong>
-                              <span className={styles.hint}><LocalTime iso={c.createdAt} options={WHEN} /></span>
+                              <span className={styles.hint}><LocalTime iso={c.createdAt} options={WHEN} relative /></span>
                             </div>
                             {c.quote && <q className={page.quote}>{c.quote}</q>}
                             <p className={page.body}>{c.text}</p>

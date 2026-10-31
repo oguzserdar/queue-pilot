@@ -7,6 +7,7 @@ import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
 import { Select } from "@/registry/components/select/select";
 import { Switch } from "@/registry/components/switch/switch";
+import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import styles from "./rule-routing.module.css";
 
 export type RuleAccount = { id: string; name: string; service: string };
@@ -22,6 +23,7 @@ export function RuleRouting({ rules, accounts, inheritance }: { rules: Rule[]; a
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [preview, setPreview] = useState<{ shared: boolean; network: boolean } | null>(null);
+  const { toast } = useToastStack();
   if (!target) return null;
 
   const level = target.startsWith("account:") ? "account" : "network";
@@ -67,7 +69,12 @@ export function RuleRouting({ rules, accounts, inheritance }: { rules: Rule[]; a
         </div>
         {canChange && (
           <div className={styles.ruleActions}>
-            {override === undefined && d.applies && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => changeRuleOverride(r.id, { level, id }, false), `Turned off for ${where}.`)}>Turn off here</Button>}
+            {override === undefined && d.applies && <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
+              const res = await changeRuleOverride(r.id, { level, id }, false).catch(() => null);
+              if (!res?.ok) { setMessage({ ok: false, text: res?.message ?? "That didn't save. Try again." }); return; }
+              setMessage(null);
+              toast({ type: "success", title: `Turned off for ${where}`, description: r.text, duration: 8000, action: { label: "Undo", onClick: () => void changeRuleOverride(r.id, { level, id }, null) } });
+            })}>Turn off here</Button>}
             {override === undefined && !d.applies && level === "account" && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => changeRuleOverride(r.id, { level, id }, true), `Turned on for ${where}.`)}>Turn on here</Button>}
             {override !== undefined && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => changeRuleOverride(r.id, { level, id }, null), "Back to the inherited setting.")}>{override ? "Undo" : "Turn back on"}</Button>}
           </div>

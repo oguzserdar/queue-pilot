@@ -19,7 +19,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
     ],
   },
   {
-    key: "writes", title: "Changes, when you ask", note: "Each one checks your playbook. Nothing goes out.",
+    key: "writes", title: "Changes, when you ask", note: "Drafts stay drafts. Saves are checked against your playbook.",
     items: [
       { label: "Writes and saves drafts in empty times", tools: ["save_drafts", "write_my_week"] },
       { label: "Edits a draft it wrote", tools: ["update_draft"] },

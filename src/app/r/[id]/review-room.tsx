@@ -118,7 +118,7 @@ export function ReviewRoom({ id, drafts, initial }: { id: string; drafts: Shared
                   <ul className={styles.comments}>
                     {mine.map((c) => (
                       <li key={c.id} className={styles.comment} data-active={active === c.id} onMouseEnter={() => setActive(c.id)} onMouseLeave={() => setActive(null)}>
-                        <span className={styles.who}><span className={styles.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>{c.name}<span className={styles.time}><LocalTime iso={c.createdAt} options={AGO} /></span></span>
+                        <span className={styles.who}><span className={styles.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>{c.name}<span className={styles.time}><LocalTime iso={c.createdAt} options={AGO} relative /></span></span>
                         {c.quote && <q className={styles.quote}>{c.quote}</q>}
                         <span className={styles.body}>{c.text}</span>
                       </li>
