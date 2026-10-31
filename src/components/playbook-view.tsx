@@ -4,7 +4,8 @@ import { RuleRouting, type RuleAccount } from "./rule-routing";
 import type { Inheritance } from "@/lib/rule-scopes";
 import { DRAFT_CHECKS } from "@/lib/draft-checks";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { PAGE_ACTION_EVENT } from "./keyboard-shortcuts";
 import { addRule, readRule, removeRule, setRuleException } from "@/app/(app)/actions";
 import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
@@ -66,6 +67,14 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   };
 
   const { toast } = useToastStack();
+  // "Add a rule" from the palette or the + Rule button: bring the form into view and put the cursor in it.
+  const focusAdd = () => { const f = document.getElementById("add-rule"); f?.scrollIntoView({ behavior: "smooth", block: "center" }); f?.querySelector<HTMLElement>("textarea, input")?.focus({ preventScroll: true }); };
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("do") === "add-rule") { window.history.replaceState(null, "", window.location.pathname); focusAdd(); }
+    const on = (e: Event) => { if ((e as CustomEvent).detail === "add-rule") focusAdd(); };
+    window.addEventListener(PAGE_ACTION_EVENT, on);
+    return () => window.removeEventListener(PAGE_ACTION_EVENT, on);
+  }, []);
   // A deleted rule can come back: Undo adds it again with the person's own sentence and the reading it had.
   const restore = async (r: ShownRule) => {
     if (!live) return setRules((rs) => [...rs, r]);
@@ -96,13 +105,13 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   return (
     <div className={styles.page}>
       <header className={styles.head}>
-        <h1 className={styles.title}>{live ? (shown.length ? `Your playbook has ${shown.length} rule${shown.length === 1 ? "" : "s"}` : "Your playbook") : shown.length ? `Mark's playbook has ${shown.length} rule${shown.length === 1 ? "" : "s"}` : "Mark's first visit"}</h1>
+        <h1 className={styles.title}>{live ? (shown.length ? <>Playbook <span className={styles.count}>{shown.length} rule{shown.length === 1 ? "" : "s"}</span></> : "Your playbook") : shown.length ? `Mark's playbook has ${shown.length} rule${shown.length === 1 ? "" : "s"}` : "Mark's first visit"}</h1>
         <p className={styles.sub}>
           {!live && firstVisit && !shown.length
             ? "No rules yet. Queue Pilot checks each draft against your rules before saving it in Buffer, so the first ones come from what you already posted."
             : live && !shown.length
             ? "No rules yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike."
-            : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix he made more than once."}`}
+            : live && accounts.length ? "Pick an account to see what applies there. What you changed for it comes first." : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix he made more than once."}`}
         </p>
       </header>
 
@@ -124,13 +133,13 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the dish.</p>}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
-      {live && accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} />}
+      {live && accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} onDelete={(r) => remove(r.id)} onAdd={focusAdd} />}
       {networks.length > 1 && shown.length > 0 && !(live && accounts.length) && (
         <p className={styles.muted} aria-label="Rules by network">
           {networks.map((n) => `${NETWORKS[n] ?? n}: ${shown.filter((r) => appliesTo(r, n)).length} rule${shown.filter((r) => appliesTo(r, n)).length === 1 ? "" : "s"}`).join(" · ")}
         </p>
       )}
-      {groups(shown, accounts).map(([name, rs]) => (
+      {!(live && accounts.length > 0) && groups(shown, accounts).map(([name, rs]) => (
         <section key={name} className={styles.block} aria-label={`${name} rules`}>
           <h2 className={styles.h2}>{name}</h2>
           <ul className={styles.rows}>
@@ -168,7 +177,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       ))}
 
       {/* Adding sits right under the rules it adds to; finding and trying rules come after. */}
-      <RuleForm accounts={accounts} onAdd={add} read={reader ?? (live ? readRule : undefined)} />
+      <div id="add-rule"><RuleForm accounts={accounts} onAdd={add} read={reader ?? (live ? readRule : undefined)} /></div>
       {live && shown.length > 0 && <FirstRulesFinder />}
       {live && <RewriteFinder />}
       {!firstVisit && <RuleTester live={live} example={EXAMPLE_TRY} accounts={accounts} />}

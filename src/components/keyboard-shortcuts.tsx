@@ -13,6 +13,10 @@ import styles from "./keyboard-shortcuts.module.css";
 const SINGLE_KEYS = "qp-single-key-shortcuts";
 /** Fired on the window to open the composer on the week's next empty slot. */
 export const NEW_POST_EVENT = "qp:new-post";
+/** Fired on the window with a page action's name ("approve", "share", "add-rule") for the page that owns it. */
+export const PAGE_ACTION_EVENT = "qp:do";
+/** Which page owns each palette action. */
+const ACTION_PAGE: Record<string, string> = { approve: "/week", share: "/week", "add-rule": "/playbook" };
 
 function readSingleKeys(): boolean {
   try {
@@ -85,10 +89,21 @@ export function KeyboardShortcuts() {
     } catch {}
   };
 
+  // A page action runs on the page that owns it, opening that page first when needed.
+  const doAction = (name: string) => {
+    const page = ACTION_PAGE[name];
+    if (path === page) window.dispatchEvent(new CustomEvent(PAGE_ACTION_EVENT, { detail: name }));
+    else router.push(`${page}?do=${name}`);
+  };
+
   const items: CommandItem[] = useMemo(
     () => [
+      { id: "do:approve", label: "Approve ready drafts", group: "Actions", shortcut: "A" },
+      { id: "do:share", label: "Share drafts for review", group: "Actions" },
+      { id: "new-post", label: "Write a post in the next empty slot", group: "Actions", shortcut: "N P" },
+      { id: "do:add-rule", label: "Add a rule", group: "Actions" },
       ...SHORTCUTS.filter((s) => "to" in s.run).map((s) => ({ id: s.id, label: s.label, group: "Go to", shortcut: s.keys.join(" ").toUpperCase() })),
-      { id: "new-post", label: "Write a post in the next empty slot", group: "Write", shortcut: "N P" },
+      { id: "go-/reviews", label: "Reviews", group: "Go to" },
       { id: "help", label: "Keyboard shortcuts", group: "Help", shortcut: formatShortcut("mod+/", platform).text },
     ],
     [platform],
@@ -106,14 +121,16 @@ export function KeyboardShortcuts() {
     <>
       <Dialog open={open === "palette"} onOpenChange={(o) => setOpen(o ? "palette" : null)}>
         {open === "palette" && (
-          <DialogContent className={styles.paletteDialog} title="Quick navigator" description="Go to a page or start a post.">
+          <DialogContent className={styles.paletteDialog} title="Do or go anywhere" description="Approve, share, write, add a rule, or open a page.">
             <CommandPalette
               autoFocus
               items={items}
-              placeholder="Go to or do…"
+              placeholder="Type a command or a page…"
               onClose={() => setOpen(null)}
               onSelect={(item) => {
                 setOpen(null);
+                if (item.id.startsWith("do:")) return doAction(item.id.slice(3));
+                if (item.id === "go-/reviews") return router.push("/reviews");
                 const s = SHORTCUTS.find((x) => x.id === item.id);
                 if (s) run(s);
               }}

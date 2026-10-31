@@ -5,6 +5,8 @@ import { ArrowUpRight } from "lucide-react";
 
 import Link from "next/link";
 import { EmptyState } from "@/registry/components/empty-state/empty-state";
+import type { TriageItem } from "@/lib/triage-model";
+import { TriageList } from "./triage-list";
 import styles from "./needs-you-view.module.css";
 
 /** One thing on the home screen that needs the person, with the page that fixes it. */
@@ -13,8 +15,8 @@ export type NeedItem = { id: string; tone: "warning" | "danger" | "success"; tit
 export type ReadinessItem = { id: string; label: string; state: "done" | "todo" | "check"; detail: string; action?: string; href?: string };
 
 /** Home: what needs the user right now, and until setup is complete, the readiness checklist. */
-export function NeedsYouView({ needs, readiness, greeting }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string }) {
-  const open = needs.filter((n) => n.tone !== "success");
+export function NeedsYouView({ needs, readiness, greeting, triage, live = false }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string; triage?: TriageItem[]; live?: boolean }) {
+  const open = triage ?? needs.filter((n) => n.tone !== "success");
   const done = readiness.filter((r) => r.state === "done").length;
   const ready = done === readiness.length;
   // A new account has nothing to catch up on yet: setup is the page until it is done or something needs attention.
@@ -30,7 +32,7 @@ export function NeedsYouView({ needs, readiness, greeting }: { needs: NeedItem[]
         {settingUp && <p className={styles.lede}>{done} of {readiness.length} done. Each step takes about a minute, and then your AI fills your week in Buffer.</p>}
       </header>
 
-      {settingUp ? null : needs.length === 0 ? (
+      {settingUp ? null : triage ? <TriageList items={triage} live={live} /> : needs.length === 0 ? (
         <EmptyState
           title="Nothing needs you right now"
           description="A draft that needs a look, or a post Buffer could not send, shows up here."

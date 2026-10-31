@@ -65,3 +65,4 @@
 
 
 .warning { margin: 0; color: color-mix(in oklab, var(--warning) 82%, black); font-size: var(--text-sm); }
+.count { font-size: var(--text-base); font-weight: 500; color: var(--text-muted); margin-left: 6px; font-variant-numeric: tabular-nums; }

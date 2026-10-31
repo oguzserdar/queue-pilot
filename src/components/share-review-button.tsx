@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { shareForReview } from "@/app/(app)/review-actions";
 import { Button } from "@/registry/components/button/button";
 import { Checkbox } from "@/registry/components/checkbox/checkbox";
@@ -16,7 +16,7 @@ export type ShareableDraft = { id: string; label: string; text: string };
  * Share for review: the person ticks the drafts to share and gets one link. Anyone with it can read and comment on
  * those drafts, nothing else. The link is turned off on the Reviews page.
  */
-export function ShareReviewButton({ drafts }: { drafts: ShareableDraft[] }) {
+export function ShareReviewButton({ drafts, openSignal = 0 }: { drafts: ShareableDraft[]; openSignal?: number }) {
   const [days, setDays] = useState(7);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -25,6 +25,8 @@ export function ShareReviewButton({ drafts }: { drafts: ShareableDraft[] }) {
   const [pending, start] = useTransition();
 
   const show = () => { setPicked(new Set(drafts.slice(0, 30).map((d) => d.id))); setUrl(null); setMessage(null); setOpen(true); };
+  // A palette action opens the dialog without a click.
+  useEffect(() => { if (openSignal) show(); }, [openSignal]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (id: string, on: boolean) => setPicked((s) => { const n = new Set(s); if (on && n.size < 30) n.add(id); else n.delete(id); return n; });
   const share = () => start(async () => {
     const r = await shareForReview([...picked], days);
