@@ -280,3 +280,19 @@ export const securityEvent = pgTable(
   },
   (t) => [index("qp_security_event_user_idx").on(t.userId, t.createdAt)],
 );
+
+/**
+ * The AI's answers for one exact set of repeated fixes (src/lib/fix-verdicts.ts), so asking again about the same
+ * unchanged repeats costs no AI action. Keyed by a hash of the exact check input; it expires on its own.
+ */
+export const fixVerdict = pgTable(
+  "qp_fix_verdict",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    inputHash: text("input_hash").notNull(),
+    /** [{ candidate, verdict, why }] as the model answered. Never tokens or rules. */
+    verdicts: jsonb("verdicts").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.inputHash] })],
+);
