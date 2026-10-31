@@ -23,6 +23,7 @@ const { connectCodeFor } = await import("./telegram");
 const { postgresRulesStore, MAX_RULES, TooManyRulesError } = await import("./rules-store");
 const { postgresWrittenStore } = await import("./written-store");
 const { currentOffers } = await import("./read-back");
+const { postgresVerdictStore, CLEAR_TTL_MS, UNCLEAR_TTL_MS, CLAIM_TTL_MS } = await import("./fix-verdicts");
 const { postgresAiKeyStore } = await import("./ai-key-store");
 const appSchema = await import("../db/schema");
 const { getTableColumns, getTableName, is } = await import("drizzle-orm");
@@ -471,5 +472,72 @@ describe("download my data on real Postgres", () => {
     expect(data?.signedInBrowsers[0]).toMatchObject({ ipAddress: "203.0.113.9" });
     for (const secret of [key, "session-token-secret", "keyEnc", "key_enc", "Someone else's rule"]) expect(text).not.toContain(secret);
     expect(await exportUserData("nobody")).toBeNull();
+  });
+});
+
+describe("saved repeated-fix answers", () => {
+  it("returns answers only to the same user, for the same check, until they expire", async () => {
+    const store = postgresVerdictStore();
+    const now = new Date("2026-10-30T12:00:00Z");
+    const clear = [{ candidate: 1, verdict: "preference" as const, why: "Both drafts cut the hype." }];
+    await store.put("u1", "k1", (await store.claim("u1", "k1", now))!, clear, now);
+    expect(await store.get("u1", "k1", now)).toEqual({ kind: "answer", verdicts: clear });
+    expect(await store.get("u2", "k1", now)).toBeNull();
+    expect(await store.get("u1", "k2", now)).toBeNull();
+    expect(await store.get("u1", "k1", new Date(now.getTime() + CLEAR_TTL_MS + 1))).toBeNull();
+  });
+
+  it("keeps an unclear answer for minutes, and a new check after that replaces it", async () => {
+    const store = postgresVerdictStore();
+    const now = new Date("2026-10-30T12:00:00Z");
+    await store.put("u1", "k3", (await store.claim("u1", "k3", now))!, [{ candidate: 1, verdict: "unclear", why: "Could be chance." }], now);
+    const lapsed = new Date(now.getTime() + UNCLEAR_TTL_MS + 1);
+    expect(await store.get("u1", "k3", lapsed)).toBeNull();
+    await store.put("u1", "k3", (await store.claim("u1", "k3", lapsed))!, [{ candidate: 1, verdict: "fact", why: "A corrected link." }], lapsed);
+    expect(await store.get("u1", "k3", lapsed)).toEqual({ kind: "answer", verdicts: [{ candidate: 1, verdict: "fact", why: "A corrected link." }] });
+  });
+
+  it("lets one check claim the key, shows it busy to the next, and frees an unfinished or lapsed claim", async () => {
+    const store = postgresVerdictStore();
+    const now = new Date("2026-10-30T13:00:00Z");
+    const a = await store.claim("u1", "k4", now);
+    expect(a).toBeTruthy();
+    expect(await store.claim("u1", "k4", now)).toBeNull();
+    expect(await store.get("u1", "k4", now)).toEqual({ kind: "busy" });
+    expect(await store.claim("u2", "k4", now)).toBeTruthy();
+    await store.release("u1", "k4", a!);
+    expect(await store.get("u1", "k4", now)).toBeNull();
+    const b = await store.claim("u1", "k4", now);
+    await store.put("u1", "k4", b!, [{ candidate: 1, verdict: "preference", why: "Same cut twice." }], now);
+    await store.release("u1", "k4", b!);
+    expect((await store.get("u1", "k4", now))?.kind).toBe("answer");
+    expect(await store.claim("u1", "k4", now)).toBeNull();
+  });
+
+  it("never lets a late check erase or overwrite a newer one after its claim lapsed", async () => {
+    const store = postgresVerdictStore();
+    const t0 = new Date("2026-10-30T14:00:00Z");
+    const later = new Date(t0.getTime() + CLAIM_TTL_MS + 1);
+    const a = await store.claim("u1", "k5", t0);
+    const b = await store.claim("u1", "k5", later);
+    expect(b).toBeTruthy();
+    expect(b).not.toBe(a);
+    await store.release("u1", "k5", a!);
+    expect(await store.get("u1", "k5", later)).toEqual({ kind: "busy" });
+    expect(await store.claim("u1", "k5", later)).toBeNull();
+    const fact = [{ candidate: 1, verdict: "fact" as const, why: "A corrected date." }];
+    await store.put("u1", "k5", b!, fact, later);
+    await store.put("u1", "k5", a!, [{ candidate: 1, verdict: "preference", why: "Late and stale." }], later);
+    expect(await store.get("u1", "k5", later)).toEqual({ kind: "answer", verdicts: fact });
+  });
+
+  it("does not recreate a row when a late check finishes after its claim was cleared", async () => {
+    const store = postgresVerdictStore();
+    const t0 = new Date("2026-10-30T15:00:00Z");
+    const a = await store.claim("u1", "k6", t0);
+    await store.put("u1", "k7", (await store.claim("u1", "k7", t0))!, [], new Date(t0.getTime() + CLAIM_TTL_MS + 1));
+    expect(await store.get("u1", "k6", t0)).toBeNull();
+    await store.put("u1", "k6", a!, [{ candidate: 1, verdict: "preference", why: "Too late." }], t0);
+    expect(await store.get("u1", "k6", t0)).toBeNull();
   });
 });

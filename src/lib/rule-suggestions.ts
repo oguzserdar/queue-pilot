@@ -4,6 +4,9 @@ import { currentOffers, currentRewrites } from "./read-back";
 import { fixToRule } from "./fix-offers";
 import { firstRuleKey, channelsByOrganization, pastPosts, proposeFirstRules } from "./day-one-rules";
 import { proposeRules } from "./rewrite-rules";
+import { askVerdicts, complete, preferencesFrom } from "./confirm-fixes";
+import { limit } from "./rate-limit";
+import { ASK_DEADLINE_MS, checkKey, postgresVerdictStore } from "./fix-verdicts";
 import { listRecentSent } from "./buffer/queries";
 import { wroteIds } from "./written-store";
 import { postgresRulesStore } from "./rules-store";
@@ -44,7 +47,43 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
   let suggestions: Suggestion[] = [];
   let note = "";
   if (mode === "fixes") {
-    suggestions = (await currentOffers(userId)).map(o => ({ key: o.key, rule: fixToRule(o.fix, o.network), fixes: o.count, evidence: o }));
+    // Code finds the repeats for free. Two matching edits can still be chance or a one-off fact, so a model decides
+    // which ones are lasting preferences before any is offered. No repeats, no AI action.
+    const candidates = (await currentOffers(userId)).filter(o => !dismissed.has(o.key));
+    if (!candidates.length) return { suggestions: [], note: "No fix repeated in two drafts on one network yet." };
+    // The same unchanged repeats were checked recently: reuse that answer, with no AI action and no AI rate limit.
+    const verdicts = postgresVerdictStore();
+    const key = checkKey(candidates);
+    const busy = { suggestions: [], note: "Queue Pilot is already checking these repeats. Ask again in a minute." };
+    const saved = await verdicts.get(userId, key);
+    if (saved?.kind === "busy") return busy;
+    let answers = saved?.kind === "answer" ? saved.verdicts : null;
+    let jm: Awaited<ReturnType<typeof judgeModelFor>> = null;
+    let token: string | null = null;
+    if (!answers) {
+      const l = await limit("ai", userId);
+      if (!l.ok) return { suggestions: [], note: "Too many AI requests just now. Try again in a minute." };
+      token = await verdicts.claim(userId, key);
+      if (!token) return busy;
+      const claimed = token;
+      jm = await judgeModelFor(userId).catch(async (e) => { await verdicts.release(userId, key, claimed); throw e; });
+      if (!jm) { await verdicts.release(userId, key, claimed); throw new Error("AI learning is unavailable. Check built-in AI or your own key in Settings."); }
+    }
+    try {
+      let unanswered = false;
+      if (!answers) {
+        answers = await askVerdicts(jm!.judges.explainer, candidates, AbortSignal.timeout(ASK_DEADLINE_MS));
+        unanswered = !complete(candidates, answers);
+        // Only a complete answer is saved. A failed save only means the next check asks again.
+        const keep = unanswered ? verdicts.release(userId, key, token!) : verdicts.put(userId, key, token!, answers);
+        await keep.catch((e) => console.error(JSON.stringify({ event: "qp-fix-verdict-save-failed", message: e instanceof Error ? e.message : String(e) })));
+      }
+      const confirmed = preferencesFrom(candidates, answers);
+      suggestions = confirmed.map(o => ({ key: o.key, rule: fixToRule(o.fix, o.network), fixes: o.count, evidence: { fix: o.fix, network: o.network, count: o.count, examples: o.examples, why: o.why } }));
+      if (!suggestions.length && unanswered) note = "The AI did not answer every repeat clearly. Ask again to check them again.";
+      else if (!suggestions.length) note = `Found ${candidates.length} repeated ${candidates.length === 1 ? "fix" : "fixes"}, but none looked like a lasting preference. One-off facts and chance matches are not offered.`;
+    } catch (e) { if (token) await verdicts.release(userId, key, token).catch(() => {}); await jm?.giveBack(); throw e; }
+    finally { await jm?.settle(); }
   } else {
     // Gather evidence before reserving an AI action. An empty account costs nothing.
     const rewrites = mode === "rewrites" ? await currentRewrites(userId) : null;
