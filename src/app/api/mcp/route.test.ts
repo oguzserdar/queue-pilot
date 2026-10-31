@@ -136,7 +136,7 @@ describe("connector voice writes", () => {
     const response = await rpc("initialize", { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "test", version: "1" } });
     expect(response.error).toBeUndefined();
     expect(response.result.serverInfo).toMatchObject({
-      name: "queue-pilot", title: "Queue Pilot", websiteUrl: "https://app.example",
+      name: "queue-pilot", title: "Queue Pilot", version: (await import("../../../../package.json")).default.version, websiteUrl: "https://app.example",
       icons: [{ src: "https://app.example/icon-512.png", mimeType: "image/png", sizes: ["512x512"] }],
     });
   });

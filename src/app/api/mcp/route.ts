@@ -32,6 +32,7 @@ import type { Post } from "@/lib/buffer/queries";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { APIError } from "better-auth/api";
 import * as z from "zod";
+import pkg from "../../../../package.json";
 import { FeedError, feedUrl, freshItems, readFeed, scopeKeys, splitKey } from "@/lib/feeds"
 import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
 
@@ -91,7 +92,7 @@ const TOOL_LIMIT: Record<string, Action> = {
 function buildServer(auth: Auth, userId: string, websiteUrl: string) {
   // Sent once when the AI connects; clients put it in the model's context, so the AI knows the order before any tool call.
   const server = new McpServer({
-    name: "queue-pilot", version: "0.1.0", title: "Queue Pilot",
+    name: "queue-pilot", version: pkg.version, title: "Queue Pilot",
     websiteUrl,
     icons: [{ src: `${websiteUrl}/icon-512.png`, mimeType: "image/png", sizes: ["512x512"] }],
   }, { instructions: SERVER_INSTRUCTIONS });

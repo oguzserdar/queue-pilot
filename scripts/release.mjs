@@ -35,8 +35,11 @@ const date = new Date().toISOString().slice(0, 10);
 const heading = `## [${version}] - ${date}${name ? ` ${name}` : ""}`;
 writeFileSync("CHANGELOG.md", `${log.slice(0, bodyStart)}\n${heading}\n\n${notes}\n${next < 0 ? "" : log.slice(next)}`);
 writeFileSync("package.json", `${JSON.stringify({ ...pkg, version }, null, 2)}\n`);
+const pluginPath = "plugin/.claude-plugin/plugin.json";
+const plugin = JSON.parse(readFileSync(pluginPath, "utf8"));
+writeFileSync(pluginPath, `${JSON.stringify({ ...plugin, version }, null, 2)}\n`);
 
-git("add", "CHANGELOG.md", "package.json");
+git("add", "CHANGELOG.md", "package.json", pluginPath);
 git("commit", "-m", `chore(release): v${version}${name ? ` ${name}` : ""}`);
 git("tag", "-a", `v${version}`, "-m", `v${version}${name ? ` ${name}` : ""}`);
 console.log(`Tagged v${version}. Publish with: git push --follow-tags`);
