@@ -40,4 +40,4 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
 ];
 
 /** Only in the app, never through a connected AI. */
-export const APP_ONLY = ["Your AI key", "Which AI apps are connected", "Whether your AI can schedule", "Signing out and deleting your account"];
+export const APP_ONLY = "Only in the app: your AI key, which AI apps are connected, whether your AI can schedule, signing out and deleting your account.";

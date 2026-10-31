@@ -138,7 +138,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, no
             </div>
           ))}
         </div>
-        <p className={styles.muted}>{`Only in the app: ${APP_ONLY.join(", ").toLowerCase().replace(/^./, (c) => c.toUpperCase())}.`}</p>
+        <p className={styles.muted}>{APP_ONLY}</p>
       </section>
 
       <Dialog open={current !== undefined} onOpenChange={(o) => { if (!o) setOpen(null); }}>
