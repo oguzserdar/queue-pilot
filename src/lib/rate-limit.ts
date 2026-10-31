@@ -28,6 +28,10 @@ export const RULES = {
   connect: { max: 30, windowSeconds: 3600 },
   /** Tries at claiming a fresh deployment with its setup code, per person, so the code cannot be guessed. */
   adminClaim: { max: 5, windowSeconds: 3600 },
+  /** Comments on a review link from people without an account, per IP address. */
+  reviewComment: { max: 20, windowSeconds: 600 },
+  /** Comments on one review link from everyone together, so a leaked link cannot be flooded from many addresses. */
+  reviewLink: { max: 60, windowSeconds: 600 },
   /** Account deletion and signing out other devices, per person. */
   account: { max: 5, windowSeconds: 3600 },
 } as const satisfies Record<string, Rule>;

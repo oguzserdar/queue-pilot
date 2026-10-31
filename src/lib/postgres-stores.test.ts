@@ -25,6 +25,7 @@ const { postgresWrittenStore } = await import("./written-store");
 const { currentOffers } = await import("./read-back");
 const { postgresVerdictStore, CLEAR_TTL_MS, UNCLEAR_TTL_MS, CLAIM_TTL_MS } = await import("./fix-verdicts");
 const { postgresAiKeyStore } = await import("./ai-key-store");
+const { checkComment, postgresReviewStore, reviewNotes, MAX_COMMENTS: MAX_REVIEW_COMMENTS, MAX_OPEN_LINKS, TooManyLinksError } = await import("./review-store");
 const appSchema = await import("../db/schema");
 const { getTableColumns, getTableName, is } = await import("drizzle-orm");
 const { PgTable } = await import("drizzle-orm/pg-core");
@@ -541,3 +542,91 @@ describe("saved repeated-fix answers", () => {
     expect(await store.get("u1", "k6", t0)).toBeNull();
   });
 });
+
+describe("review links on real Postgres", () => {
+  const drafts = [
+    { postId: "p1", network: "twitter", channel: "OguzSerdar", dueAt: "2026-11-03T09:00:00Z", text: "Day 4 of Queue Pilot: reviews." },
+    { postId: "p2", network: "linkedin", channel: "Oguz", dueAt: null, text: "Shipping review links today." },
+  ];
+
+  it("shares drafts under an unguessable link that only its owner can turn off", async () => {
+    const s = postgresReviewStore();
+    const link = await s.create("u7", drafts);
+    expect(link.id).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect((await s.open(link.id))?.drafts).toEqual(drafts);
+    await s.revoke("u8", link.id);
+    expect(await s.open(link.id)).not.toBeNull();
+    await s.revoke("u7", link.id);
+    expect(await s.open(link.id)).toBeNull();
+    expect((await s.list("u7")).find((l) => l.id === link.id)?.revokedAt).not.toBeNull();
+  });
+
+  it("takes comments while the link is on, and none after it is turned off", async () => {
+    const s = postgresReviewStore();
+    const link = await s.create("u7", drafts);
+    const ok = checkComment(drafts, { postId: "p1", name: "Ali", text: "just say QP", start: 9, end: 20 });
+    if (!ok.ok) throw new Error(ok.message);
+    expect(ok.comment.quote).toBe("Queue Pilot");
+    expect(await s.comment(link.id, ok.comment)).toBe(true);
+    expect((await s.open(link.id))?.comments).toMatchObject([{ postId: "p1", name: "Ali", text: "just say QP", quote: "Queue Pilot", start: 9, end: 20 }]);
+    await s.revoke("u7", link.id);
+    expect(await s.comment(link.id, ok.comment)).toBe(false);
+  });
+
+  it("stops at the comment limit for one link", async () => {
+    const s = postgresReviewStore();
+    const link = await s.create("u7", drafts);
+    const c = { postId: "p2", name: "Spam", text: "x", quote: null, start: null, end: null };
+    for (let i = 0; i < MAX_REVIEW_COMMENTS; i++) await s.comment(link.id, c);
+    expect(await s.comment(link.id, c)).toBe(false);
+    expect((await s.open(link.id))?.comments).toHaveLength(MAX_REVIEW_COMMENTS);
+    await s.revoke("u7", link.id);
+  });
+
+  it("refuses a new link past the number a person can keep on", async () => {
+    const s = postgresReviewStore();
+    const mine = await Promise.all(Array.from({ length: MAX_OPEN_LINKS }, () => s.create("u8", drafts.slice(0, 1))));
+    await expect(s.create("u8", drafts.slice(0, 1))).rejects.toBeInstanceOf(TooManyLinksError);
+    await s.revoke("u8", mine[0].id);
+    await expect(s.create("u8", drafts.slice(0, 1))).resolves.toBeTruthy();
+  });
+
+  it("goes with the person's account", async () => {
+    const s = postgresReviewStore();
+    await pg.query(`insert into "user" (id, name, email) values ('u9', 'u9', 'u9@x')`);
+    const link = await s.create("u9", drafts);
+    await s.comment(link.id, { postId: "p1", name: "Ali", text: "hi", quote: null, start: null, end: null });
+    await deleteAccount("u9");
+    expect(await s.open(link.id)).toBeNull();
+    const { rows } = await pg.query<{ n: number }>(`select count(*)::int as n from qp_review_comment where link_id = '${link.id}'`);
+    expect(rows[0].n).toBe(0);
+  });
+});
+
+describe("checkComment and reviewNotes", () => {
+  const drafts = [{ postId: "p1", network: "twitter", channel: "X", dueAt: null, text: "Day 4 of Queue Pilot." }];
+  it("takes the quote from the shared text, never from the reviewer", () => {
+    const r = checkComment(drafts, { postId: "p1", name: " Ali ", text: " shorter ", start: 9, end: 20 });
+    expect(r).toEqual({ ok: true, comment: { postId: "p1", name: "Ali", text: "shorter", quote: "Queue Pilot", start: 9, end: 20 } });
+  });
+  it("refuses an unknown draft, a missing name or comment, and a highlight outside the text", () => {
+    expect(checkComment(drafts, { postId: "p9", name: "A", text: "x" }).ok).toBe(false);
+    expect(checkComment(drafts, { postId: "p1", name: " ", text: "x" }).ok).toBe(false);
+    expect(checkComment(drafts, { postId: "p1", name: "A", text: "" }).ok).toBe(false);
+    expect(checkComment(drafts, { postId: "p1", name: "A", text: "x", start: 5, end: 99 }).ok).toBe(false);
+    expect(checkComment(drafts, { postId: "p1", name: "A", text: "x", start: 5, end: 5 }).ok).toBe(false);
+    expect(checkComment(drafts, { postId: "p1", name: "A", text: "x", start: 1.5, end: 3 }).ok).toBe(false);
+    expect(checkComment(drafts, { postId: "p1", name: "A".repeat(61), text: "x" }).ok).toBe(false);
+  });
+  it("turns comments into notes on their drafts, naming highlighted words", () => {
+    const posts = reviewNotes([{ id: "L", drafts, createdAt: "2026-10-31T00:00:00Z", revokedAt: null, comments: [
+      { id: "c1", postId: "p1", name: "Ali", text: "just say QP", quote: "Queue Pilot", start: 9, end: 20, createdAt: "2026-10-31T01:00:00Z" },
+      { id: "c2", postId: "p1", name: "Sara", text: "Nice", quote: null, start: null, end: null, createdAt: "2026-10-31T02:00:00Z" },
+    ] }]);
+    expect(posts).toEqual([{ id: "L:p1", network: "twitter", text: "Day 4 of Queue Pilot.", notes: [
+      { text: 'On the words "Queue Pilot": just say QP', by: "Ali", at: "2026-10-31T01:00:00Z" },
+      { text: "Nice", by: "Sara", at: "2026-10-31T02:00:00Z" },
+    ] }]);
+  });
+});
+

@@ -4,7 +4,7 @@
  * Each person may take their data with them (GDPR Article 20). The export reads only rows that belong to the person and
  * leaves out every secret: the encrypted AI key, Buffer and AI-app tokens, and session tokens.
  */
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { session, user } from "../db/auth-schema";
 import {
@@ -14,6 +14,8 @@ import {
   echo,
   echoDestination,
   fixDismissed,
+  reviewComment,
+  reviewLink,
   rule,
   securityEvent,
   source,
@@ -39,7 +41,7 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
   const [person] = await d.select({ name: user.name, email: user.email, image: user.image, createdAt: user.createdAt }).from(user).where(eq(user.id, userId));
   if (!person) return null;
   const [
-    rules, voiceExamples, voiceNotes, sources, sourcesUsed, copies, copiedPosts, drafts, dismissed, ai, usage, security, sessions, snapshot, apps,
+    rules, voiceExamples, voiceNotes, sources, sourcesUsed, copies, copiedPosts, drafts, dismissed, ai, usage, security, sessions, snapshot, apps, reviews,
   ] = await Promise.all([
     d.select().from(rule).where(eq(rule.userId, userId)),
     d.select().from(voiceExample).where(eq(voiceExample.userId, userId)),
@@ -56,7 +58,9 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     d.select({ createdAt: session.createdAt, expiresAt: session.expiresAt, ipAddress: session.ipAddress, userAgent: session.userAgent }).from(session).where(eq(session.userId, userId)),
     d.select({ data: bufferSnapshot.data, fetchedAt: bufferSnapshot.fetchedAt }).from(bufferSnapshot).where(eq(bufferSnapshot.userId, userId)),
     approvedApps(userId),
+    d.select().from(reviewLink).where(eq(reviewLink.userId, userId)).orderBy(asc(reviewLink.createdAt)),
   ]);
+  const reviewComments = reviews.length ? await d.select().from(reviewComment).where(inArray(reviewComment.linkId, reviews.map((r) => r.id))).orderBy(asc(reviewComment.createdAt)) : [];
   const strip = <T extends Record<string, unknown>>(rows: T[]) => rows.map(({ userId: _u, ...rest }) => rest);
   return {
     format: EXPORT_FORMAT,
@@ -67,6 +71,7 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     sources: { feeds: strip(sources), used: strip(sourcesUsed) },
     copies: { destinations: strip(copies), sent: strip(copiedPosts) },
     draftsQueuePilotWrote: strip(drafts),
+    reviewLinks: strip(reviews).map((l) => ({ ...l, comments: reviewComments.filter((c) => c.linkId === l.id) })),
     ai: { ownKey: ai[0] ?? null, builtInUsage: strip(usage) },
     aiApps: apps,
     securityActivity: strip(security),
