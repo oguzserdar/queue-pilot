@@ -3,10 +3,10 @@
 import { DRAFT_CHECKS } from "@/lib/draft-checks";
 
 import { useState, useTransition } from "react";
-import { addRule, readRule, removeRule } from "@/app/(app)/actions";
+import { addRule, readRule, removeRule, setRuleException } from "@/app/(app)/actions";
 import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
-import { NETWORKS, ruleHold, type NewRule, type Rule } from "@/lib/rules";
+import { appliesTo, NETWORKS, ruleHold, type NewRule, type Rule } from "@/lib/rules";
 import { EXAMPLE_RULES } from "@/lib/example-playbook";
 import { EXAMPLE_TRY } from "@/lib/example-verdicts";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
@@ -25,6 +25,8 @@ const OFFERED: ShownRule = { id: "r5", kind: "guidance", channels: ["instagram"]
 const HOLD_TONE = { "Blocks drafts": "danger", "Flags drafts": "warning" } as const;
 const HOLD_HINT = { "Blocks drafts": "A draft that breaks it is rewritten once, then not saved", "Flags drafts": "A draft that breaks it is saved and flagged for you" };
 
+const EXAMPLE_NETWORKS = ["twitter", "linkedin", "instagram"];
+
 const groupName = (r: Rule) => (r.channels === "all" ? "Every network" : r.channels.map((c) => NETWORKS[c] ?? c).join(", "));
 
 function groups(rules: ShownRule[]): [string, ShownRule[]][] {
@@ -34,19 +36,32 @@ function groups(rules: ShownRule[]): [string, ShownRule[]][] {
 }
 
 /** Example mode: Mark's playbook and one repeated fix waiting for his yes. Live mode: the person's own rules. */
-export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null> }) {
+export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[] }) {
   const live = mode === "live";
+  // Networks a shared rule was switched off for on this screen, ahead of the server's answer.
+  const [except, setExcept] = useState<Record<string, string[]>>({});
   const [rules, setRules] = useState<ShownRule[]>(live ? initial : firstVisit ? [] : EXAMPLE);
   const [offer, setOffer] = useState<"open" | "kept" | "dismissed">(live || firstVisit ? "dismissed" : "open");
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const shown = live ? initial : rules;
+  const shown = (live ? initial : rules).map((r) => (except[r.id] ? { ...r, except: except[r.id] } : r));
+  const toggle = (r: ShownRule, network: string) => {
+    const off = !(r.except ?? []).includes(network);
+    const next = off ? [...(r.except ?? []), network] : (r.except ?? []).filter((n) => n !== network);
+    const before = r.except ?? [];
+    setExcept((e) => ({ ...e, [r.id]: next }));
+    if (!live) return;
+    start(async () => {
+      const res = await setRuleException(r.id, network, off);
+      if (!res.ok) { setExcept((e) => ({ ...e, [r.id]: before })); setProblem(res.message); }
+    });
+  };
 
   const { toast } = useToastStack();
   // A deleted rule can come back: Undo adds it again with the person's own sentence and the reading it had.
   const restore = async (r: ShownRule) => {
     if (!live) return setRules((rs) => [...rs, r]);
-    const res = await addRule({ kind: "guidance", text: r.text, channels: r.channels, level: r.level, reading: r });
+    const res = await addRule({ kind: "guidance", text: r.text, channels: r.channels, except: r.except, level: r.level, reading: r });
     if (!res.ok) setProblem(res.message);
   };
   const remove = (id: string) => {
@@ -101,6 +116,11 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the dish.</p>}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
+      {networks.length > 1 && shown.length > 0 && (
+        <p className={styles.muted} aria-label="Rules by network">
+          {networks.map((n) => `${NETWORKS[n] ?? n}: ${shown.filter((r) => appliesTo(r, n)).length} rule${shown.filter((r) => appliesTo(r, n)).length === 1 ? "" : "s"}`).join(" · ")}
+        </p>
+      )}
       {groups(shown).map(([name, rs]) => (
         <section key={name} className={styles.block} aria-label={`${name} rules`}>
           <h2 className={styles.h2}>{name}</h2>
@@ -112,6 +132,18 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
                   <span className={styles.text}>
                     <strong>{r.text}</strong>
                     <span className={styles.muted}>{HOLD_HINT[hold]}{r.origin ? `. ${r.origin}.` : "."}</span>
+                    {r.channels === "all" && networks.length > 0 && (
+                      <span className={styles.nets} role="group" aria-label={`Networks for: ${r.text}`}>
+                        {networks.map((n) => {
+                          const on = appliesTo(r, n);
+                          return (
+                            <button key={n} type="button" className={styles.net} aria-pressed={on} disabled={pending} onClick={() => toggle(r, n)} title={on ? `On for ${NETWORKS[n] ?? n}. Switch it off there.` : `Off for ${NETWORKS[n] ?? n}. Switch it back on.`}>
+                              {NETWORKS[n] ?? n}{on ? "" : " off"}
+                            </button>
+                          );
+                        })}
+                      </span>
+                    )}
                   </span>
                   <span className={styles.rowEnd}>
                     <Badge tone={HOLD_TONE[hold]} size="sm">{hold}</Badge>

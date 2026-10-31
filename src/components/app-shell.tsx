@@ -17,6 +17,7 @@ import { FeatherIcon } from "./animated-icons/feather";
 import { LinkIcon } from "./animated-icons/link";
 import { PlugZapIcon } from "./animated-icons/plug-zap";
 import { SettingsIcon } from "./animated-icons/settings";
+import { MessageSquareMoreIcon } from "./animated-icons/message-square-more";
 import { ShieldCheckIcon } from "./animated-icons/shield-check";
 import { SparklesIcon } from "./animated-icons/sparkles";
 import { ToastStack, ToastStackProvider } from "@/registry/components/toast-stack/toast-stack";
@@ -31,6 +32,7 @@ const NAV_GROUPS = [
   { label: null, items: [
     { href: "/", label: "Needs you", Icon: CheckCheckIcon },
     { href: "/week", label: "Next week", Icon: CalendarDaysIcon },
+    { href: "/reviews", label: "Reviews", Icon: MessageSquareMoreIcon },
     { href: "/delivery", label: "Delivery", Icon: ShieldCheckIcon },
   ] },
   { label: "What it knows", items: [

@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/registry/components/p
 import type { Verdict } from "@/lib/judge";
 import { EXAMPLE_VERDICTS } from "@/lib/example-verdicts";
 import { WriteWeekButton } from "./write-week-button";
+import { ShareReviewButton } from "./share-review-button";
 import type { WritingAvailability } from "@/lib/writing-availability";
 import { ChannelIcon } from "./channel-icon";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
@@ -197,6 +198,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             </Popover>
           )}
           {live && open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions />}
+          {live && drafts.length > 0 && <ShareReviewButton drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (
               <>

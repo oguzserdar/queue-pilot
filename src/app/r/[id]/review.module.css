@@ -1,0 +1,27 @@
+/* A reading column of drafts, each with its comments and the comment form beneath it. */
+.page { min-height: 100dvh; background: var(--qp-desk); padding: 40px 16px 64px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+.head, .drafts, .closed { width: min(680px, 100%); }
+.head { display: flex; flex-direction: column; gap: 8px; }
+.mark { font-weight: 700; font-size: var(--text-lg); }
+.mark span { color: var(--qp-crimson); }
+.title { font-size: var(--text-2xl); font-weight: 700; line-height: 1.2; text-wrap: balance; }
+.sub { color: var(--text-secondary); line-height: 1.55; max-width: 60ch; }
+.closed { margin-top: 12vh; display: flex; flex-direction: column; gap: 10px; text-align: center; align-items: center; }
+.drafts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px; }
+.draft { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-surface); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.meta { color: var(--text-secondary); font-size: var(--text-sm); }
+.meta strong { color: var(--foreground); font-weight: 600; }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; border-radius: var(--radius-control); cursor: text; }
+.text::selection { background: var(--qp-crimson-wash); }
+.text:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 4px; }
+.comments { margin: 0; padding: 12px 0 0; list-style: none; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border-subtle); }
+.comment { display: flex; flex-direction: column; gap: 4px; line-height: 1.5; }
+.who { font-weight: 600; font-size: var(--text-sm); }
+.quote { background: var(--qp-crimson-wash); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+.body { overflow-wrap: anywhere; }
+.form { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+.on { color: var(--text-secondary); font-size: var(--text-sm); }
+.actions { display: flex; justify-content: flex-end; gap: 8px; }
+.add { align-self: flex-start; }
+.ok { color: var(--success); }
+.error { color: var(--danger); }

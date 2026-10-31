@@ -82,7 +82,7 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
   }
 }
 
-export type SourceActionResult = { ok: true; title?: string } | { ok: false; message: string };
+export type SourceActionResult = { ok: true; title?: string; id?: string } | { ok: false; message: string };
 
 /** Adds a feed after reading it once to confirm it is a working RSS or Atom feed. */
 export async function addSource(url: string): Promise<SourceActionResult> {
@@ -289,15 +289,16 @@ export async function addRule(input: unknown): Promise<SourceActionResult> {
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   const parsed = parseNewRule(input);
   if (typeof parsed === "string") return { ok: false, message: parsed };
+  let id: string;
   try {
-    await postgresRulesStore().add(userId, await readingOrTyped(userId, parsed, (input as { reading?: unknown }).reading));
+    id = await postgresRulesStore().add(userId, await readingOrTyped(userId, parsed, (input as { reading?: unknown }).reading));
   } catch (e) {
     if (e instanceof TooManyRulesError) return { ok: false, message: e.message };
     console.error(JSON.stringify({ event: "qp-rule-add-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Queue Pilot could not save that rule just now. Try again in a minute." };
   }
   revalidatePath("/playbook");
-  return { ok: true };
+  return { ok: true, id };
 }
 
 /**
@@ -347,6 +348,21 @@ export async function removeRule(id: string): Promise<SourceActionResult> {
   } catch (e) {
     console.error(JSON.stringify({ event: "qp-rule-remove-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Queue Pilot could not delete that rule just now. Try again in a minute." };
+  }
+  revalidatePath("/playbook");
+  return { ok: true };
+}
+
+/** Switches one of the person's shared rules off for a network, or back on. */
+export async function setRuleException(id: string, network: string, off: boolean): Promise<SourceActionResult> {
+  const userId = await signedInUserId();
+  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (typeof id !== "string" || id.length > 100 || typeof network !== "string" || !(network in NETWORKS) || typeof off !== "boolean") return { ok: false, message: "Unknown rule." };
+  try {
+    if (!(await postgresRulesStore().setException(userId, id, network, off))) return { ok: false, message: "Only a rule for every network can be switched off for one." };
+  } catch (e) {
+    console.error(JSON.stringify({ event: "qp-rule-exception-failed", message: e instanceof Error ? e.message : String(e) }));
+    return { ok: false, message: "Queue Pilot could not change that rule just now. Try again in a minute." };
   }
   revalidatePath("/playbook");
   return { ok: true };

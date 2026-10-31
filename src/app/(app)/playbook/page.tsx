@@ -1,5 +1,5 @@
 import { PlaybookView, type ShownRule } from "@/components/playbook-view";
-import { signedInUserId } from "@/lib/current-user";
+import { getCurrentUser, signedInUserId } from "@/lib/current-user";
 import { postgresRulesStore } from "@/lib/rules-store";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ first?: string }> }) {
@@ -12,5 +12,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
   const rules: ShownRule[] = stored.map(({ fixes, ...r }) => ({ ...r, origin: fixes > 0 ? `From ${fixes} of your fixes` : "Added by you" }) as ShownRule);
   // Rules from the person's edits are proposed by a model that reads them by meaning (the finder on this page), never
   // by matching words, so the page offers nothing on its own.
-  return <PlaybookView mode="live" initial={rules} />;
+  // The networks the person posts to, from the saved copy of their Buffer, so a shared rule can be switched off per network.
+  const { user } = await getCurrentUser().catch(() => ({ user: null }));
+  const networks = [...new Set((user?.channels ?? []).map((c) => c.service))];
+  return <PlaybookView mode="live" initial={rules} networks={networks} />;
 }

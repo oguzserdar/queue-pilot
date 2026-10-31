@@ -55,3 +55,10 @@
 .checks { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-6); }
 .checks li { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: var(--text-sm); }
 @media (max-width: 640px) { .checks { grid-template-columns: minmax(0, 1fr); } }
+.fixes { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+/* Networks a shared rule is on for; a pressed chip is on, an unpressed one is switched off. */
+.nets { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
+.net { font: inherit; font-size: var(--text-xs); padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-muted); cursor: pointer; text-decoration: line-through; transition: background-color 160ms var(--ease-standard), color 160ms var(--ease-standard); }
+.net[aria-pressed="true"] { background: var(--accent-subtle); color: var(--foreground); border-color: transparent; text-decoration: none; }
+.net:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.net:disabled { cursor: default; opacity: 0.7; }

@@ -2,50 +2,78 @@
 
 import { useState, useTransition } from "react";
 import { addRule, dismissFirstRule, findFirstRules, type FirstRuleOffer } from "@/app/(app)/actions";
+import { findRulesInComments } from "@/app/(app)/review-actions";
 import { Button } from "@/registry/components/button/button";
 import { EXAMPLE_FIRST_RULES } from "@/lib/example-first-rules";
+import { RuleFixes } from "./rule-fixes";
 import styles from "./playbook-view.module.css";
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-const proofLine = (o: FirstRuleOffer) =>
+const proofLine = (o: FirstRuleOffer, source: Source) =>
   o.proof.kind === "posts"
     ? `Followed in ${o.proof.followed} of your ${o.proof.of} ${o.where} posts`
-    : `From ${o.proof.by ? `${o.proof.by}'s note` : "a note"}${o.proof.at ? `, ${day(o.proof.at)}` : ""}, on a ${o.where} post`;
+    : `From ${o.proof.by ? `${o.proof.by}'s ${source === "comments" ? "comment" : "note"}` : source === "comments" ? "a comment" : "a note"}${o.proof.at ? `, ${day(o.proof.at)}` : ""}, on a ${o.where} ${source === "comments" ? "draft" : "post"}`;
+
+type Source = "posts" | "comments";
+
+/** What the finder reads, in its own words. */
+const COPY: Record<Source, { title: string; intro: string; find: string; reading: string; none: string }> = {
+  posts: {
+    title: "Rules from your past posts",
+    intro: "Your AI reads your last 20 sent posts on each network and the notes your team left on them in Buffer. Each rule it finds shows its proof. A rule you keep flags drafts that break it; it never blocks one.",
+    find: "Find rules in my past posts",
+    reading: "Reading your posts…",
+    none: "No habit of yours holds in every post yet, and no note asks for one.",
+  },
+  comments: {
+    title: "Rules from review comments",
+    intro: "Your AI reads the comments people left on your review links. Only a comment that asks for something in every future post becomes a rule, with the comment as its proof. A rule you keep flags drafts that break it; it never blocks one.",
+    find: "Find rules in comments",
+    reading: "Reading the comments…",
+    none: "No comment asks for something that should apply to every post.",
+  },
+};
 
 /**
  * Find my first rules: on demand (it spends the person's AI credits), a model reads their recent sent posts and the
- * notes their team left in Buffer. Each rule shows its proof; Keep adds it as a "flag it" rule; Not now is remembered, so it is not offered again.
+ * notes their team left in Buffer, or (`source="comments"`) the comments left on their review links. Each rule shows its proof; Keep adds it as a "flag it" rule; Not now is remembered, so it is not offered again.
  */
-export function FirstRulesFinder({ open = false, onExampleKeep }: { open?: boolean; onExampleKeep?: (o: FirstRuleOffer) => void }) {
+export function FirstRulesFinder({ open = false, onExampleKeep, source = "posts" }: { open?: boolean; onExampleKeep?: (o: FirstRuleOffer) => void; source?: Source }) {
+  const copy = COPY[source];
   const [pending, start] = useTransition();
   const [found, setFound] = useState<{ offers: FirstRuleOffer[]; skipped: string[] } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [handled, setHandled] = useState<Record<number, "kept" | "dropped">>({});
+  // The id of each rule kept here, so its change can be carried across the week's drafts.
+  const [keptIds, setKeptIds] = useState<Record<number, string>>({});
 
   const find = () =>
     start(async () => {
       setMessage(null);
       if (onExampleKeep) { setFound(EXAMPLE_FIRST_RULES); setHandled({}); return; }
-      const r = await findFirstRules();
+      const r = source === "comments" ? await findRulesInComments() : await findFirstRules();
       if (r.ok) { setFound(r); setHandled({}); } else setMessage(r.message);
     });
 
   return (
-    <section className={open ? styles.offer : styles.block} aria-labelledby="first-rules-title">
-      <h2 id="first-rules-title" className={styles.h2}>Rules from your past posts</h2>
-      <p className={styles.muted}>Your AI reads your last 20 sent posts on each network and the notes your team left on them in Buffer. Each rule it finds shows its proof. A rule you keep flags drafts that break it; it never blocks one.</p>
-      <div><Button variant={open && !found ? "primary" : "secondary"} size="sm" disabled={pending} onClick={find}>{pending ? "Reading your posts…" : found ? "Look again" : "Find rules in my past posts"}</Button></div>
+    <section className={open ? styles.offer : styles.block} aria-labelledby={`first-rules-${source}`}>
+      <h2 id={`first-rules-${source}`} className={styles.h2}>{copy.title}</h2>
+      <p className={styles.muted}>{copy.intro}</p>
+      <div><Button variant={open && !found ? "primary" : "secondary"} size="sm" disabled={pending} onClick={find}>{pending ? copy.reading : found ? "Look again" : copy.find}</Button></div>
       {message && <p className={styles.problem} role="alert">{message}</p>}
-      {found && found.offers.length === 0 && <p className={styles.muted} role="status">No habit of yours holds in every post yet, and no note asks for one.</p>}
+      {found && found.offers.length === 0 && <p className={styles.muted} role="status">{copy.none}</p>}
       {found && found.skipped.length > 0 && <p className={styles.muted}>Skipped {found.skipped.join(", ")}: fewer than 10 sent posts.</p>}
       {found?.offers.map((o, i) =>
         handled[i] ? (
-          <p key={i} className={styles.done} role="status">{handled[i] === "kept" ? `Kept: ${o.text}` : "Set aside."}</p>
+          <div key={i}>
+            <p className={styles.done} role="status">{handled[i] === "kept" ? `Kept: ${o.text}` : "Set aside."}</p>
+            {keptIds[i] && <RuleFixes ruleId={keptIds[i]} />}
+          </div>
         ) : (
           <section key={i} className={styles.suggestion} aria-label={`Suggested rule: ${o.text}`}>
             <h3 className={styles.h2}>{o.text}</h3>
-            <p className={styles.proof}>✓ {proofLine(o)}</p>
+            <p className={styles.proof}>✓ {proofLine(o, source)}</p>
             {o.proof.kind === "note" ? (
               <>
                 <blockquote className={styles.quote}>{o.proof.note}</blockquote>
@@ -63,7 +91,7 @@ export function FirstRulesFinder({ open = false, onExampleKeep }: { open?: boole
               <Button variant="primary" size="sm" disabled={pending} onClick={() => start(async () => {
                 if (onExampleKeep) { onExampleKeep(o); setHandled((h) => ({ ...h, [i]: "kept" })); return; }
                 const r = await addRule({ kind: "guidance", text: o.text, channels: o.channels, level: "warn" });
-                if (r.ok) setHandled((h) => ({ ...h, [i]: "kept" })); else setMessage(r.message);
+                if (r.ok) { setHandled((h) => ({ ...h, [i]: "kept" })); if (r.id) setKeptIds((k) => ({ ...k, [i]: r.id! })); } else setMessage(r.message);
               })}>Keep</Button>
               <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
                 if (onExampleKeep) { setHandled((h) => ({ ...h, [i]: "dropped" })); return; }

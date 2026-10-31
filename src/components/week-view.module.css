@@ -114,3 +114,10 @@
 .issue { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--text-sm); line-height: 1.45; color: var(--text-secondary); }
 .issue strong { color: var(--foreground); font-weight: 600; }
 .issue + .issue { padding-top: var(--space-3); border-top: 1px solid var(--border); }
+
+/* Share for review dialog. */
+.shareBody { display: flex; flex-direction: column; gap: 16px; }
+.shareList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; max-height: min(50dvh, 420px); overflow-y: auto; }
+.shareUrl { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-muted); overflow-wrap: anywhere; font-size: var(--text-sm); }
+.shareActions { display: flex; justify-content: flex-end; gap: 8px; }
+.shareError { color: var(--danger); }
