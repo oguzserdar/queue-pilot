@@ -78,9 +78,10 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
   });
   server.registerTool("list_rule_suggestions", {
     title: "Find rules in my edits and posts",
-    description: "List suggestions without keeping any. fixes refreshes the queue within the shared request allowance and reads repeated small edits; rewrites uses an AI action to learn from larger rewrites; past_posts reads recent Buffer posts and uses AI to find first rules. Show the evidence and ask which to keep. Use each returned token with keep_suggestion or dismiss_suggestion within an hour.",
+    description: "List suggestions without keeping any. fixes refreshes the queue within the shared request allowance and finds the same small edit in two drafts on one network; when it finds one, an AI action decides whether it is a lasting preference rather than chance or a one-off fact, and only preferences are offered, each with the reason (evidence.why); the same unchanged repeats asked about again reuse that answer without another action; rewrites uses an AI action to learn from larger rewrites; past_posts reads recent Buffer posts and uses AI to find first rules. Show the evidence and ask which to keep. Use each returned token with keep_suggestion or dismiss_suggestion within an hour.",
     inputSchema: z.object({ mode: z.enum(["fixes", "rewrites", "past_posts"]).default("fixes") }), annotations: { ...read, openWorldHint: true },
   }, async ({ mode }) => {
+    // fixes applies the AI limit itself, only when it has to ask the model (a saved answer needs none).
     if (mode !== "fixes") {
       const l = await limit("ai", userId);
       if (!l.ok) return result("Too many AI requests just now. Try again in a minute.", true);

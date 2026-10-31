@@ -17,7 +17,7 @@ const TOOLS: [string, string][] = [
   ["remove_rule", "Remove a rule the person requests by its playbook ID."],
   ["read_rule", "Read a rule and any stored evidence from keeping it; never invent missing evidence."],
   ["check_draft", "Check a draft without saving it, using the metered AI and current rules."],
-  ["list_rule_suggestions", "Find repeated fixes, larger rewrites or habits from past posts, with evidence and signed tokens."],
+  ["list_rule_suggestions", "Find repeated fixes (checked by AI as a lasting preference, not chance or a one-off fact), larger rewrites or habits from past posts, with evidence and signed tokens."],
   ["keep_suggestion", "Keep a suggestion the person chose, using its exact token."],
   ["dismiss_suggestion", "Set aside a suggestion the person does not want."],
   ["list_sources", "List every configured feed and its ID."],

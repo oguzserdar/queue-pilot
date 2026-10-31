@@ -14,7 +14,8 @@ vi.mock("@better-auth/mcp", () => ({
   },
 }))
 vi.mock("@/lib/ai-access", () => ({ stillApproved: async () => true, recordAppUse: async () => {}, approvedApps: async () => [{ name: "ChatGPT", lastUsedAt: "2026-10-29T12:00:00Z" }] }))
-vi.mock("@/lib/rate-limit", () => ({ limit: async () => ({ ok: true }), limitHeaders: () => ({}) }))
+const limits = vi.hoisted(() => ({ blocked: "" }));
+vi.mock("@/lib/rate-limit", () => ({ limit: async (kind: string) => ({ ok: kind !== limits.blocked }), limitHeaders: () => ({}) }))
 vi.mock("@/lib/buffer-token", () => ({ bufferAccessToken: async (_auth: unknown, userId: string) => userId }))
 vi.mock("@/lib/buffer/snapshot-store", () => ({ postgresSnapshotStore: () => snapshots }))
 vi.mock("@/lib/voice-store", async (original) => ({ ...await original<typeof import("@/lib/voice-store")>(), postgresVoiceStore: () => voices }))
@@ -27,6 +28,15 @@ vi.mock("@/lib/written-store", () => ({
 }))
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: (...args: unknown[]) => buffer.q(...args) }))
 vi.mock("@/lib/safe-fetch", () => ({ safeFetch: vi.fn(), BlockedAddressError: class extends Error {} }))
+const confirm = vi.hoisted(() => ({ verdict: "preference" as "preference" | "fact", calls: 0, empty: false, wait: null as Promise<void> | null }));
+vi.mock("@/lib/confirm-fixes", async (original) => ({ ...await original<typeof import("@/lib/confirm-fixes")>(), askVerdicts: async (_model: unknown, offers: object[]) => { confirm.calls++; if (confirm.wait) await confirm.wait; if (confirm.empty) return []; return offers.map((_o, i) => ({ candidate: i + 1, verdict: confirm.verdict, why: "Both drafts make the same change." })); } }));
+const savedVerdicts = vi.hoisted(() => new Map<string, unknown>());
+vi.mock("@/lib/fix-verdicts", async (original) => ({ ...await original<typeof import("@/lib/fix-verdicts")>(), postgresVerdictStore: () => ({
+  get: async (u: string, k: string) => { const v = savedVerdicts.get(`${u}|${k}`); return v === undefined ? null : typeof v === "string" ? { kind: "busy" } : { kind: "answer", verdicts: v }; },
+  claim: async (u: string, k: string) => { if (savedVerdicts.has(`${u}|${k}`)) return null; const t = `t${Math.random()}`; savedVerdicts.set(`${u}|${k}`, t); return t; },
+  put: async (u: string, k: string, t: string, v: unknown) => { if (savedVerdicts.get(`${u}|${k}`) === t) savedVerdicts.set(`${u}|${k}`, v); },
+  release: async (u: string, k: string, t: string) => { if (savedVerdicts.get(`${u}|${k}`) === t) savedVerdicts.delete(`${u}|${k}`); },
+}) }));
 const aiCalls = vi.hoisted(() => ({ settle: vi.fn(async () => {}), giveBack: vi.fn(async () => {}) }));
 vi.mock("@/lib/judge-model", () => ({ AiCapError: class extends Error {}, allowanceFor: async () => ({ used: 1, cap: 20, budgetUsd: 100, leftUsd: 99.95, totalRemaining: 100 }), aiFor: async () => ({ cfg: { provider: "openai", key: "never-display", model: "test" }, language: answering({ quote: "broth", reason: "Use stock." }), decider: judge.model, source: "Queue Pilot key", ...aiCalls }), judgeModelFor: async () => ({
   judges: { decider: judge.model, explainer: answering({ quote: "broth", reason: "Use stock." }) },
@@ -101,6 +111,7 @@ async function call(name: string, args: Record<string, unknown> = {}, userId = "
 const answer = (r: Result) => r.content.map((c) => c.text).join("\n")
 
 beforeEach(() => {
+  savedVerdicts.clear()
   vi.useFakeTimers({ toFake: ["Date"] })
   vi.setSystemTime(new Date("2026-10-29T12:00:00Z"))
   voices = memoryVoiceStore()
@@ -435,10 +446,85 @@ describe("remaining account controls", () => {
     const found = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
     expect(found.suggestions).toHaveLength(1);
     expect(found.suggestions[0].rule).toMatchObject({ kind: "banned", phrases: ["🚀"], level: "block" });
+    expect(found.suggestions[0].evidence.why).toBe("Both drafts make the same change.");
     expect(found.suggestions[0].evidence.examples).toHaveLength(2);
     const kept = JSON.parse(answer(await call("keep_suggestion", { token: found.suggestions[0].token })));
     expect(kept.ok).toBe(true);
     expect(answer(await call("read_rule", { id: kept.id }))).toContain("🚀");
+  });
+  it("offers no rule when the model reads a repeated fix as a one-off fact, and settles the AI action", async () => {
+    confirm.verdict = "fact";
+    posts = [1, 2].map(i => ({ id: `fact-${i}`, channelId: "ch", status: "draft" as const, via: "buffer" as const, text: `Release ${i} is out today for builders.`, dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
+    written.set("person-a", posts.map(p => ({ postId: p.id, text: `${p.text} https://example.com/old`, network: "twitter" })));
+    const found = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    confirm.verdict = "preference";
+    expect(found.suggestions).toHaveLength(0);
+    expect(found.note).toContain("none looked like a lasting preference");
+    expect(aiCalls.settle).toHaveBeenCalled();
+  });
+  it("applies the AI limit only when the model must be asked, so a saved answer is still served", async () => {
+    posts = [1, 2].map(i => ({ id: `lim-${i}`, channelId: "ch", status: "draft" as const, via: "buffer" as const, text: `Shipping note ${i} for builders.`, dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
+    written.set("person-a", posts.map(p => ({ postId: p.id, text: `${p.text} Thrilled!`, network: "twitter" })));
+    limits.blocked = "ai";
+    const blocked = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    expect(blocked.note).toContain("Too many AI requests");
+    limits.blocked = "";
+    await call("list_rule_suggestions", { mode: "fixes" });
+    limits.blocked = "ai";
+    const saved = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    limits.blocked = "";
+    expect(saved.suggestions).toHaveLength(1);
+  });
+  it("lets only one of two simultaneous checks ask the model", async () => {
+    posts = [1, 2].map(i => ({ id: `race-${i}`, channelId: "ch", status: "draft" as const, via: "buffer" as const, text: `Shipping note ${i} for builders.`, dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
+    written.set("person-a", posts.map(p => ({ postId: p.id, text: `${p.text} Thrilled!`, network: "twitter" })));
+    let go!: () => void;
+    confirm.wait = new Promise<void>(r => { go = r; });
+    const before = confirm.calls;
+    const both = Promise.all([call("list_rule_suggestions", { mode: "fixes" }), call("list_rule_suggestions", { mode: "fixes" })]);
+    await vi.waitFor(() => expect(confirm.calls).toBe(before + 1));
+    go();
+    const [a, b] = (await both).map(r => JSON.parse(answer(r)));
+    confirm.wait = null;
+    expect(confirm.calls).toBe(before + 1);
+    expect([a.suggestions.length, b.suggestions.length].sort()).toEqual([0, 1]);
+    expect([a.note, b.note].join(" ")).toContain("already checking");
+  });
+  it("does not save an answer that skipped a repeat, so the next check asks again", async () => {
+    posts = [1, 2].map(i => ({ id: `gap-${i}`, channelId: "ch", status: "draft" as const, via: "buffer" as const, text: `Shipping note ${i} for builders.`, dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
+    written.set("person-a", posts.map(p => ({ postId: p.id, text: `${p.text} Thrilled!`, network: "twitter" })));
+    confirm.empty = true;
+    const before = confirm.calls;
+    const first = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    confirm.empty = false;
+    expect(first.note).toContain("did not answer every repeat");
+    const second = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    expect(confirm.calls).toBe(before + 2);
+    expect(second.suggestions).toHaveLength(1);
+  });
+  it("reuses the saved answer for the same unchanged repeats without another AI action", async () => {
+    posts = [1, 2].map(i => ({ id: `reuse-${i}`, channelId: "ch", status: "draft" as const, via: "buffer" as const, text: `Shipping note ${i} for builders.`, dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
+    written.set("person-a", posts.map(p => ({ postId: p.id, text: `${p.text} Thrilled!`, network: "twitter" })));
+    const before = confirm.calls;
+    const first = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    aiCalls.settle.mockClear();
+    const second = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    expect(first.suggestions).toHaveLength(1);
+    expect(second.suggestions.map((s: { key: string }) => s.key)).toEqual(first.suggestions.map((s: { key: string }) => s.key));
+    expect(second.suggestions[0].token).toBeTruthy();
+    expect(confirm.calls).toBe(before + 1);
+    expect(aiCalls.settle).not.toHaveBeenCalled();
+    posts = posts.map(p => ({ ...p, text: `${p.text} More.` }));
+    vi.setSystemTime(new Date(Date.now() + 31_000));
+    await call("list_rule_suggestions", { mode: "fixes" });
+    expect(confirm.calls).toBe(before + 2);
+  });
+  it("spends no AI action when no fix repeats", async () => {
+    const before = confirm.calls;
+    const found = JSON.parse(answer(await call("list_rule_suggestions", { mode: "fixes" })));
+    expect(found.suggestions).toHaveLength(0);
+    expect(confirm.calls).toBe(before);
+    expect(aiCalls.settle).not.toHaveBeenCalled();
   });
   it("reads channels and AI allowance without consuming an AI action", async () => {
     vi.stubEnv("SETTINGS_KEY", "");
