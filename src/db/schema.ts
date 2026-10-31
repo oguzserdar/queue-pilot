@@ -296,3 +296,42 @@ export const fixVerdict = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.inputHash] })],
 );
+
+/**
+ * A review link the person shared (src/lib/review-store.ts). The id is the unguessable token in the link. `drafts`
+ * is a copy of the drafts they chose, taken when they shared, so a reviewer never reaches Buffer or anything else.
+ * A link works until the person turns it off (`revokedAt`).
+ */
+export const reviewLink = pgTable(
+  "qp_review_link",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    /** [{ postId, network, channel, dueAt, text }] as shared. */
+    drafts: jsonb("drafts").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("qp_review_link_user_idx").on(t.userId, t.createdAt)],
+);
+
+/**
+ * A reviewer's comment on one shared draft, optionally on a highlighted span of its text (`quote` is that span,
+ * from `start` to `end`). Written by someone without an account, so it is untrusted text: it only ever becomes a
+ * suggested rule the person can keep or skip.
+ */
+export const reviewComment = pgTable(
+  "qp_review_comment",
+  {
+    id: text("id").primaryKey(),
+    linkId: text("link_id").notNull().references(() => reviewLink.id, { onDelete: "cascade" }),
+    postId: text("post_id").notNull(),
+    name: text("name").notNull(),
+    text: text("text").notNull(),
+    quote: text("quote"),
+    start: integer("start"),
+    end: integer("end"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("qp_review_comment_link_idx").on(t.linkId, t.createdAt)],
+);
