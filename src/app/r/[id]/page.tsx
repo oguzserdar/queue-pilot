@@ -15,8 +15,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
       <main className={styles.page}>
         <section className={styles.closed}>
           <p className={styles.mark}>Queue Pilot<span>.</span></p>
-          <h1 className={styles.title}>This review link is off</h1>
-          <p className={styles.sub}>Ask the person who shared it for a new link.</p>
+          <h1 className={styles.title}>This review link is closed</h1>
+          <p className={styles.sub}>It was turned off or it expired. Ask the person who shared it for a new link. Comments already sent are still with them.</p>
         </section>
       </main>
     );

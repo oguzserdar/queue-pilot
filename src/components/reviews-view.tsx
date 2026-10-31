@@ -3,17 +3,35 @@
 import { ReviewFeedback, type ReviewCandidate } from "./review-feedback";
 import { useState, useTransition } from "react";
 import { turnOffReview } from "@/app/(app)/review-actions";
+import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
 import { CopyButton } from "@/registry/components/copy-button/copy-button";
+import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { NETWORKS } from "@/lib/rules";
 import type { ReviewComment, ReviewLink } from "@/lib/review-limits";
-import styles from "./playbook-view.module.css";
+import styles from "./review-ui.module.css";
+import page from "./reviews-view.module.css";
 
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+
+/** The draft with each commented span marked, so the comment beside it reads in place. */
+function Marked({ text, comments }: { text: string; comments: ReviewComment[] }) {
+  const spans = comments.filter((c) => c.start !== null && c.end !== null && c.end! <= text.length).sort((a, b) => a.start! - b.start!);
+  const parts: React.ReactNode[] = [];
+  let at = 0;
+  for (const c of spans) {
+    if (c.start! < at) continue;
+    parts.push(text.slice(at, c.start!), <mark key={c.id} className={page.mark} title={`${c.name}: ${c.text}`}>{text.slice(c.start!, c.end!)}</mark>);
+    at = c.end!;
+  }
+  parts.push(text.slice(at));
+  return <p className={page.draftText}>{parts}</p>;
+}
 
 /**
- * Reviews: the links the person shared, what people said on each draft, and the rules those comments suggest.
- * `links` is null for someone signed out, who sees what the page is for.
+ * Reviews: the links the person shared, what people said on each draft beside the words they meant, and, from any
+ * comment, proposed changes to the drafts it is about. `links` is null for someone signed out.
  */
 export function ReviewsView({ origin, links, candidates = [], candidatesUnavailable = false }: { candidatesUnavailable?: boolean; candidates?: ReviewCandidate[]; origin: string; links: (ReviewLink & { comments: ReviewComment[] })[] | null }) {
   const [off, setOff] = useState<Set<string>>(new Set());
@@ -22,47 +40,74 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
   const total = links?.reduce((n, l) => n + l.comments.length, 0) ?? 0;
 
   return (
-    <div className={styles.page}>
-      <header className={styles.head}>
-        <h1 className={styles.title}>{links === null ? "Reviews" : `Reviews: ${total} comment${total === 1 ? "" : "s"}`}</h1>
-        <p className={styles.sub}>Share drafts from Next week with anyone, no account needed. A comment can fix the selected drafts. Preview each change, then decide whether a lasting preference belongs in the playbook.</p>
+    <div className={page.page}>
+      <header className={page.head}>
+        <h1 className={page.title}>{links === null || total === 0 ? "Reviews" : `Reviews: ${total} comment${total === 1 ? "" : "s"}`}</h1>
+        <p className={page.sub}>Send drafts to anyone for feedback. No account needed. From any comment, preview the edits it implies, apply the ones you want, and keep lasting preferences as rules.</p>
       </header>
+
       {links === null ? (
-        <p className={styles.muted}>Sign in with Buffer, then pick drafts on Next week and choose Share for review.</p>
+        <EmptyState title="Sign in to share drafts" description="Sign in with Buffer, then pick drafts on Next week and choose Share for review." />
       ) : links.length === 0 ? (
-        <p className={styles.muted}>No review links yet. On Next week, choose Share for review.</p>
+        <EmptyState title="No review links yet" description="On Next week, choose Share for review, tick the drafts, and send the link to whoever you want feedback from." action={<Button variant="secondary" size="sm" onClick={() => { window.location.href = "/week"; }}>Go to Next week</Button>} />
       ) : (
         <>
-          {candidatesUnavailable && <p role="alert">Drafts could not be read. Comments are available below; refresh before proposing changes.</p>}
-          {message && <p className={styles.problem} role="alert">{message}</p>}
+          {candidatesUnavailable && <p role="alert" className={styles.callout}>Your drafts couldn't be read just now, so changes can't be proposed. Comments are below. Refresh to try again.</p>}
+          {message && <p className={styles.error} role="alert">{message}</p>}
           {links.map((l) => {
-            const isOff = !!l.revokedAt || off.has(l.id) || !!(l.expiresAt && Date.parse(l.expiresAt) <= Date.now());
+            const expired = !!(l.expiresAt && Date.parse(l.expiresAt) <= Date.now());
+            const isOff = !!l.revokedAt || off.has(l.id);
+            const live = !isOff && !expired;
             const url = `${origin}/r/${l.id}`;
+            const commented = l.drafts.filter((d) => l.comments.some((c) => c.postId === d.postId));
+            const quiet = l.drafts.length - commented.length;
             return (
-              <section key={l.id} className={styles.block} aria-label={`Review link from ${day(l.createdAt)}`}>
-                <h2 className={styles.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared ${day(l.createdAt)}${isOff ? ", off" : ""}`}</h2>
-                {l.expiresAt && <p className={styles.muted}>Expires {day(l.expiresAt)}</p>}
-                {!isOff && (
-                  <div className={styles.actions}>
-                    <CopyButton value={url} label="Copy link" />
-                    <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
-                      const r = await turnOffReview(l.id);
-                      if (r.ok) setOff((s) => new Set(s).add(l.id)); else setMessage(r.message ?? "Could not turn it off.");
-                    })}>Turn off</Button>
+              <section key={l.id} className={page.link} aria-label={`Review link from ${day(l.createdAt)}`}>
+                <div className={page.linkHead}>
+                  <div className={page.linkTitle}>
+                    <h2 className={page.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared ${day(l.createdAt)}`}</h2>
+                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : l.expiresAt ? `Open until ${day(l.expiresAt)}` : "Open"}</Badge>
+                    <span className={styles.hint}>{`${l.comments.length} comment${l.comments.length === 1 ? "" : "s"}`}</span>
                   </div>
-                )}
-                {l.drafts.map((d) => {
+                  {live && (
+                    <div className={styles.row}>
+                      <CopyButton value={url} label="Copy link" />
+                      <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
+                        const r = await turnOffReview(l.id);
+                        if (r.ok) setOff((s) => new Set(s).add(l.id)); else setMessage(r.message ?? "Could not turn it off. Try again.");
+                      })}>Turn off</Button>
+                    </div>
+                  )}
+                </div>
+                {!live && <p className={styles.help}>Reviewers can no longer open this link. Their comments stay here.</p>}
+
+                {commented.length === 0 && <p className={styles.help}>{live ? "No comments yet. Send the link to your reviewer." : "Nobody commented."}</p>}
+                {commented.map((d) => {
                   const said = l.comments.filter((c) => c.postId === d.postId);
                   return (
-                    <div key={d.postId} className={styles.suggestion}>
-                      <p className={styles.muted}>{`${NETWORKS[d.network] ?? d.network} · ${d.channel}`}</p>
-                      <blockquote className={styles.quote}>{d.text}</blockquote>
-                      {said.length === 0 ? <p className={styles.muted}>No comments yet.</p> : said.map((c) => (
-                        <div key={c.id}><p className={styles.proof}><strong>{c.name}</strong>{c.quote ? ` on "${c.quote}"` : ""}: {c.text}</p>{!candidatesUnavailable && <ReviewFeedback linkId={l.id} commentId={c.id} channelId={d.channelId} candidates={candidates} />}</div>
-                      ))}
-                    </div>
+                    <article key={d.postId} className={page.thread}>
+                      <div className={page.draftCol}>
+                        <p className={styles.hint}>{`${NETWORKS[d.network] ?? d.network} · ${d.channel}`}</p>
+                        <Marked text={d.text} comments={said} />
+                      </div>
+                      <ol className={page.comments}>
+                        {said.map((c) => (
+                          <li key={c.id} className={page.comment}>
+                            <div className={page.who}>
+                              <span className={page.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>
+                              <strong>{c.name}</strong>
+                              <span className={styles.hint}>{when(c.createdAt)}</span>
+                            </div>
+                            {c.quote && <q className={page.quote}>{c.quote}</q>}
+                            <p className={page.body}>{c.text}</p>
+                            {!candidatesUnavailable && candidates.length > 0 && <ReviewFeedback linkId={l.id} commentId={c.id} channelId={d.channelId} reviewer={c.name} candidates={candidates} />}
+                          </li>
+                        ))}
+                      </ol>
+                    </article>
                   );
                 })}
+                {quiet > 0 && commented.length > 0 && <p className={styles.help}>{`${quiet} other draft${quiet === 1 ? "" : "s"} in this link ${quiet === 1 ? "has" : "have"} no comments.`}</p>}
               </section>
             );
           })}

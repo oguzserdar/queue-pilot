@@ -6,6 +6,7 @@ import { Button } from "@/registry/components/button/button";
 import { Checkbox } from "@/registry/components/checkbox/checkbox";
 import { CopyButton } from "@/registry/components/copy-button/copy-button";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
+import SegmentedControl from "@/registry/components/segmented-control/segmented-control";
 import styles from "./week-view.module.css";
 
 /** A draft the person can share, with the words that name it in the list. */
@@ -38,6 +39,7 @@ export function ShareReviewButton({ drafts }: { drafts: ShareableDraft[] }) {
           {url ? (
             <div className={styles.shareBody}>
               <p className={styles.shareUrl}>{url}</p>
+              <p className={styles.shareNote}>{`Works for ${days} day${days === 1 ? "" : "s"}. Comments show up on Reviews, where each one can become proposed edits.`}</p>
               <div className={styles.shareActions}>
                 <CopyButton value={url} label="Copy link" />
                 <Button variant="ghost" onClick={() => setOpen(false)}>Done</Button>
@@ -45,7 +47,10 @@ export function ShareReviewButton({ drafts }: { drafts: ShareableDraft[] }) {
             </div>
           ) : (
             <div className={styles.shareBody}>
-              <label>Link expires in <select value={days} onChange={e => setDays(Number(e.target.value))}><option value={1}>1 day</option><option value={7}>7 days</option><option value={30}>30 days</option></select></label>
+              <div className={styles.shareHead}>
+                <span className={styles.shareCount}>{`${picked.size} of ${drafts.length} drafts`}</span>
+                <Button variant="ghost" size="sm" onClick={() => setPicked(picked.size === Math.min(drafts.length, 30) ? new Set() : new Set(drafts.slice(0, 30).map((d) => d.id)))}>{picked.size === Math.min(drafts.length, 30) ? "Clear" : "Select all"}</Button>
+              </div>
               <ul className={styles.shareList}>
                 {drafts.map((d) => (
                   <li key={d.id}>
@@ -53,6 +58,8 @@ export function ShareReviewButton({ drafts }: { drafts: ShareableDraft[] }) {
                   </li>
                 ))}
               </ul>
+              <SegmentedControl label="Link works for" options={[{ value: "1", label: "1 day" }, { value: "7", label: "7 days" }, { value: "30", label: "30 days" }]} value={String(days)} onValueChange={(v) => setDays(Number(v))} />
+              <p className={styles.shareNote}>Reviewers see only the drafts you tick, never your voice notes, sources or other drafts. You can turn the link off any time on Reviews.</p>
               {message && <p className={styles.shareError} role="alert">{message}</p>}
               <div className={styles.shareActions}>
                 <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>Cancel</Button>

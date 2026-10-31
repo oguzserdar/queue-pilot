@@ -17,6 +17,6 @@ export default async function Page() {
   const snap = await postgresSnapshotStore().get(userId).catch(() => null);
   const drafts = snap?.data.posts.filter(p => p.status === "draft") ?? [];
   const ours = await wroteIds(userId, ...drafts.map(p => p.id)).catch(() => null);
-  const candidates = drafts.filter(p => ours?.has(p.id)).map(p => ({ id: p.id, channelId: p.channelId, label: snap?.data.channels.find(c => c.id === p.channelId)?.name ?? "Account", text: p.text }));
+  const candidates = drafts.filter(p => ours?.has(p.id)).map(p => { const c = snap?.data.channels.find(ch => ch.id === p.channelId); return { id: p.id, channelId: p.channelId, network: c?.service ?? "", label: c?.name ?? "Account", text: p.text }; });
   return <ReviewsView origin={publicOrigin(await headers())} links={links} candidates={candidates} candidatesUnavailable={!snap || !ours} />;
 }
