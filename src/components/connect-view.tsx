@@ -9,6 +9,7 @@ import { AiMark } from "./ai-mark";
 import { CopyButton } from "@/registry/components/copy-button/copy-button";
 import { setupLine } from "@/lib/agent-setup";
 import { sinceText } from "@/lib/connect-links";
+import { APP_ONLY, CONNECTOR_CATALOG } from "@/lib/connector-catalog";
 import styles from "./connect-view.module.css";
 
 /** One chat app's setup, shown in its modal. Coding agents set themselves up from the copied prompt instead. */
@@ -122,6 +123,23 @@ export function ConnectView({ connectorUrl, example = false, approved = null, no
         ))}
       </ul>
 
+
+      <section className={styles.can} aria-labelledby="can-title">
+        <div className={styles.canHead}>
+          <h2 id="can-title" className={styles.chatTitle}>What your AI can do here</h2>
+          <a href="/settings?tab=ai" className={styles.manage}>Manage apps and approving</a>
+        </div>
+        <div className={styles.canGrid}>
+          {CONNECTOR_CATALOG.map((g) => (
+            <div key={g.key} className={styles.canCol} data-group={g.key}>
+              <h3 className={styles.canTitle}><span className={styles.canDot} aria-hidden="true" />{g.title}</h3>
+              <p className={styles.muted}>{g.note}</p>
+              <ul className={styles.canList}>{g.items.map((i) => <li key={i.label}>{i.label}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+        <p className={styles.muted}>{`Only in the app: ${APP_ONLY.join(", ").toLowerCase().replace(/^./, (c) => c.toUpperCase())}.`}</p>
+      </section>
 
       <Dialog open={current !== undefined} onOpenChange={(o) => { if (!o) setOpen(null); }}>
         {current && (

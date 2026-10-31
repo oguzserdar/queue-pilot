@@ -49,3 +49,16 @@
 .dialogBody .steps { margin: 0; display: grid; gap: 8px; padding-left: 1.3em; }
 .dialogBody > p { margin: 0; }
 
+/* What your AI can do: three columns by how much each action asks of the person. */
+.can { display: flex; flex-direction: column; gap: var(--space-3); }
+.canHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.manage { font-size: var(--text-sm); font-weight: 600; color: var(--qp-crimson); }
+.canGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.canCol { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4); border-radius: var(--radius-surface); background: var(--surface); box-shadow: 0 0 0 1px var(--border); }
+.canCol[data-group="asks"] { background: var(--qp-warning-wash); box-shadow: none; }
+.canTitle { margin: 0; display: flex; align-items: center; gap: 8px; font-size: var(--text-base); font-weight: 600; }
+.canDot { width: 8px; height: 8px; border-radius: 999px; background: var(--text-muted); flex: none; }
+.canCol[data-group="writes"] .canDot { background: var(--qp-crimson); }
+.canCol[data-group="asks"] .canDot { background: var(--warning); }
+.canList { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); line-height: 1.45; }
+@media (max-width: 860px) { .canGrid { grid-template-columns: minmax(0, 1fr); } }
