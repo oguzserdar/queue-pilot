@@ -66,7 +66,7 @@ export function ReviewFeedback({ linkId, commentId, channelId, reviewer, candida
     { value: "shared", label: "Every account" },
   ];
 
-  if (!open) return <Button variant="secondary" size="sm" className={styles.start} onClick={() => setOpen(true)}>{`Suggest changes from ${reviewer}'s comment`}</Button>;
+  if (!open) return <button type="button" className={styles.startLink} onClick={() => setOpen(true)} aria-label={`Suggest changes from ${reviewer}'s comment`}>Suggest changes <span aria-hidden="true">→</span></button>;
 
   return (
     <div className={styles.panel}>
@@ -138,6 +138,7 @@ export function ReviewFeedback({ linkId, commentId, channelId, reviewer, candida
             <div className={styles.ruleBox}>
               <h4 className={styles.h4}>Make it a rule for future drafts?</h4>
               <p className={styles.ruleText}>{plan.preference}</p>
+              <span className={styles.hint}>Where it applies</span>
               <SegmentedControl label="Where it applies" options={scopes} value={scope} onValueChange={setScope} />
               <p className={styles.help}>{scope === "shared" ? "Every account will follow it, unless you turn it off for one." : scope.startsWith("network:") ? `Every ${NETWORKS[scope.slice(8)] ?? scope.slice(8)} account will follow it.` : "Only the accounts these drafts are on will follow it."} Keeping the rule doesn't change the drafts above.</p>
               <div className={styles.row}>

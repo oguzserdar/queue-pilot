@@ -345,7 +345,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             const on = lines.filter(l => l.applies).length;
             return lines.length > 0 && <details className={styles.checks}>
               <summary className={styles.h3}>{`${on} rule${on === 1 ? "" : "s"} for this account`}</summary>
-              <p className={styles.muted}>Your current settings. The badge above shows the last check of this draft.</p>
+              <p className={styles.muted}>Your current settings. The check below shows how this draft did when it was last checked.</p>
               <ul className={styles.ruleLines}>
                 {lines.map(l => <li key={l.rule.id} data-off={!l.applies}>
                   <span className={styles.ruleText}>{l.rule.text}</span>

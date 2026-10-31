@@ -9,11 +9,13 @@ import { CopyButton } from "@/registry/components/copy-button/copy-button";
 import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { NETWORKS } from "@/lib/rules";
 import type { ReviewComment, ReviewLink } from "@/lib/review-limits";
+import { LocalTime } from "./local-time";
 import styles from "./review-ui.module.css";
 import page from "./reviews-view.module.css";
 
-const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+const WHEN: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" };
+const day = (iso: string) => <LocalTime iso={iso} options={DAY} />;
 
 /** The draft with each commented span marked, so the comment beside it reads in place. */
 function Marked({ text, comments }: { text: string; comments: ReviewComment[] }) {
@@ -62,11 +64,11 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
             const commented = l.drafts.filter((d) => l.comments.some((c) => c.postId === d.postId));
             const quiet = l.drafts.length - commented.length;
             return (
-              <section key={l.id} className={page.link} aria-label={`Review link from ${day(l.createdAt)}`}>
+              <section key={l.id} className={page.link} aria-label="Review link">
                 <div className={page.linkHead}>
                   <div className={page.linkTitle}>
-                    <h2 className={page.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared ${day(l.createdAt)}`}</h2>
-                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : l.expiresAt ? `Open until ${day(l.expiresAt)}` : "Open"}</Badge>
+                    <h2 className={page.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared `}{day(l.createdAt)}</h2>
+                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : l.expiresAt ? <>Open until {day(l.expiresAt)}</> : "Open"}</Badge>
                     <span className={styles.hint}>{`${l.comments.length} comment${l.comments.length === 1 ? "" : "s"}`}</span>
                   </div>
                   {live && (
@@ -96,7 +98,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                             <div className={page.who}>
                               <span className={page.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>
                               <strong>{c.name}</strong>
-                              <span className={styles.hint}>{when(c.createdAt)}</span>
+                              <span className={styles.hint}><LocalTime iso={c.createdAt} options={WHEN} /></span>
                             </div>
                             {c.quote && <q className={page.quote}>{c.quote}</q>}
                             <p className={page.body}>{c.text}</p>

@@ -58,6 +58,7 @@ export function ShareReviewButton({ drafts }: { drafts: ShareableDraft[] }) {
                   </li>
                 ))}
               </ul>
+              <span className={styles.shareCount}>Link works for</span>
               <SegmentedControl label="Link works for" options={[{ value: "1", label: "1 day" }, { value: "7", label: "7 days" }, { value: "30", label: "30 days" }]} value={String(days)} onValueChange={(v) => setDays(Number(v))} />
               <p className={styles.shareNote}>Reviewers see only the drafts you tick, never your voice notes, sources or other drafts. You can turn the link off any time on Reviews.</p>
               {message && <p className={styles.shareError} role="alert">{message}</p>}

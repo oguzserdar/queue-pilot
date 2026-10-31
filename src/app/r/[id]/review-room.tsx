@@ -7,6 +7,7 @@ import { Textarea } from "@/registry/components/textarea/textarea";
 import { NETWORKS } from "@/lib/rules";
 import { MAX_COMMENT, MAX_NAME, type ReviewComment, type SharedDraft } from "@/lib/review-limits";
 import { addReviewComment } from "./actions";
+import { LocalTime } from "@/components/local-time";
 import styles from "./review.module.css";
 
 const NAME_KEY = "qp-review-name";
@@ -25,8 +26,8 @@ function selectionIn(el: HTMLElement): { start: number; end: number; rect: DOMRe
   return end > start ? { start, end, rect: range.getBoundingClientRect() } : null;
 }
 
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "No time set");
-const ago = (iso: string) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+const WHEN: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" };
+const AGO: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" };
 
 /** The draft's text with every commented span marked; the active comment's span is emphasised. */
 function Marked({ text, comments, active, onPick }: { text: string; comments: ReviewComment[]; active: string | null; onPick: (id: string) => void }) {
@@ -106,7 +107,7 @@ export function ReviewRoom({ id, drafts, initial }: { id: string; drafts: Shared
           return (
             <li key={d.postId} className={styles.draft}>
               <article className={styles.post}>
-                <p className={styles.meta}><span className={styles.num}>{i + 1}</span><strong>{NETWORKS[d.network] ?? d.network}</strong> · {d.channel} · {when(d.dueAt)}</p>
+                <p className={styles.meta}><span className={styles.num}>{i + 1}</span><strong>{NETWORKS[d.network] ?? d.network}</strong> · {d.channel} · <LocalTime iso={d.dueAt} options={WHEN} fallback="No time set" /></p>
                 <p className={styles.text} ref={(el) => { if (el) texts.current.set(d.postId, el); }} onMouseUp={() => pick(d.postId)} onKeyUp={() => pick(d.postId)} onTouchEnd={() => setTimeout(() => pick(d.postId), 0)} tabIndex={0} aria-label={`Draft ${i + 1}. Select words to comment on them.`}>
                   <Marked text={d.text} comments={mine} active={active} onPick={setActive} />
                 </p>
@@ -117,7 +118,7 @@ export function ReviewRoom({ id, drafts, initial }: { id: string; drafts: Shared
                   <ul className={styles.comments}>
                     {mine.map((c) => (
                       <li key={c.id} className={styles.comment} data-active={active === c.id} onMouseEnter={() => setActive(c.id)} onMouseLeave={() => setActive(null)}>
-                        <span className={styles.who}><span className={styles.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>{c.name}<span className={styles.time}>{ago(c.createdAt)}</span></span>
+                        <span className={styles.who}><span className={styles.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>{c.name}<span className={styles.time}><LocalTime iso={c.createdAt} options={AGO} /></span></span>
                         {c.quote && <q className={styles.quote}>{c.quote}</q>}
                         <span className={styles.body}>{c.text}</span>
                       </li>
