@@ -32,6 +32,29 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false 
         {settingUp && <p className={styles.lede}>{done} of {readiness.length} done. Each step takes about a minute, and then your AI fills your week in Buffer.</p>}
       </header>
 
+      {/* While setup is unfinished it stays at the top as one line with the next step; the full list opens from it. */}
+      {triage && !ready && !settingUp && next && (
+        <details className={styles.setupStrip}>
+          <summary>
+            <span className={styles.stripText}><strong>Finish setting up</strong><span className={styles.muted}>{done} of {readiness.length} done · Next: {next.label}</span></span>
+            <span className={styles.stripBar} aria-hidden="true"><span style={{ width: `${(done / readiness.length) * 100}%` }} /></span>
+            {next.action && next.href && (next.href.startsWith("http")
+              ? <a href={next.href} target="_blank" rel="noreferrer" className={styles.primary}>{next.action} <ArrowUpRight size={15} strokeWidth={2} aria-hidden="true" /></a>
+              : <Link href={next.href} className={styles.primary}>{next.action}</Link>)}
+            <span className={styles.stripMore}>All steps</span>
+          </summary>
+          <ol className={styles.steps}>
+            {readiness.map((r, i) => (
+              <li key={r.id} className={styles.step} data-state={r.state} data-next={r === next ? "true" : undefined}>
+                <span className={styles.check} aria-hidden="true">{r.state === "done" ? <Check size={13} strokeWidth={3} color="#fff" /> : i + 1}</span>
+                <div className={styles.needText}><strong>{r.label}</strong><span className={styles.muted}>{r.detail}</span></div>
+                {r.state !== "done" && r.action && r.href && r !== next ? (r.href.startsWith("http") ? <a href={r.href} target="_blank" rel="noreferrer" className={styles.action}>{r.action}</a> : <Link href={r.href} className={styles.action}>{r.action}</Link>) : <span />}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+
       {settingUp ? null : triage ? <TriageList items={triage} live={live} /> : needs.length === 0 ? (
         <EmptyState
           title="Nothing needs you right now"
@@ -53,7 +76,7 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false 
       </ul>
       )}
 
-      {!ready && (
+      {!ready && !(triage && !settingUp) && (
         <section className={styles.ready} aria-labelledby="ready-title">
           <div className={styles.readyHead}>
             <h2 id="ready-title" className={settingUp ? "sr-only" : styles.h2}>Finish setting up</h2>

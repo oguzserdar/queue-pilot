@@ -47,3 +47,16 @@
 
 /* The external-link icon sits on the text baseline, a little apart from the words. */
 .primary > svg, .action > svg { flex-shrink: 0; margin-left: 4px; }
+
+/* Unfinished setup as one line above the triage list; "All steps" opens the checklist. */
+.setupStrip { border: 1px solid var(--border); border-radius: var(--radius-panel); background: color-mix(in oklab, var(--qp-crimson) 4%, var(--surface)); }
+.setupStrip summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) 120px auto auto; align-items: center; gap: var(--space-4); padding: 12px var(--space-4); }
+.setupStrip summary::-webkit-details-marker { display: none; }
+.stripText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stripBar { height: 6px; border-radius: 3px; background: var(--surface-muted); overflow: hidden; }
+.stripBar span { display: block; height: 100%; background: var(--qp-crimson); }
+.stripMore { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; }
+.stripMore::after { content: " ▾"; }
+.setupStrip[open] .stripMore::after { content: " ▴"; }
+.setupStrip .steps { border: 0; border-top: 1px solid var(--border-subtle); border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
+@media (max-width: 640px) { .setupStrip summary { grid-template-columns: minmax(0, 1fr) auto; } .stripBar { display: none; } }

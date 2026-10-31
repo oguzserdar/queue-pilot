@@ -185,6 +185,36 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
     return () => window.removeEventListener(PAGE_ACTION_EVENT, on);
   }, [ready.length, drafts.length]);
 
+  /** One cell's slots and posts, shared by the calendar and the phone day list. */
+  const entriesFor = (channelId: string, day: number) =>
+    cellEntries({ ...week, posts }, channelId, day).flatMap(({ time: t, posts: here }) => {
+      if (!here.length) {
+        const name = `${channels.find((c) => c.id === channelId)?.name ?? ""}, ${FULL_DAY[day]} at ${t}`;
+        return [
+          <button key={t} type="button" className={styles.empty} aria-label={`Write a post for ${name}`} onClick={() => setComposing({ id: week.slotIds?.[slotKey(channelId, day, t)], name, service: channels.find((c) => c.id === channelId)?.service })}>
+            <span>{t}</span>
+            <span className={styles.addCue} aria-hidden="true">+ Add</span>
+          </button>,
+        ];
+      }
+      return here.map((p) => {
+        const state = postState(p, approved.has(p.id));
+        if (p.status !== "draft") return (
+          <div key={p.id} className={styles.existing} data-status={p.status}>
+            <span className={styles.time}>{t}<span className={styles.state}><StateMark state={state} word /></span></span>
+            <span className={styles.text}>{p.text}</span>
+            {p.status === "error" && <span className={styles.reason}>{p.error?.message || "Buffer did not say why."} This time counts as open again.</span>}
+          </div>
+        );
+        return (
+          <button key={p.id} id={`post-${p.id}`} type="button" onClick={(e) => openPost(p.id, e.currentTarget)} className={styles.draft} data-tone={worstTone(p)} data-selected={selected === p.id && (wide || dialogOpen)} data-approved={approved.has(p.id)} aria-current={selected === p.id ? "true" : undefined}>
+            <span className={styles.time}>{t}<span className={styles.state}><StateMark state={state} word /></span></span>
+            <span className={styles.text}>{p.text}</span>
+          </button>
+        );
+      });
+    });
+
   const filled = (() => { let all = 0; for (const ch of channels) for (const t of Object.values(slots[ch.id] ?? {})) all += t.length; return { all, done: all - open }; })();
   const needYou = drafts.filter((p) => p.ours !== false && !approved.has(p.id)).length;
 
@@ -347,52 +377,44 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         />
       ) : (
       <div className={styles.layout} data-side={wide && current ? "true" : undefined}>
-        <div className={styles.days} aria-label="Next week, by day">
-          {week.timeZone && week.startsAt && <p className={styles.zone}>Times in {zoneLabel(week.timeZone, new Date(week.startsAt))}</p>}
-          {DAYS.map((d, day) => {
-            const rows = dayRows(day);
-            const empty = rows.filter((r) => !r.post).length;
-            // A run of days with nothing planned reads as one line, so the days that matter stay close together.
-            if (!rows.length) {
-              if (day > 0 && !dayRows(day - 1).length) return null;
-              let last = day;
-              while (last + 1 < DAYS.length && !dayRows(last + 1).length) last++;
-              return <p key={d} className={styles.quietDays}>{last === day ? d : `${d} – ${DAYS[last]}`}<span className={styles.dayMeta}>Nothing planned</span></p>;
-            }
-            return (
-              <section key={d} className={styles.day} aria-label={FULL_DAY[day]}>
-                <h2 className={styles.dayHead}>{d}<span className={styles.dayMeta}>{`${rows.length - empty} post${rows.length - empty === 1 ? "" : "s"} · ${empty} empty`}</span></h2>
-                {rows.map(({ time, ch, post }) => {
-                  const channelCell = <span className={styles.itemCh}><ChannelIcon service={ch.service} /><span>{ch.name}</span>{ch.isDisconnected && <Badge tone="danger" size="sm">Disconnected</Badge>}</span>;
-                  if (!post) {
-                    const name = `${ch.name}, ${FULL_DAY[day]} at ${time}`;
-                    return (
-                      <button key={`${ch.id}-${time}`} type="button" className={styles.item} data-empty="true" aria-label={`Write a post for ${name}`} onClick={() => setComposing({ id: week.slotIds?.[slotKey(ch.id, day, time)], name, service: ch.service })}>
-                        <span className={styles.itemTime}>{time}</span>{channelCell}
-                        <span className={styles.itemText}>Empty · write one</span>
-                        <StateMark state="empty" />
-                      </button>
-                    );
-                  }
-                  const state = postState(post, approved.has(post.id));
-                  if (post.status !== "draft") return (
-                    <div key={post.id} className={styles.item} data-static="true">
-                      <span className={styles.itemTime}>{time}</span>{channelCell}
-                      <span className={styles.itemText}>{post.text}{post.status === "error" && <span className={styles.reason}> {post.error?.message || "Buffer did not say why."} This time counts as open again.</span>}</span>
-                      <StateMark state={state} />
+        <div className={styles.weekArea}>
+          <div className={styles.gridWrap}>
+            <div className={styles.grid} role="table" aria-label="Posting slots for next week" style={{ gridTemplateColumns: `max-content ${DAYS.map((_, d) => (dayRows(d).length ? "minmax(132px, 1fr)" : "40px")).join(" ")}` }}>
+              <div className={styles.corner}>{week.timeZone && week.startsAt && <span className={styles.zone}>Times in {zoneLabel(week.timeZone, new Date(week.startsAt))}</span>}</div>
+              {DAYS.map((d, i) => {
+                const has = dayRows(i).length > 0;
+                return <div key={d} className={styles.day} data-empty={!has} role="columnheader">{has ? d : d.split(" ")[0]}</div>;
+              })}
+              {channels.map((ch) => (
+                <div key={ch.id} className={styles.row} role="row">
+                  <div className={styles.channel} role="rowheader">
+                    <span className={styles.chip}><ChannelIcon service={ch.service} />{ch.name}</span>
+                    {ch.timezone && week.timeZone && week.startsAt && ch.timezone !== week.timeZone && <span className={styles.zone}>{zoneLabel(ch.timezone, new Date(week.startsAt))} times</span>}
+                    {ch.isDisconnected && <>{" "}<Badge tone="danger" size="sm">Disconnected</Badge></>}
+                  </div>
+                  {DAYS.map((_, day) => <div key={day} className={styles.cell} role="cell">{entriesFor(ch.id, day)}</div>)}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* On a phone, or when the area is narrow, the week reads as a list by day (the grid is hidden). */}
+          <div className={styles.list} aria-label="Posting slots for next week, by day">
+            {DAYS.map((d, day) => dayRows(day).length > 0 && (
+              <section key={d} className={styles.listDay} aria-label={d}>
+                <h2 className={styles.listHead}>{d}</h2>
+                {channels.map((ch) => {
+                  const items = entriesFor(ch.id, day);
+                  return items.length > 0 && (
+                    <div key={ch.id} className={styles.listChannel}>
+                      <span className={styles.chip}><ChannelIcon service={ch.service} />{ch.name}</span>
+                      {items}
                     </div>
-                  );
-                  return (
-                    <button key={post.id} id={`post-${post.id}`} type="button" className={styles.item} aria-current={selected === post.id ? "true" : undefined} onClick={(e) => openPost(post.id, e.currentTarget)}>
-                      <span className={styles.itemTime}>{time}</span>{channelCell}
-                      <span className={styles.itemText}>{post.text}</span>
-                      <StateMark state={state} />
-                    </button>
                   );
                 })}
               </section>
-            );
-          })}
+            ))}
+          </div>
           <p className={styles.hint}><kbd className={styles.key}>J</kbd> <kbd className={styles.key}>K</kbd> move · <kbd className={styles.key}>A</kbd> approve · <kbd className={styles.key}>E</kbd> edit · Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.</p>
         </div>
 

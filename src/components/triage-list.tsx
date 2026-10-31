@@ -20,7 +20,7 @@ const MARK: Record<TriageItem["kind"], PostState> = { breaks: "breaks", failed: 
  * Ticked drafts are approved together from the bar at the bottom.
  */
 export function TriageList({ items, live }: { items: TriageItem[]; live: boolean }) {
-  const [focus, setFocus] = useState(0);
+  const [focus, setFocus] = useState(-1);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [done, setDone] = useState<Set<string>>(new Set());
   const [pending, start] = useTransition();
@@ -72,9 +72,12 @@ export function TriageList({ items, live }: { items: TriageItem[]; live: boolean
               i += 1;
               const at = i;
               return (
-                <li key={item.id} ref={(el) => { rows.current[at] = el; }} className={styles.row} data-focus={focus === at || undefined} onMouseEnter={() => setFocus(at)}>
-                  {item.postId ? <Checkbox aria-label={`Select: ${item.title}`} checked={picked.has(item.postId)} onCheckedChange={() => toggle(item.postId!)} /> : <span />}
-                  <StateMark state={MARK[item.kind]} />
+                <li key={item.id} ref={(el) => { rows.current[at] = el; }} className={styles.row} data-focus={focus === at || undefined} data-picked={(item.postId && picked.has(item.postId)) || undefined} data-picking={picked.size > 0 || undefined} onMouseEnter={() => setFocus(at)}>
+                  {/* One slot: the state mark, which turns into a tick box on hover, focus, or once anything is ticked. */}
+                  <span className={styles.lead}>
+                    <span className={styles.leadMark}><StateMark state={MARK[item.kind]} /></span>
+                    {item.postId && <span className={styles.leadBox}><Checkbox aria-label={`Select: ${item.title}`} checked={picked.has(item.postId)} onCheckedChange={() => toggle(item.postId!)} /></span>}
+                  </span>
                   <div className={styles.text}>
                     <span className={styles.title}>{item.title}</span>
                     <span className={styles.detail}>{item.detail}</span>
