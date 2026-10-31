@@ -3,7 +3,7 @@
  * The connector hands them to the AI (get_playbook) and save_drafts enforces them, so any AI follows the same rules.
  */
 import { randomUUID } from "node:crypto";
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { fixDismissed, rule as ruleTable } from "../db/schema";
 import type { NewRule, Rule } from "./rules";
@@ -23,6 +23,8 @@ export type RulesStore = {
   /** Adds a rule and returns its id. */
   add(userId: string, rule: NewRule, fixes?: number): Promise<string>;
   remove(userId: string, id: string): Promise<void>;
+  /** Switches a shared rule off or back on for one network. A rule for named networks is left alone. */
+  setException(userId: string, id: string, network: string, off: boolean): Promise<boolean>;
   /** Remembers a repeated fix the person set aside with "Not now". */
   dismiss(userId: string, key: string): Promise<void>;
   dismissed(userId: string): Promise<Set<string>>;
@@ -44,6 +46,19 @@ export function postgresRulesStore(): RulesStore {
     },
     async remove(userId, id) {
       await db().delete(ruleTable).where(and(eq(ruleTable.userId, userId), eq(ruleTable.id, id)));
+    },
+    async setException(userId, id, network, off) {
+      // One statement on the stored rule, so two quick toggles cannot overwrite each other's network.
+      const r = await db().execute(sql`
+        update ${ruleTable} set spec = jsonb_set(spec, '{except}', coalesce((
+          select jsonb_agg(distinct n order by n) from (
+            select jsonb_array_elements_text(coalesce(spec->'except', '[]'::jsonb)) as n
+            union all select ${network} where ${off}
+          ) s where ${off} or n <> ${network}
+        ), '[]'::jsonb))
+        where id = ${id} and user_id = ${userId} and spec->>'channels' = 'all'
+        returning id`);
+      return (r as unknown as { rows: unknown[] }).rows.length > 0;
     },
     async dismiss(userId, key) {
       await db().insert(fixDismissed).values({ userId, key: key.slice(0, 500) }).onConflictDoNothing();

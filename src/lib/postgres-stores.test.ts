@@ -630,3 +630,20 @@ describe("checkComment and reviewNotes", () => {
   });
 });
 
+describe("shared rule exceptions on real Postgres", () => {
+  it("switches a shared rule off and back on for one network, and leaves a named-network rule alone", async () => {
+    const s = postgresRulesStore();
+    const shared = await s.add("u5", { kind: "guidance", channels: "all", level: "warn", text: "Shared rule" });
+    const named = await s.add("u5", { kind: "guidance", channels: ["twitter"], level: "warn", text: "Named rule" });
+    const read = async (id: string) => (await s.list("u5")).find((r) => r.id === id);
+    expect(await s.setException("u5", shared, "linkedin", true)).toBe(true);
+    expect(await s.setException("u5", shared, "linkedin", true)).toBe(true);
+    expect(await s.setException("u5", shared, "bluesky", true)).toBe(true);
+    expect((await read(shared))?.except).toEqual(["bluesky", "linkedin"]);
+    expect(await s.setException("u5", shared, "linkedin", false)).toBe(true);
+    expect((await read(shared))?.except).toEqual(["bluesky"]);
+    expect(await s.setException("u5", named, "twitter", true)).toBe(false);
+    expect(await s.setException("u6", shared, "twitter", true)).toBe(false);
+    expect((await read(shared))?.except).toEqual(["bluesky"]);
+  });
+});

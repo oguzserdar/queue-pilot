@@ -16,6 +16,9 @@ const german = { slotId: "s1", network: "linkedin", text: "Eine gute Brühe begi
 describe("rules as decision questions", () => {
   it("asks one pass/fail/unsure choice per rule that applies on the network, by meaning", () => {
     expect(rulesFor([dish, broth], "instagram").map((r) => r.id)).toEqual(["b1"]);
+    // A shared rule switched off for a network is never asked about there.
+    expect(rulesFor([{ ...broth, channels: "all", except: ["instagram"] }], "instagram")).toEqual([]);
+    expect(rulesFor([{ ...broth, channels: "all", except: ["instagram"] }], "linkedin").map((r) => r.id)).toEqual(["b1"]);
     const q = questionsFor([broth]);
     expect(Object.keys(q)).toEqual(["rule_b1"]);
     expect(Object.keys(q.rule_b1.criteria)).toEqual(["pass", "fail", "unsure"]);

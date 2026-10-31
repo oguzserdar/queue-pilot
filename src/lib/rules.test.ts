@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseNewRule, ruleHold, ruleInput, type NewRule, type Rule } from "./rules";
+import { appliesTo, parseNewRule, ruleHold, ruleInput, ruleScope, type NewRule, type Rule } from "./rules";
 
 // The example account's playbook.
 const RULES: Rule[] = [
@@ -46,5 +46,25 @@ describe("ruleInput", () => {
 
   it.each(stored)("reads a stored $kind rule back as the same rule", (rule) => {
     expect(parseNewRule(ruleInput(rule))).toEqual(rule);
+  });
+});
+
+describe("shared rules with channel exceptions", () => {
+  const shared = { channels: "all" as const, except: ["linkedin"] };
+  it("applies a shared rule everywhere except the networks it is switched off for", () => {
+    expect(appliesTo(shared, "twitter")).toBe(true);
+    expect(appliesTo(shared, "linkedin")).toBe(false);
+    expect(appliesTo({ channels: ["linkedin"] }, "linkedin")).toBe(true);
+    expect(appliesTo({ channels: ["linkedin"] }, "twitter")).toBe(false);
+  });
+  it("says where a rule applies in plain words", () => {
+    expect(ruleScope({ channels: "all" })).toBe("every network");
+    expect(ruleScope(shared)).toBe("every network except LinkedIn");
+    expect(ruleScope({ channels: ["twitter", "linkedin"] })).toBe("X, LinkedIn");
+  });
+  it("keeps known exceptions on a shared rule and drops them anywhere else", () => {
+    expect(parseNewRule({ kind: "guidance", text: "Short.", channels: "all", level: "warn", except: ["linkedin", "nope", "linkedin", 3] })).toMatchObject({ channels: "all", except: ["linkedin"] });
+    expect(parseNewRule({ kind: "guidance", text: "Short.", channels: ["twitter"], level: "warn", except: ["linkedin"] })).not.toHaveProperty("except");
+    expect(parseNewRule({ kind: "guidance", text: "Short.", channels: "all", level: "warn" })).not.toHaveProperty("except");
   });
 });

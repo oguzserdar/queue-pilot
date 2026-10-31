@@ -11,7 +11,7 @@
 import { experimental_decide as decide, generateText, Output, type Experimental_DecisionModel as DecisionModel, type LanguageModel } from "ai";
 import * as z from "zod";
 import { fenced } from "./ai-writer";
-import type { Rule } from "./rules";
+import { appliesTo, type Rule } from "./rules";
 
 export const MIN_PROBABILITY = 0.8;
 const TIMEOUT_MS = 20_000;
@@ -25,7 +25,7 @@ export type JudgeInput = { slotId: string; text: string; network: string };
 export type Judges = { decider: DecisionModel | null; explainer: LanguageModel };
 
 /** The rules that apply to a draft on this network. */
-export const rulesFor = (rules: Rule[], network: string) => rules.filter((r) => r.channels === "all" || r.channels.includes(network));
+export const rulesFor = (rules: Rule[], network: string) => rules.filter((r) => appliesTo(r, network));
 
 /** A rule as the model reads it: its meaning in any language. */
 export function describeRule(r: Rule): string {

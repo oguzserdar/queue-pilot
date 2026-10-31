@@ -14,6 +14,8 @@ type RuleBase = {
   text: string;
   /** Channel ids the rule applies to, or "all". */
   channels: string[] | "all";
+  /** For a rule on every network: the networks it is switched off for. A rule for named networks has none. */
+  except?: string[];
   /** block: a failing draft is not saved. warn: it is saved and the failure is shown. */
   level: RuleLevel;
 };
@@ -37,6 +39,18 @@ export const NETWORKS: Record<string, string> = {
   facebook: "Facebook",
   mastodon: "Mastodon",
 };
+
+/** Whether a rule applies to a draft on this network: a shared rule applies everywhere it is not switched off. */
+export function appliesTo(rule: Pick<Rule, "channels" | "except">, network: string): boolean {
+  return rule.channels === "all" ? !(rule.except ?? []).includes(network) : rule.channels.includes(network);
+}
+
+/** Where a rule applies, in plain words: "every network", "every network except X", or the networks it names. */
+export function ruleScope(rule: Pick<Rule, "channels" | "except">): string {
+  if (rule.channels !== "all") return rule.channels.map((c) => NETWORKS[c] ?? c).join(", ");
+  const off = (rule.except ?? []).map((c) => NETWORKS[c] ?? c);
+  return off.length ? `every network except ${off.join(", ")}` : "every network";
+}
 
 /** What happens to a draft that breaks the rule, in the words the Playbook shows. */
 export function ruleHold(rule: Rule): "Blocks drafts" | "Flags drafts" {
@@ -64,6 +78,15 @@ export function ruleInput(rule: NewRule): Record<string, unknown> {
  * checked for type and length, and the networks must be ones Queue Pilot knows.
  */
 export function parseNewRule(input: unknown): NewRule | string {
+  const rule = parseRuleBody(input);
+  if (typeof rule === "string" || rule.channels !== "all") return rule;
+  // A shared rule may come back with the networks it was switched off for (an undo, a restored rule).
+  const raw = (input as Record<string, unknown>).except;
+  const except = Array.isArray(raw) ? [...new Set(raw.filter((c): c is string => typeof c === "string" && c in NETWORKS))] : [];
+  return except.length ? { ...rule, except } : rule;
+}
+
+function parseRuleBody(input: unknown): NewRule | string {
   if (!input || typeof input !== "object") return "Fill in the rule.";
   const i = input as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
