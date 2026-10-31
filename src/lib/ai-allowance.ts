@@ -29,6 +29,8 @@ export type AllowanceStore = {
   addCost(userId: string, day: string, micros: number): Promise<void>;
   /** Everything spent on the built-in key so far, in millionths of a dollar: the number the budget is checked against. */
   spentMicros(): Promise<number>;
+  /** Spent on one UTC day, in micro-dollars. */
+  spentOn(day: string): Promise<number>;
 };
 
 /** The UTC day an action counts against, as YYYY-MM-DD. */
@@ -76,6 +78,10 @@ export function postgresAllowanceStore(): AllowanceStore {
     },
     async spentMicros() {
       const [row] = await db().select({ total: sql<string>`coalesce(sum(${aiUsageTotal.costMicros}), 0)` }).from(aiUsageTotal);
+      return Number(row?.total ?? 0);
+    },
+    async spentOn(day) {
+      const [row] = await db().select({ total: aiUsageTotal.costMicros }).from(aiUsageTotal).where(eq(aiUsageTotal.day, day));
       return Number(row?.total ?? 0);
     },
     async used(userId, day) {

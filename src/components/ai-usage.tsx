@@ -22,9 +22,9 @@ function Gauge({ label, value, unit, left, total, note }: { label: string; value
  */
 export function AiUsage(props:
   | { view: "person"; used: number; cap: number; budgetUsd: number; leftUsd: number; resetsAt: string }
-  | { view: "operator"; today: number; totalCap: number | null; perPerson: number; budgetUsd: number; leftUsd: number; resetsAt: string }) {
+  | { view: "operator"; today: number; totalCap: number | null; perPerson: number; budgetUsd: number; leftUsd: number; spentUsd: number; spentTodayUsd: number; resetsAt: string }) {
   const budget = <Gauge label="Shared budget" value={usd(props.leftUsd)} unit={`of ${usd(props.budgetUsd)} left`} left={props.leftUsd} total={props.budgetUsd}
-    note={props.view === "person" ? "For everyone on this copy. When it runs out, built-in AI stops." : `Spent so far: ${usd(props.budgetUsd - props.leftUsd)}. When it runs out, built-in AI stops for everyone.`} />;
+    note={props.view === "person" ? "For everyone on this copy. When it runs out, built-in AI stops." : `Spent in total: ${usd(props.spentUsd)}, ${usd(props.spentTodayUsd)} of it today. This total never resets. When it reaches the budget, built-in AI stops for everyone.`} />;
   return (
     <div className={styles.meters}>
       {props.view === "person"

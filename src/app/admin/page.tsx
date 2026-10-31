@@ -73,8 +73,8 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
     hasDatabase() ? recentSettingChanges().catch(() => []) : [],
     signedInEmail(),
     hasDatabase()
-      ? Promise.all([allowanceStore.spentMicros(), allowanceStore.used("admin-view", utcDay(new Date()))])
-          .then(([spent, today]) => ({ spentUsd: spent / 1_000_000, today: today.total }))
+      ? Promise.all([allowanceStore.spentMicros(), allowanceStore.spentOn(utcDay(new Date())), allowanceStore.used("admin-view", utcDay(new Date()))])
+          .then(([spent, spentToday, today]) => ({ spentUsd: spent / 1_000_000, spentTodayUsd: spentToday / 1_000_000, today: today.total }))
           .catch(() => null)
       : null,
   ]);
@@ -109,7 +109,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
               <p className={styles.sub}>{GROUPS[g].help}</p>
               {g === "ai" && usage && budgetUsd ? (
                 <section className={styles.card} aria-label="Built-in AI usage">
-                  <AiUsage view="operator" today={usage.today} totalCap={totalCap} perPerson={perPerson} budgetUsd={budgetUsd} leftUsd={Math.max(0, budgetUsd - usage.spentUsd)} resetsAt="00:00 UTC" />
+                  <AiUsage view="operator" today={usage.today} totalCap={totalCap} perPerson={perPerson} budgetUsd={budgetUsd} leftUsd={Math.max(0, budgetUsd - usage.spentUsd)} spentUsd={usage.spentUsd} spentTodayUsd={usage.spentTodayUsd} resetsAt="00:00 UTC" />
                 </section>
               ) : null}
               {rows.filter((r) => r.group === g).map((r) => (

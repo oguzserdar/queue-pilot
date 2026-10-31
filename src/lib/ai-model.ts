@@ -16,7 +16,7 @@ const openRouter = (key: string) => createOpenRouter({ apiKey: key, headers: { "
 
 /** The language model for a provider, key and model id. */
 export function modelFor(cfg: AiConfig): LanguageModel {
-  if (cfg.provider === "openrouter") return openRouter(cfg.key).chat(cfg.model);
+  if (cfg.provider === "openrouter") return openRouter(cfg.key).chat(cfg.model, { usage: { include: true } });
   return cfg.provider === "anthropic" ? createAnthropic({ apiKey: cfg.key })(cfg.model) : createOpenAI({ apiKey: cfg.key })(cfg.model);
 }
 

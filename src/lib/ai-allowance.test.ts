@@ -83,6 +83,14 @@ describe("money spent on the built-in key", () => {
     await s.addCost("a", "2026-11-07", 1_000);
     expect(await s.spentMicros()).toBe(before + 1_000);
   });
+  it("reads one day's spend apart from the all-time total", async () => {
+    const s = postgresAllowanceStore();
+    await s.addCost("a", "2026-12-01", 7_000);
+    await s.addCost("b", "2026-12-01", 3_000);
+    await s.addCost("a", "2026-12-02", 2_000);
+    expect(await s.spentOn("2026-12-01")).toBe(10_000);
+    expect(await s.spentOn("2026-12-03")).toBe(0);
+  });
 });
 
 describe("utcDay and capMessage", () => {
