@@ -6,30 +6,15 @@
 .h3 { font-size: var(--text-sm); font-weight: 600; }
 
 
-.empty { all: unset; box-sizing: border-box; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; border: 1px dashed var(--border-control); border-radius: 8px; color: var(--text-muted); font-size: var(--text-xs); padding: 8px; transition: border-color 160ms var(--ease-standard), color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
-.empty:focus-visible { outline: 2px solid var(--qp-crimson); outline-offset: 2px; }
-.empty > span { white-space: nowrap; }
-.addCue { font-weight: 500; }
 .composer { display: flex; flex-direction: column; gap: var(--space-3); }
 .composerFoot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-xs); }
 .over { color: var(--danger); font-weight: 600; }
 .composerActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.existing { border-radius: 8px; padding: 8px; font-size: var(--text-xs); color: var(--text-secondary); background: var(--surface-muted); display: flex; flex-direction: column; gap: 2px; line-height: 1.35; }
 
-.draft { all: unset; box-sizing: border-box; cursor: pointer; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border-strong); font-size: var(--text-xs); transition: border-color 160ms var(--ease-standard), background-color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
-.draft:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
-.draft[data-selected="true"] { border-color: var(--qp-crimson); box-shadow: 0 0 0 1px var(--qp-crimson); }
-.draft[data-tone="danger"] { background: var(--qp-danger-wash); border-color: color-mix(in oklab, var(--danger) 45%, var(--surface)); }
-.draft[data-approved="true"] { background: var(--qp-success-wash); border-color: color-mix(in oklab, var(--success) 40%, var(--surface)); }
 
 .time { color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .state { margin-left: auto; font-weight: 500; color: var(--success); }
 .dot { width: 7px; height: 7px; border-radius: 2px; background: var(--success); flex: none; }
-.draft[data-tone="warning"] .dot { background: var(--warning); transform: rotate(45deg); }
-.draft[data-tone="warning"] .state { color: var(--warning); }
-.draft[data-tone="danger"] .dot { background: var(--danger); border-radius: 50%; }
-.draft[data-tone="danger"] .state { color: var(--danger); }
-.draft[data-approved="true"] .state { color: var(--success); }
 .text { color: var(--foreground); font-size: var(--text-sm); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .src { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); align-self: flex-start; }
 
@@ -57,20 +42,10 @@
 @media (max-width: 767px) {
   .dialog.dialog { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
 }
-.existing .state { color: var(--text-muted); }
-.existing[data-status="error"] { background: var(--surface); border: 1px solid var(--danger); }
-.existing[data-status="error"] .state { color: var(--danger); font-weight: 600; }
 .reason { color: var(--danger); overflow-wrap: anywhere; }
 
 .problem { margin: 0; color: var(--danger); font-size: var(--text-sm); }
-@media (hover: hover) and (pointer: fine) {
-  .empty:hover { border-color: var(--qp-crimson); color: var(--qp-crimson); }
-  .draft:hover { border-color: var(--text-muted); }
-}
 /* Press feedback: the interface answers the click at once. */
-.empty:active:not(:disabled) { transform: scale(0.98); }
-.draft:active:not(:disabled) { transform: scale(0.98); }
-@media (prefers-reduced-motion: reduce) { .empty:active:not(:disabled), .draft:active:not(:disabled) { transform: none; } }
 
 /* The one action on an empty week: connect a channel in Buffer (opens Buffer's Channels page). */
 .connect { display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: var(--radius-control); background: var(--accent); color: var(--accent-foreground); font-weight: 600; font-size: var(--text-sm); text-decoration: none; transition: background-color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
@@ -83,12 +58,6 @@
 .connect > svg { flex-shrink: 0; margin-left: 4px; }
 
 /* The "would fail" button and its list: one red dot says what kind of news it is, the list says which posts. */
-.issues { gap: 8px; }
-.issueDot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex: none; }
-.issueList { width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: var(--space-3); }
-.issue { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--text-sm); line-height: 1.45; color: var(--text-secondary); }
-.issue strong { color: var(--foreground); font-weight: 600; }
-.issue + .issue { padding-top: var(--space-3); border-top: 1px solid var(--border); }
 
 /* Share for review dialog. */
 .shareBody { display: flex; flex-direction: column; gap: 16px; }
