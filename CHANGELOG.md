@@ -5,14 +5,16 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- A fix you made in two drafts is now checked by AI before it is offered as a rule. A one-off fact, like a corrected link, or a chance match is not offered. Each offer says why it looks like your preference. Asking again about the same unchanged repeats reuses the answer and costs no action.
+
 ### Fixed
 
 - Learn repeated emoji removals without producing an empty rule, and refresh Buffer before looking for edits.
 - Include Queue Pilot's recorded drafts when Buffer labels them as created in Buffer.
 - Show channel names and network logos in the sidebar's Buffer status card.
-
 - Connection permissions describe voice, playbook, source and draft changes. Claude's consent card uses its logo, and expired requests have a compact recovery card.
-- Connect puts chat apps before coding-agent setup and makes the scheduling boundary clear.
+- Connect puts the setup prompt for coding agents first, then the chat apps, and makes the scheduling boundary clear.
 
 ## [0.2.0] - 2026-10-29 Your AI runs your Buffer week
 
