@@ -5,10 +5,10 @@
 .sub { color: var(--text-secondary); margin-top: var(--space-2); max-width: 64ch; line-height: 1.5; }
 .h3 { font-size: var(--text-sm); font-weight: 600; }
 
-.layout { display: grid; grid-template-columns: 1fr; gap: var(--space-6); align-items: start; }
+.layout { display: grid; grid-template-columns: 1fr; gap: var(--space-6); align-items: start; container: week / inline-size; }
 
 .gridWrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); }
-.grid { display: grid; min-width: 500px; }
+.grid { display: grid; min-width: 760px; }
 .row { display: contents; }
 .corner, .day { padding: 10px var(--space-3); border-bottom: 1px solid var(--border); background: var(--surface-muted); }
 .day { font-weight: 600; color: var(--text-secondary); font-size: var(--text-xs); }
@@ -69,7 +69,7 @@
 /* When the week's own area is narrower than the grid needs (760px plus the channel column), the grid gives way to a
    list by day, as most schedulers and calendars do on phones. A container query, so the sidebar's width counts too. */
 .list { display: none; }
-@container week (max-width: 499px) {
+@container week (max-width: 799px) {
   .gridWrap { display: none; }
   .list { display: grid; gap: var(--space-6); }
   .listDay { display: grid; gap: var(--space-3); }
@@ -132,25 +132,3 @@
 .shareHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .shareCount { font-size: var(--text-sm); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .shareNote { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.5; }
-
-/* The open post sits beside the calendar on wide screens; the calendar keeps its columns. */
-.layout[data-side="true"] { grid-template-columns: minmax(0, 1fr) clamp(300px, 32%, 420px); }
-.hint { font-size: var(--text-xs); color: var(--text-muted); }
-.key { display: inline-block; font: 600 11px/1 ui-monospace, SFMono-Regular, monospace; border: 1px solid var(--border-control); border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px; margin-left: 6px; color: inherit; opacity: 0.75; }
-.hint .key { margin-left: 0; }
-.capacity { display: inline-flex; align-items: center; gap: var(--space-2); margin-left: var(--space-3); }
-.meter { display: inline-block; width: 84px; height: 6px; border-radius: 99px; background: var(--border); overflow: hidden; }
-.meter i { display: block; height: 100%; background: var(--qp-crimson); border-radius: inherit; }
-.needCount { color: var(--qp-crimson); font-weight: 600; }
-.side { position: sticky; top: var(--space-6); max-height: calc(100dvh - 2 * var(--space-6)); overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: var(--space-5); display: flex; flex-direction: column; gap: var(--space-4); }
-@starting-style { .side { opacity: 0; transform: translateX(8px); } }
-.side { transition: opacity 180ms var(--ease-standard), transform 180ms var(--ease-standard); }
-.sideHead { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); }
-.sideHead > div { display: flex; flex-direction: column; gap: 4px; }
-.sideTitle { font-size: var(--text-base); font-weight: 650; }
-.panel[data-inline] { display: flex; flex-direction: column; }
-.panel[data-inline] .postText { font-size: var(--text-base); }
-@media (prefers-reduced-motion: reduce) { .side { transition: none; } }
-.weekArea { min-width: 0; container: week / inline-size; display: flex; flex-direction: column; gap: var(--space-3); }
-.draft[data-selected="true"] { background: color-mix(in oklab, var(--qp-crimson) 6%, var(--surface)); }
-@media (max-width: 640px) { .capacity { margin-left: 0; display: flex; margin-top: 4px; } .hint { display: none; } }
