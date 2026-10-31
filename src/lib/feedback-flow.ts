@@ -5,7 +5,7 @@ import { postgresSnapshotStore } from "./buffer/snapshot-store";
 import { wroteIds } from "./written-store";
 import { postgresRulesStore } from "./rules-store";
 import { planFeedback, type FeedbackPlan } from "./feedback-plan";
-import { judgeModelFor } from "./judge-model";
+import { AiCapError, judgeModelFor } from "./judge-model";
 import { applyPlaybook, type PlaybookCheck } from "./save-for-user";
 import { judgeDrafts } from "./judge";
 import { signSuggestion } from "./rule-suggestions";
@@ -30,7 +30,9 @@ export async function feedbackForComment(userId: string, linkId: unknown, commen
   if (!l.ok) return { ok: false, message: "Too many checks just now. Try again in a minute." };
   // Read the entire playbook before reserving AI; a database failure must never mean no rules.
   const rules = await postgresRulesStore().list(userId);
-  const jm = await judgeModelFor(userId);
+  // The daily allowance being spent is a normal answer, not a crash.
+  const jm = await judgeModelFor(userId).catch((e) => (e instanceof AiCapError ? e : Promise.reject(e)));
+  if (jm instanceof AiCapError) return { ok: false, message: jm.message };
   if (!jm) return { ok: false, message: "AI is unavailable. Check the allowance or your own key in Settings." };
   try {
     const plan = await planFeedback(jm.language, { text: comment.text, quote: comment.quote, original: original.text }, drafts.map(p => ({ slotId: p.id, text: p.text, network: channels.get(p.channelId)!.service, channelId: p.channelId })));
