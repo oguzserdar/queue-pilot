@@ -30,7 +30,7 @@ describe("parseNewRule", () => {
 
 describe("ruleHold", () => {
   it("names what happens to a draft that breaks each rule", () => {
-    expect(RULES.map(ruleHold)).toEqual(["Not saved", "Not saved", "Flagged", "Flagged"]);
+    expect(RULES.map(ruleHold)).toEqual(["Blocks drafts", "Blocks drafts", "Flags drafts", "Flags drafts"]);
   });
 });
 

@@ -22,8 +22,8 @@ export type ShownRule = Rule & { origin?: string };
 
 const EXAMPLE: ShownRule[] = EXAMPLE_RULES;
 const OFFERED: ShownRule = { id: "r5", kind: "guidance", channels: ["instagram"], level: "warn", text: "Start with the dish, not a feeling.", origin: "You changed the opening in 2 drafts" };
-const HOLD_TONE = { "Not saved": "danger", Flagged: "warning" } as const;
-const HOLD_HINT = { "Not saved": "A draft that breaks it is rewritten once, then not saved", Flagged: "A draft that breaks it is saved and flagged for you" };
+const HOLD_TONE = { "Blocks drafts": "danger", "Flags drafts": "warning" } as const;
+const HOLD_HINT = { "Blocks drafts": "A draft that breaks it is rewritten once, then not saved", "Flags drafts": "A draft that breaks it is saved and flagged for you" };
 
 const groupName = (r: Rule) => (r.channels === "all" ? "Every network" : r.channels.map((c) => NETWORKS[c] ?? c).join(", "));
 
