@@ -343,3 +343,11 @@ export const ruleInheritance = pgTable("qp_rule_inheritance", {
   userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   settings: jsonb("settings").notNull().default({}),
 });
+
+/** What a connected AI app may do for this person. Approve schedules real posts, so it is the person's choice. */
+export const agentPermission = pgTable("qp_agent_permission", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  /** "ask": the app shows the drafts and needs a yes in the chat. "direct": no confirm step. "off": the person approves. */
+  approve: text("approve").notNull().default("ask"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

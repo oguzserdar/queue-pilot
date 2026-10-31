@@ -42,7 +42,7 @@ export function ConsentCard({ client, user, scopes, children }: { client: string
             {scopes.map((s) => <li key={s}><Check size={16} strokeWidth={2.5} aria-hidden="true" />{SCOPE_TEXT[s] ?? s}</li>)}
           </ul>
         </div>
-        <p className={styles.note}>It cannot schedule or publish anything. Only your Approve schedules a post.</p>
+        <p className={styles.note}>It schedules a post only when you ask it to, and by default only after you say yes in the chat. Change that in Settings.</p>
         {children}
       </section>
     </main>

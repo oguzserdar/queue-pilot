@@ -23,7 +23,7 @@ The Queue Pilot tools must be connected. If they are missing, or a call says acc
 
 `update_draft` and `delete_draft` return an error when they change nothing. The answer starts "Not changed:" or "Not deleted:" with the reason. Tell the person the reason. Common ones: the post is already approved, scheduled or sent, or Queue Pilot did not write it.
 
-An updated draft stays a draft at the same time. The person still approves it.
+An updated draft stays a draft at the same time until the person approves it.
 
 ## Never
 

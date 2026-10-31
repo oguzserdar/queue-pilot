@@ -17,7 +17,7 @@ describe("approval selection", () => {
     const html = renderToStaticMarkup(<WeekView week={week} live verdicts={{ ours: null }} />)
     expect(html).toContain("Approve 1 draft")
     expect(html).not.toContain("Approve 2 drafts")
-    expect(html).toContain("Only your Approve schedules")
+    expect(html).toContain("Only your Approve schedules, or your AI when you ask it")
   })
 
   it("offers no approval when there are no writing records", () => {

@@ -172,7 +172,7 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     if (!(await store.get(userId, key))) return result("That saved research is not in your account.", true);
     await store.remove(userId, key); return result("Saved research removed. Existing drafts are unchanged.");
   });
-  server.registerTool("get_setup_status", { title: "Read my setup progress", description: "Open and close a workflow with the exact steps and count shown on Needs you. Never invent completion. Approval is a human step and stays incomplete in a drafts-only demo.", annotations: read }, async () => {
+  server.registerTool("get_setup_status", { title: "Read my setup progress", description: "Open and close a workflow with the exact steps and count shown on Needs you. Never invent completion. Approval needs the person: their Approve, or their yes to approve_drafts. It stays incomplete in a drafts-only demo.", annotations: read }, async () => {
     const [b, sources, apps, voice] = await Promise.all([buffer(), postgresSourceStore().list(userId), approvedApps(userId), postgresVoiceStore().get(userId)]);
     const steps = setupReadiness(b, sources, apps, voice);
     return result({ done: steps.filter(s => s.state === "done").length, total: steps.length, steps, next: steps.find(s => s.state !== "done") ?? null });

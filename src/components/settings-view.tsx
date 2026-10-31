@@ -6,6 +6,8 @@ import { UrlTabs } from "./url-tabs";
 
 import { Avatar } from "@/registry/components/avatar/avatar";
 import { AiApps } from "./ai-apps";
+import { AgentApproveSetting } from "./agent-approve-setting";
+import type { ApproveMode } from "@/lib/agent-permission";
 import { AiKeyCard, type ShownAiKey } from "./ai-key-card";
 import { DeleteAccount } from "./delete-account";
 import { SignedInDevices, type Device } from "./signed-in-devices";
@@ -38,6 +40,8 @@ export type SettingsAccount = {
   security?: ShownSecurityEvent[] | null;
   /** A result to show on arrival, e.g. after connecting OpenRouter. */
   notice?: { ok: boolean; text: string } | null;
+  /** Whether connected AI apps may approve drafts; "ask" when never set. */
+  approveMode?: ApproveMode;
   /** Name and picture from the Buffer account, as in the account menu. */
   name: string;
   image: string | null;
@@ -117,7 +121,7 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
             </div>
           ) : null}
           <div className={styles.row}>
-            <div className={styles.name}><strong>Only your Approve schedules</strong><span className={styles.muted}>Queue Pilot never schedules or publishes on its own. Your AI can only save drafts. Approve schedules only drafts Queue Pilot wrote.</span></div>
+            <div className={styles.name}><strong>Only you schedule</strong><span className={styles.muted}>Queue Pilot never schedules or publishes on its own. A post is scheduled when you press Approve, or when your AI does it for you as allowed under AI. Only drafts Queue Pilot wrote can be scheduled.</span></div>
           </div>
         </div>
       </section>
@@ -139,6 +143,10 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
         <h2 id="ai-apps" className={styles.h2}>Who can use your Buffer</h2>
         <p className={styles.muted}>AI apps you allowed to read your queue and save drafts through Queue Pilot.</p>
         <AiApps apps={account.apps} />
+      </section>
+      <section className={styles.block} aria-labelledby="ai-approve">
+        <h2 id="ai-approve" className={styles.h2}>Can your AI schedule posts?</h2>
+        <AgentApproveSetting mode={account.approveMode ?? "ask"} example={example} />
       </section>
       <section className={styles.block} aria-labelledby="ai-key">
         <h2 id="ai-key" className={styles.h2}>Your AI key</h2>

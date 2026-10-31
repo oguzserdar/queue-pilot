@@ -17,7 +17,7 @@ const TOOLS: [string, string][] = [
   ["set_rule_override", "Include, exclude or reset a rule at a network or exact account, only when requested."],
   ["set_rule_inheritance", "Choose inherited shared/network rules; show the affected rules first. Exceptions remain saved."],
   ["propose_review_changes", "Turn one review comment into proposed changes to selected drafts. Facts never become style rules. Apply with expectedText; keep any preference separately."],
-  ["get_setup_status", "The same setup steps and true done count as Needs you. Approval remains a human step."],
+  ["get_setup_status", "The same setup steps and true done count as Needs you. Approval needs the person's yes."],
   ["add_rule", "Add a rule the person requests, with block or warn behavior."],
   ["remove_rule", "Remove a rule the person requests by its playbook ID."],
   ["read_rule", "Read a rule and any stored evidence from keeping it; never invent missing evidence."],
@@ -51,6 +51,7 @@ const TOOLS: [string, string][] = [
   ["save_drafts", "Saves posts in Buffer as drafts. Each draft is checked against the playbook first; one that breaks a rule comes back with the fix."],
   ["update_draft", "Changes a draft that is already saved. Pass expectedText from the read or proposal so newer Buffer edits are refused."],
   ["delete_draft", "Removes a draft."],
+  ["approve_drafts", "Schedules drafts only when the person asks. If it returns a confirm token, show the drafts and get a clear yes first."],
   ["show_next_week", "Monday to Sunday of their queue, slot by slot."],
   ["show_last_week_delivery", "Which posts went out last week, with Buffer's reason for any that did not."],
   ["add_source", "Adds a feed address as material."],
@@ -80,7 +81,7 @@ Add this remote MCP server (Streamable HTTP) and sign in with Buffer when asked:
 
 ${origin}/api/mcp
 
-The connector only saves drafts. Queue Pilot never schedules or publishes on its own. Only your Approve schedules. The person can also schedule drafts directly in Buffer.
+Saving makes Buffer drafts. Queue Pilot never schedules or publishes on its own. A draft is scheduled only by the person: their Approve, Buffer, or approve_drafts when they ask, which by default shows the drafts and needs their yes.
 
 ## Fill the week
 
@@ -90,7 +91,7 @@ ${FILL_WEEK_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
 Start with get_setup_status, get_my_voice, get_playbook, new material and list_open_slots. When the person asks Queue Pilot to do the writing and save drafts, use get_ai_usage then write_my_week. This is the same writer as the app button, with up to 10 drafts per run and one rewrite of refused drafts. Read list_my_drafts and show_next_week afterward. Report remaining slots; do not repeat automatically. For drafts you write yourself, show them and get agreement before save_drafts.
 
-Use check_draft to demonstrate a real refusal and correction without saving. A subsequent save judges again. Learned suggestions are proposals: only keep the ones the person chooses. Approve, scheduling, account deletion, AI keys, app revocation and admin stay human-only.
+Use check_draft to demonstrate a real refusal and correction without saving. A subsequent save judges again. Learned suggestions are proposals: only keep the ones the person chooses. Account deletion, AI keys, app revocation and admin stay human-only. Never approve without the person asking.
 
 ## Tools
 

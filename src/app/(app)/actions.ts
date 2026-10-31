@@ -12,6 +12,7 @@ import { openSlots, parseSlotId } from "@/lib/open-slots";
 import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
 import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
 import { wroteIds } from "@/lib/written-store";
+import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
 import { listRecentSent, type Post } from "@/lib/buffer/queries";
 import { FeedError, feedUrl, readFeed } from "@/lib/feeds"
 import { revokeApp } from "@/lib/ai-access";
@@ -407,6 +408,20 @@ export async function removeAiKey(): Promise<SourceActionResult> {
   if (!userId || !store) return { ok: false, message: "Sign in with Buffer first." };
   await store.remove(userId).catch(() => {});
   revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Settings → AI: whether connected apps may approve drafts, and whether they must ask first. Only this screen sets it. */
+export async function setAgentApproveMode(mode: string): Promise<SourceActionResult> {
+  const userId = await signedInUserId();
+  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (!APPROVE_MODES.includes(mode as ApproveMode)) return { ok: false, message: "Unknown choice." };
+  try { await setApproveMode(userId, mode as ApproveMode); }
+  catch (e) {
+    console.error(JSON.stringify({ event: "qp-approve-mode-failed", message: e instanceof Error ? e.message : String(e) }));
+    return { ok: false, message: "That didn't save. Try again." };
+  }
+  revalidatePath("/settings");
   return { ok: true };
 }
 

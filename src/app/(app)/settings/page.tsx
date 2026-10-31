@@ -1,4 +1,5 @@
 import { SettingsView } from "@/components/settings-view";
+import { approveMode } from "@/lib/agent-permission";
 import { PROVIDERS, postgresAiKeyStore } from "@/lib/ai-key-store";
 import { listModels } from "@/lib/ai-models";
 import { maskSecret } from "@/lib/secrets";
@@ -35,7 +36,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   const master = process.env.SETTINGS_KEY;
   // Independent reads, so they run together. The built-in allowance is read alongside and dropped when the person
   // has their own key.
-  const [apps, aiKey, security, usage] = await Promise.all([
+  const [apps, aiKey, security, usage, approve] = await Promise.all([
     userId ? approvedAiApps() : [],
     userId && master
       ? postgresAiKeyStore(master).get(userId).then(async (k) => {
@@ -54,13 +55,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
         })
       : [],
     userId ? allowanceFor(userId).catch(() => null) : null,
+    userId ? approveMode(userId).catch(() => "ask" as const) : ("ask" as const),
   ]);
   const allowance = aiKey === null && usage && user ? { ...usage, resetsAt: resetTime(user.timeZone) } : null;
   return (
     <SettingsView
       // The OpenRouter callback's notice shows on the AI tab, so it lands there.
       tab={openrouter ? "ai" : tab}
-      account={user ? { email: user.email, name: profile?.name ?? user.email, image: profile?.image ?? null, channelNames: user.channels.map((c) => c.name), rateLimit: user.rateLimit, apps, devices, security, aiKey, allowance, notice } : undefined}
+      account={user ? { email: user.email, name: profile?.name ?? user.email, image: profile?.image ?? null, channelNames: user.channels.map((c) => c.name), rateLimit: user.rateLimit, apps, devices, security, aiKey, allowance, notice, approveMode: approve } : undefined}
     />
   );
 }

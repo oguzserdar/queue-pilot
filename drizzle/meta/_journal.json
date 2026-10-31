@@ -148,6 +148,13 @@
       "when": 1793435785605,
       "tag": "20261031083625_check_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793442298638,
+      "tag": "20261031102458_agent_permission",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,9 @@ vi.mock("@/lib/ai-key-store", async (orig) => ({
   postgresAiKeyStore: () => ({ get: async () => ownKey.saved, setModel: ownKey.setModel }),
 }))
 vi.mock("@/lib/ai-models", async (orig) => ({ ...(await orig<object>()), listModels: async () => ({ models: [{ id: "model-a" }, { id: "model-b" }] }) }))
+const perm = vi.hoisted(() => ({ mode: "ask" as "ask" | "direct" | "off", approve: vi.fn() }))
+vi.mock("@/lib/agent-permission", async (orig) => ({ ...(await orig<object>()), approveMode: async () => perm.mode }))
+vi.mock("@/lib/approve-drafts", async (orig) => ({ ...(await orig<object>()), approveDrafts: (...a: unknown[]) => perm.approve(...a) }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
 vi.mock("@/lib/auth", () => ({ getAuth: async () => ({ $context: Promise.resolve({ baseURL: "https://app.example/api/auth" }) }), mcpResource: (url: string) => `${url}/api/mcp` }))
 vi.mock("@better-auth/mcp", () => ({
@@ -161,7 +164,7 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(41)
+    expect(tools).toHaveLength(42)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
@@ -573,6 +576,42 @@ describe("connector AI model", () => {
     expect(ownKey.setModel).not.toHaveBeenCalled()
     expect((await call("set_ai_model", { model: "model-b" })).isError).toBeFalsy()
     expect(ownKey.setModel).toHaveBeenCalledWith("person-a", "model-b")
+  })
+})
+
+describe("connector approve", () => {
+  const draft = { id: "d1", channelId: "ch", status: "draft" as const, via: "api" as const, text: "Monday post.", dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }
+  beforeEach(() => { posts = [draft]; perm.approve.mockReset().mockResolvedValue({ approved: ["d1"], refused: [] }) })
+  afterEach(() => { perm.mode = "ask" })
+  it("refuses when the person turned approving from apps off", async () => {
+    perm.mode = "off"
+    expect((await call("approve_drafts", { postIds: ["d1"] })).isError).toBe(true)
+    expect(perm.approve).not.toHaveBeenCalled()
+  })
+  it("asks first by default: the first call schedules nothing and names the drafts", async () => {
+    const first = answer(await call("approve_drafts", { postIds: ["d1"] }))
+    expect(first).toContain("Nothing approved yet")
+    expect(first).toContain("Monday post.")
+    expect(perm.approve).not.toHaveBeenCalled()
+    const token = first.match(/confirmToken: (\S+)/)![1]
+    expect((await call("approve_drafts", { postIds: ["d1", "d2"], confirmToken: token })).isError).toBe(true)
+    expect((await call("approve_drafts", { postIds: ["d1"], confirmToken: token }, "person-b")).isError).toBe(true)
+    expect(perm.approve).not.toHaveBeenCalled()
+    expect(answer(await call("approve_drafts", { postIds: ["d1"], confirmToken: token }))).toContain("1 scheduled")
+    expect(perm.approve).toHaveBeenCalledTimes(1)
+  })
+  it("refuses an expired confirmation", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    const token = answer(await call("approve_drafts", { postIds: ["d1"] })).match(/confirmToken: (\S+)/)![1]
+    vi.setSystemTime(new Date(Date.now() + 11 * 60_000))
+    expect((await call("approve_drafts", { postIds: ["d1"], confirmToken: token })).isError).toBe(true)
+    expect(perm.approve).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+  it("schedules in one call when the person chose not to be asked", async () => {
+    perm.mode = "direct"
+    expect(answer(await call("approve_drafts", { postIds: ["d1"] }))).toContain("1 scheduled")
+    expect(perm.approve).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -221,7 +221,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         </div>
       </header>
 
-      <p className={styles.muted}>Queue Pilot never schedules or publishes on its own. Only your Approve schedules.</p>
+      <p className={styles.muted}>Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.</p>
 
       {composed && <p className={styles.muted} role="status">{composed}</p>}
 
