@@ -32,9 +32,8 @@ import { structureRule } from "@/lib/structure-rule";
 import { judgeDrafts, type Verdict } from "@/lib/judge";
 import { AiCapError, judgeModelFor } from "@/lib/judge-model";
 import { limit, type Action, type Limited } from "@/lib/rate-limit";
-import { currentOffers, currentRewrites } from "@/lib/read-back";
+import { currentRewrites } from "@/lib/read-back";
 import { proposeRules } from "@/lib/rewrite-rules";
-import { fixToRule } from "@/lib/fix-offers";
 import { channelsByOrganization, firstRuleKey, pastPosts, proposeFirstRules } from "@/lib/day-one-rules";
 
 /** The signed-in person's limit for this action (src/lib/rate-limit.ts), or null while they are within it. */
@@ -348,39 +347,6 @@ export async function removeRule(id: string): Promise<SourceActionResult> {
   } catch (e) {
     console.error(JSON.stringify({ event: "qp-rule-remove-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Queue Pilot could not delete that rule just now. Try again in a minute." };
-  }
-  revalidatePath("/playbook");
-  return { ok: true };
-}
-
-/** Keeps a repeated fix as a rule. The offer is recomputed here from the person's own data, never taken from the browser. */
-export async function keepFix(key: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof key !== "string" || key.length > 500) return { ok: false, message: "Unknown fix." };
-  try {
-    const offer = (await currentOffers(userId)).find((o) => o.key === key);
-    if (!offer) return { ok: false, message: "That fix is no longer waiting. Refresh the page." };
-    await postgresRulesStore().add(userId, fixToRule(offer.fix, offer.network), offer.count);
-  } catch (e) {
-    if (e instanceof TooManyRulesError) return { ok: false, message: e.message };
-    console.error(JSON.stringify({ event: "qp-keep-fix-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not keep that rule just now. Try again in a minute." };
-  }
-  revalidatePath("/playbook");
-  return { ok: true };
-}
-
-/** Sets a repeated fix aside, so it is not offered again. */
-export async function dismissFix(key: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof key !== "string" || key.length > 500) return { ok: false, message: "Unknown fix." };
-  try {
-    await postgresRulesStore().dismiss(userId, key);
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-dismiss-fix-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not save that just now. Try again in a minute." };
   }
   revalidatePath("/playbook");
   return { ok: true };

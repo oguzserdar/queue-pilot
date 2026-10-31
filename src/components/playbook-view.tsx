@@ -3,7 +3,7 @@
 import { DRAFT_CHECKS } from "@/lib/draft-checks";
 
 import { useState, useTransition } from "react";
-import { addRule, dismissFix, keepFix, readRule, removeRule } from "@/app/(app)/actions";
+import { addRule, readRule, removeRule } from "@/app/(app)/actions";
 import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
 import { NETWORKS, ruleHold, type NewRule, type Rule } from "@/lib/rules";
@@ -16,9 +16,6 @@ import { FirstRulesFinder } from "./first-rules-finder";
 import { RewriteFinder } from "./rewrite-finder";
 import { RuleTester } from "./rule-tester";
 import styles from "./playbook-view.module.css";
-
-/** A repeated fix waiting for the person's answer: the rule it would become and one of the edits it came from. */
-export type ShownOffer = { key: string; ruleText: string; where: string; count: number; before: string; after: string };
 
 /** A rule as the Playbook shows it: the rule, and the edits it came from when there were any. */
 export type ShownRule = Rule & { origin?: string };
@@ -37,7 +34,7 @@ function groups(rules: ShownRule[]): [string, ShownRule[]][] {
 }
 
 /** Example mode: Mark's playbook and one repeated fix waiting for his yes. Live mode: the person's own rules. */
-export function PlaybookView({ mode = "example", initial = EXAMPLE, offers = [], firstVisit = false, reader }: { mode?: "example" | "live"; initial?: ShownRule[]; offers?: ShownOffer[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null> }) {
+export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null> }) {
   const live = mode === "live";
   const [rules, setRules] = useState<ShownRule[]>(live ? initial : firstVisit ? [] : EXAMPLE);
   const [offer, setOffer] = useState<"open" | "kept" | "dismissed">(live || firstVisit ? "dismissed" : "open");
@@ -102,18 +99,6 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, offers = [],
         </section>
       )}
       {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the dish.</p>}
-      {live && offers.map((o) => (
-        <section key={o.key} className={styles.offer} aria-label={`A fix you made ${o.count} times`}>
-          <h2 className={styles.h2}>You made the same fix {o.count === 2 ? "twice" : `${o.count} times`}</h2>
-          <p className={styles.diff}><del><span className="sr-only">Before: </span>{o.before}</del> <span className="sr-only">After: </span>{o.after}</p>
-          <p className={styles.muted}>On {o.where}, in {o.count} drafts Queue Pilot wrote.</p>
-          <p className={styles.proposed}>Keep as a rule: {o.ruleText}</p>
-          <div className={styles.actions}>
-            <Button variant="primary" size="sm" disabled={pending} onClick={() => start(async () => { const r = await keepFix(o.key); setProblem(r.ok ? null : r.message); if (r.ok) toast({ type: "success", title: "Kept as a rule", description: o.ruleText }); })}>Keep as a rule</Button>
-            <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => { const r = await dismissFix(o.key); setProblem(r.ok ? null : r.message); })}>Not now</Button>
-          </div>
-        </section>
-      ))}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
       {groups(shown).map(([name, rs]) => (
