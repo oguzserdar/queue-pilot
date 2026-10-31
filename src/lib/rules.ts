@@ -4,15 +4,17 @@
  * text: a decision model judges every rule by meaning, in the draft's own language (src/lib/judge.ts).
  */
 
+import { resolveRule, type RuleRouting } from "./rule-scopes";
+
 export type RuleLevel = "block" | "warn";
 
-type RuleBase = {
+type RuleBase = RuleRouting & {
   /** Evidence saved only by the server when a suggestion is kept. */
   learnedFrom?: unknown;
   id: string;
   /** The rule as the person reads it in their playbook. */
   text: string;
-  /** Channel ids the rule applies to, or "all". */
+  /** Legacy network names, or "all". Exact accounts use accountIds. */
   channels: string[] | "all";
   /** For a rule on every network: the networks it is switched off for. A rule for named networks has none. */
   except?: string[];
@@ -41,12 +43,13 @@ export const NETWORKS: Record<string, string> = {
 };
 
 /** Whether a rule applies to a draft on this network: a shared rule applies everywhere it is not switched off. */
-export function appliesTo(rule: Pick<Rule, "channels" | "except">, network: string): boolean {
-  return rule.channels === "all" ? !(rule.except ?? []).includes(network) : rule.channels.includes(network);
+export function appliesTo(rule: RuleRouting, network: string, accountId?: string): boolean {
+  return resolveRule(rule, network, accountId).applies;
 }
 
 /** Where a rule applies, in plain words: "every network", "every network except X", or the networks it names. */
-export function ruleScope(rule: Pick<Rule, "channels" | "except">): string {
+export function ruleScope(rule: RuleRouting): string {
+  if (rule.accountIds?.length) return `${rule.accountIds.length} selected account${rule.accountIds.length === 1 ? "" : "s"}`;
   if (rule.channels !== "all") return rule.channels.map((c) => NETWORKS[c] ?? c).join(", ");
   const off = (rule.except ?? []).map((c) => NETWORKS[c] ?? c);
   return off.length ? `every network except ${off.join(", ")}` : "every network";
@@ -78,8 +81,28 @@ export function ruleInput(rule: NewRule): Record<string, unknown> {
  * checked for type and length, and the networks must be ones Queue Pilot knows.
  */
 export function parseNewRule(input: unknown): NewRule | string {
-  const rule = parseRuleBody(input);
-  if (typeof rule === "string" || rule.channels !== "all") return rule;
+  let rule = parseRuleBody(input);
+  if (typeof rule === "string") return rule;
+  const overrides = (input as Record<string, unknown>).overrides;
+  if (overrides !== undefined) {
+    if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) return "Invalid rule exceptions.";
+    const clean: NonNullable<RuleRouting["overrides"]> = {};
+    for (const group of ["networks", "accounts"] as const) {
+      const map = (overrides as Record<string, unknown>)[group];
+      if (map === undefined) continue;
+      if (!map || typeof map !== "object" || Array.isArray(map) || Object.keys(map).length > 50) return "Invalid rule exceptions.";
+      const entries = Object.entries(map);
+      if (entries.some(([key, value]) => !key || key.length > 200 || typeof value !== "boolean" || (group === "networks" && !Object.hasOwn(NETWORKS, key)))) return "Invalid rule exceptions.";
+      clean[group] = Object.fromEntries(entries) as Record<string, boolean>;
+    }
+    rule = { ...rule, overrides: clean };
+  }
+  const ids = (input as Record<string, unknown>).accountIds;
+  if (ids !== undefined) {
+    if (!Array.isArray(ids) || !ids.length || ids.length > 30 || ids.some(id => typeof id !== "string" || !id || id.length > 200)) return "Choose valid accounts.";
+    return { ...rule, channels: "all", accountIds: [...new Set(ids)] };
+  }
+  if (rule.channels !== "all") return rule;
   // A shared rule may come back with the networks it was switched off for (an undo, a restored rule).
   const raw = (input as Record<string, unknown>).except;
   const except = Array.isArray(raw) ? [...new Set(raw.filter((c): c is string => typeof c === "string" && c in NETWORKS))] : [];

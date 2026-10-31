@@ -20,7 +20,7 @@ describe("pastPosts", () => {
       { id: "p1", channelId: "c1", text: "Hi", sentAt: null, notes: [{ text: "Say stock.", by: "Sara", at: null }] },
       { id: "p2", channelId: "gone", text: "Old", sentAt: null, notes: [] },
     ]);
-    expect(out).toEqual([{ id: "p1", network: "linkedin", text: "Hi", notes: [{ text: "Say stock.", by: "Sara", at: null }] }]);
+    expect(out).toEqual([{ id: "p1", channelId: "c1", channelName: "c1", network: "linkedin", text: "Hi", notes: [{ text: "Say stock.", by: "Sara", at: null }] }]);
   });
 
   it("groups channels by organization and skips channels with no organization", () => {
@@ -119,4 +119,20 @@ describe("proposeFirstRules", () => {
     expect(prompt).toContain("- Keep it short.");
     expect(prompt).toContain("Note 1 (on a linkedin post)");
   });
+});
+
+
+it("does not combine two accounts on the same network to reach the evidence threshold", async () => {
+  const writer = answering({ rules: [] });
+  const split = linkedin.map((p, i) => ({ ...p, channelId: i < 6 ? "company" : "personal", channelName: i < 6 ? "Company" : "Personal" }));
+  const result = await proposeFirstRules(writer, { decider: judgeWith(() => "pass").model, explainer: explainer() }, split, []);
+  expect(result.offers).toEqual([]);
+  expect(result.skipped).toEqual(["Company", "Personal"]);
+  expect(writer.doGenerateCalls).toHaveLength(0);
+});
+it("keeps an evidenced account habit on that account only", async () => {
+  const writer = answering({ rules: [{ rule: "No exclamation marks.", network: "linkedin", from: "posts", posts: [1, 2], note: null }] });
+  const result = await proposeFirstRules(writer, { decider: judgeWith(() => "pass").model, explainer: explainer() }, linkedin.map(p => ({ ...p, channelId: "company" })), []);
+  expect(result.offers).toHaveLength(1);
+  expect(result.offers[0].rule.accountIds).toEqual(["company"]);
 });

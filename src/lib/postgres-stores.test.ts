@@ -23,7 +23,7 @@ const { connectCodeFor } = await import("./telegram");
 const { postgresRulesStore, MAX_RULES, TooManyRulesError } = await import("./rules-store");
 const { postgresWrittenStore } = await import("./written-store");
 const { currentOffers } = await import("./read-back");
-const { postgresVerdictStore, CLEAR_TTL_MS, UNCLEAR_TTL_MS, CLAIM_TTL_MS } = await import("./fix-verdicts");
+const { postgresVerdictStore, checkKey, CLEAR_TTL_MS, UNCLEAR_TTL_MS, CLAIM_TTL_MS } = await import("./fix-verdicts");
 const { postgresAiKeyStore } = await import("./ai-key-store");
 const { checkComment, postgresReviewStore, reviewNotes, MAX_COMMENTS: MAX_REVIEW_COMMENTS, MAX_OPEN_LINKS, TooManyLinksError } = await import("./review-store");
 const appSchema = await import("../db/schema");
@@ -646,4 +646,52 @@ describe("shared rule exceptions on real Postgres", () => {
     expect(await s.setException("u6", shared, "twitter", true)).toBe(false);
     expect((await read(shared))?.except).toEqual(["bluesky"]);
   });
+});
+
+describe("account routing and review boundaries", () => {
+  it("keeps accounts separate, restores saved exceptions and rejects another owner's targets", async () => {
+    const { setRuleOverride, setInheritance } = await import("./rule-routing-store");
+    const { resolveRule } = await import("./rule-scopes");
+    const channels = [{ id: "route-company", name: "Company", service: "linkedin" }, { id: "route-personal", name: "Personal", service: "linkedin" }];
+    await pg.query(`insert into buffer_snapshot(user_id,data,fetched_at) values ('u7',$1,now()) on conflict(user_id) do update set data=excluded.data,fetched_at=excluded.fetched_at`, [JSON.stringify({ channels, posts: [] })]);
+    const s = postgresRulesStore();
+    const shared = await s.add("u7", { kind: "guidance", text: "Routing test", channels: "all", level: "warn" });
+    const local = await s.add("u7", { kind: "guidance", text: "Company only", channels: "all", accountIds: ["route-company"], level: "warn" });
+    await expect(s.add("u8", { kind: "guidance", text: "Foreign", channels: "all", accountIds: ["route-company"], level: "warn" })).rejects.toThrow(/connected/);
+    expect(await setRuleOverride("u8", shared, { level: "network", id: "linkedin" }, false)).toBe(false);
+    expect(await setRuleOverride("u7", shared, { level: "account", id: "foreign" }, false)).toBe(false);
+    expect(await setRuleOverride("u7", local, { level: "account", id: "route-personal" }, true)).toBe(false);
+    expect(await setRuleOverride("u7", shared, { level: "network", id: "linkedin" }, false)).toBe(true);
+    expect(await setRuleOverride("u7", shared, { level: "account", id: "route-personal" }, true)).toBe(true);
+    let rule = (await s.list("u7")).find(r => r.id === shared)!;
+    expect(resolveRule(rule, "linkedin", "route-company").applies).toBe(false);
+    expect(resolveRule(rule, "linkedin", "route-personal").applies).toBe(true);
+    expect(await setInheritance("u7", { level: "account", id: "route-personal" }, false, false)).toBe(true);
+    rule = (await s.list("u7")).find(r => r.id === shared)!;
+    expect(resolveRule(rule, "linkedin", "route-personal").applies).toBe(false);
+    await setInheritance("u7", { level: "account", id: "route-personal" }, true, true);
+    rule = (await s.list("u7")).find(r => r.id === shared)!;
+    expect(resolveRule(rule, "linkedin", "route-personal").applies).toBe(true);
+    expect(resolveRule(rule, "linkedin", "route-company").applies).toBe(false);
+    expect(await setInheritance("u8", { level: "account", id: "route-personal" }, false, false)).toBe(false);
+  });
+  it("expired review links cannot be read or commented on, and revocation requires the owner", async () => {
+    const s = postgresReviewStore();
+    const link = await s.create("u7", [{ postId: "expiry-post", channelId: "route-company", channel: "Company", network: "linkedin", text: "Monday", dueAt: null }], 1);
+    expect(await s.revoke("u8", link.id)).toBe(false);
+    expect(await s.revoke("u7", "nonexistent")).toBe(false);
+    const comment = { postId: "expiry-post", name: "Reviewer", text: "Tuesday", quote: null, start: null, end: null };
+    expect(await s.comment(link.id, { ...comment, postId: "unshared" })).toBe(false);
+    await pg.query(`update qp_review_link set expires_at=now()-interval '1 second' where id=$1`, [link.id]);
+    expect(await s.open(link.id)).toBeNull();
+    expect(await s.comment(link.id, comment)).toBe(false);
+    expect(await s.revoke("u7", link.id)).toBe(true);
+    expect(await s.revoke("u7", link.id)).toBe(false);
+  });
+});
+
+
+it("keeps saved learning verdicts separate for two accounts with identical edits", () => {
+  const offer = { fix: { kind: "banned" as const, phrase: "excited" }, network: "linkedin", count: 2, examples: [] };
+  expect(checkKey([{ ...offer, channelId: "company" }])).not.toBe(checkKey([{ ...offer, channelId: "personal" }]));
 });

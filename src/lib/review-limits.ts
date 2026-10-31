@@ -4,8 +4,8 @@
  */
 
 /** A draft as it was shared. */
-export type SharedDraft = { postId: string; network: string; channel: string; dueAt: string | null; text: string };
-export type ReviewLink = { id: string; drafts: SharedDraft[]; createdAt: string; revokedAt: string | null };
+export type SharedDraft = { postId: string; channelId?: string; network: string; channel: string; dueAt: string | null; text: string };
+export type ReviewLink = { id: string; drafts: SharedDraft[]; createdAt: string; revokedAt: string | null; expiresAt?: string };
 export type ReviewComment = { id: string; postId: string; name: string; text: string; quote: string | null; start: number | null; end: number | null; createdAt: string };
 
 /** Most drafts in one link: a week of posts. */

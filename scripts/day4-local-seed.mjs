@@ -1,0 +1,24 @@
+// Local browser fixture only. Refuses every non-loopback database.
+import pg from 'pg';
+import { createHmac } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
+const url = process.env.DATABASE_URL;
+if (!url || new URL(url).hostname !== '127.0.0.1' || new URL(url).pathname !== '/qpday4') throw new Error('Local test database only');
+const pool = new pg.Pool({ connectionString: url });
+const uid='day4-local-review'; const now=new Date();
+await pool.query('insert into "user"(id,name,email,email_verified) values($1,$2,$3,true) on conflict(id) do nothing',[uid,'Local test account','local-review@example.test']);
+await pool.query('insert into session(id,user_id,token,expires_at,updated_at) values($1,$2,$3,$4,now()) on conflict(id) do update set expires_at=excluded.expires_at',['day4-local-session',uid,'day4-local-token',new Date(Date.now()+86400000)]);
+const channels=[{id:'local-company',name:'Company · Local test',service:'linkedin'},{id:'local-personal',name:'Personal · Local test',service:'linkedin'},{id:'local-x',name:'Founder · Local test',service:'twitter'}].map(c=>({...c,timezone:'UTC',organizationId:'local-org',isDisconnected:false,isLocked:false,isQueuePaused:false,postingSchedule:[{day:'mon',paused:false,times:['09:00','12:00']}]}));
+const posts=[{id:'local-1',channelId:'local-company',text:'Queue Pilot opens review links on Monday.'},{id:'local-2',channelId:'local-company',text:'On Monday, Queue Pilot adds account-specific rules.'},{id:'local-3',channelId:'local-personal',text:'I am building QP around the edits I keep making.'}].map((p,i)=>({...p,status:'draft',dueAt:`2026-11-02T${i===1?'12':'09'}:00:00Z`,sentAt:null,externalLink:null,error:null}));
+const data={email:'local-review@example.test',timezone:'UTC',organizationIds:['local-org'],channels,posts,truncated:false,range:{start:'2026-10-25T00:00:00Z',end:'2026-11-15T00:00:00Z'}};
+await pool.query('insert into buffer_snapshot(user_id,data,rate_limit,fetched_at) values($1,$2,$3,$4) on conflict(user_id) do update set data=excluded.data,fetched_at=excluded.fetched_at',[uid,JSON.stringify(data),'[]',new Date(Date.now()+3600000)]);
+for(const p of posts) await pool.query('insert into qp_written(user_id,post_id,network,text) values($1,$2,$3,$4) on conflict(user_id,post_id) do update set text=excluded.text',[uid,p.id,channels.find(c=>c.id===p.channelId).service,p.text]);
+const rules=[{id:'local-shared',text:'Make one concrete point.',channels:'all',level:'warn',kind:'guidance'},{id:'local-network',text:'Explain why the change matters.',channels:['linkedin'],level:'warn',kind:'guidance'},{id:'local-account',text:'Write in the first person.',channels:'all',accountIds:['local-personal'],level:'warn',kind:'guidance'}];
+for(const r of rules) await pool.query('insert into qp_rule(id,user_id,spec) values($1,$2,$3) on conflict(id) do update set spec=excluded.spec',[r.id,uid,JSON.stringify(r)]);
+const drafts=posts.slice(0,2).map(p=>({postId:p.id,channelId:p.channelId,channel:channels.find(c=>c.id===p.channelId).name,network:'linkedin',text:p.text,dueAt:p.dueAt}));
+await pool.query('insert into qp_review_link(id,user_id,drafts,expires_at) values($1,$2,$3,$4) on conflict(id) do update set expires_at=excluded.expires_at,revoked_at=null',['local-review-link',uid,JSON.stringify(drafts),new Date(Date.now()+86400000)]);
+const token='day4-local-token'; const secret=process.env.SESSION_SECRET;
+const cookie=token+'.'+createHmac('sha256',secret).update(token).digest('base64');
+writeFileSync('/private/tmp/qp-day4-local/cookie.txt',encodeURIComponent(cookie),{mode:0o600});
+await pool.end();
+console.log('Local fixture ready: 3 accounts, 3 drafts, 3 rules, one review link. No external requests.');

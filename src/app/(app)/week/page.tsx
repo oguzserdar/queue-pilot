@@ -1,3 +1,5 @@
+import { postgresRulesStore } from "@/lib/rules-store";
+import { playbookVersion } from "@/lib/playbook-version";
 import { WeekView } from "@/components/week-view";
 import { getCurrentUser } from "@/lib/current-user";
 import { demoWeek } from "@/lib/demo-data";
@@ -21,8 +23,14 @@ export default async function Page() {
   // The playbook verdicts each draft was saved with; a draft Queue Pilot did not write has none.
   const draftIds = week.posts.filter((p) => p.status === "draft").map((p) => p.id);
   const written = userId ? await postgresWrittenStore().get(userId, draftIds).catch(() => []) : [];
-  const verdicts = Object.fromEntries(written.map((w) => [w.postId, w.verdicts ?? null]));
+  const rules = userId ? await postgresRulesStore().list(userId).catch(() => null) : null;
+  const revision = rules ? playbookVersion(rules) : null;
+  const checkNotes = Object.fromEntries(written.map(w => [w.postId,
+    week.posts.find(p => p.id === w.postId)?.text !== w.text ? "This draft changed since its last check. Check it again before relying on that result." :
+    revision && w.playbookRevision !== revision ? "The rules or where they apply changed. This draft needs a fresh check." :
+    "No current playbook check is available for this draft."]));
+  const verdicts = Object.fromEntries(written.map((w) => [w.postId, revision && w.playbookRevision === revision && week.posts.find(p => p.id === w.postId)?.text === w.text ? w.verdicts ?? null : null]));
   const writing = userId ? await writingAvailabilityFor(userId) : undefined;
   const count = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, timeZone).length;
-  return <WeekView week={week} live verdicts={verdicts} writing={writing} writeCount={count} />;
+  return <WeekView week={week} live rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} />;
 }

@@ -10,9 +10,9 @@ const wrote = new Set(["d1", "s1", "t1"]);
 
 describe("updateDraft", () => {
   it("edits only the text of the caller's own draft and keeps it a draft", async () => {
-    const q = vi.fn().mockResolvedValue({ editPost: { __typename: "PostActionSuccess" } });
+    const q = vi.fn().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ editPost: { __typename: "PostActionSuccess" } });
     expect(await updateDraft("tok", "d1", "new text", posts, channels, wrote, q)).toEqual({ ok: true });
-    expect(q.mock.calls[0][2]).toEqual({ input: { id: "d1", text: "new text", saveToDraft: true } });
+    expect(q.mock.calls[1][2]).toEqual({ input: { id: "d1", text: "new text", saveToDraft: true } });
   });
   it("refuses scheduled, sent and unknown posts without calling Buffer", async () => {
     const q = vi.fn();
@@ -30,11 +30,11 @@ describe("updateDraft", () => {
     const res = await updateDraft("tok", "d1", "Ravi di condividere v2", posts, channels, wrote, q, gate);
     expect(res).toMatchObject({ ok: false });
     expect(!res.ok && res.reason).toContain("Ravi di condividere");
-    expect(gate).toHaveBeenCalledWith("Ravi di condividere v2", expect.any(String));
+    expect(gate).toHaveBeenCalledWith("Ravi di condividere v2", expect.any(String), "x");
     expect(q).not.toHaveBeenCalled();
   });
   it("passes Buffer's own refusal on", async () => {
-    const q = vi.fn().mockResolvedValue({ editPost: { __typename: "InvalidInputError", message: "Text is required" } });
+    const q = vi.fn().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ editPost: { __typename: "InvalidInputError", message: "Text is required" } });
     expect(await updateDraft("tok", "d1", "x", posts, channels, wrote, q)).toEqual({ ok: false, reason: "Text is required" });
   });
 });
@@ -79,4 +79,21 @@ describe("drafts another app wrote through Buffer's API", () => {
     expect(del.ok).toBe(false);
     expect(q).not.toHaveBeenCalled();
   });
+});
+
+it("reads again after judging and does not overwrite a newer Buffer edit", async () => {
+  const q = vi.fn().mockResolvedValue({ post: { ...posts[0], text: "Edited in Buffer" } });
+  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q, async () => null, "old");
+  expect(result).toMatchObject({ ok: false, reason: expect.stringContaining("Nothing was overwritten") });
+  expect(q).toHaveBeenCalledTimes(1);
+});
+it("refuses a draft scheduled while the AI check was running", async () => {
+  const q = vi.fn().mockResolvedValue({ post: { ...posts[0], status: "scheduled" } });
+  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q);
+  expect(result.ok).toBe(false); expect(q).toHaveBeenCalledTimes(1);
+});
+it("refuses a proposal read before the current snapshot", async () => {
+  const q = vi.fn().mockResolvedValue({ post: posts[0] });
+  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q, async () => null, "even older");
+  expect(result.ok).toBe(false); expect(q).toHaveBeenCalledTimes(1);
 });

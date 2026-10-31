@@ -13,6 +13,8 @@ import { Alert } from "@/registry/components/alert/alert";
 import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
+import { resolveRule } from "@/lib/rule-scopes";
+import type { Rule } from "@/lib/rules";
 import type { Verdict } from "@/lib/judge";
 import { EXAMPLE_VERDICTS } from "@/lib/example-verdicts";
 import { WriteWeekButton } from "./write-week-button";
@@ -40,7 +42,7 @@ const RESULT_TONE = { pass: "success", fail: "danger", unsure: "warning" } as co
  * `live` is true for a signed-in user: Approve schedules the drafts in Buffer. Example data only marks them on screen.
  * `verdicts` are the playbook verdicts each draft was saved with, by post id; null means it was saved unchecked.
  */
-export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0 }: { week: WeekModel; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
+export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {} }: { week: WeekModel; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
   const { label: WEEK_LABEL, days: DAYS, channels, slots } = week;
   /** A day gets a full column when any channel has a slot or a post on it. */
   const dayHasContent = (d: number) => channels.some((c) => slots[c.id]?.[d]?.length) || posts.some((p) => p.day === d);
@@ -67,6 +69,9 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
   const posts = week.posts.filter((p) => !gone.has(p.id)).map((p) => ({
     ...p,
     text: edited[p.id] ?? p.text,
+    checks: live && p.status === "draft" && verdicts[p.id] === null
+      ? [...(p.checks ?? []), { tone: "warning" as const, label: checkNotes[p.id] ?? "Needs a current playbook check." }]
+      : p.checks,
     // Live verdict entries come from this person's writing records, including drafts saved unchecked.
     ours: live ? Object.hasOwn(verdicts, p.id) : p.ours,
   }));
@@ -320,7 +325,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               <div className={styles.checks}>
                 <h3 className={styles.h3}>Your playbook</h3>
                 {v === null ? (
-                  <p className={styles.muted}>Saved without a playbook check: no AI key was set when it was written.</p>
+                  <p className={styles.muted}>{checkNotes[current.id] ?? "No current playbook check is available for this draft."}</p>
                 ) : (
                   v.map((r) => (
                     <div key={r.ruleId} className={styles.check}>
@@ -334,6 +339,15 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </div>
             );
           })()}
+          {live && rules.length > 0 && <details className={styles.checks}>
+            <summary className={styles.h3}>Rules used for this account</summary>
+            <p className={styles.muted}>Current settings, not a new check of this draft.</p>
+            {rules.map(rule => {
+              const network = channels.find(c => c.id === current.channel)?.service ?? "";
+              const d = resolveRule(rule, network, current.channel);
+              return <div key={rule.id} className={styles.check}><Badge tone={d.applies ? "neutral" : "warning"} size="sm">{d.applies ? "Applies" : "Excluded"}</Badge><span>{rule.text}<br />{d.origin} · {d.reason}</span></div>;
+            })}
+          </details>}
           <div className={styles.checks}>
             <h3 className={styles.h3}>Before it goes out</h3>
             {current.checks?.map((c) => (
@@ -364,7 +378,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               <div className={styles.actions}>
                 <Button variant="primary" size="sm" disabled={busy || !editing.trim() || editing.trim() === current.text} onClick={() => run(async () => {
                   if (!live) { setEdited((m) => ({ ...m, [current.id]: editing.trim() })); return { ok: true as const }; }
-                  return editDraftText(current.id, editing);
+                  return editDraftText(current.id, editing, current.text);
                 }, live ? "Saved in Buffer. It is still a draft." : "Changed on this example page only.")}>{busy ? "Checking and saving…" : "Save"}</Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => setEditing(null)}>Cancel</Button>
               </div>

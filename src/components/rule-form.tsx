@@ -25,7 +25,7 @@ function tagsFor(r: NewRule): string[] {
  * (a banned phrase, a replacement, a required ending, or judged by meaning), and they can drop the reading to keep the
  * rule as written. The reading they saw is the one saved. A new rule flags drafts by default; "Do not save it" is a choice.
  */
-export function RuleForm({ onAdd, read }: { onAdd: (rule: NewRule, raw: Record<string, unknown>) => Promise<string | null>; read?: (text: string) => Promise<NewRule | null> }) {
+export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: string; name: string; service: string }[]; onAdd: (rule: NewRule, raw: Record<string, unknown>) => Promise<string | null>; read?: (text: string) => Promise<NewRule | null> }) {
   const [text, setText] = useState("");
   const [network, setNetwork] = useState("all");
   const [level, setLevel] = useState("warn");
@@ -59,7 +59,7 @@ export function RuleForm({ onAdd, read }: { onAdd: (rule: NewRule, raw: Record<s
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (adding.current) return;
-    const raw: Record<string, unknown> = { kind: "guidance", text, channels: network === "all" ? "all" : [network], level, ...(current ? { reading: current } : {}) };
+    const raw: Record<string, unknown> = { kind: "guidance", text, channels: network === "all" || network.startsWith("account:") ? "all" : [network], ...(network.startsWith("account:") ? { accountIds: [network.slice(8)] } : {}), level, ...(current ? { reading: current } : {}) };
     const rule = parseNewRule(raw);
     if (typeof rule === "string") return setProblem(rule);
     adding.current = true;
@@ -97,7 +97,7 @@ export function RuleForm({ onAdd, read }: { onAdd: (rule: NewRule, raw: Record<s
         </div>
       )}
       <div className={styles.formFields}>
-        <Select label="Applies to" value={network} onValueChange={setNetwork} options={[{ value: "all", label: "Every network" }, ...Object.entries(NETWORKS).map(([value, label]) => ({ value, label }))]} />
+        <Select label="Applies to" value={network} onValueChange={setNetwork} options={[{ value: "all", label: "Every network" }, ...Object.entries(NETWORKS).map(([value, label]) => ({ value, label: `All ${label} accounts` })), ...accounts.map(a => ({ value: `account:${a.id}`, label: `${a.name} · ${NETWORKS[a.service] ?? a.service}` }))]} />
         <Select label="If a draft breaks it" value={level} onValueChange={setLevel} options={[{ value: "warn", label: "Save it and flag it" }, { value: "block", label: "Do not save it" }]} />
       </div>
       {problem && <p className={styles.problem} role="alert">{problem}</p>}

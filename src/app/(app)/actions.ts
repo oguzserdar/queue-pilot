@@ -312,7 +312,7 @@ async function readingOrTyped(userId: string, rule: NewRule, reading: unknown): 
   // A reading the form saw is a whole rule (a banned one holds `phrases`); turn it back into parser input before checking it.
   const raw = reading as Record<string, unknown>;
   const input = raw.kind === "banned" && Array.isArray(raw.phrases) ? ruleInput(raw as NewRule) : raw;
-  const typed = parseNewRule({ ...input, channels: rule.channels, level: rule.level });
+  const typed = parseNewRule({ ...input, channels: rule.channels, accountIds: rule.accountIds, except: rule.except, overrides: rule.overrides, level: rule.level });
   return typeof typed === "string" || typed.kind === "guidance" ? typedIfPossible(userId, rule) : { ...typed, text: rule.text };
 }
 
@@ -474,11 +474,15 @@ async function writeSlots(only?: string): Promise<WriteWeekActionResult> {
 export type TryDraftResult = { ok: true; verdicts: Verdict[]; judgedWith: string } | { ok: false; message: string };
 
 /** Try a draft: judges typed text against the person's playbook with the same model check saves get. */
-export async function tryDraft(text: string, network: string): Promise<TryDraftResult> {
+export async function tryDraft(text: string, network: string, channelId?: string): Promise<TryDraftResult> {
   { const l = await overLimit("ai"); if (l) return tooMany(l); }
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (typeof text !== "string" || !text.trim() || text.length > 5000 || typeof network !== "string" || !(network in NETWORKS)) return { ok: false, message: "Type a draft to check." };
+  const snapshot = await postgresSnapshotStore().get(userId);
+  const channels = snapshot?.data.channels.filter(c => c.service === network) ?? [];
+  const channel = channelId ? channels.find(c => c.id === channelId) : channels.length === 1 ? channels[0] : undefined;
+  if (!channel) return { ok: false, message: "Choose the connected account this draft is for." };
   const rules = await postgresRulesStore().list(userId).catch(() => null);
   if (!rules) return { ok: false, message: "Could not read your playbook just now. Try again." };
   if (!rules.length) return { ok: false, message: "Your playbook has no rules yet." };
@@ -486,7 +490,7 @@ export async function tryDraft(text: string, network: string): Promise<TryDraftR
   if (jm instanceof AiCapError) return { ok: false, message: jm.message };
   if (!jm) return { ok: false, message: "Add your AI key in Settings: a model judges each draft against your rules." };
   try {
-    const v = await judgeDrafts(jm.judges, [{ slotId: "try", text, network }], rules);
+    const v = await judgeDrafts(jm.judges, [{ slotId: "try", text, network, channelId: channel.id }], rules);
     return { ok: true, verdicts: v.get("try") ?? [], judgedWith: jm.source };
   } catch (e) {
     await jm.giveBack();
@@ -496,7 +500,7 @@ export async function tryDraft(text: string, network: string): Promise<TryDraftR
   }
 }
 
-export type RewriteProposal = { text: string; channels: string[] | "all"; where: string; examples: { before: string; after: string }[] };
+export type RewriteProposal = { accountIds?: string[]; text: string; channels: string[] | "all"; where: string; examples: { before: string; after: string }[] };
 
 /** Find rules in my rewrites: a model reads the drafts the person rewrote and proposes rules they can keep. */
 export async function findRulesInRewrites(): Promise<{ ok: true; proposals: RewriteProposal[]; read: number } | { ok: false; message: string }> {
@@ -516,7 +520,8 @@ export async function findRulesInRewrites(): Promise<{ ok: true; proposals: Rewr
       proposals: found.map((p) => ({
         text: p.rule.text,
         channels: p.rule.channels,
-        where: p.rule.channels === "all" ? "Every network" : p.rule.channels.map((c) => NETWORKS[c] ?? c).join(", "),
+        accountIds: p.rule.accountIds,
+        where: p.rule.accountIds?.length ? "Selected account" : p.rule.channels === "all" ? "Every network" : p.rule.channels.map((c) => NETWORKS[c] ?? c).join(", "),
         examples: p.evidence.map((e) => ({ before: e.before, after: e.after })),
       })),
     };
@@ -529,6 +534,7 @@ export async function findRulesInRewrites(): Promise<{ ok: true; proposals: Rewr
 }
 
 export type FirstRuleOffer = {
+  accountIds?: string[];
   text: string;
   channels: string[];
   where: string;
@@ -559,8 +565,9 @@ export async function findFirstRules(): Promise<{ ok: true; offers: FirstRuleOff
         const channels = rule.channels === "all" ? [] : rule.channels;
         return {
           text: rule.text,
+          accountIds: rule.accountIds,
           channels,
-          where: channels.map((c) => NETWORKS[c] ?? c).join(", "),
+          where: rule.accountIds?.length ? rule.accountIds.map(id => b.channels.find(c => c.id === id)?.name ?? "Account").join(", ") : channels.map((c) => NETWORKS[c] ?? c).join(", "),
           key: firstRuleKey(rule),
           proof,
         };
@@ -603,18 +610,18 @@ async function patchSavedQueue(userId: string, change: (posts: Post[]) => Post[]
 }
 
 /** Edit in the week dialog: changes the text of a draft Queue Pilot wrote, after the same playbook check as every save. */
-export async function editDraftText(postId: string, text: string): Promise<SourceActionResult> {
+export async function editDraftText(postId: string, text: string, expectedText?: string): Promise<SourceActionResult> {
   { const l = await overLimit("bufferWrite"); if (l) return tooMany(l); }
   if (typeof postId !== "string" || typeof text !== "string" || !text.trim() || text.length > 25_000) return { ok: false, message: "Write the new text first." };
   try {
     const b = await bufferForWriting();
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
     let note: string | undefined;
-    const r = await updateDraft(b.token, postId, text.trim(), b.posts, b.channels, await wroteIds(b.userId, postId), undefined, async (t, network) => {
-      const j = await judgeEdit(b.userId, t, network);
+    const r = await updateDraft(b.token, postId, text.trim(), b.posts, b.channels, await wroteIds(b.userId, postId), undefined, async (t, network, channelId) => {
+      const j = await judgeEdit(b.userId, t, network, channelId);
       note = checkNote(j.check);
       return j.refusal;
-    });
+    }, expectedText);
     if (!r.ok) return { ok: false, message: r.reason };
     await patchSavedQueue(b.userId, (posts) => posts.map((p) => (p.id === postId ? { ...p, text: text.trim() } : p)));
     revalidatePath("/", "layout");

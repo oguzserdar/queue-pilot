@@ -45,7 +45,7 @@ export async function writeWeek(open: OpenSlot[], now: Date, deps: WriteWeekDeps
   const material = await deps.material();
   if (!material.length) return { kind: "nothing", reason: "no-material" };
   const [voice, rules] = await Promise.all([deps.voice(), deps.rules()]);
-  const brief: Brief = { slots: slots.map((s) => ({ id: s.id, local: s.local, channel: s.channel, service: s.service })), material, voice: { note: voice.note, examples: voice.examples }, rules };
+  const brief: Brief = { slots: slots.map((s) => ({ id: s.id, channelId: s.channelId, local: s.local, channel: s.channel, service: s.service })), material, voice: { note: voice.note, examples: voice.examples }, rules };
 
   const first = await deps.write(brief);
   const res = await deps.save(first, keysOf(first));

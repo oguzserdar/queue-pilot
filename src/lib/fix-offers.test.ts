@@ -56,3 +56,14 @@ describe("openOffers", () => {
     expect(openOffers(offers, [], new Set([offerKey(offers[0])]))).toEqual([]);
   });
 });
+
+it("does not pool matching fixes across two LinkedIn accounts", () => {
+  const split = editsFrom(written, posts.map((p, i) => ({ ...p, channelId: i === 0 ? "company" : "personal" })));
+  expect(repeatedFixes(split)).toEqual([]);
+  const together = repeatedFixes(editsFrom(written, posts.map(p => ({ ...p, channelId: "company" }))));
+  expect(together).toHaveLength(1);
+  expect(together[0].channelId).toBe("company");
+  expect(fixToRule(together[0].fix, together[0].network, together[0].channelId).accountIds).toEqual(["company"]);
+  const other: Rule = { id: "r", ...fixToRule(together[0].fix, "linkedin", "personal") };
+  expect(openOffers(together, [other], new Set())).toHaveLength(1);
+});

@@ -3,7 +3,7 @@
  * Queue Pilot skill and add the connector, per agent. The Connect page copies one line that points at it, so the
  * person pastes one sentence instead of following steps. Every command carries this deployment's own address.
  */
-import { SKILL_NAME } from "./agent-skill";
+import { SKILL_NAME } from "./skill-name";
 
 /** The one line the Connect page copies. */
 export function setupLine(origin: string): string {

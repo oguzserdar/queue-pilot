@@ -1,6 +1,6 @@
 /**
  * Finds the fixes a person made to a draft Queue Pilot wrote, by comparing the saved text with what is in Buffer now,
- * and offers a fix made in two different drafts on one network as a playbook rule (src/lib/rules.ts).
+ * and offers a fix made in two different drafts on one account as a playbook rule (src/lib/rules.ts).
  *
  * The comparison is a word-level diff (longest common subsequence). Each changed stretch is named as a rule kind the
  * checker can enforce: a short swap is "use this word", a cut is "never use", words added at the end are an ending.
@@ -12,8 +12,8 @@ export type Fix =
   | { kind: "banned"; phrase: string }
   | { kind: "ends_with"; phrase: string };
 
-export type Edit = { postId: string; network: string; before: string; after: string };
-export type FixOffer = { fix: Fix; network: string; count: number; examples: { before: string; after: string }[] };
+export type Edit = { postId: string; channelId?: string; network: string; before: string; after: string };
+export type FixOffer = { fix: Fix; channelId?: string; network: string; count: number; examples: { before: string; after: string }[] };
 
 const MAX_SWAP_WORDS = 3;
 const MAX_CUT_WORDS = 6;
@@ -84,11 +84,11 @@ const fixKey = (f: Fix) => (f.kind === "replace" ? `replace:${f.from}>${f.to}` :
 
 /** Fixes made in at least two different drafts on the same network, most repeated first. */
 export function repeatedFixes(edits: Edit[]): FixOffer[] {
-  const seen = new Map<string, { fix: Fix; network: string; posts: Set<string>; examples: { before: string; after: string }[] }>();
+  const seen = new Map<string, { fix: Fix; channelId?: string; network: string; posts: Set<string>; examples: { before: string; after: string }[] }>();
   for (const e of edits) {
     for (const fix of fixesIn(e.before, e.after)) {
-      const key = `${e.network}|${fixKey(fix)}`;
-      const entry = seen.get(key) ?? { fix, network: e.network, posts: new Set<string>(), examples: [] };
+      const key = `${e.network}|${e.channelId ?? ""}|${fixKey(fix)}`;
+      const entry = seen.get(key) ?? { fix, ...(e.channelId ? { channelId: e.channelId } : {}), network: e.network, posts: new Set<string>(), examples: [] };
       if (!entry.posts.has(e.postId)) {
         entry.posts.add(e.postId);
         entry.examples.push({ before: e.before, after: e.after });
@@ -98,6 +98,6 @@ export function repeatedFixes(edits: Edit[]): FixOffer[] {
   }
   return [...seen.values()]
     .filter((s) => s.posts.size >= MIN_REPEATS)
-    .map((s) => ({ fix: s.fix, network: s.network, count: s.posts.size, examples: s.examples }))
+    .map((s) => ({ fix: s.fix, ...(s.channelId ? { channelId: s.channelId } : {}), network: s.network, count: s.posts.size, examples: s.examples }))
     .sort((x, y) => y.count - x.count);
 }

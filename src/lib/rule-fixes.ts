@@ -60,7 +60,7 @@ export async function proposeRuleFixes(judges: Judges, writer: LanguageModel, dr
   });
   if (!rewritten.length) return [];
   // The rewrite has to pass the same judge, so a proposal never trades one break for another.
-  const after = await judgeDrafts(judges, rewritten.map((r) => ({ slotId: r.slotId, text: r.after, network: r.network })), [rule]);
+  const after = await judgeDrafts(judges, rewritten.map((r) => ({ slotId: r.slotId, text: r.after, network: r.network, channelId: r.channelId })), [rule]);
   return rewritten
     .filter((r) => after.get(r.slotId)?.find((x) => x.ruleId === rule.id)?.verdict === "pass")
     .map((r) => ({ postId: r.slotId, before: r.text, after: r.after, problem: r.problem }));

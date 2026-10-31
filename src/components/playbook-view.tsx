@@ -1,5 +1,7 @@
 "use client";
 
+import { RuleRouting, type RuleAccount } from "./rule-routing";
+import type { Inheritance } from "@/lib/rule-scopes";
 import { DRAFT_CHECKS } from "@/lib/draft-checks";
 
 import { useState, useTransition } from "react";
@@ -20,6 +22,12 @@ import styles from "./playbook-view.module.css";
 /** A rule as the Playbook shows it: the rule, and the edits it came from when there were any. */
 export type ShownRule = Rule & { origin?: string };
 
+function reviewEvidence(value: unknown): { comment: string; reason: string } | null {
+  if (!value || typeof value !== "object") return null;
+  const e = value as Record<string, unknown>;
+  return e.kind === "review" && typeof e.comment === "string" && typeof e.reason === "string" ? { comment: e.comment, reason: e.reason } : null;
+}
+
 const EXAMPLE: ShownRule[] = EXAMPLE_RULES;
 const OFFERED: ShownRule = { id: "r5", kind: "guidance", channels: ["instagram"], level: "warn", text: "Start with the dish, not a feeling.", origin: "You changed the opening in 2 drafts" };
 const HOLD_TONE = { "Blocks drafts": "danger", "Flags drafts": "warning" } as const;
@@ -27,16 +35,16 @@ const HOLD_HINT = { "Blocks drafts": "A draft that breaks it is rewritten once, 
 
 const EXAMPLE_NETWORKS = ["twitter", "linkedin", "instagram"];
 
-const groupName = (r: Rule) => (r.channels === "all" ? "Every network" : r.channels.map((c) => NETWORKS[c] ?? c).join(", "));
+const groupName = (r: Rule, accounts: RuleAccount[]) => (r.accountIds?.length ? r.accountIds.map(id => accounts.find(a => a.id === id)?.name ?? "Disconnected account").join(", ") : r.channels === "all" ? "Every network" : r.channels.map((c) => NETWORKS[c] ?? c).join(", "));
 
-function groups(rules: ShownRule[]): [string, ShownRule[]][] {
+function groups(rules: ShownRule[], accounts: RuleAccount[]): [string, ShownRule[]][] {
   const m = new Map<string, ShownRule[]>();
-  for (const r of rules) m.set(groupName(r), [...(m.get(groupName(r)) ?? []), r]);
+  for (const r of rules) m.set(groupName(r, accounts), [...(m.get(groupName(r, accounts)) ?? []), r]);
   return [...m.entries()].sort(([a], [b]) => (a === "Every network" ? 1 : b === "Every network" ? -1 : a.localeCompare(b)));
 }
 
 /** Example mode: Mark's playbook and one repeated fix waiting for his yes. Live mode: the person's own rules. */
-export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[] }) {
+export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS, accounts = [], inheritance = {} }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[]; accounts?: RuleAccount[]; inheritance?: Inheritance }) {
   const live = mode === "live";
   // Networks a shared rule was switched off for on this screen, ahead of the server's answer.
   const [except, setExcept] = useState<Record<string, string[]>>({});
@@ -61,7 +69,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   // A deleted rule can come back: Undo adds it again with the person's own sentence and the reading it had.
   const restore = async (r: ShownRule) => {
     if (!live) return setRules((rs) => [...rs, r]);
-    const res = await addRule({ kind: "guidance", text: r.text, channels: r.channels, except: r.except, level: r.level, reading: r });
+    const res = await addRule({ kind: "guidance", text: r.text, channels: r.channels, accountIds: r.accountIds, except: r.except, overrides: r.overrides, level: r.level, reading: r });
     if (!res.ok) setProblem(res.message);
   };
   const remove = (id: string) => {
@@ -116,23 +124,26 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the dish.</p>}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
-      {networks.length > 1 && shown.length > 0 && (
+      {live && accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} />}
+      {networks.length > 1 && shown.length > 0 && !(live && accounts.length) && (
         <p className={styles.muted} aria-label="Rules by network">
           {networks.map((n) => `${NETWORKS[n] ?? n}: ${shown.filter((r) => appliesTo(r, n)).length} rule${shown.filter((r) => appliesTo(r, n)).length === 1 ? "" : "s"}`).join(" · ")}
         </p>
       )}
-      {groups(shown).map(([name, rs]) => (
+      {groups(shown, accounts).map(([name, rs]) => (
         <section key={name} className={styles.block} aria-label={`${name} rules`}>
           <h2 className={styles.h2}>{name}</h2>
           <ul className={styles.rows}>
             {rs.map((r) => {
               const hold = ruleHold(r);
+              const evidence = reviewEvidence(r.learnedFrom);
               return (
                 <li key={r.id} className={styles.row}>
                   <span className={styles.text}>
                     <strong>{r.text}</strong>
-                    <span className={styles.muted}>{HOLD_HINT[hold]}{r.origin ? `. ${r.origin}.` : "."}</span>
-                    {r.channels === "all" && networks.length > 0 && (
+                    <span className={styles.muted}>{HOLD_HINT[hold]}{evidence ? ". Kept from review feedback." : r.origin ? `. ${r.origin}.` : "."}</span>
+                    {evidence && <details><summary>Why this became a rule</summary><blockquote className={styles.quote}>{evidence.comment}</blockquote><p className={styles.muted}>{evidence.reason}</p></details>}
+                    {!live && r.channels === "all" && networks.length > 0 && (
                       <span className={styles.nets} role="group" aria-label={`Networks for: ${r.text}`}>
                         {networks.map((n) => {
                           const on = appliesTo(r, n);
@@ -157,10 +168,10 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       ))}
 
       {/* Adding sits right under the rules it adds to; finding and trying rules come after. */}
-      <RuleForm onAdd={add} read={reader ?? (live ? readRule : undefined)} />
+      <RuleForm accounts={accounts} onAdd={add} read={reader ?? (live ? readRule : undefined)} />
       {live && shown.length > 0 && <FirstRulesFinder />}
       {live && <RewriteFinder />}
-      {!firstVisit && <RuleTester live={live} example={EXAMPLE_TRY} />}
+      {!firstVisit && <RuleTester live={live} example={EXAMPLE_TRY} accounts={accounts} />}
 
       <section className={styles.checksBlock} aria-labelledby="checks-title">
         <h2 id="checks-title" className={styles.checksTitle}>Every draft is also checked for</h2>

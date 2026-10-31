@@ -21,7 +21,7 @@ type Source = "posts" | "comments";
 const COPY: Record<Source, { title: string; intro: string; find: string; reading: string; none: string }> = {
   posts: {
     title: "Rules from your past posts",
-    intro: "Your AI reads your last 20 sent posts on each network and the notes your team left on them in Buffer. Each rule it finds shows its proof. A rule you keep flags drafts that break it; it never blocks one.",
+    intro: "Your AI reads your last 20 sent posts on each connected account and the notes your team left on them in Buffer. Each rule it finds shows its proof. A rule you keep flags drafts that break it; it never blocks one.",
     find: "Find rules in my past posts",
     reading: "Reading your posts…",
     none: "No habit of yours holds in every post yet, and no note asks for one.",
@@ -90,7 +90,7 @@ export function FirstRulesFinder({ open = false, onExampleKeep, source = "posts"
             <div className={styles.actions}>
               <Button variant="primary" size="sm" disabled={pending} onClick={() => start(async () => {
                 if (onExampleKeep) { onExampleKeep(o); setHandled((h) => ({ ...h, [i]: "kept" })); return; }
-                const r = await addRule({ kind: "guidance", text: o.text, channels: o.channels, level: "warn" });
+                const r = await addRule({ kind: "guidance", text: o.text, channels: o.accountIds?.length ? "all" : o.channels, accountIds: o.accountIds, level: "warn" });
                 if (r.ok) { setHandled((h) => ({ ...h, [i]: "kept" })); if (r.id) setKeptIds((k) => ({ ...k, [i]: r.id! })); } else setMessage(r.message);
               })}>Keep</Button>
               <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {

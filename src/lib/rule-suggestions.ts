@@ -51,7 +51,7 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
     // Code finds the repeats for free. Two matching edits can still be chance or a one-off fact, so a model decides
     // which ones are lasting preferences before any is offered. No repeats, no AI action.
     const candidates = (await currentOffers(userId)).filter(o => !dismissed.has(o.key));
-    if (!candidates.length) return { suggestions: [], note: "No fix repeated in two drafts on one network yet." };
+    if (!candidates.length) return { suggestions: [], note: "No fix repeated in two drafts on one account yet." };
     // The same unchanged repeats were checked recently: reuse that answer, with no AI action and no AI rate limit.
     const verdicts = postgresVerdictStore();
     const key = checkKey(candidates);
@@ -80,7 +80,7 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
         await keep.catch((e) => console.error(JSON.stringify({ event: "qp-fix-verdict-save-failed", message: e instanceof Error ? e.message : String(e) })));
       }
       const confirmed = preferencesFrom(candidates, answers);
-      suggestions = confirmed.map(o => ({ key: o.key, rule: fixToRule(o.fix, o.network), fixes: o.count, evidence: { fix: o.fix, network: o.network, count: o.count, examples: o.examples, why: o.why } }));
+      suggestions = confirmed.map(o => ({ key: o.key, rule: fixToRule(o.fix, o.network, o.channelId), fixes: o.count, evidence: { fix: o.fix, channelId: o.channelId, network: o.network, count: o.count, examples: o.examples, why: o.why } }));
       if (!suggestions.length && unanswered) note = "The AI did not answer every repeat clearly. Ask again to check them again.";
       else if (!suggestions.length) note = `Found ${candidates.length} repeated ${candidates.length === 1 ? "fix" : "fixes"}, but none looked like a lasting preference. One-off facts and chance matches are not offered.`;
     } catch (e) { if (token) await verdicts.release(userId, key, token).catch(() => {}); await jm?.giveBack(); throw e; }
@@ -125,7 +125,7 @@ export async function applySuggestion(userId: string, token: string, action: "ke
   const store = postgresRulesStore();
   if (action === "dismiss") { await store.dismiss(userId, s.key); return { ok: true, message: "Suggestion dismissed." }; }
   if ((await store.dismissed(userId)).has(s.key)) return { ok: false, message: "That suggestion was dismissed. List suggestions again." };
-  const existing = (await store.list(userId)).find(r => r.text === s.rule.text && JSON.stringify(r.channels) === JSON.stringify(s.rule.channels));
+  const existing = (await store.list(userId)).find(r => r.text === s.rule.text && JSON.stringify(r.channels) === JSON.stringify(s.rule.channels) && JSON.stringify(r.accountIds ?? []) === JSON.stringify(s.rule.accountIds ?? []));
   if (existing) return { ok: true, id: existing.id, message: "That rule is already kept." };
   const id = await store.add(userId, { ...s.rule, learnedFrom: s.evidence }, s.fixes);
   return { ok: true, id, message: "Suggestion kept as a playbook rule." };

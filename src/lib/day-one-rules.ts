@@ -14,7 +14,7 @@ import * as z from "zod";
 import { fenced } from "./ai-writer";
 import type { Channel, SentNote, SentPost } from "./buffer/queries";
 import { judgeDrafts, type Judges } from "./judge";
-import { parseNewRule, type NewRule, type Rule } from "./rules";
+import { appliesTo, parseNewRule, type NewRule, type Rule } from "./rules";
 
 /** Fewest posts on a network before Queue Pilot proposes rules for it; below this a pattern proves little. */
 export const MIN_POSTS = 10;
@@ -22,7 +22,7 @@ export const MIN_POSTS = 10;
 export const MAX_PER_NETWORK = 5;
 
 /** A sent post with its network and the notes people wrote on it. */
-export type PastPost = { id: string; network: string; text: string; notes: SentNote[] };
+export type PastPost = { id: string; channelId?: string; channelName?: string; network: string; text: string; notes: SentNote[] };
 
 export type FirstRuleProof =
   | { kind: "posts"; network: string; followed: number; of: number; unclear: number; unclearPosts: string[]; examples: string[] }
@@ -44,7 +44,7 @@ export const CONTRAST = [
 export type FirstRule = { rule: NewRule; proof: FirstRuleProof };
 
 /** The key "Not now" is remembered under, in the same table as set-aside fixes. */
-export const firstRuleKey = (rule: NewRule) => `first:${rule.channels === "all" ? "all" : rule.channels.join(",")}:${rule.text}`.slice(0, 500);
+export const firstRuleKey = (rule: NewRule) => `first:${rule.accountIds?.length ? `accounts:${[...rule.accountIds].sort().join(",")}:` : ""}${rule.channels === "all" ? "all" : rule.channels.join(",")}:${rule.text}`.slice(0, 500);
 
 const Proposals = z.object({
   rules: z.array(
@@ -60,10 +60,10 @@ const Proposals = z.object({
 
 /** Buffer's sent posts as past posts: each takes its channel's network; a post from an unknown channel is left out. */
 export function pastPosts(channels: Channel[], sent: SentPost[]): PastPost[] {
-  const network = new Map(channels.map((c) => [c.id, c.service]));
+  const network = new Map(channels.map((c) => [c.id, c]));
   return sent.flatMap((p) => {
     const n = network.get(p.channelId);
-    return n ? [{ id: p.id, network: n, text: p.text, notes: p.notes }] : [];
+    return n ? [{ id: p.id, channelId: p.channelId, channelName: n.name, network: n.service, text: p.text, notes: p.notes }] : [];
   });
 }
 
@@ -117,7 +117,7 @@ export function buildFirstRulesPrompt(usable: PastPost[], notes: { note: string;
  * @param opts - `notesOnly` learns from the notes alone, for posts that are not the person's own writing
  * @returns Rules worth offering, each with its proof, and the networks skipped for having too few posts
  */
-export async function proposeFirstRules(writer: LanguageModel, judges: Judges, posts: PastPost[], rules: Rule[], opts: { notesOnly?: boolean } = {}): Promise<{ offers: FirstRule[]; skipped: string[] }> {
+async function proposeFirstRulesForScope(writer: LanguageModel, judges: Judges, posts: PastPost[], rules: Rule[], opts: { notesOnly?: boolean } = {}): Promise<{ offers: FirstRule[]; skipped: string[] }> {
   const all = material(posts);
   const { notes } = all;
   const usable = opts.notesOnly ? [] : all.usable;
@@ -136,7 +136,7 @@ export async function proposeFirstRules(writer: LanguageModel, judges: Judges, p
     if (p.from === "note") {
       const n = p.note === null ? undefined : notes[p.note - 1];
       if (!n) continue;
-      const rule = parseNewRule({ kind: "guidance", text: wanted, channels: [n.post.network], level: "warn" });
+      const rule = parseNewRule({ kind: "guidance", text: wanted, channels: [n.post.network], ...(n.post.channelId ? { accountIds: [n.post.channelId] } : {}), level: "warn" });
       if (typeof rule !== "string") fromNotes.push({ rule, proof: { kind: "note", note: n.note, by: n.by, at: n.at, post: text(n.post) } });
       continue;
     }
@@ -171,4 +171,24 @@ export async function proposeFirstRules(writer: LanguageModel, judges: Judges, p
     fromPosts.push({ rule: h.rule, proof: { kind: "posts", network: h.network, followed, of: followed, unclear: unclearPosts.length, unclearPosts: unclearPosts.slice(0, 2), examples } });
   });
   return { offers: [...fromPosts, ...fromNotes], skipped };
+}
+
+
+/** Learn each connected account independently; never pool a company and personal profile to reach the evidence minimum. */
+export async function proposeFirstRules(writer: LanguageModel, judges: Judges, posts: PastPost[], rules: Rule[], opts: { notesOnly?: boolean } = {}): Promise<{ offers: FirstRule[]; skipped: string[] }> {
+  if (!posts.some(p => p.channelId)) return proposeFirstRulesForScope(writer, judges, posts, rules, opts);
+  const groups = new Map<string, PastPost[]>();
+  for (const post of posts) {
+    if (!post.channelId) continue; // Unknown identities cannot contribute evidence to a known account.
+    groups.set(post.channelId, [...(groups.get(post.channelId) ?? []), post]);
+  }
+  const offers: FirstRule[] = [];
+  const skipped: string[] = [];
+  for (const [channelId, group] of groups) {
+    const scopedRules = rules.filter(r => appliesTo(r, group[0].network, channelId));
+    const result = await proposeFirstRulesForScope(writer, judges, group.map(({ channelId: _id, channelName: _name, ...p }) => p), scopedRules, opts);
+    offers.push(...result.offers.map(o => ({ ...o, rule: { ...o.rule, channels: "all" as const, accountIds: [channelId] } })));
+    if (result.skipped.length) skipped.push(group[0].channelName ?? group[0].network);
+  }
+  return { offers, skipped };
 }

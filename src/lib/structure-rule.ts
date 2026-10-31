@@ -34,7 +34,7 @@ export async function structureRule(model: LanguageModel, rule: NewRule): Promis
       prompt: fenced("rule", "", rule.text),
       maxRetries: 1,
     });
-    const typed = parseNewRule({ ...output, channels: rule.channels, level: rule.level });
+    const typed = parseNewRule({ ...output, channels: rule.channels, accountIds: rule.accountIds, except: rule.except, overrides: rule.overrides, level: rule.level });
     return typeof typed === "string" || typed.kind === "guidance" ? rule : { ...typed, text: rule.text };
   } catch {
     return rule;

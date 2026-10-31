@@ -1,3 +1,5 @@
+import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
+import { wroteIds } from "@/lib/written-store";
 import { headers } from "next/headers";
 import { ReviewsView } from "@/components/reviews-view";
 import { signedInUserId } from "@/lib/current-user";
@@ -9,7 +11,12 @@ export default async function Page() {
   if (!userId) return <ReviewsView origin="" links={null} />;
   const links = await postgresReviewStore().list(userId).catch((e) => {
     console.error(JSON.stringify({ event: "qp-reviews-read-failed", message: e instanceof Error ? e.message : String(e) }));
-    return [];
+    return null;
   });
-  return <ReviewsView origin={publicOrigin(await headers())} links={links} />;
+  if (!links) return <section><h1>Reviews unavailable</h1><p role="alert">Could not read the review links. Refresh to try again.</p></section>;
+  const snap = await postgresSnapshotStore().get(userId).catch(() => null);
+  const drafts = snap?.data.posts.filter(p => p.status === "draft") ?? [];
+  const ours = await wroteIds(userId, ...drafts.map(p => p.id)).catch(() => null);
+  const candidates = drafts.filter(p => ours?.has(p.id)).map(p => ({ id: p.id, channelId: p.channelId, label: snap?.data.channels.find(c => c.id === p.channelId)?.name ?? "Account", text: p.text }));
+  return <ReviewsView origin={publicOrigin(await headers())} links={links} candidates={candidates} candidatesUnavailable={!snap || !ours} />;
 }

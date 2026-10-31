@@ -6,12 +6,17 @@
 import { createHash } from "node:crypto";
 import { FILL_WEEK_STEPS } from "./fill-week-prompt";
 
-export const SKILL_NAME = "queue-pilot";
+import { SKILL_NAME } from "./skill-name";
+export { SKILL_NAME } from "./skill-name";
 export const SKILL_DESCRIPTION =
   "Fill a Buffer posting week with drafts through Queue Pilot: read the person's voice, playbook and new material, write one post per empty slot, and save them in Buffer as drafts for the person to approve. Use when someone asks to fill their week, draft social posts for Buffer, or work with their Buffer queue.";
 
 /** The connector tools and what each is for, in the order the loop uses them. */
 const TOOLS: [string, string][] = [
+  ["get_effective_rules", "Read applicable and excluded rules for an exact account, with reasons and a revision."],
+  ["set_rule_override", "Include, exclude or reset a rule at a network or exact account, only when requested."],
+  ["set_rule_inheritance", "Choose inherited shared/network rules; show the affected rules first. Exceptions remain saved."],
+  ["propose_review_changes", "Turn one review comment into proposed changes to selected drafts. Facts never become style rules. Apply with expectedText; keep any preference separately."],
   ["get_setup_status", "The same setup steps and true done count as Needs you. Approval remains a human step."],
   ["add_rule", "Add a rule the person requests, with block or warn behavior."],
   ["remove_rule", "Remove a rule the person requests by its playbook ID."],
@@ -42,7 +47,7 @@ const TOOLS: [string, string][] = [
   ["read_material", "The full text of one item from list_new_material."],
   ["list_open_slots", "The empty times in their Buffer queue for the next two weeks, each with its network's character limit."],
   ["save_drafts", "Saves posts in Buffer as drafts. Each draft is checked against the playbook first; one that breaks a rule comes back with the fix."],
-  ["update_draft", "Changes a draft that is already saved."],
+  ["update_draft", "Changes a draft that is already saved. Pass expectedText from the read or proposal so newer Buffer edits are refused."],
   ["delete_draft", "Removes a draft."],
   ["show_next_week", "Monday to Sunday of their queue, slot by slot."],
   ["show_last_week_delivery", "Which posts went out last week, with Buffer's reason for any that did not."],

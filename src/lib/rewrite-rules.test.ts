@@ -64,3 +64,10 @@ describe("proposeRules", () => {
     expect(buildRewritePrompt([r1, r2], [{ id: "x", kind: "guidance", channels: "all", level: "warn", text: "Keep it short." }]).prompt).toContain("- Keep it short.");
   });
 });
+
+it("does not learn one rule from different profiles, but keeps two rewrites on the same profile local", () => {
+  const edits = [{ postId: "a", network: "linkedin", channelId: "company", before: "A", after: "B" }, { postId: "b", network: "linkedin", channelId: "personal", before: "C", after: "D" }];
+  const proposal = [{ rule: "Short openings", evidence: [1, 2] }];
+  expect(supported(proposal, edits)).toEqual([]);
+  expect(supported(proposal, edits.map(e => ({ ...e, channelId: "company" })))[0].rule.accountIds).toEqual(["company"]);
+});

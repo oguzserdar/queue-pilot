@@ -114,7 +114,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string) {
       } catch (e) {
         console.error(JSON.stringify({ event: "qp-tool-failed", tool: name, message: e instanceof Error ? e.message : String(e) }));
         if (name === "remove_voice_example") return { ...text("Could not remove that example just now. Try again in a minute."), isError: true }
-        const controls = ["add_rule", "remove_rule", "read_rule", "check_draft", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage", "share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"];
+        const controls = ["add_rule", "remove_rule", "read_rule", "check_draft", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage", "share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes", "propose_review_changes", "get_effective_rules", "set_rule_override", "set_rule_inheritance"];
         if (controls.includes(name) && (e instanceof AiCapError || e instanceof TooManyRulesError)) return { ...text(e.message), isError: true };
         if (controls.includes(name)) return { ...text("Could not complete that action just now. Read the current state before retrying."), isError: true };
         const privateWrite = ["save_my_voice_note", "add_voice_example", "add_material"].includes(name)
@@ -228,17 +228,17 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string) {
       title: "Change a draft",
       description:
         "Replaces the text of one draft in the user's Buffer queue. The old text is gone after this. Use a post id from show_next_week. The post stays a draft in the same slot. Only drafts can be changed: an approved, scheduled or sent post is refused. Only drafts this app wrote can be changed. Read get_my_voice and get_playbook before rewriting. The new text must fit the network's limit and follow the playbook.",
-      inputSchema: z.object({ postId: z.string().min(1).max(200).describe("A post id from show_next_week."), text: z.string().min(1).max(25_000).describe("The full new text of the post.") }),
+      inputSchema: z.object({ postId: z.string().min(1).max(200).describe("A post id from show_next_week."), text: z.string().min(1).max(25_000).describe("The full new text of the post."), expectedText: z.string().max(25_000).optional().describe("Exact text read before proposing this edit. A newer edit in Buffer is refused, never overwritten.") }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async ({ postId, text: newText }) => {
+    async ({ postId, text: newText, expectedText }) => {
       const b = await bufferFor(auth, userId, { force: true });
       let note: string | undefined;
-      const r = await updateDraft(b.accessToken, postId, newText, b.posts, b.channels, await wroteIds(userId, postId), undefined, async (t, network) => {
-        const j = await judgeEdit(userId, t, network);
+      const r = await updateDraft(b.accessToken, postId, newText, b.posts, b.channels, await wroteIds(userId, postId), undefined, async (t, network, channelId) => {
+        const j = await judgeEdit(userId, t, network, channelId);
         note = checkNote(j.check);
         return j.refusal;
-      });
+      }, expectedText);
       if (!r.ok) return { ...text(`Not changed: ${r.reason}`), isError: true };
       await patchSnapshot(userId, (posts) => posts.map((p) => (p.id === postId ? { ...p, text: newText } : p)));
       return text(`Draft updated. It is still a draft; the user approves it in Queue Pilot or Buffer.${note ? `\n${note}` : ""}`);

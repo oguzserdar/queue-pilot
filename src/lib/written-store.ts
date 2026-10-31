@@ -8,7 +8,7 @@ import { written } from "../db/schema";
 import type { Verdict } from "./judge";
 
 /** verdicts: the playbook check the draft was saved with; null when it was saved unchecked. */
-export type Written = { postId: string; network: string; text: string; verdicts?: Verdict[] | null };
+export type Written = { postId: string; network: string; text: string; verdicts?: Verdict[] | null; playbookRevision?: string | null };
 
 export type WrittenStore = {
   /** Records drafts just saved; saving the same post again replaces its text. */
@@ -24,13 +24,13 @@ export function postgresWrittenStore(): WrittenStore {
       if (!drafts.length) return;
       await db()
         .insert(written)
-        .values(drafts.map((d) => ({ userId, postId: d.postId, network: d.network, text: d.text.slice(0, 25_000), verdicts: d.verdicts ?? null })))
-        .onConflictDoUpdate({ target: [written.userId, written.postId], set: { text: sql`excluded.text`, network: sql`excluded.network`, verdicts: sql`excluded.verdicts`, savedAt: sql`now()` } });
+        .values(drafts.map((d) => ({ userId, postId: d.postId, network: d.network, text: d.text.slice(0, 25_000), verdicts: d.verdicts ?? null, playbookRevision: d.playbookRevision ?? null })))
+        .onConflictDoUpdate({ target: [written.userId, written.postId], set: { text: sql`excluded.text`, network: sql`excluded.network`, verdicts: sql`excluded.verdicts`, playbookRevision: sql`excluded.playbook_revision`, savedAt: sql`now()` } });
     },
     async get(userId, postIds) {
       if (!postIds.length) return [];
       const rows = await db().select().from(written).where(and(eq(written.userId, userId), inArray(written.postId, postIds)));
-      return rows.map((r) => ({ postId: r.postId, network: r.network, text: r.text, verdicts: (r.verdicts as Verdict[] | null) ?? null }));
+      return rows.map((r) => ({ postId: r.postId, network: r.network, text: r.text, verdicts: (r.verdicts as Verdict[] | null) ?? null, ...(r.playbookRevision ? { playbookRevision: r.playbookRevision } : {}) }));
     },
   };
 }

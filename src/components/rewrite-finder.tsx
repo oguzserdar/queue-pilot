@@ -39,7 +39,7 @@ export function RewriteFinder() {
             {p.examples.slice(0, 2).map((e, j) => <p key={j} className={styles.diff}><del><span className="sr-only">Before: </span>{e.before}</del> <span className="sr-only">After: </span>{e.after}</p>)}
             <div className={styles.actions}>
               <Button variant="primary" size="sm" disabled={pending} onClick={() => start(async () => {
-                const r = await addRule({ kind: "guidance", text: p.text, channels: p.channels, level: "warn" });
+                const r = await addRule({ kind: "guidance", text: p.text, channels: p.channels, accountIds: p.accountIds, level: "warn" });
                 if (r.ok) setHandled((h) => ({ ...h, [i]: "kept" })); else setMessage(r.message);
               })}>Keep as a rule</Button>
               <Button variant="ghost" size="sm" onClick={() => setHandled((h) => ({ ...h, [i]: "dropped" }))}>Not now</Button>

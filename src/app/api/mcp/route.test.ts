@@ -41,10 +41,12 @@ const reviews = vi.hoisted(() => ({ links: [] as { id: string; userId: string; d
 vi.mock("@/lib/review-store", async (original) => ({ ...await original<typeof import("@/lib/review-store")>(), postgresReviewStore: () => ({
   create: async (userId: string, drafts: typeof reviews.links[number]["drafts"]) => { const l = { id: `link-${reviews.links.length + 1}`, userId, drafts, revokedAt: null, comments: [] }; reviews.links.push(l); return { ...l, createdAt: "2026-10-29T12:00:00Z" }; },
   list: async (userId: string) => reviews.links.filter((l) => l.userId === userId).map((l) => ({ ...l, createdAt: "2026-10-29T12:00:00Z" })),
-  revoke: async (userId: string, id: string) => { const l = reviews.links.find((x) => x.id === id && x.userId === userId); if (l) l.revokedAt = "2026-10-29T12:00:00Z"; },
+  revoke: async (userId: string, id: string) => { const l = reviews.links.find((x) => x.id === id && x.userId === userId); if (l) l.revokedAt = "2026-10-29T12:00:00Z"; return !!l; },
 }) }));
+const feedbackAnswer = vi.hoisted(() => ({ value: {} as unknown }));
 const aiCalls = vi.hoisted(() => ({ settle: vi.fn(async () => {}), giveBack: vi.fn(async () => {}) }));
 vi.mock("@/lib/judge-model", () => ({ AiCapError: class extends Error {}, allowanceFor: async () => ({ used: 1, cap: 20, budgetUsd: 100, leftUsd: 99.95, totalRemaining: 100 }), aiFor: async () => ({ cfg: { provider: "openai", key: "never-display", model: "test" }, language: answering({ quote: "broth", reason: "Use stock." }), decider: judge.model, source: "Queue Pilot key", ...aiCalls }), judgeModelFor: async () => ({
+  language: answering(feedbackAnswer.value),
   judges: { decider: judge.model, explainer: answering({ quote: "broth", reason: "Use stock." }) },
   source: "your key", cfg: { provider: "openai" }, ...aiCalls,
 }) }))
@@ -87,6 +89,7 @@ const buffer = fakeBuffer((call) => {
     posts.push(...added)
     return { createContentItem: { __typename: "CreateContentItemSuccess", content: { body: { posts: added } } } }
   }
+  if (query.includes("post(input")) return { post: structuredClone(posts.find(p => p.id === variables.input.id)) }
   if (query.includes("editPost")) {
     expect(variables.input.saveToDraft).toBe(true)
     posts = posts.map((p) => p.id === variables.input.id ? { ...p, text: variables.input.text } : p)
@@ -117,6 +120,7 @@ async function call(name: string, args: Record<string, unknown> = {}, userId = "
 const answer = (r: Result) => r.content.map((c) => c.text).join("\n")
 
 beforeEach(() => {
+  feedbackAnswer.value = {}
   savedVerdicts.clear()
   vi.useFakeTimers({ toFake: ["Date"] })
   vi.setSystemTime(new Date("2026-10-29T12:00:00Z"))
@@ -151,7 +155,7 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(35)
+    expect(tools).toHaveLength(39)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
@@ -575,3 +579,51 @@ describe("connector review links", () => {
     expect(aiCalls.settle).not.toHaveBeenCalled()
   })
 })
+
+
+describe("comment to draft changes through the real connector", () => {
+  async function prepare() {
+    posts = ["d1", "d2"].map(id => ({ id, channelId: "ch", status: "draft", via: "api", text: "Launch is Monday.", dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }));
+    written.set("person-a", posts.map(p => ({ postId: p.id, network: "linkedin", text: p.text })));
+    await call("show_next_week");
+    await call("share_for_review", { postIds: ["d1", "d2"] });
+    reviews.links[0].comments.push({ id: "comment", postId: "d1", name: "Reviewer", text: "It is Tuesday, not Monday.", quote: "Monday", start: 10, end: 16, createdAt: "2026-10-29T12:01:00Z" });
+  }
+  it("a fact offers two changes, no rule, and refuses overwriting a newer Buffer edit", async () => {
+    await prepare();
+    feedbackAnswer.value = { kind: "fact", reason: "Date correction", preference: null, edits: [1, 2].map(draft => ({ draft, text: "Launch is Tuesday.", reason: "Corrected day" })) };
+    const response = await call("propose_review_changes", { linkId: "link-1", commentId: "comment", postIds: ["d1", "d2"] });
+    expect(response.isError).not.toBe(true);
+    const { plan } = JSON.parse(answer(response));
+    expect(plan).toMatchObject({ kind: "fact", suggestionToken: null, checked: 0, check: "no-rules" });
+    expect(plan.edits).toHaveLength(2);
+    expect(posts[0].text).toBe("Launch is Monday.");
+    expect(rules.get("person-a") ?? []).toEqual([]);
+    const first = plan.edits[0];
+    expect((await call("update_draft", { postId: first.postId, text: first.after, expectedText: first.before })).isError).not.toBe(true);
+    expect(posts[0].text).toBe("Launch is Tuesday.");
+    posts[1].text = "Launch date is not decided.";
+    const refused = await call("update_draft", { postId: "d2", text: "Launch is Tuesday.", expectedText: "Launch is Monday." });
+    expect(refused.isError).toBe(true);
+    expect(posts[1].text).toBe("Launch date is not decided.");
+  });
+  it("a preference is only kept by a separate call, scoped to its selected account", async () => {
+    await prepare();
+    feedbackAnswer.value = { kind: "preference", reason: "Explicit future preference", preference: "Use short openings.", edits: [] };
+    const { plan } = JSON.parse(answer(await call("propose_review_changes", { linkId: "link-1", commentId: "comment", postIds: ["d1"] })));
+    expect(rules.get("person-a") ?? []).toEqual([]);
+    expect((await call("keep_suggestion", { token: plan.suggestionToken }, "person-b")).isError).toBe(true);
+    expect((await call("keep_suggestion", { token: plan.suggestionToken })).isError).not.toBe(true);
+    expect(rules.get("person-a")).toMatchObject([{ accountIds: ["ch"], text: "Use short openings." }]);
+    const effective = JSON.parse(answer(await call("get_effective_rules", { channelId: "ch" })));
+    expect(effective.rules[0]).toMatchObject({ applies: true, origin: "account" });
+    expect((await call("get_effective_rules", { channelId: "foreign" })).isError).toBe(true);
+  });
+  it("rejects another person's comment and unwritten drafts before spending AI", async () => {
+    await prepare();
+    expect((await call("propose_review_changes", { linkId: "link-1", commentId: "comment", postIds: ["d1"] }, "person-b")).isError).toBe(true);
+    written.clear();
+    expect((await call("propose_review_changes", { linkId: "link-1", commentId: "comment", postIds: ["d1"] })).isError).toBe(true);
+    expect(aiCalls.settle).not.toHaveBeenCalled();
+  });
+});

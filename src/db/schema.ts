@@ -166,6 +166,7 @@ export const written = pgTable(
     text: text("text").notNull(),
     /** The playbook verdicts the draft was saved with (src/lib/judge.ts); null when it was saved unchecked. */
     verdicts: jsonb("verdicts"),
+    playbookRevision: text("playbook_revision"),
     savedAt: timestamp("saved_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.postId] })],
@@ -311,6 +312,7 @@ export const reviewLink = pgTable(
     drafts: jsonb("drafts").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().default(sql`now() + interval '7 days'`),
   },
   (t) => [index("qp_review_link_user_idx").on(t.userId, t.createdAt)],
 );
@@ -335,3 +337,9 @@ export const reviewComment = pgTable(
   },
   (t) => [index("qp_review_comment_link_idx").on(t.linkId, t.createdAt)],
 );
+
+/** Inheritance choices belong to a person, even when there are no rules yet. */
+export const ruleInheritance = pgTable("qp_rule_inheritance", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  settings: jsonb("settings").notNull().default({}),
+});

@@ -21,7 +21,7 @@ export async function currentOffers(userId: string): Promise<(FixOffer & { key: 
     store.list(userId),
     store.dismissed(userId),
   ]);
-  const offers = openOffers(repeatedFixes(editsFrom(written, posts.map((p) => ({ id: p.id, text: p.text ?? "" })))), rules, dismissed);
+  const offers = openOffers(repeatedFixes(editsFrom(written, posts.map((p) => ({ id: p.id, channelId: p.channelId, text: p.text ?? "" })))), rules, dismissed);
   return offers.map((o) => ({ ...o, key: offerKey(o) }));
 }
 
@@ -31,5 +31,5 @@ export async function currentRewrites(userId: string): Promise<{ rewrites: Edit[
   const posts = (snap?.data.posts ?? []).filter((p) => !p.id.startsWith("pending:"));
   if (!posts.length) return { rewrites: [], rules: [] };
   const [written, rules] = await Promise.all([postgresWrittenStore().get(userId, posts.map((p) => p.id)), postgresRulesStore().list(userId)]);
-  return { rewrites: rewritesIn(editsFrom(written, posts.map((p) => ({ id: p.id, text: p.text ?? "" })))), rules };
+  return { rewrites: rewritesIn(editsFrom(written, posts.map((p) => ({ id: p.id, channelId: p.channelId, text: p.text ?? "" })))), rules };
 }

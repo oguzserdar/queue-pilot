@@ -46,15 +46,22 @@ function ownDraft(id: string, posts: Post[], wrote: ReadonlySet<string>): Post |
  */
 export async function updateDraft(
   token: string, id: string, text: string, posts: Post[], channels: Channel[], wrote: ReadonlySet<string>, q: Query = bufferQuery,
-  gate: (text: string, network: string) => Promise<string | null> = async () => null,
+  gate: (text: string, network: string, channelId: string) => Promise<string | null> = async () => null,
+  expectedText?: string,
 ): Promise<EditResult> {
   const p = ownDraft(id, posts, wrote);
   if (typeof p === "string") return { ok: false, reason: p };
   const service = channels.find((c) => c.id === p.channelId)?.service ?? "";
   const long = tooLong(service, text);
   if (long) return { ok: false, reason: long };
-  const refusal = await gate(text, service);
+  const refusal = await gate(text, service, p.channelId);
   if (refusal) return { ok: false, reason: refusal };
+  // One targeted read immediately before writing, after the AI check. Never reuse the 30-second snapshot here.
+  // Buffer has no conditional edit version, so an external write between this read and mutation remains possible.
+  const fresh = await q<{ post: Post }>(token, "query ($input: PostInput!) { post(input: $input) { id channelId text status } }", { input: { id } });
+  const latest = fresh.post;
+  if (!latest || latest.id !== id || latest.channelId !== p.channelId || latest.status !== "draft") return { ok: false, reason: "This draft moved or is no longer a draft. Read it again before changing it." };
+  if (latest.text !== (expectedText ?? p.text)) return { ok: false, reason: "This draft changed in Buffer since you read it. Nothing was overwritten. Read it again and review the new change." };
   const res = await q<{ editPost: { __typename: string; message?: string } }>(token, EDIT_POST, { input: { id, text, saveToDraft: true } });
   return res.editPost.__typename === "PostActionSuccess" ? { ok: true } : { ok: false, reason: res.editPost.message ?? "Buffer refused the change." };
 }

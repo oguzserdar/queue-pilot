@@ -17,7 +17,7 @@ export const MIN_PROBABILITY = 0.8;
 const TIMEOUT_MS = 20_000;
 
 export type Verdict = { ruleId: string; rule: string; level: Rule["level"]; verdict: "pass" | "fail" | "unsure"; probability: number | null; quote: string; reason: string; unavailable?: boolean };
-export type JudgeInput = { slotId: string; text: string; network: string };
+export type JudgeInput = { slotId: string; text: string; network: string; channelId?: string };
 /**
  * The two models a judgment needs: a decision model for verdicts, a language model to explain failures. A provider
  * with no decision models (OpenRouter) passes decider null, and the language model gives the verdicts too.
@@ -25,7 +25,7 @@ export type JudgeInput = { slotId: string; text: string; network: string };
 export type Judges = { decider: DecisionModel | null; explainer: LanguageModel };
 
 /** The rules that apply to a draft on this network. */
-export const rulesFor = (rules: Rule[], network: string) => rules.filter((r) => appliesTo(r, network));
+export const rulesFor = (rules: Rule[], network: string, channelId?: string) => rules.filter((r) => appliesTo(r, network, channelId));
 
 /** A rule as the model reads it: its meaning in any language. */
 export function describeRule(r: Rule): string {
@@ -120,7 +120,7 @@ async function judgeOne(m: Judges, draft: JudgeInput, rules: Rule[]): Promise<Ve
 
 /** Verdicts by slot id, drafts judged in parallel. Drafts no rule applies to are not sent. */
 export async function judgeDrafts(m: Judges, drafts: JudgeInput[], rules: Rule[]): Promise<Map<string, Verdict[]>> {
-  const asked = drafts.filter((d) => rulesFor(rules, d.network).length);
-  const verdicts = await Promise.all(asked.map((d) => judgeOne(m, d, rulesFor(rules, d.network))));
+  const asked = drafts.filter((d) => rulesFor(rules, d.network, d.channelId).length);
+  const verdicts = await Promise.all(asked.map((d) => judgeOne(m, d, rulesFor(rules, d.network, d.channelId))));
   return new Map(asked.map((d, i) => [d.slotId, verdicts[i]]));
 }

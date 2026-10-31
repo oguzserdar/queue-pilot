@@ -37,7 +37,7 @@ const pending = (token: string) => ({ pending: token });
  * @returns A hash of the prompt version and every candidate's fix, network, count and drafts
  */
 export function checkKey(offers: FixOffer[]): string {
-  const input = { v: CONFIRM_VERSION, offers: offers.map((o) => ({ fix: o.fix, network: o.network, count: o.count, examples: o.examples })) };
+  const input = { v: CONFIRM_VERSION, offers: offers.map((o) => ({ fix: o.fix, channelId: o.channelId, network: o.network, count: o.count, examples: o.examples })) };
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 

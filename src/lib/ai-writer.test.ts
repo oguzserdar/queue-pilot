@@ -73,3 +73,17 @@ describe("fenced", () => {
     expect(out.endsWith("</material>")).toBe(true);
   });
 });
+
+it("gives each slot only its own effective rules, including account exceptions", () => {
+  const prompt = buildPrompt({ ...brief, slots: [{ ...brief.slots[0], id: "company-slot", channelId: "company" }, { ...brief.slots[0], id: "personal-slot", channelId: "personal" }], rules: [
+    { ...broth, overrides: { accounts: { company: false } } },
+    { id: "local", kind: "guidance", text: "Company-specific opening", channels: "all", accountIds: ["company"], level: "warn" },
+  ] }).prompt;
+  const scoped = prompt.split("Playbook rules by slot")[1];
+  const company = scoped.split("slotId company-slot:")[1].split("slotId personal-slot:")[0];
+  const personal = scoped.split("slotId personal-slot:")[1];
+  expect(company).toContain("Company-specific opening");
+  expect(company).not.toContain('Say "stock"');
+  expect(personal).toContain('Say "stock"');
+  expect(personal).not.toContain("Company-specific opening");
+});

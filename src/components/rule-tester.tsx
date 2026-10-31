@@ -6,6 +6,7 @@ import { Button } from "@/registry/components/button/button";
 import { Select } from "@/registry/components/select/select";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { NETWORKS } from "@/lib/rules";
+import type { RuleAccount } from "./rule-routing";
 import type { Verdict } from "@/lib/judge";
 import styles from "./playbook-view.module.css";
 
@@ -16,9 +17,11 @@ const LABEL = { pass: "Follows", fail: "Breaks", unsure: "Not sure" } as const;
  * working in any language before any AI writes. Live mode checks on demand (it spends the person's AI credits); the
  * example shows a hand-written answer for its sample, labelled as such.
  */
-export function RuleTester({ live, example }: { live: boolean; example: { text: string; network: string; verdicts: Verdict[] } }) {
+export function RuleTester({ live, example, accounts = [] }: { accounts?: RuleAccount[]; live: boolean; example: { text: string; network: string; verdicts: Verdict[] } }) {
   const [text, setText] = useState(live ? "" : example.text);
   const [network, setNetwork] = useState(example.network);
+  const [channelId, setChannelId] = useState(accounts[0]?.id ?? "");
+  const selected = accounts.find(c => c.id === channelId);
   const [answer, setAnswer] = useState<{ verdicts: Verdict[]; note: string } | null>(live ? null : { verdicts: example.verdicts, note: "Example answer for this sample." });
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -28,7 +31,7 @@ export function RuleTester({ live, example }: { live: boolean; example: { text: 
   const check = () =>
     start(async () => {
       setProblem(null);
-      const r = await tryDraft(text, network);
+      const r = await tryDraft(text, selected?.service ?? network, selected?.id);
       if (r.ok) setAnswer({ verdicts: r.verdicts, note: `Checked by a model with ${r.judgedWith}.` });
       else { setAnswer(null); setProblem(r.message); }
     });
@@ -41,15 +44,15 @@ export function RuleTester({ live, example }: { live: boolean; example: { text: 
       </div>
       <div className={styles.testerFields}>
         <Textarea label="Draft" value={text} onChange={(e) => { setText(e.target.value); if (!live) setAnswer(null); }} rows={3} aria-describedby={resultsId} readOnly={!live} />
-        <Select label="Network" value={network} onValueChange={setNetwork} options={Object.entries(NETWORKS).map(([value, label]) => ({ value, label }))} />
+        {live ? <Select label="Account" value={channelId} onValueChange={setChannelId} options={accounts.map(c => ({ value: c.id, label: `${c.name} · ${NETWORKS[c.service] ?? c.service}` }))} /> : <Select label="Network" value={network} onValueChange={setNetwork} options={Object.entries(NETWORKS).map(([value, label]) => ({ value, label }))} />}
       </div>
-      {live && <div><Button variant="secondary" size="sm" disabled={pending || !text.trim()} onClick={check}>{pending ? "Checking…" : "Check"}</Button></div>}
+      {live && <div><Button variant="secondary" size="sm" disabled={pending || !text.trim() || !selected} onClick={check}>{pending ? "Checking…" : "Check"}</Button></div>}
       <div id={resultsId} aria-live="polite" className={styles.verdictBox}>
         {problem && <p className={styles.problem} role="alert">{problem}</p>}
         {!answer && !problem && <p className={styles.muted}>{live ? "Type a draft and press Check." : "Sign in to check your own text."}</p>}
         {answer && (
           <>
-            <p className={styles.verdict} data-blocked={blocked}>{answer.verdicts.length === 0 ? `No rules apply on ${NETWORKS[network]}.` : blocked ? "Would not be saved. It breaks a rule marked do not save." : "Would be saved."}</p>
+            <p className={styles.verdict} data-blocked={blocked}>{answer.verdicts.length === 0 ? `No rules apply on ${selected?.name ?? NETWORKS[network]}.` : blocked ? "Would not be saved. It breaks a rule marked do not save." : "Would be saved."}</p>
             <ul className={styles.results}>
               {answer.verdicts.map((v) => (
                 <li key={v.ruleId} className={styles.result} data-status={v.verdict === "unsure" ? "guidance" : v.verdict}>

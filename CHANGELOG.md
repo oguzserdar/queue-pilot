@@ -5,6 +5,19 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Share selected drafts through a review link that expires in 1, 7 or 30 days, or turn it off sooner. Guests can highlight text and comment without an account.
+- Preview how one review comment changes selected drafts. Fact corrections and one-off requests stay separate from writing preferences. Apply each edit individually. Keep a lasting preference separately, with its evidence and selected account scope.
+- Shared, network and account rules, with explicit exceptions and inheritance controls. See which rules apply to an account and preview what changes before switching inheritance.
+- Four additional connector tools for effective rules, exceptions, inheritance and proposed review changes. The connector now exposes 39 tools.
+
+### Fixed
+- Keep the Connect setup prompt free of server-only imports so the production browser bundle builds.
+- Re-read a Buffer draft after checking an edit and refuse the write if its text, account or draft status changed. Buffer does not offer an atomic conditional write, so a change between this read and the write remains possible.
+- Mark stored checks stale when the playbook changes. Show the current effective rules in draft details.
+- Keep learning evidence and saved AI answers separate for different accounts on the same network.
+- Request OpenRouter usage details and use its published prices, including cache rates. Settings shows actual spend since the budget was set and spend today.
+
 ## [0.3.0] - 2026-10-31 Edits become rules
 
 ### Changed

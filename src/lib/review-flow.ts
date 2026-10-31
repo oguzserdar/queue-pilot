@@ -7,7 +7,7 @@ import { APICallError, NoObjectGeneratedError } from "ai";
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
 import { postgresReviewStore, reviewNotes, TooManyLinksError, MAX_SHARED_DRAFTS, type SharedDraft } from "./review-store";
 import { postgresRulesStore } from "./rules-store";
-import { NETWORKS } from "./rules";
+import { NETWORKS, appliesTo } from "./rules";
 import { firstRuleKey, proposeFirstRules, type FirstRuleProof } from "./day-one-rules";
 import { AiCapError, judgeModelFor } from "./judge-model";
 import { aiErrorMessage } from "./ai-model";
@@ -16,10 +16,11 @@ import { wroteIds } from "./written-store";
 import { MAX_FIX_DRAFTS, proposeRuleFixes, type FixProposal } from "./rule-fixes";
 
 /** A rule suggested from comments, as the rule finder shows it. */
-export type RuleOffer = { text: string; channels: string[]; where: string; key: string; proof: FirstRuleProof };
+export type RuleOffer = { text: string; channels: string[]; accountIds?: string[]; where: string; key: string; proof: FirstRuleProof };
 
 /** Shares these drafts (ids are lookup keys, checked against the person's own drafts) from the saved copy of the person's Buffer under a new review link. */
-export async function shareDrafts(userId: string, postIds: unknown): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+export async function shareDrafts(userId: string, postIds: unknown, days = 7): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  if (![1, 7, 30].includes(days)) return { ok: false, message: "Choose 1, 7 or 30 days." };
   if (!Array.isArray(postIds) || !postIds.length || postIds.length > MAX_SHARED_DRAFTS || postIds.some((id) => typeof id !== "string")) {
     return { ok: false, message: `Choose between 1 and ${MAX_SHARED_DRAFTS} drafts.` };
   }
@@ -32,9 +33,9 @@ export async function shareDrafts(userId: string, postIds: unknown): Promise<{ o
     // Only the person's own drafts, as they were last read from Buffer; ids are lookup keys, not proof.
     const drafts: SharedDraft[] = snap.data.posts
       .filter((p) => postIds.includes(p.id) && p.status === "draft" && channels.has(p.channelId))
-      .map((p) => ({ postId: p.id, network: channels.get(p.channelId)!.service, channel: channels.get(p.channelId)!.name, dueAt: p.dueAt, text: p.text }));
+      .map((p) => ({ postId: p.id, channelId: p.channelId, network: channels.get(p.channelId)!.service, channel: channels.get(p.channelId)!.name, dueAt: p.dueAt, text: p.text }));
     if (drafts.length !== new Set(postIds).size) return { ok: false, message: "Some of those drafts are no longer in Buffer. Refresh and try again." };
-    const link = await postgresReviewStore().create(userId, drafts);
+    const link = await postgresReviewStore().create(userId, drafts, days);
     return { ok: true, id: link.id };
   } catch (e) {
     if (e instanceof TooManyLinksError) return { ok: false, message: e.message };
@@ -61,7 +62,7 @@ export async function rulesFromComments(userId: string): Promise<{ ok: true; off
       skipped: [],
       offers: offers.filter(({ rule }) => !dismissed.has(firstRuleKey(rule))).map(({ rule, proof }) => {
         const channels = rule.channels === "all" ? [] : rule.channels;
-        return { text: rule.text, channels, where: channels.map((c) => NETWORKS[c] ?? c).join(", "), key: firstRuleKey(rule), proof };
+        return { text: rule.text, channels, accountIds: rule.accountIds, where: rule.accountIds?.length ? "selected account" : channels.map((c) => NETWORKS[c] ?? c).join(", "), key: firstRuleKey(rule), proof };
       }),
     };
   } catch (e) {
@@ -95,14 +96,14 @@ export async function fixesForRule(userId: string, ruleId: unknown): Promise<{ o
   const candidates = snap.data.posts.filter((p) => p.status === "draft" && channels.has(p.channelId));
   // Only drafts Queue Pilot wrote: the person's own drafts are theirs to change.
   const ours = await wroteIds(userId, ...candidates.map((p) => p.id));
-  const drafts = candidates.filter((p) => ours.has(p.id)).slice(0, MAX_FIX_DRAFTS);
+  const drafts = candidates.filter((p) => ours.has(p.id) && appliesTo(rule, channels.get(p.channelId)!.service, p.channelId)).slice(0, MAX_FIX_DRAFTS);
   // No drafts, no AI action spent.
   if (!drafts.length) return { ok: true, fixes: [], checked: 0 };
   const jm = await judgeModelFor(userId).catch((e) => (e instanceof AiCapError ? e : null));
   if (jm instanceof AiCapError) return { ok: false, message: jm.message };
   if (!jm) return { ok: false, message: "Add your AI key in Settings: a model checks the drafts." };
   try {
-    const fixes = await proposeRuleFixes(jm.judges, jm.language, drafts.map((p) => ({ slotId: p.id, text: p.text, network: channels.get(p.channelId)!.service })), rule);
+    const fixes = await proposeRuleFixes(jm.judges, jm.language, drafts.map((p) => ({ slotId: p.id, text: p.text, network: channels.get(p.channelId)!.service, channelId: p.channelId })), rule);
     const label = (postId: string) => {
       const p = drafts.find((d) => d.id === postId)!;
       const c = channels.get(p.channelId)!;

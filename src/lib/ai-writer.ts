@@ -7,9 +7,9 @@ import { generateText, Output, type LanguageModel } from "ai";
 import * as z from "zod";
 import { limitFor } from "./char-limits";
 import { describeRule } from "./judge";
-import { ruleScope, type Rule } from "./rules";
+import { appliesTo, type Rule } from "./rules";
 
-export type BriefSlot = { id: string; local: string; channel: string; service: string };
+export type BriefSlot = { id: string; channelId?: string; local: string; channel: string; service: string };
 export type BriefMaterial = { key: string; title: string; url: string | null; text: string };
 export type Brief = {
   slots: BriefSlot[];
@@ -45,7 +45,7 @@ export function buildPrompt(b: Brief): { system: string; prompt: string } {
     "Slots to fill:",
     ...b.slots.map((s) => `- slotId ${s.id}: ${s.local}, ${s.channel} (${s.service}${limitFor(s.service) ? `, max ${limitFor(s.service)} characters` : ""})${b.retry?.[s.id] ? `. Your last draft here was refused: ${b.retry[s.id]}` : ""}`),
     "",
-    b.rules.length ? `Playbook rules:\n${b.rules.map((r) => `- ${describeRule(r)} (for ${ruleScope(r)}; ${r.level === "block" ? "a draft that breaks it is not saved" : "a draft that breaks it is flagged"})`).join("\n")}` : "Playbook rules: none yet.",
+    b.rules.length ? `Playbook rules by slot (apply only the listed rules to each slot):\n${b.slots.map(s => `slotId ${s.id}:\n${b.rules.filter(r => appliesTo(r, s.service, s.channelId)).map(r => `- ${describeRule(r)} (${r.level === "block" ? "a draft that breaks it is not saved" : "a draft that breaks it is flagged"})`).join("\n") || "No rules apply."}`).join("\n\n")}` : "Playbook rules: none yet.",
     "",
     b.voice.note ? `How I write: ${b.voice.note}` : "",
     ...b.voice.examples.map((e, i) => fenced("example", `n="${i + 1}" channel="${e.channel.replace(/["<>]/g, "")}"`, e.text)),

@@ -5,6 +5,7 @@
  * was written with its verdicts. Bookkeeping after Buffer accepted the drafts never turns into an error, so a caller
  * does not retry a save that already happened.
  */
+import { playbookVersion } from "./playbook-version";
 import { withSavedDrafts } from "./buffer/snapshot";
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
 import { judgeDrafts, rulesFor, type JudgeInput, type Verdict } from "./judge";
@@ -39,7 +40,8 @@ export async function applyPlaybook(
   if (rules === null) return { ...none, keep: [], refused: drafts.map((d) => ({ slotId: d.slotId, reason: "Not saved: your playbook could not be read. Try again." })), check: "no-playbook" };
   if (!rules.length) return { ...none, check: "no-rules" };
   const service = new Map(open.map((s) => [s.id, s.service]));
-  const applicable = (d: DraftInput) => rulesFor(rules, service.get(d.slotId) ?? "");
+  const accounts = new Map(open.map((s) => [s.id, s.channelId]));
+  const applicable = (d: DraftInput) => rulesFor(rules, service.get(d.slotId) ?? "", accounts.get(d.slotId));
   const unchecked = (check: "no-model" | "failed") => ({
     ...none,
     keep: drafts.filter((d) => !applicable(d).some((r) => r.level === "block")),
@@ -49,7 +51,7 @@ export async function applyPlaybook(
   if (!judge) return unchecked("no-model");
   let verdicts: Map<string, Verdict[]>;
   try {
-    verdicts = await judge(drafts.map((d) => ({ slotId: d.slotId, text: d.text, network: service.get(d.slotId) ?? "" })), rules);
+    verdicts = await judge(drafts.map((d) => ({ slotId: d.slotId, text: d.text, network: service.get(d.slotId) ?? "", channelId: accounts.get(d.slotId) })), rules);
   } catch (e) {
     console.warn(JSON.stringify({ event: "qp-judge-failed", message: e instanceof Error ? e.message : String(e) }));
     return unchecked("failed");
@@ -127,7 +129,7 @@ export async function saveDraftsForUser(
     // What Queue Pilot wrote and how it was judged, so later edits can be read back and the week shows the verdicts.
     const wrote = res.saved
       .filter((x): x is typeof x & { postId: string } => x.postId !== null)
-      .map((x) => ({ postId: x.postId, network: x.network, text: x.text, verdicts: gate.check === "judged" ? (gate.verdicts.get(x.slotId) ?? []) : null }));
+      .map((x) => ({ postId: x.postId, network: x.network, text: x.text, playbookRevision: rules ? playbookVersion(rules) : null, verdicts: gate.check === "judged" ? (gate.verdicts.get(x.slotId) ?? []) : null }));
     await postgresWrittenStore().record(userId, wrote).catch(warn("qp-record-written-failed"));
     if (input.sourceKeys?.length) await postgresSourceStore().markUsed(userId, input.sourceKeys).catch(warn("qp-mark-used-failed"));
   }
@@ -146,10 +148,10 @@ export function checkNote(check: PlaybookCheck): string | undefined {
  * The playbook check for one changed draft (update_draft), so a draft cannot be saved clean and then edited past a
  * "do not save" rule. Returns the refusal reason, or null when the text may be saved, with how it was checked.
  */
-export async function judgeEdit(userId: string, text: string, network: string): Promise<{ refusal: string | null; check: PlaybookCheck }> {
+export async function judgeEdit(userId: string, text: string, network: string, channelId?: string): Promise<{ refusal: string | null; check: PlaybookCheck }> {
   const rules = await postgresRulesStore().list(userId).catch(() => null);
   const { jm, cappedReason } = rules?.length ? await judgeFor(userId) : { jm: null, cappedReason: null };
-  const slot = { id: "edit", service: network } as OpenSlot;
+  const slot = { id: "edit", service: network, channelId } as OpenSlot;
   const gate = await applyPlaybook([{ slotId: "edit", text }], [slot], rules, jm ? (d, r) => judgeDrafts(jm.judges, d, r) : null, cappedReason).finally(() => jm?.settle());
   return { refusal: gate.refused[0]?.reason ?? null, check: gate.check };
 }

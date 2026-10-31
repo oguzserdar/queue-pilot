@@ -24,13 +24,14 @@ function countingBuffer() {
   const calls: string[] = [];
   let next = 0;
   const query = (async (_t: string, text: string) => {
-    const op = text.match(/\b(account|channels|posts|dailyPostingLimits|createContentItem|createPost|editPost)\b/)?.[1] ?? "other";
+    const op = text.match(/\b(account|channels|posts|dailyPostingLimits|createContentItem|createPost|editPost|post)\b/)?.[1] ?? "other";
     calls.push(op);
     if (op === "account") return { account: { email: "judge@x", organizations: [{ id: "o1" }] } };
     if (op === "channels") return { channels: CHANNELS };
     if (op === "posts") return { posts: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } };
     if (op === "dailyPostingLimits") return { dailyPostingLimits: [] };
     if (op === "createContentItem") return { createContentItem: { __typename: "CreateContentItemSuccess", content: { id: `c${next++}`, body: { posts: [] } } } };
+    if (op === "post") return { post: { id: "p1", channelId: "x", status: "draft", text: "A short post." } };
     if (op === "editPost") return { editPost: { __typename: "PostActionSuccess" } };
     throw new Error(`unexpected ${op}`);
   }) as unknown as typeof bufferQuery;
@@ -46,7 +47,7 @@ const week: OpenSlot[] = [0, 1, 2, 3, 4].flatMap((d) =>
 );
 
 describe("a judge's first session", () => {
-  it("costs 21 Buffer requests, less than the 25 a day each signed-in person adds to the app's limit", async () => {
+  it("costs 22 Buffer requests, less than the 25 a day each signed-in person adds to the app's limit", async () => {
     const store = memorySnapshotStore();
     const { query, calls } = countingBuffer();
     const signIn = 1; // Better Auth's getUserInfo asks Buffer for the account once (src/lib/auth.ts).
@@ -64,7 +65,7 @@ describe("a judge's first session", () => {
     const saved = await saveDrafts("t", { title: "Week", drafts: week.map((s) => ({ slotId: s.id, text: "A short post." })), open: week }, query);
     expect(saved.saved).toHaveLength(15);
 
-    // Edit one draft at once: the copy is under 30 seconds old, so only the edit itself is a request.
+    // Edit one draft at once: the copy is under 30 seconds old, but the edit re-reads its target before writing.
     const snap = await refreshSnapshot("judge", "t", { store, query, now: () => at(2.2) }, { force: true });
     const post = { id: "p1", channelId: "x", status: "draft", text: "A short post.", dueAt: week[0].at, via: "api" } as never;
     expect((await updateDraft("t", "p1", "A shorter post.", [post], snap!.data.channels, new Set(["p1"]), query)).ok).toBe(true);
@@ -77,10 +78,10 @@ describe("a judge's first session", () => {
       firstPage: 3,
       browsing: 0,
       writeWeek: calls.filter((c) => c === "dailyPostingLimits" || c === "createContentItem").length + 3,
-      edit: 1,
+      edit: 2,
       refresh: 3,
       total,
-    }).toEqual({ firstPage: 3, browsing: 0, writeWeek: 13, edit: 1, refresh: 3, total: 21 });
+    }).toEqual({ firstPage: 3, browsing: 0, writeWeek: 13, edit: 2, refresh: 3, total: 22 });
     expect(total).toBeLessThan(25);
   });
 });

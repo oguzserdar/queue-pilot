@@ -16,16 +16,17 @@ export type ShareableDraft = { id: string; label: string; text: string };
  * those drafts, nothing else. The link is turned off on the Reviews page.
  */
 export function ShareReviewButton({ drafts }: { drafts: ShareableDraft[] }) {
+  const [days, setDays] = useState(7);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [url, setUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const show = () => { setPicked(new Set(drafts.map((d) => d.id))); setUrl(null); setMessage(null); setOpen(true); };
-  const toggle = (id: string, on: boolean) => setPicked((s) => { const n = new Set(s); if (on) n.add(id); else n.delete(id); return n; });
+  const show = () => { setPicked(new Set(drafts.slice(0, 30).map((d) => d.id))); setUrl(null); setMessage(null); setOpen(true); };
+  const toggle = (id: string, on: boolean) => setPicked((s) => { const n = new Set(s); if (on && n.size < 30) n.add(id); else n.delete(id); return n; });
   const share = () => start(async () => {
-    const r = await shareForReview([...picked]);
+    const r = await shareForReview([...picked], days);
     if (r.ok) setUrl(`${window.location.origin}/r/${r.id}`); else setMessage(r.message);
   });
 
@@ -44,6 +45,7 @@ export function ShareReviewButton({ drafts }: { drafts: ShareableDraft[] }) {
             </div>
           ) : (
             <div className={styles.shareBody}>
+              <label>Link expires in <select value={days} onChange={e => setDays(Number(e.target.value))}><option value={1}>1 day</option><option value={7}>7 days</option><option value={30}>30 days</option></select></label>
               <ul className={styles.shareList}>
                 {drafts.map((d) => (
                   <li key={d.id}>

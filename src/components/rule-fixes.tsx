@@ -40,8 +40,8 @@ export function RuleFixes({ ruleId }: { ruleId: string }) {
           </div>
           <div className={styles.actions}>
             <Button variant="primary" size="sm" disabled={pending} onClick={() => start(async () => {
-              const r = await editDraftText(f.postId, f.after);
-              setDone((d) => ({ ...d, [f.postId]: r.ok ? `Changed in Buffer: ${f.label}` : r.message }));
+              const r = await editDraftText(f.postId, f.after, f.before);
+              if (r.ok) setDone((d) => ({ ...d, [f.postId]: `Changed in Buffer: ${f.label}` })); else setMessage(r.message);
             })}>Apply</Button>
             <Button variant="ghost" size="sm" disabled={pending} onClick={() => setDone((d) => ({ ...d, [f.postId]: `Left as it was: ${f.label}` }))}>Leave</Button>
           </div>

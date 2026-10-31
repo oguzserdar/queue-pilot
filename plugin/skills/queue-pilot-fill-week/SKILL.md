@@ -69,3 +69,13 @@ The show-and-confirm step above still applies to drafts you write yourself with 
 - `list_channels` shows posting times and channel state. `refresh_buffer` refreshes within the shared request allowance.
 - `get_setup_status` must match the screen. A drafts-only demo does not finish the human approval step.
 - Approve, scheduling, account deletion, keys and model settings, app revocation, admin and echo destinations remain human-only.
+
+
+### Accounts and review feedback
+
+- `get_effective_rules`: use an exact channel ID to see which shared, network and account rules apply, including exclusions. Two LinkedIn accounts may have different rules.
+- `set_rule_override`: include, exclude or reset an inherited rule on a network or account only when requested. Includes do not cross an inheritance boundary.
+- `set_rule_inheritance`: show the affected rules, then change shared/network inheritance when the person requests it. Restoring inheritance restores the saved exceptions.
+- `propose_review_changes`: read `list_review_comments`, choose one comment and the draft IDs the person wants changed, and show the returned before/after proposals. A fact correction is not a writing preference. Apply chosen edits with `update_draft` and the exact `before` as `expectedText`. A returned preference token can be kept with `keep_suggestion` only as a separate choice.
+
+Review links expire after 1, 7 (default), or 30 days and can be turned off earlier. A rewrite re-reads the individual Buffer draft after checking the playbook; changed text or status stops the write. Buffer does not provide an atomic conditional edit, so the tiny read/write race with another Buffer client remains. A stored verdict is shown only while its text and playbook revision still match.

@@ -40,7 +40,7 @@ describe("learning controls", () => {
     deps.sent.mockResolvedValue([{ id: "ours", channelId: "ch", text: "Generated", notes: [] }, { id: "mine", channelId: "ch", text: "My writing", notes: [] }]);
     deps.first.mockResolvedValue({ offers: [{ rule, proof: { kind: "posts", examples: ["My writing"] } }], skipped: [] });
     const r = await ruleSuggestions("a", "past_posts", async () => buffer);
-    expect(deps.first.mock.calls[0][2]).toEqual([{ id: "mine", network: "twitter", text: "My writing", notes: [] }]);
+    expect(deps.first.mock.calls[0][2]).toEqual([{ id: "mine", channelId: "ch", channelName: undefined, network: "twitter", text: "My writing", notes: [] }]);
     expect(r.suggestions).toHaveLength(1);
     deps.first.mockRejectedValue(new Error("model failed"));
     await expect(ruleSuggestions("a", "past_posts", async () => buffer)).rejects.toThrow("model failed");
