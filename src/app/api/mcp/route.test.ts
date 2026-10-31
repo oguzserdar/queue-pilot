@@ -5,6 +5,12 @@ import type { Rule } from "@/lib/rules"
 import { fakeBuffer } from "@/test/fake-buffer"
 import { answering, deciding } from "@/lib/ai-test-model"
 
+const ownKey = vi.hoisted(() => ({ saved: null as null | { provider: string, key: string, model: string }, setModel: vi.fn() }))
+vi.mock("@/lib/ai-key-store", async (orig) => ({
+  ...(await orig<object>()),
+  postgresAiKeyStore: () => ({ get: async () => ownKey.saved, setModel: ownKey.setModel }),
+}))
+vi.mock("@/lib/ai-models", async (orig) => ({ ...(await orig<object>()), listModels: async () => ({ models: [{ id: "model-a" }, { id: "model-b" }] }) }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
 vi.mock("@/lib/auth", () => ({ getAuth: async () => ({ $context: Promise.resolve({ baseURL: "https://app.example/api/auth" }) }), mcpResource: (url: string) => `${url}/api/mcp` }))
 vi.mock("@better-auth/mcp", () => ({
@@ -155,7 +161,7 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(39)
+    expect(tools).toHaveLength(41)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
@@ -548,6 +554,27 @@ describe("remaining account controls", () => {
     expect(aiCalls.settle).not.toHaveBeenCalled();
   });
 });
+
+describe("connector AI model", () => {
+  afterEach(() => { ownKey.saved = null; ownKey.setModel.mockReset() })
+  it("refuses both model tools when no key is saved, and never asks for one", async () => {
+    vi.stubEnv("SETTINGS_KEY", "k".repeat(64))
+    expect((await call("list_ai_models")).isError).toBe(true)
+    expect((await call("set_ai_model", { model: "model-a" })).isError).toBe(true)
+    expect(ownKey.setModel).not.toHaveBeenCalled()
+  })
+  it("lists the key's models without the key, and switches only to one of them", async () => {
+    vi.stubEnv("SETTINGS_KEY", "k".repeat(64))
+    ownKey.saved = { provider: "openai", key: "never-display", model: "model-a" }
+    const listed = answer(await call("list_ai_models"))
+    expect(JSON.parse(listed)).toEqual({ provider: "openai", selected: "model-a", models: ["model-a", "model-b"] })
+    expect(listed).not.toContain("never-display")
+    expect((await call("set_ai_model", { model: "not-offered" })).isError).toBe(true)
+    expect(ownKey.setModel).not.toHaveBeenCalled()
+    expect((await call("set_ai_model", { model: "model-b" })).isError).toBeFalsy()
+    expect(ownKey.setModel).toHaveBeenCalledWith("person-a", "model-b")
+  })
+})
 
 describe("connector review links", () => {
   it("shares only the person's own drafts under a link on this site, lists the comments, and turns the link off", async () => {

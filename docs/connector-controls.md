@@ -4,7 +4,7 @@ The connector exposes 39 tools. OAuth supplies the account ID; tool inputs canno
 
 | Area | Tools |
 | --- | --- |
-| Setup and account reads | `get_setup_status`, `list_channels`, `refresh_buffer`, `get_ai_usage` |
+| Setup and account reads | `get_setup_status`, `list_channels`, `refresh_buffer`, `get_ai_usage`, `list_ai_models`, `set_ai_model` |
 | Voice | `get_my_voice`, `save_my_voice_note`, `add_voice_example`, `remove_voice_example` |
 | Playbook | `get_playbook`, `add_rule`, `remove_rule`, `read_rule`, `check_draft`, `get_effective_rules`, `set_rule_override`, `set_rule_inheritance` |
 | Learning | `list_rule_suggestions`, `keep_suggestion`, `dismiss_suggestion`, `propose_rule_fixes` |

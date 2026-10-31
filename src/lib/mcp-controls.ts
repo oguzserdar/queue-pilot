@@ -16,6 +16,7 @@ import { postgresSourceStore } from "./sources-store";
 import { postgresVoiceStore } from "./voice-store";
 import { postgresWrittenStore } from "./written-store";
 import { postgresAiKeyStore } from "./ai-key-store";
+import { listModels, ModelListError } from "./ai-models";
 import { approvedApps } from "./ai-access";
 import { setupReadiness } from "./setup-readiness";
 import { writeSlotsForUser, type WriteBuffer } from "./write-slots-for-user";
@@ -195,6 +196,23 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
   });
   server.registerTool("refresh_buffer", { title: "Refresh Buffer data", description: "Refresh the saved queue after a user changes channels or slots in Buffer. Shares the app's request limit and keeps data under 30 seconds old. Use sparingly, then read the relevant tools.", annotations: { ...write, idempotentHint: true, openWorldHint: true } }, async () => { const b = await buffer(true); return result({ refreshedAt: b.fetchedAt.toISOString(), channels: b.channels.length }); });
   server.registerTool("list_channels", { title: "List my Buffer channels", description: "Read connected channels, timezones and posting schedules, including disconnection, lock and queue-paused flags. Reads the saved snapshot; use refresh_buffer for recent changes.", annotations: read }, async () => { const b = await buffer(); return result({ asOf: b.fetchedAt.toISOString(), channels: b.channels }); });
+  server.registerTool("list_ai_models", { title: "List models for my AI key", description: "List the models the user's own saved AI key can use, and which one is selected. Returns nothing to choose from when no key is saved; the key itself is never shown.", annotations: { ...read, openWorldHint: true } }, async () => {
+    const master = process.env.SETTINGS_KEY;
+    const cfg = master ? await postgresAiKeyStore(master).get(userId).catch(() => null) : null;
+    if (!cfg) return result("No AI key is saved. The user adds one in Settings; it can't be added here.", true);
+    try { const list = await listModels(cfg.provider, cfg.key); return result({ provider: cfg.provider, selected: cfg.model, models: list.models.map(m => m.id) }); }
+    catch (e) { return result(e instanceof ModelListError ? e.message : "Could not read the model list just now. Try again.", true); }
+  });
+  server.registerTool("set_ai_model", { title: "Change my AI model", description: "Switch the user's own AI key to another model only when the user asks, using an id from list_ai_models. Changes which model writes future drafts. The key itself can only be added or removed in Settings.", inputSchema: z.object({ model: z.string().min(1).max(200) }), annotations: { ...write, idempotentHint: true, openWorldHint: true } }, async ({ model }) => {
+    const master = process.env.SETTINGS_KEY;
+    const store = master ? postgresAiKeyStore(master) : null;
+    const cfg = store ? await store.get(userId).catch(() => null) : null;
+    if (!store || !cfg) return result("No AI key is saved. The user adds one in Settings.", true);
+    try {
+      if (!(await listModels(cfg.provider, cfg.key)).models.some(m => m.id === model)) return result("That model is not available to this key.", true);
+      await store.setModel(userId, model); return result(`Model changed to ${model}. Drafts written from now on use it.`);
+    } catch (e) { return result(e instanceof ModelListError ? e.message : "Could not change the model just now. Try again.", true); }
+  });
   server.registerTool("get_ai_usage", { title: "Read my AI allowance", description: "Read today's built-in AI usage and remaining shared dollar budget without spending an action. Reports whether an own key is saved, never the key. This is configuration and allowance information, not a successful live model test.", annotations: read }, async () => {
     const master = process.env.SETTINGS_KEY;
     const own = master ? await postgresAiKeyStore(master).get(userId) : null;

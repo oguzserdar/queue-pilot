@@ -37,6 +37,8 @@ const TOOLS: [string, string][] = [
   ["refresh_buffer", "Refresh the saved Buffer account within the shared request limit."],
   ["list_channels", "Read channels, posting times and paused, locked or disconnected status."],
   ["get_ai_usage", "Read today’s allowance and shared dollar budget; never expose keys."],
+  ["list_ai_models", "Read the models the person’s own AI key can use and which one is selected."],
+  ["set_ai_model", "Switch the person’s own key to another model when they ask; keys are added only in Settings."],
 
   ["get_my_voice", "How the person writes: their note and example posts. Match it."],
   ["save_my_voice_note", "Save how the person says they write when they ask you to remember it. Up to 500 characters."],
