@@ -121,3 +121,11 @@
 .shareUrl { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-muted); overflow-wrap: anywhere; font-size: var(--text-sm); }
 .shareActions { display: flex; justify-content: flex-end; gap: 8px; }
 .shareError { color: var(--danger); }
+
+/* Rules for this account: one line each, rules switched off here dimmed below the ones that apply. */
+.ruleLines { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.ruleLines li { display: flex; flex-direction: column; gap: 2px; padding-left: 10px; border-left: 2px solid var(--accent); }
+.ruleLines li[data-off="true"] { border-left-color: var(--border-strong); color: var(--text-muted); }
+.ruleText { line-height: 1.4; }
+.ruleLines li[data-off="true"] .ruleText { text-decoration: line-through; text-decoration-color: var(--border-strong); }
+.ruleWhy { font-size: var(--text-xs); color: var(--text-secondary); }

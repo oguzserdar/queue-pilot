@@ -48,7 +48,7 @@ export async function feedbackForComment(userId: string, linkId: unknown, commen
     const suggestionToken = plan.preference ? signSuggestion(userId, {
       key: `review:${createHash("sha256").update(JSON.stringify([linkId, commentId, plan.preference, accountIds])).digest("hex")}`,
       rule: { kind: "guidance", text: plan.preference, channels: "all", accountIds, level: "warn" }, fixes: 0,
-      evidence: { kind: "review", comment: comment.text, quote: comment.quote, reason: plan.reason, sharedAt: link!.createdAt },
+      evidence: { kind: "review", comment: comment.text, quote: comment.quote, reason: plan.reason, sharedAt: link!.createdAt, networks: [...new Set(drafts.map(p => channels.get(p.channelId)!.service))].sort() },
     }) : null;
     return { ok: true, plan: { ...plan, edits: plan.edits.filter(e => allowed.has(e.postId)), checked: gate.verdicts.size, check: gate.check, suggestionToken, refused: [...lengthRefusals, ...gate.refused.map(r => ({ postId: r.slotId, reason: r.reason }))], flags: [...gate.verdicts].flatMap(([postId, vs]) => vs.filter(v => v.verdict !== "pass").map(v => ({ postId, rule: v.rule, reason: v.reason }))) } };
   } catch (e) {

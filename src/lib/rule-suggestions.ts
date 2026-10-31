@@ -119,9 +119,29 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
   return { suggestions: bounded.map(s => ({ ...s, token: signSuggestion(userId, s) })), note };
 }
 
-export async function applySuggestion(userId: string, token: string, action: "keep" | "dismiss") {
-  const s = verifySuggestion(userId, token);
-  if (!s) return { ok: false, message: "That suggestion is invalid or expired. List suggestions again." };
+/** Where a preference from review feedback is kept: the reviewed accounts, one of their networks, or everywhere. */
+export type KeepScope = { level: "accounts" } | { level: "network"; network: string } | { level: "shared" };
+
+/**
+ * The suggested rule at the scope the person chose. Only a preference from review feedback can be widened, and only to
+ * a network its reviewed drafts were on, or to every account; anything else keeps the scope it was signed with.
+ */
+export function atScope(s: Suggestion, scope?: KeepScope): Suggestion["rule"] | null {
+  if (!scope || scope.level === "accounts") return s.rule;
+  const ev = s.evidence as { kind?: unknown; networks?: unknown } | undefined;
+  if (ev?.kind !== "review" || s.rule.kind !== "guidance") return null;
+  const { accountIds: _accounts, ...rest } = s.rule;
+  if (scope.level === "shared") return { ...rest, channels: "all" };
+  const networks = Array.isArray(ev.networks) ? ev.networks : [];
+  return scope.level === "network" && typeof scope.network === "string" && networks.includes(scope.network) ? { ...rest, channels: [scope.network] } : null;
+}
+
+export async function applySuggestion(userId: string, token: string, action: "keep" | "dismiss", scope?: KeepScope) {
+  const signed = verifySuggestion(userId, token);
+  if (!signed) return { ok: false, message: "That suggestion is invalid or expired. List suggestions again." };
+  const rule = atScope(signed, scope);
+  if (!rule) return { ok: false, message: "That rule can't be kept there. Choose the reviewed accounts, their network or every account." };
+  const s = { ...signed, rule };
   const store = postgresRulesStore();
   if (action === "dismiss") { await store.dismiss(userId, s.key); return { ok: true, message: "Suggestion dismissed." }; }
   if ((await store.dismissed(userId)).has(s.key)) return { ok: false, message: "That suggestion was dismissed. List suggestions again." };

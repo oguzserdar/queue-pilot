@@ -48,11 +48,11 @@ export async function proposeCommentChanges(linkId: string, commentId: string, p
   const { feedbackForComment } = await import("@/lib/feedback-flow");
   return feedbackForComment(userId, linkId, commentId, postIds);
 }
-export async function keepReviewPreference(token: string) {
+export async function keepReviewPreference(token: string, scope?: import("@/lib/rule-suggestions").KeepScope) {
   const userId = await signedInUserId();
   if (!userId) return signedOut;
   const { applySuggestion } = await import("@/lib/rule-suggestions");
-  const r = await applySuggestion(userId, token, "keep");
+  const r = await applySuggestion(userId, token, "keep", scope);
   if (r.ok) revalidatePath("/playbook");
   return r;
 }

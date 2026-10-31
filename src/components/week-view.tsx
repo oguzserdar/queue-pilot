@@ -13,7 +13,7 @@ import { Alert } from "@/registry/components/alert/alert";
 import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
-import { resolveRule } from "@/lib/rule-scopes";
+import { rulesForAccount } from "@/lib/rule-explain";
 import type { Rule } from "@/lib/rules";
 import type { Verdict } from "@/lib/judge";
 import { EXAMPLE_VERDICTS } from "@/lib/example-verdicts";
@@ -339,15 +339,21 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </div>
             );
           })()}
-          {live && rules.length > 0 && <details className={styles.checks}>
-            <summary className={styles.h3}>Rules used for this account</summary>
-            <p className={styles.muted}>Current settings, not a new check of this draft.</p>
-            {rules.map(rule => {
-              const network = channels.find(c => c.id === current.channel)?.service ?? "";
-              const d = resolveRule(rule, network, current.channel);
-              return <div key={rule.id} className={styles.check}><Badge tone={d.applies ? "neutral" : "warning"} size="sm">{d.applies ? "Applies" : "Excluded"}</Badge><span>{rule.text}<br />{d.origin} · {d.reason}</span></div>;
-            })}
-          </details>}
+          {live && rules.length > 0 && (() => {
+            const network = channels.find(c => c.id === current.channel)?.service ?? "";
+            const lines = rulesForAccount(rules, network, current.channel);
+            const on = lines.filter(l => l.applies).length;
+            return lines.length > 0 && <details className={styles.checks}>
+              <summary className={styles.h3}>{`${on} rule${on === 1 ? "" : "s"} for this account`}</summary>
+              <p className={styles.muted}>Your current settings. The badge above shows the last check of this draft.</p>
+              <ul className={styles.ruleLines}>
+                {lines.map(l => <li key={l.rule.id} data-off={!l.applies}>
+                  <span className={styles.ruleText}>{l.rule.text}</span>
+                  <span className={styles.ruleWhy}>{l.from} · {l.why}</span>
+                </li>)}
+              </ul>
+            </details>;
+          })()}
           <div className={styles.checks}>
             <h3 className={styles.h3}>Before it goes out</h3>
             {current.checks?.map((c) => (
