@@ -5,15 +5,6 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-- Approving a draft failed in Buffer with "Post must have either text or media". Approve now sends the draft's text with the schedule request.
-- Edit text sits under the post and edits it in place, instead of opening below the fold.
-- A review link that was turned off or expired can be turned on again from Reviews, with its comments kept. An expired link reopens for 7 days.
-- Ready drafts on Needs you always show their tick box beside the first line, show two lines of text and are labelled as drafts.
-- A draft that breaks a blocking rule reads "Blocked" on one line, and hovering it names the rule.
-- Share for review lists each draft on one line, so the dialog fits a laptop screen without scrolling.
-- Dropdown menus fit their longest item, and the post dialog is wider.
-
 ## [0.4.0] - 2026-10-31 Rules for each account
 
 ### Added
@@ -33,6 +24,13 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Connect lists every tool by what it reads, changes or asks permission for.
 
 ### Fixed
+- Approving a draft failed in Buffer with "Post must have either text or media". Approve now sends the draft's text with the schedule request.
+- Edit text sits under the post and edits it in place, instead of opening below the fold.
+- A review link that was turned off or expired can be turned on again from Reviews, with its comments kept. An expired link reopens for 7 days.
+- Ready drafts on Needs you always show their tick box beside the first line, show two lines of text and are labelled as drafts.
+- A draft that breaks a blocking rule reads "Blocked" on one line, and hovering it names the rule.
+- Share for review lists each draft on one line, so the dialog fits a laptop screen without scrolling.
+- Dropdown menus fit their longest item, and the post dialog is wider.
 - A wording replacement accepts capitalization variants of the preferred phrase. Explicit case-only replacements still enforce their requested spelling. Review-plan reasons describe the classification without claiming later checks passed.
 - Require complete current passing checks for applicable mandatory rules before approval. Missing or uncertain mandatory verdicts offer Check again. Warning-only failures remain approvable.
 - Recheck reads the selected drafts freshly from Buffer. Changed content invalidates an approval confirmation, and an unconfirmed scheduling response cannot make it reusable.
