@@ -5,22 +5,28 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Approving a draft failed in Buffer with "Post must have either text or media". Approve now sends the draft's text with the schedule request.
+- Edit text sits under the post and edits it in place, instead of opening below the fold.
+- A review link that was turned off or expired can be turned on again from Reviews, with its comments kept. An expired link reopens for 7 days.
+- Ready drafts on Needs you always show their tick box beside the first line, show two lines of text and are labelled as drafts.
+- A draft that breaks a blocking rule reads "Blocked" on one line, and hovering it names the rule.
+- Share for review lists each draft on one line, so the dialog fits a laptop screen without scrolling.
+- Dropdown menus fit their longest item, and the post dialog is wider.
+
+## [0.4.0] - 2026-10-31 Rules for each account
+
 ### Added
 - Share selected drafts through a review link that expires in 1, 7 or 30 days, or turn it off sooner. Guests can highlight text and comment without an account.
 - Preview how one review comment changes selected drafts. Fact corrections and one-off requests stay separate from writing preferences. Apply edits individually or together. Keep a lasting preference separately, with its evidence and selected account scope.
 - Shared, network and account rules, with explicit exceptions and inheritance controls. See which rules apply to an account and preview what changes before switching inheritance.
-- Seven additional connector tools: effective rules, exceptions, inheritance, proposed review changes, AI model choices and approval. The connector now exposes 42 tools.
+- Eleven additional connector tools: effective rules, exceptions, inheritance, proposed review changes, AI model choices and approval. The connector now exposes 42 tools.
 
 ### Changed
 - Needs you groups drafts by what needs attention, with selection for bulk approval and a setup strip.
 - Form problems show on the field that caused them and clear as you type. Add rule, Add feed and Save key confirm on the button itself.
 - Approving on Needs you folds the row away and the count above rolls down.
 - Next week and Needs you show placeholders in the page's own shape while Buffer is read.
-- A draft that breaks a blocking rule reads "Blocked" on one line, and hovering it names the rule.
-- Edit opens the editor in place of the post text, so it is visible after Check again.
-- Share for review lists each draft on one line, so ten drafts fit without scrolling.
-- Dropdown menus fit their longest item, and the post dialog is wider.
-- A review link that was turned off or expired can be turned on again from Reviews, with its comments kept. An expired link reopens for 7 days.
 - Playbook shows each rule once, where it came from and where it applies. Turn inherited rules off for one account and undo the change.
 - Command search opens writing, sharing, approval and rule actions. Draft status marks are consistent across the app.
 - A connected AI can schedule only under the permission set in Settings: ask first by default, allow directly, or turn off. Ask-first confirmations bind the exact draft content, account, time and attachments, expire after ten minutes and can be used once.

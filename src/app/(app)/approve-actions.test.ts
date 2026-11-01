@@ -32,7 +32,7 @@ describe("Approve action", () => {
     expect(written.get).toHaveBeenCalledWith("person-a", ["ours", "foreign"])
     expect(result).toEqual({ ok: true, approved: ["ours"], refused: [{ id: "foreign", reason: "Queue Pilot did not write this draft. Schedule it in Buffer." }] })
     expect(bufferQuery).toHaveBeenCalledTimes(2)
-    expect(bufferQuery).toHaveBeenLastCalledWith("token-a", expect.any(String), { input: { id: "ours", saveToDraft: false, mode: "customScheduled", dueAt: "2099-11-01T09:00:00Z" } })
+    expect(bufferQuery).toHaveBeenLastCalledWith("token-a", expect.any(String), { input: { id: "ours", text: "Draft", saveToDraft: false, mode: "customScheduled", dueAt: "2099-11-01T09:00:00Z" } })
     expect(markScheduled).toHaveBeenCalledWith(["ours"])
   })
 
