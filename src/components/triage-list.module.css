@@ -26,6 +26,8 @@
 
 /* The mark or tick box, centred on the row. */
 .lead { width: 24px; height: 24px; display: grid; place-items: center; }
+/* The tick box keeps its full-size hit area, centred on the 24px slot rather than hanging below it. */
+.lead > * { display: flex; margin: calc((24px - var(--control-height-md)) / 2); }
 .row[data-picked] { background: color-mix(in oklab, var(--qp-crimson) 6%, var(--surface)); }
 /* Folding a row away: its height closes and the rows below slide up; set from the row's measured height. */
 .row { transition: background-color 120ms var(--ease-standard), height 300ms var(--ease-standard), opacity 200ms var(--ease-standard), padding 300ms var(--ease-standard); }

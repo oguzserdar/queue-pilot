@@ -58,10 +58,10 @@ export function triageFromBuffer(input: {
 
   const past = { start: new Date(now.getTime() - 7 * 86_400_000), end: now };
   for (const d of deliveriesFromBuffer(channels, postsBetween(posts, past.start, past.end), past, now).filter((d) => d.tone === "danger"))
-    items.push({ id: `failed-${d.id}`, kind: "failed", title: d.title, detail: `${d.channel} · ${d.error?.message ?? "Buffer did not say why."}`, href: "/delivery", action: "See why" });
+    items.push({ id: `failed-${d.id}`, kind: "failed", title: d.title, detail: `${d.channel} · ${d.error?.message ?? "Buffer did not say why."}`, href: "/delivery", action: "See why", full: d.title, why: d.error?.message ?? "Buffer did not say why." });
 
   for (const c of comments)
-    items.push({ id: `comment-${c.id}`, kind: "comment", title: `${c.name}: "${short(c.text, 70)}"`, detail: `On "${short(c.draft, 50)}"`, href: "/reviews", action: "Suggest edits" });
+    items.push({ id: `comment-${c.id}`, kind: "comment", title: `${c.name}: "${short(c.text, 70)}"`, detail: `On "${short(c.draft, 50)}"`, href: "/reviews", action: "Suggest edits", full: `${c.name}: "${c.text}"`, why: `On "${c.draft}"` });
 
   for (const ch of week.channels.filter((c) => !c.isDisconnected))
     for (let day = 0; day < 7; day++)
