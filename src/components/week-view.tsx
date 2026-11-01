@@ -327,7 +327,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
           )}
           {/* Edit in place: the text itself becomes the editor, where the eye already is. */}
           {editing !== null && (
-            <div className={styles.editor}>
+            <div className={styles.editInPlace}>
               <Textarea label="Draft text" autoFocus value={editing} onChange={(e) => setEditing(e.target.value)} rows={6} />
               <div className={styles.actions}>
                 <Button variant="primary" size="sm" disabled={busy || !editing.trim() || editing.trim() === current.text} onClick={() => run(async () => {

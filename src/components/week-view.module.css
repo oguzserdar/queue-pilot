@@ -65,6 +65,8 @@
 .channel { min-width: 120px; }
 .panelSide > .actions { margin-top: auto; }
 .editor { display: grid; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
+/* Editing in place replaces the post text, so it needs no rule above it. */
+.editInPlace { display: grid; gap: var(--space-3); }
 
 /* When the week's own area is narrower than the grid needs (760px plus the channel column), the grid gives way to a
    list by day, as most schedulers and calendars do on phones. A container query, so the sidebar's width counts too. */
@@ -116,9 +118,11 @@
 .issue + .issue { padding-top: var(--space-3); border-top: 1px solid var(--border); }
 
 /* Share for review dialog. */
-.shareBody { display: flex; flex-direction: column; gap: 16px; }
+.shareBody { display: flex; flex-direction: column; gap: 12px; }
 .shareList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; max-height: min(50dvh, 420px); overflow-y: auto; }
-.shareRow { display: flex; align-items: center; gap: var(--space-3); min-height: 32px; }
+.shareRow { display: flex; align-items: center; gap: var(--space-3); min-height: 30px; }
+/* The expiry label and its choice share one row, so the dialog fits a laptop screen. */
+.shareExpiry { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
 .shareLine { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-sm); cursor: pointer; }
 .shareLine b { color: var(--foreground); font-weight: 600; margin-right: 6px; font-variant-numeric: tabular-nums; }
 .shareUrl { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-muted); overflow-wrap: anywhere; font-size: var(--text-sm); }
