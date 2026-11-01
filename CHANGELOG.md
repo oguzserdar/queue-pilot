@@ -7,11 +7,21 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ### Added
 - Share selected drafts through a review link that expires in 1, 7 or 30 days, or turn it off sooner. Guests can highlight text and comment without an account.
-- Preview how one review comment changes selected drafts. Fact corrections and one-off requests stay separate from writing preferences. Apply each edit individually. Keep a lasting preference separately, with its evidence and selected account scope.
+- Preview how one review comment changes selected drafts. Fact corrections and one-off requests stay separate from writing preferences. Apply edits individually or together. Keep a lasting preference separately, with its evidence and selected account scope.
 - Shared, network and account rules, with explicit exceptions and inheritance controls. See which rules apply to an account and preview what changes before switching inheritance.
-- Four additional connector tools for effective rules, exceptions, inheritance and proposed review changes. The connector now exposes 39 tools.
+- Seven additional connector tools: effective rules, exceptions, inheritance, proposed review changes, AI model choices and approval. The connector now exposes 42 tools.
+
+### Changed
+- Needs you groups drafts by what needs attention, with selection for bulk approval and a setup strip.
+- Playbook shows each rule once, where it came from and where it applies. Turn inherited rules off for one account and undo the change.
+- Command search opens writing, sharing, approval and rule actions. Draft status marks are consistent across the app.
+- A connected AI can schedule only under the permission set in Settings: ask first by default, allow directly, or turn off. Ask-first confirmations bind the exact draft content, account, time and attachments, expire after ten minutes and can be used once.
+- Connect lists every tool by what it reads, changes or asks permission for.
 
 ### Fixed
+- Require complete current passing checks for applicable mandatory rules before approval. Missing or uncertain mandatory verdicts offer Check again. Warning-only failures remain approvable.
+- Recheck reads the selected drafts freshly from Buffer. Changed content invalidates an approval confirmation, and an unconfirmed scheduling response cannot make it reusable.
+- Respect the single-key shortcut setting on Needs you. Changing the drafts selected for review clears the previous preview.
 - Keep the Connect setup prompt free of server-only imports so the production browser bundle builds.
 - Re-read a Buffer draft after checking an edit and refuse the write if its text, account or draft status changed. Buffer does not offer an atomic conditional write, so a change between this read and the write remains possible.
 - Mark stored checks stale when the playbook changes. Show the current effective rules in draft details.

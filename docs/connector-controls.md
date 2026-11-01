@@ -1,6 +1,6 @@
 # Connector controls
 
-The connector exposes 39 tools. OAuth supplies the account ID; tool inputs cannot select another account. The browser and connector share the built-in writer and the signed-in setup-step builder.
+The connector exposes 42 tools. OAuth supplies the account ID; tool inputs cannot select another account. The browser and connector share the built-in writer and the signed-in setup-step builder.
 
 | Area | Tools |
 | --- | --- |
