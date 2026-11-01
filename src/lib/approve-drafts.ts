@@ -1,5 +1,5 @@
 /**
- * Approving a draft schedules it at its own slot time: Buffer's editPost with saveToDraft false, keeping dueAt
+ * Approving a draft schedules it at its own slot time: Buffer's editPost with saveToDraft false, keeping dueAt and text
  * (developers.buffer.com reference, EditPostInput). Only drafts recorded as written by Queue Pilot for this person are
  * approved; anything else is refused, so a crafted id cannot schedule someone else's post or a post that already went.
  * Buffer checks its posting limits when a post leaves draft and its own reason is passed back unchanged.
@@ -55,7 +55,8 @@ export async function approveDrafts(
     if (failed) { refused.push({ id, reason: failed.detail }); continue; }
     try {
       const res = await q<{ editPost: { __typename: string; message?: string } }>(token, EDIT_POST, {
-        input: { id, saveToDraft: false, mode: "customScheduled", dueAt: p.dueAt },
+        // The text as just read from Buffer: without it Buffer treats the post as empty and refuses it.
+        input: { id, text: p.text, saveToDraft: false, mode: "customScheduled", dueAt: p.dueAt },
       });
       if (res.editPost.__typename === "PostActionSuccess") approved.push(id);
       else refused.push({ id, reason: res.editPost.message ?? "Buffer refused to schedule this draft." });

@@ -10,7 +10,8 @@ import SegmentedControl from "@/registry/components/segmented-control/segmented-
 import styles from "./week-view.module.css";
 
 /** A draft the person can share, with the words that name it in the list. */
-export type ShareableDraft = { id: string; label: string; text: string };
+/** `label` names the draft for screen readers; `when` is the short time shown on its row. */
+export type ShareableDraft = { id: string; label: string; when: string; text: string };
 
 /**
  * Share for review: the person ticks the drafts to share and gets one link. Anyone with it can read and comment on
@@ -55,8 +56,10 @@ export function ShareReviewButton({ drafts, openSignal = 0 }: { drafts: Shareabl
               </div>
               <ul className={styles.shareList}>
                 {drafts.map((d) => (
-                  <li key={d.id}>
-                    <Checkbox checked={picked.has(d.id)} onCheckedChange={(v) => toggle(d.id, v === true)} label={d.label} description={d.text.length > 120 ? `${d.text.slice(0, 120)}…` : d.text} />
+                  // One line per draft, so ten drafts fit without scrolling; the full text is in the title.
+                  <li key={d.id} className={styles.shareRow}>
+                    <Checkbox id={`share-${d.id}`} aria-label={d.label} checked={picked.has(d.id)} onCheckedChange={(v) => toggle(d.id, v === true)} />
+                    <label htmlFor={`share-${d.id}`} className={styles.shareLine} title={d.text}><b>{d.when}</b> {d.text}</label>
                   </li>
                 ))}
               </ul>

@@ -47,7 +47,7 @@
 .src { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); align-self: flex-start; }
 
 /* The draft opens over the week in a dialog wide enough for the post beside its rules and checks. */
-.dialog { --dialog-width: 760px; }
+.dialog { --dialog-width: 1080px; }
 .panel { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-4) var(--space-8); }
 /* Two columns that stack what they hold: the post on the left, rules, checks and actions on the right. */
 .panelMain, .panelSide { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
@@ -117,7 +117,10 @@
 
 /* Share for review dialog. */
 .shareBody { display: flex; flex-direction: column; gap: 16px; }
-.shareList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; max-height: min(50dvh, 420px); overflow-y: auto; }
+.shareList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; max-height: min(50dvh, 420px); overflow-y: auto; }
+.shareRow { display: flex; align-items: center; gap: var(--space-3); min-height: 32px; }
+.shareLine { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-sm); cursor: pointer; }
+.shareLine b { color: var(--foreground); font-weight: 600; margin-right: 6px; font-variant-numeric: tabular-nums; }
 .shareUrl { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-muted); overflow-wrap: anywhere; font-size: var(--text-sm); }
 .shareActions { display: flex; justify-content: flex-end; gap: 8px; }
 .shareError { color: var(--danger); }

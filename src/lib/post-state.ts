@@ -12,7 +12,7 @@ export const STATE_WORD: Record<PostState, string> = {
   empty: "Empty",
   draft: "Draft",
   check: "Check",
-  breaks: "Breaks a rule",
+  breaks: "Blocked",
   scheduled: "Scheduled",
   sent: "Sent",
   failed: "Failed",

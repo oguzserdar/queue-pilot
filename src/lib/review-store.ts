@@ -80,6 +80,24 @@ export function postgresReviewStore() {
       const rows = await db().update(reviewLink).set({ revokedAt: new Date() }).where(and(eq(reviewLink.id, id), eq(reviewLink.userId, userId), isNull(reviewLink.revokedAt))).returning({ id: reviewLink.id });
       return rows.length > 0;
     },
+    /**
+     * Turns the owner's link back on. It keeps its comments and its expiry; one that has already expired opens for
+     * another 7 days. Counts toward the open-link limit, checked under the same lock as create. False when the link is
+     * not this person's or is already on.
+     */
+    async reopen(userId: string, id: string): Promise<boolean> {
+      return db().transaction(async tx => {
+        await tx.select({ id: user.id }).from(user).where(eq(user.id, userId)).for("update");
+        const now = new Date();
+        const [link] = await tx.select({ revokedAt: reviewLink.revokedAt, expiresAt: reviewLink.expiresAt }).from(reviewLink).where(and(eq(reviewLink.id, id), eq(reviewLink.userId, userId)));
+        if (!link || (!link.revokedAt && link.expiresAt > now)) return false;
+        const [{ open }] = await tx.select({ open: sql<number>`count(*)::int` }).from(reviewLink).where(and(eq(reviewLink.userId, userId), isNull(reviewLink.revokedAt), gt(reviewLink.expiresAt, now)));
+        if (open >= MAX_OPEN_LINKS) throw new TooManyLinksError();
+        const expiresAt = link.expiresAt > now ? link.expiresAt : new Date(now.getTime() + 7 * 86_400_000);
+        await tx.update(reviewLink).set({ revokedAt: null, expiresAt }).where(and(eq(reviewLink.id, id), eq(reviewLink.userId, userId)));
+        return true;
+      });
+    },
     /** A link that is still on, with its comments, for the public page; null when it is off or never existed. */
     async open(id: string): Promise<(ReviewLink & { comments: ReviewComment[] }) | null> {
       const [l] = await db().select().from(reviewLink).where(and(eq(reviewLink.id, id), isNull(reviewLink.revokedAt), gt(reviewLink.expiresAt, new Date())));

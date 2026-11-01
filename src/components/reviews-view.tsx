@@ -2,7 +2,7 @@
 
 import { ReviewFeedback, type ReviewCandidate } from "./review-feedback";
 import { useState, useTransition } from "react";
-import { turnOffReview } from "@/app/(app)/review-actions";
+import { turnOffReview, turnOnReview } from "@/app/(app)/review-actions";
 import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
 import { CopyButton } from "@/registry/components/copy-button/copy-button";
@@ -37,6 +37,8 @@ function Marked({ text, comments }: { text: string; comments: ReviewComment[] })
  */
 export function ReviewsView({ origin, links, candidates = [], candidatesUnavailable = false }: { candidatesUnavailable?: boolean; candidates?: ReviewCandidate[]; origin: string; links: (ReviewLink & { comments: ReviewComment[] })[] | null }) {
   const [off, setOff] = useState<Set<string>>(new Set());
+  // Links turned back on here, with their expiry, until the page reloads from the server.
+  const [on, setOn] = useState<Map<string, string>>(new Map());
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -56,8 +58,9 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
           {candidatesUnavailable && <p role="alert" className={styles.callout}>Your drafts couldn't be read just now, so changes can't be proposed. Comments are below. Refresh to try again.</p>}
           {message && <p className={styles.error} role="alert">{message}</p>}
           {links.map((l) => {
-            const expired = !!(l.expiresAt && Date.parse(l.expiresAt) <= Date.now());
-            const isOff = !!l.revokedAt || off.has(l.id);
+            const expiresAt = on.get(l.id) ?? l.expiresAt;
+            const expired = !!(expiresAt && Date.parse(expiresAt) <= Date.now());
+            const isOff = ((!!l.revokedAt && !on.has(l.id)) || off.has(l.id));
             const live = !isOff && !expired;
             const url = `${origin}/r/${l.id}`;
             const commented = l.drafts.filter((d) => l.comments.some((c) => c.postId === d.postId));
@@ -67,7 +70,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                 <div className={page.linkHead}>
                   <div className={page.linkTitle}>
                     <h2 className={page.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared `}{day(l.createdAt)}</h2>
-                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : l.expiresAt ? <>Open until {day(l.expiresAt)}</> : "Open"}</Badge>
+                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : expiresAt ? <>Open until {day(expiresAt)}</> : "Open"}</Badge>
                     <span className={styles.hint}>{`${l.comments.length} comment${l.comments.length === 1 ? "" : "s"}`}</span>
                   </div>
                   {live && (
@@ -75,12 +78,21 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                       <CopyButton value={url} label="Copy link" />
                       <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
                         const r = await turnOffReview(l.id);
-                        if (r.ok) setOff((s) => new Set(s).add(l.id)); else setMessage(r.message ?? "Could not turn it off. Try again.");
+                        if (r.ok) { setOff((s) => new Set(s).add(l.id)); setOn((m) => { const n = new Map(m); n.delete(l.id); return n; }); } else setMessage(r.message ?? "Could not turn it off. Try again.");
                       })}>Turn off</Button>
                     </div>
                   )}
+                  {!live && (
+                    <Button variant="secondary" size="sm" disabled={pending} onClick={() => start(async () => {
+                      const r = await turnOnReview(l.id);
+                      if (!r.ok) return setMessage(r.message);
+                      setMessage(null);
+                      setOn((m) => new Map(m).set(l.id, r.expiresAt));
+                      setOff((s) => { const n = new Set(s); n.delete(l.id); return n; });
+                    })}>Turn on again</Button>
+                  )}
                 </div>
-                {!live && <p className={styles.help}>Reviewers can no longer open this link. Their comments stay here.</p>}
+                {!live && <p className={styles.help}>{expired && !isOff ? "This link has expired. Turn it on again for another 7 days." : "Reviewers can no longer open this link. Their comments stay here. Turn it on again to reopen the same link."}</p>}
 
                 {commented.length === 0 && <p className={styles.help}>{live ? "No comments yet. Send the link to your reviewer." : "Nobody commented."}</p>}
                 {commented.map((d) => {

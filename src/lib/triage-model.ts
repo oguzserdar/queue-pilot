@@ -27,7 +27,7 @@ export type TriageKind = (typeof TRIAGE_GROUPS)[number]["kind"];
  */
 export type TriageItem = { id: string; kind: TriageKind; title: string; detail: string; href: string; action: string; postId?: string; run?: "approve" | "recheck" };
 
-const short = (t: string, n = 90) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+const short = (t: string, n = 200) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
 
 export function triageFromBuffer(input: {
   channels: Channel[];

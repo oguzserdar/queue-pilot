@@ -561,6 +561,32 @@ describe("review links on real Postgres", () => {
     expect((await s.list("u7")).find((l) => l.id === link.id)?.revokedAt).not.toBeNull();
   });
 
+  it("turns a link back on for its owner only, keeps its comments and reopens an expired one for 7 days", async () => {
+    const s = postgresReviewStore();
+    const link = await s.create("u7", drafts);
+    await s.revoke("u7", link.id);
+    expect(await s.reopen("u8", link.id)).toBe(false);
+    expect(await s.open(link.id)).toBeNull();
+    expect(await s.reopen("u7", link.id)).toBe(true);
+    expect((await s.open(link.id))?.expiresAt).toBe(link.expiresAt);
+    expect(await s.reopen("u7", link.id)).toBe(false);
+    await pg.query(`update qp_review_link set revoked_at = now(), expires_at = now() - interval '1 day' where id = $1`, [link.id]);
+    expect(await s.reopen("u7", link.id)).toBe(true);
+    const reopened = await s.open(link.id);
+    expect(Date.parse(reopened!.expiresAt ?? "") - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
+    await s.revoke("u7", link.id);
+  });
+
+  it("refuses to turn a link back on past the number a person can keep on", async () => {
+    const s = postgresReviewStore();
+    await pg.query(`insert into "user" (id, name, email) values ('u10', 'u10', 'u10@x')`);
+    const off = await s.create("u10", drafts.slice(0, 1));
+    await s.revoke("u10", off.id);
+    const on = await Promise.all(Array.from({ length: MAX_OPEN_LINKS }, () => s.create("u10", drafts.slice(0, 1))));
+    await expect(s.reopen("u10", off.id)).rejects.toBeInstanceOf(TooManyLinksError);
+    await Promise.all(on.map((l) => s.revoke("u10", l.id)));
+  });
+
   it("takes comments while the link is on, and none after it is turned off", async () => {
     const s = postgresReviewStore();
     const link = await s.create("u7", drafts);

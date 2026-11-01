@@ -101,14 +101,15 @@ export function TriageList({ items, live, onRemaining }: { items: TriageItem[]; 
               const at = i;
               return (
                 <li key={item.id} data-post={item.postId} ref={(el) => { rows.current[at] = el; }} className={styles.row} data-focus={focus === at || undefined} data-picked={(item.run === "approve" && item.postId && picked.has(item.postId)) || undefined} data-picking={picked.size > 0 || undefined} onMouseEnter={() => setFocus(at)}>
-                  {/* One slot: the state mark, which turns into a tick box on hover, focus, or once anything is ticked. */}
+                  {/* A draft ready to approve shows its tick box; everything else shows its state mark. */}
                   <span className={styles.lead}>
-                    <span className={styles.leadMark}><StateMark state={MARK[item.kind]} /></span>
-                    {item.run === "approve" && item.postId && <span className={styles.leadBox}><Checkbox aria-label={`Select: ${item.title}`} checked={picked.has(item.postId)} onCheckedChange={() => toggle(item.postId!)} /></span>}
+                    {item.run === "approve" && item.postId
+                      ? <Checkbox aria-label={`Select: ${item.title}`} checked={picked.has(item.postId)} onCheckedChange={() => toggle(item.postId!)} />
+                      : <StateMark state={MARK[item.kind]} />}
                   </span>
                   <div className={styles.text}>
                     <span className={styles.title}>{item.title}</span>
-                    <span className={styles.detail}>{item.detail}</span>
+                    <span className={styles.detail}>{item.postId && item.kind !== "comment" ? `Draft · ${item.detail}` : item.detail}</span>
                   </div>
                   {item.run === "approve" ? (
                     <Button variant="secondary" size="sm" disabled={pending} onClick={() => approve([item.postId!])}>{item.action}{keysOn && <kbd className={styles.key}>A</kbd>}</Button>

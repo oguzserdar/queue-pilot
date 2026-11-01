@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { signedInUserId } from "@/lib/current-user";
-import { postgresReviewStore } from "@/lib/review-store";
+import { postgresReviewStore, TooManyLinksError } from "@/lib/review-store";
 import { fixesForRule, rulesFromComments, shareDrafts, type ShownFix } from "@/lib/review-flow";
 import type { FirstRuleOffer } from "@/app/(app)/actions";
 
@@ -27,6 +27,22 @@ export async function turnOffReview(id: string): Promise<{ ok: boolean; message?
   if (!changed) return { ok: false, message: "No matching active review link." };
   revalidatePath("/reviews");
   return { ok: true };
+}
+
+/** Turns a review link back on: it opens again with its comments, and an expired one gets another 7 days. */
+export async function turnOnReview(id: string): Promise<{ ok: true; expiresAt: string } | { ok: false; message: string }> {
+  const userId = await signedInUserId();
+  if (!userId) return signedOut;
+  if (typeof id !== "string" || id.length > 100) return { ok: false, message: "Unknown link." };
+  try {
+    if (!(await postgresReviewStore().reopen(userId, id))) return { ok: false, message: "That link is already on." };
+  } catch (e) {
+    if (e instanceof TooManyLinksError) return { ok: false, message: e.message };
+    throw e;
+  }
+  const link = (await postgresReviewStore().list(userId)).find((l) => l.id === id);
+  revalidatePath("/reviews");
+  return { ok: true, expiresAt: link?.expiresAt ?? new Date(Date.now() + 7 * 86_400_000).toISOString() };
 }
 
 /** Find rules in comments: only lasting requests come back, as rules to keep or skip. */

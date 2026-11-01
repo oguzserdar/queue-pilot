@@ -164,7 +164,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         const isOn = approved.has(p.id);
         return (
           <button key={p.id} type="button" onClick={(e) => { opener.current = e.currentTarget; setSelected(p.id); setEditing(null); setConfirmDelete(false); setNote(null); setDialogOpen(true); }} className={styles.draft} data-tone={tone} data-selected={dialogOpen && selected === p.id} data-approved={isOn}>
-            <span className={styles.time}>{t}<span className={styles.state}><StateMark state={postState(p, isOn)} word /></span></span>
+            <span className={styles.time}>{t}<span className={styles.state}><StateMark state={postState(p, isOn)} word why={p.checks?.find((c) => c.tone === "danger")?.label} /></span></span>
             <span className={styles.text}>{p.text}</span>
             <span className={styles.src} title={p.source?.label ?? "Draft saved in Buffer"}>{p.source ? SOURCE_SHORT[p.source.kind] : "Buffer draft"}</span>
           </button>
@@ -218,7 +218,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             </Popover>
           )}
           {live && open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions />}
-          {live && drafts.length > 0 && <ShareReviewButton openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, text: d.text }))} />}
+          {live && drafts.length > 0 && <ShareReviewButton openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (
               <>
@@ -316,7 +316,28 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         >
         <div className={styles.panel}>
           <div className={styles.panelMain}>
-          <p className={styles.postText}>{current.text}</p>
+          {/* The text and its Edit button sit together; editing turns this same spot into the editor. */}
+          {editing === null && (
+            <>
+              <p className={styles.postText}>{current.text}</p>
+              {current.ours !== false && !approved.has(current.id) && (
+                <div><Button variant="secondary" size="sm" onClick={() => { setEditing(current.text); setConfirmDelete(false); setNote(null); }}>Edit text</Button></div>
+              )}
+            </>
+          )}
+          {/* Edit in place: the text itself becomes the editor, where the eye already is. */}
+          {editing !== null && (
+            <div className={styles.editor}>
+              <Textarea label="Draft text" autoFocus value={editing} onChange={(e) => setEditing(e.target.value)} rows={6} />
+              <div className={styles.actions}>
+                <Button variant="primary" size="sm" disabled={busy || !editing.trim() || editing.trim() === current.text} onClick={() => run(async () => {
+                  if (!live) { setEdited((m) => ({ ...m, [current.id]: editing.trim() })); return { ok: true as const }; }
+                  return editDraftText(current.id, editing, current.text);
+                }, live ? "Saved in Buffer. It is still a draft." : "Changed on this example page only.")}>{busy ? "Checking and saving…" : "Save"}</Button>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setEditing(null)}>Cancel</Button>
+              </div>
+            </div>
+          )}
           {current.editedFrom && (
             <div className={styles.sourceBox}>
               <div>
@@ -385,7 +406,6 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             {current.ours !== false && !approved.has(current.id) && (
               <>
                 {live && (verdicts[current.id] === null || needsCheck(current.id)) && <Button variant="secondary" disabled={busy} onClick={() => run(() => recheckMyDrafts([current.id]).then((r) => (r.ok ? { ok: true as const } : r)), "Checked against your playbook.")}>Check again</Button>}
-                <Button variant="secondary" onClick={() => { setEditing(current.text); setConfirmDelete(false); setNote(null); }}>Edit</Button>
                 <Button variant="ghost" onClick={() => { setConfirmDelete(true); setEditing(null); setNote(null); }}>Delete draft</Button>
               </>
             )}
@@ -395,18 +415,6 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             <p id="approve-off" className={styles.muted}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
           )}
           {current.ours === false && <p id="approve-foreign" className={styles.muted}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>}
-          {editing !== null && (
-            <div className={styles.editor}>
-              <Textarea label="Draft text" value={editing} onChange={(e) => setEditing(e.target.value)} rows={4} />
-              <div className={styles.actions}>
-                <Button variant="primary" size="sm" disabled={busy || !editing.trim() || editing.trim() === current.text} onClick={() => run(async () => {
-                  if (!live) { setEdited((m) => ({ ...m, [current.id]: editing.trim() })); return { ok: true as const }; }
-                  return editDraftText(current.id, editing, current.text);
-                }, live ? "Saved in Buffer. It is still a draft." : "Changed on this example page only.")}>{busy ? "Checking and saving…" : "Save"}</Button>
-                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setEditing(null)}>Cancel</Button>
-              </div>
-            </div>
-          )}
           {confirmDelete && (
             <div className={styles.editor}>
               <p className={styles.muted}>Delete this draft from Buffer? The time becomes empty again.</p>

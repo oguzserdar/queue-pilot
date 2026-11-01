@@ -3,11 +3,12 @@
 .groupHead { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin: 0 0 4px; }
 .count { font-variant-numeric: tabular-nums; color: var(--text-muted); font-weight: 600; }
 .rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); overflow: clip; }
-.row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: 10px var(--space-4); transition: background-color 120ms var(--ease-standard); }
+.row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: start; gap: var(--space-3); padding: 10px var(--space-4); transition: background-color 120ms var(--ease-standard); }
 .row + .row { border-top: 1px solid var(--border-subtle); }
 .row[data-focus] { background: var(--surface-muted); }
 .text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Two lines of the post, so a reader can tell what it says. */
+.title { font-weight: 600; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .detail { color: var(--text-muted); font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .action { display: inline-flex; align-items: center; font-weight: 600; font-size: var(--text-sm); color: var(--qp-crimson); text-decoration: none; padding: 6px 10px; border-radius: var(--radius-control); white-space: nowrap; transition: background-color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
 .action:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
@@ -23,13 +24,10 @@
 @media (prefers-reduced-motion: reduce) { .bar { transition: none; } .action:active { transform: none; } }
 .bar > button:last-child { color: var(--background); opacity: 0.8; }
 
-.lead { position: relative; width: 24px; height: 24px; display: grid; place-items: center; }
-.leadMark, .leadBox { grid-area: 1 / 1; display: grid; place-items: center; transition: opacity 120ms var(--ease-standard); }
-.leadBox { opacity: 0; }
-.row[data-focus] .leadBox:has(*), .row[data-picking] .leadBox, .leadBox:focus-within { opacity: 1; }
-.row[data-focus] .leadMark:has(+ .leadBox), .row[data-picking] .leadMark:has(+ .leadBox), .lead:focus-within .leadMark { opacity: 0; }
+/* The mark or tick box sits beside the title's first line. */
+.lead { width: 24px; height: calc(1em * var(--leading-body, 1.5)); display: grid; place-items: center; }
+.row > :last-child { align-self: center; }
 .row[data-picked] { background: color-mix(in oklab, var(--qp-crimson) 6%, var(--surface)); }
-@media (hover: none) { .leadBox { opacity: 1; } .leadMark:has(+ .leadBox) { opacity: 0; } }
 /* Folding a row away: its height closes and the rows below slide up; set from the row's measured height. */
 .row { transition: background-color 120ms var(--ease-standard), height 300ms var(--ease-standard), opacity 200ms var(--ease-standard), padding 300ms var(--ease-standard); }
 .row[data-leaving] { height: 0 !important; opacity: 0; padding-block: 0; overflow: hidden; border-top-color: transparent; }

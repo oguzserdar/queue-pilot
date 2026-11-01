@@ -34,7 +34,8 @@ describe("approveDrafts", () => {
     const { q, inputs } = fake(success);
     const res = await approveDrafts("t", ["d1"], [post({})], now, wrote, q);
     expect(res).toEqual({ approved: ["d1"], refused: [] });
-    expect(inputs[0]).toEqual({ id: "d1", saveToDraft: false, mode: "customScheduled", dueAt: "2026-11-02T09:00:00.000Z" });
+    // Buffer reads a missing text as an empty post ("Post must have either text or media"), so the draft's own text goes with it.
+    expect(inputs[0]).toEqual({ id: "d1", text: "hi", saveToDraft: false, mode: "customScheduled", dueAt: "2026-11-02T09:00:00.000Z" });
   });
 
   it("refuses ids that are not the caller's drafts, without calling Buffer", async () => {
