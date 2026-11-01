@@ -44,7 +44,9 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd }: {
   const mine = all ? rules : rules.filter(r => r.accountIds?.length ? level === "account" && r.accountIds.includes(id) : r.channels === "all" || r.channels.includes(network));
   const origin = (r: Rule): Level => r.accountIds?.length ? "account" : r.channels === "all" ? "shared" : "network";
   const overrideOf = (r: Rule) => level === "account" ? r.overrides?.accounts?.[id] : r.overrides?.networks?.[id] ?? (r.except?.includes(id) ? false : undefined);
-  const used = (r: Rule) => origin(r) === "shared" ? current.shared : origin(r) === "network" ? current.network : true;
+  // An account inherits shared rules only when both it and its network do (the same boundary resolveRule applies).
+  const netShared = level === "account" ? inheritance.networks?.[network]?.shared !== false : true;
+  const used = (r: Rule) => origin(r) === "shared" ? current.shared && netShared : origin(r) === "network" ? current.network : true;
   // Each rule once: what was changed here first, then this account's own, then what it inherits.
   const groups: { key: string; title: string; rules: Rule[] }[] = all
     ? [{ key: "all", title: "Every rule", rules: mine }]
@@ -75,7 +77,7 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd }: {
             <span className={styles.tag}>{source(r)}</span>
             <span>{r.level === "block" ? "Blocks" : "Flags"}</span>
             {evidence && <span>From a review</span>}
-            {!all && !on && <span className={styles.warn}>Set not used here</span>}
+            {!all && !on && <span className={styles.warn}>{origin(r) === "shared" && !netShared ? `Shared is off for every ${net} account` : "Set not used here"}</span>}
             {!all && on && override === false && <span className={styles.warn}>Off here</span>}
             {!all && on && override === true && <span>On here</span>}
             {!all && on && override === undefined && !d.applies && <span className={styles.warn}>{`Off for every ${net} account`}</span>}
@@ -133,6 +135,7 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd }: {
               </div>
             )}
           </div>
+          {g.key === "inherited" && !netShared && <p className={styles.help}>{`Shared rules are off for every ${net} account, so this account can't turn one back on. Change it under "Every ${net} account".`}</p>}
           {g.rules.length ? <ul className={styles.rules}>{g.rules.map(row)}</ul> : <p className={styles.help}>{`Nothing inherited by ${where}.`}</p>}
         </div>
       ))}

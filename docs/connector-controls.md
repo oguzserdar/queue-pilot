@@ -22,7 +22,7 @@ Setup progress uses exactly the same helper as the signed-in home screen. Its fi
 
 Only drafts recorded as Queue Pilot's own are returned by `list_my_drafts`. Stored verdicts are hidden when the text has changed since the recorded check. Rule, source, example and research cleanup is scoped to the token owner. Removing sources or research leaves existing drafts intact; research usage history remains.
 
-`approve_drafts` schedules drafts only when the person asks. By default it first returns the drafts and a ten-minute confirm token, and schedules on the second call after the person's yes. Settings → AI can drop the confirm step or turn the tool off; no tool can change that setting. Account deletion, AI keys, revoking apps, admin, sign-out and echo destinations are not connector tools.
+`approve_drafts` schedules drafts only when the person asks. By default it first returns the drafts and a ten-minute confirm token, and schedules on the second call after the person's yes. The token covers each draft's text, account, time and images as shown, works once, and stops working when the person changes the setting. Drafts whose playbook check is out of date or that break a blocking rule are refused, as they are in the app. Settings → AI can drop the confirm step or turn the tool off; no tool can change that setting. Account deletion, AI keys, revoking apps, admin, sign-out and echo destinations are not connector tools.
 
 ## Verification
 

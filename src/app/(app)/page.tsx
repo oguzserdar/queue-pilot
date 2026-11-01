@@ -4,11 +4,11 @@ import { approvedAiApps, getCurrentUser, signedInUserId } from "@/lib/current-us
 import { postgresSourceStore } from "@/lib/sources-store";
 import { postgresVoiceStore } from "@/lib/voice-store";
 import { needsFromBuffer } from "@/lib/needs-model";
-import { triageFromBuffer, type DraftCheck } from "@/lib/triage-model";
+import { triageFromBuffer } from "@/lib/triage-model";
+import { draftReadiness, type Readiness } from "@/lib/draft-readiness";
 import { postgresWrittenStore } from "@/lib/written-store";
 import { postgresRulesStore } from "@/lib/rules-store";
 import { postgresReviewStore } from "@/lib/review-store";
-import { playbookVersion } from "@/lib/playbook-version";
 
 /** Example home, matching the example week used on the other screens. */
 const EXAMPLE_NEEDS: NeedItem[] = [
@@ -43,11 +43,10 @@ export default async function Page() {
     userId ? postgresRulesStore().list(userId).catch(() => null) : null,
     userId ? postgresReviewStore().list(userId).catch(() => []) : [],
   ]);
-  const revision = rules ? playbookVersion(rules) : null;
-  const checks: Record<string, DraftCheck> = Object.fromEntries(written.map((w) => {
-    const current = user.posts.find((p) => p.id === w.postId)?.text === w.text && revision && w.playbookRevision === revision && w.verdicts;
-    return [w.postId, !current ? "check" : w.verdicts!.some((v) => v.verdict === "fail") ? "breaks" : "ok"];
-  }));
+  // The same test Approve uses, so this page never offers an approval the button would refuse.
+  const checks: Record<string, Readiness> = Object.fromEntries(written.map((w) => [w.postId, rules
+    ? draftReadiness(w, user.posts.find((p) => p.id === w.postId)?.text ?? "", rules)
+    : { state: "check" as const, reason: "Your playbook could not be read just now." }]));
   const weekAgo = now.getTime() - 7 * 86_400_000;
   const comments = links.filter((l) => !l.revokedAt).flatMap((l) => l.comments.filter((c) => Date.parse(c.createdAt) > weekAgo).map((c) => ({ ...c, draft: l.drafts.find((d) => d.postId === c.postId)?.text ?? "" })));
   const triage = triageFromBuffer({ channels: user.channels, posts: user.posts, now, timeZone: user.timeZone, checks, comments });

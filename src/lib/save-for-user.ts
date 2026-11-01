@@ -155,3 +155,20 @@ export async function judgeEdit(userId: string, text: string, network: string, c
   const gate = await applyPlaybook([{ slotId: "edit", text }], [slot], rules, jm ? (d, r) => judgeDrafts(jm.judges, d, r) : null, cappedReason).finally(() => jm?.settle());
   return { refusal: gate.refused[0]?.reason ?? null, check: gate.check };
 }
+
+/**
+ * Check again: judges drafts Queue Pilot wrote, as their text is now, against the current playbook, and records the
+ * result so they can be approved. Returns a reason when no check could run (AI unavailable, playbook unreadable).
+ */
+export async function recheckDrafts(userId: string, drafts: { postId: string; text: string; network: string; channelId: string }[]): Promise<{ ok: true; checked: number } | { ok: false; message: string }> {
+  if (!drafts.length) return { ok: true, checked: 0 };
+  const rules = await postgresRulesStore().list(userId).catch(() => null);
+  if (rules === null) return { ok: false, message: "Your playbook could not be read just now. Try again." };
+  const { jm, cappedReason } = rules.length ? await judgeFor(userId) : { jm: null, cappedReason: null };
+  if (rules.length && !jm) return { ok: false, message: cappedReason ?? "AI is unavailable. Check the allowance or your own key in Settings." };
+  const slots = drafts.map((d) => ({ id: d.postId, service: d.network, channelId: d.channelId }) as OpenSlot);
+  const gate = await applyPlaybook(drafts.map((d) => ({ slotId: d.postId, text: d.text })), slots, rules, jm ? (x, r) => judgeDrafts(jm.judges, x, r) : null, cappedReason).finally(() => jm?.settle());
+  if (gate.check === "failed") return { ok: false, message: "The check could not run just now. Try again." };
+  await postgresWrittenStore().record(userId, drafts.map((d) => ({ postId: d.postId, network: d.network, text: d.text, playbookRevision: playbookVersion(rules), verdicts: gate.check === "judged" ? (gate.verdicts.get(d.postId) ?? []) : [] })));
+  return { ok: true, checked: drafts.length };
+}

@@ -11,8 +11,18 @@ vi.mock("@/lib/ai-key-store", async (orig) => ({
   postgresAiKeyStore: () => ({ get: async () => ownKey.saved, setModel: ownKey.setModel }),
 }))
 vi.mock("@/lib/ai-models", async (orig) => ({ ...(await orig<object>()), listModels: async () => ({ models: [{ id: "model-a" }, { id: "model-b" }] }) }))
-const perm = vi.hoisted(() => ({ mode: "ask" as "ask" | "direct" | "off", approve: vi.fn() }))
-vi.mock("@/lib/agent-permission", async (orig) => ({ ...(await orig<object>()), approveMode: async () => perm.mode }))
+// Saving the setting gives it a new revision, as the real table's updated_at does; claims are kept in memory.
+const perm = vi.hoisted(() => {
+  let mode: "ask" | "direct" | "off" = "ask", revision = 0
+  return { get mode() { return mode }, set mode(m) { mode = m; revision++ }, get revision() { return String(revision) }, approve: vi.fn(), claims: new Set<string>() }
+})
+vi.mock("@/lib/agent-permission", async (orig) => ({
+  ...(await orig<object>()),
+  approveMode: async () => perm.mode,
+  approvePermission: async () => ({ mode: perm.mode, revision: perm.revision }),
+  claimApproval: async (_u: string, nonce: string) => (perm.claims.has(nonce) ? false : (perm.claims.add(nonce), true)),
+  releaseApproval: async (_u: string, nonce: string) => { perm.claims.delete(nonce) },
+}))
 vi.mock("@/lib/approve-drafts", async (orig) => ({ ...(await orig<object>()), approveDrafts: (...a: unknown[]) => perm.approve(...a) }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
 vi.mock("@/lib/auth", () => ({ getAuth: async () => ({ $context: Promise.resolve({ baseURL: "https://app.example/api/auth" }) }), mcpResource: (url: string) => `${url}/api/mcp` }))
@@ -98,6 +108,7 @@ const buffer = fakeBuffer((call) => {
     posts.push(...added)
     return { createContentItem: { __typename: "CreateContentItemSuccess", content: { body: { posts: added } } } }
   }
+  if (query.includes("p0: post(input")) return Object.fromEntries(Object.entries(variables as Record<string, { id: string }>).map(([k, v]) => [`p${k.slice(1)}`, structuredClone(posts.find(p => p.id === v.id)) ?? null]))
   if (query.includes("post(input")) return { post: structuredClone(posts.find(p => p.id === variables.input.id)) }
   if (query.includes("editPost")) {
     expect(variables.input.saveToDraft).toBe(true)
@@ -607,6 +618,47 @@ describe("connector approve", () => {
     expect((await call("approve_drafts", { postIds: ["d1"], confirmToken: token })).isError).toBe(true)
     expect(perm.approve).not.toHaveBeenCalled()
     vi.useRealTimers()
+  })
+  it("refuses an approval token after the shown draft text or time changes", async () => {
+    const token = answer(await call("approve_drafts", { postIds: ["d1"] })).match(/confirmToken: (\S+)/)![1]
+    posts = [{ ...draft, text: "Different content never shown for approval.", dueAt: "2026-11-03T12:00:00.000Z" }]
+    const result = await call("approve_drafts", { postIds: ["d1"], confirmToken: token })
+    expect(result.isError).toBe(true)
+    expect(perm.approve).not.toHaveBeenCalled()
+  })
+  it("uses a yes once, so a draft returned to drafts cannot be scheduled again with it", async () => {
+    const token = answer(await call("approve_drafts", { postIds: ["d1"] })).match(/confirmToken: (\S+)/)![1]
+    await call("approve_drafts", { postIds: ["d1"], confirmToken: token })
+    posts = [{ ...draft }]
+    perm.approve.mockClear()
+    const result = await call("approve_drafts", { postIds: ["d1"], confirmToken: token })
+    expect(result.isError).toBe(true)
+    expect(perm.approve).not.toHaveBeenCalled()
+  })
+  it("lets the same yes try again when nothing was scheduled", async () => {
+    const token = answer(await call("approve_drafts", { postIds: ["d1"] })).match(/confirmToken: (\S+)/)![1]
+    perm.approve.mockResolvedValueOnce({ approved: [], refused: [{ id: "d1", reason: "Buffer could not be reached." }] })
+    expect((await call("approve_drafts", { postIds: ["d1"], confirmToken: token })).isError).toBe(true)
+    expect(answer(await call("approve_drafts", { postIds: ["d1"], confirmToken: token }))).toContain("1 scheduled")
+  })
+  it("a changed setting invalidates outstanding confirmations", async () => {
+    const token = answer(await call("approve_drafts", { postIds: ["d1"] })).match(/confirmToken: (\S+)/)![1]
+    perm.mode = "off"
+    await call("approve_drafts", { postIds: ["d1"], confirmToken: token })
+    perm.mode = "ask"
+    const result = await call("approve_drafts", { postIds: ["d1"], confirmToken: token })
+    expect(result.isError).toBe(true)
+    expect(perm.approve).not.toHaveBeenCalled()
+  })
+  it("shares the Buffer write allowance in both modes", async () => {
+    limits.blocked = "bufferWrite"
+    try {
+      const token = answer(await call("approve_drafts", { postIds: ["d1"] })).match(/confirmToken: (\S+)/)![1]
+      expect((await call("approve_drafts", { postIds: ["d1"], confirmToken: token })).isError).toBe(true)
+      perm.mode = "direct"
+      expect((await call("approve_drafts", { postIds: ["d1"] })).isError).toBe(true)
+      expect(perm.approve).not.toHaveBeenCalled()
+    } finally { limits.blocked = "" }
   })
   it("schedules in one call when the person chose not to be asked", async () => {
     perm.mode = "direct"

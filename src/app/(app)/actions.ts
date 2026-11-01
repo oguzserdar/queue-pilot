@@ -26,7 +26,9 @@ import { installState, installUrl } from "@/lib/discord";
 import { headers } from "next/headers";
 import { publicOrigin } from "@/lib/origin";
 import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
-import { approveDrafts as approveInBuffer, type ApproveResult } from "@/lib/approve-drafts";
+import { type ApproveResult } from "@/lib/approve-drafts";
+import { approveChecked } from "@/lib/approve-checked";
+import { recheckDrafts } from "@/lib/save-for-user";
 import { postgresRulesStore, TooManyRulesError } from "@/lib/rules-store";
 import { NETWORKS, parseNewRule, type NewRule, ruleInput } from "@/lib/rules";
 import { structureRule } from "@/lib/structure-rule";
@@ -72,14 +74,36 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
   try {
     const b = await freshBufferForCurrentUser();
     if (!b) return { ok: false, kind: "signedOut" };
-    const res = await approveInBuffer(b.token, ids, b.posts, new Date(), await wroteIds(b.userId, ...ids));
-    await b.markScheduled(res.approved);
+    // Read from Buffer now and check the playbook: a draft with an out-of-date check or a broken blocking rule is refused.
+    const { approved, refused } = await approveChecked(b.userId, b.token, ids, new Date());
+    await b.markScheduled(approved);
     revalidatePath("/", "layout");
-    return { ok: true, ...res };
+    return { ok: true, approved, refused };
   } catch (e) {
     if (e instanceof BufferRateLimitedError) return { ok: false, kind: "limited", retryAt: e.retryAt.toISOString() };
     console.error(JSON.stringify({ event: "qp-approve-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, kind: "failed" };
+  }
+}
+
+/** Check again: re-runs the playbook check on the person's own drafts as they are in Buffer now. */
+export async function recheckMyDrafts(ids: string[]): Promise<{ ok: true; checked: number } | { ok: false; message: string }> {
+  { const l = await overLimit("ai"); if (l) return tooMany(l); }
+  if (!Array.isArray(ids) || !ids.length || ids.length > 30 || ids.some((id) => typeof id !== "string")) return { ok: false, message: "Choose up to 30 drafts." };
+  try {
+    const b = await bufferForWriting();
+    if (!b) return { ok: false, message: "Sign in with Buffer first." };
+    const ours = await wroteIds(b.userId, ...ids);
+    const service = new Map(b.channels.map((c) => [c.id, c.service]));
+    const drafts = b.posts.filter((p) => ours.has(p.id) && p.status === "draft").map((p) => ({ postId: p.id, text: p.text, network: service.get(p.channelId) ?? "", channelId: p.channelId }));
+    if (!drafts.length) return { ok: false, message: "Only drafts Queue Pilot wrote can be checked here." };
+    const r = await recheckDrafts(b.userId, drafts);
+    if (r.ok) revalidatePath("/", "layout");
+    return r;
+  } catch (e) {
+    if (e instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+    console.error(JSON.stringify({ event: "qp-recheck-failed", message: e instanceof Error ? e.message : String(e) }));
+    return { ok: false, message: "Could not check those drafts just now. Try again." };
   }
 }
 

@@ -155,6 +155,13 @@
       "when": 1793442298638,
       "tag": "20261031102458_agent_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793490947450,
+      "tag": "20261031235547_approval_claim",
+      "breakpoints": true
     }
   ]
 }

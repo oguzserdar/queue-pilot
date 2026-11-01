@@ -5,7 +5,7 @@ import { ArrowUpRight } from "lucide-react";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { approveDrafts, deleteMyDraft, editDraftText } from "@/app/(app)/actions";
+import { approveDrafts, deleteMyDraft, editDraftText, recheckMyDrafts } from "@/app/(app)/actions";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { Button } from "@/registry/components/button/button";
 import { Badge } from "@/registry/components/badge/badge";
@@ -380,6 +380,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             </Button>
             {current.ours !== false && !approved.has(current.id) && (
               <>
+                {live && verdicts[current.id] === null && <Button variant="secondary" disabled={busy} onClick={() => run(() => recheckMyDrafts([current.id]).then((r) => (r.ok ? { ok: true as const } : r)), "Checked against your playbook.")}>Check again</Button>}
                 <Button variant="secondary" onClick={() => { setEditing(current.text); setConfirmDelete(false); setNote(null); }}>Edit</Button>
                 <Button variant="ghost" onClick={() => { setConfirmDelete(true); setEditing(null); setNote(null); }}>Delete draft</Button>
               </>

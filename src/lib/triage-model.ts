@@ -8,6 +8,7 @@ import { deliveriesFromBuffer } from "./delivery-model";
 import { postsBetween } from "./posts-between";
 import { nextWeekRange, weekFromBuffer } from "./week-from-buffer";
 import { cellEntries, worstTone } from "./week-model";
+import type { Readiness } from "./draft-readiness";
 
 /** Why something needs the person; the groups appear in this order. */
 export const TRIAGE_GROUPS = [
@@ -20,11 +21,11 @@ export const TRIAGE_GROUPS = [
 ] as const;
 export type TriageKind = (typeof TRIAGE_GROUPS)[number]["kind"];
 
-/** One line. `postId` is set for a draft Queue Pilot wrote, so it can be approved from here. */
-export type TriageItem = { id: string; kind: TriageKind; title: string; detail: string; href: string; action: string; postId?: string };
-
-/** A draft's playbook state: checked and fine, needing a fresh check, or breaking a rule. */
-export type DraftCheck = "ok" | "check" | "breaks";
+/**
+ * One line. `postId` is set on a draft Queue Pilot wrote: `approve` rows can be approved from here, and `recheck`
+ * rows run Check again. Other check rows open Next week to read the draft.
+ */
+export type TriageItem = { id: string; kind: TriageKind; title: string; detail: string; href: string; action: string; postId?: string; run?: "approve" | "recheck" };
 
 const short = (t: string, n = 90) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
 
@@ -33,8 +34,8 @@ export function triageFromBuffer(input: {
   posts: Post[];
   now: Date;
   timeZone: string;
-  /** Drafts Queue Pilot wrote, with their playbook state. A draft missing here is not Queue Pilot's. */
-  checks: Record<string, DraftCheck>;
+  /** Drafts Queue Pilot wrote, with whether their last check lets them go out. A draft missing here is not Queue Pilot's. */
+  checks: Record<string, Readiness>;
   /** Review comments from the last seven days, with the draft each was left on. */
   comments: (ReviewComment & { draft: string })[];
 }): TriageItem[] {
@@ -46,12 +47,12 @@ export function triageFromBuffer(input: {
 
   for (const p of week.posts.filter((p) => p.status === "draft")) {
     const where = `${week.days[p.day]} ${p.time} · ${name(p.channel)}`;
-    const state = checks[p.id];
-    if (worstTone(p) === "danger" || state === "breaks") {
-      const why = p.checks?.find((c) => c.tone === "danger")?.label ?? "It breaks a rule in your playbook.";
+    const r = checks[p.id];
+    if (worstTone(p) === "danger" || r?.state === "breaks") {
+      const why = p.checks?.find((c) => c.tone === "danger")?.label ?? r?.reason ?? "It breaks a rule in your playbook.";
       items.push({ id: `breaks-${p.id}`, kind: "breaks", title: short(p.text), detail: `${where} · ${why}`, href: "/week", action: "Fix" });
-    } else if (state === "ok") items.push({ id: `approve-${p.id}`, kind: "approve", title: short(p.text), detail: where, href: "/week", action: "Approve", postId: p.id });
-    else if (state === "check") items.push({ id: `check-${p.id}`, kind: "check", title: short(p.text), detail: `${where} · The rules changed since it was checked`, href: "/week", action: "Approve", postId: p.id });
+    } else if (r?.state === "ok" || r?.state === "flagged") items.push({ id: `approve-${p.id}`, kind: "approve", title: short(p.text), detail: r.reason ? `${where} · ${r.reason}` : where, href: "/week", action: "Approve", postId: p.id, run: "approve" });
+    else if (r?.state === "check") items.push({ id: `check-${p.id}`, kind: "check", title: short(p.text), detail: `${where} · ${r.reason}`, href: "/week", action: r.stale ? "Check again" : "Read it", postId: p.id, run: r.stale ? "recheck" : undefined });
   }
 
   const past = { start: new Date(now.getTime() - 7 * 86_400_000), end: now };

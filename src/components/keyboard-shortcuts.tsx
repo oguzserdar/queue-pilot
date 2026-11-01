@@ -18,7 +18,11 @@ export const PAGE_ACTION_EVENT = "qp:do";
 /** Which page owns each palette action. */
 const ACTION_PAGE: Record<string, string> = { approve: "/week", share: "/week", "add-rule": "/playbook" };
 
-function readSingleKeys(): boolean {
+/** Fired on the window when the single-key switch changes, so every key listener follows it without a reload. */
+export const SINGLE_KEYS_EVENT = "qp:single-keys";
+
+/** Whether single-key shortcuts are on in this browser (on unless the person switched them off). */
+export function readSingleKeys(): boolean {
   try {
     return localStorage.getItem(SINGLE_KEYS) !== "off";
   } catch {
@@ -87,6 +91,7 @@ export function KeyboardShortcuts() {
     try {
       localStorage.setItem(SINGLE_KEYS, on ? "on" : "off");
     } catch {}
+    window.dispatchEvent(new Event(SINGLE_KEYS_EVENT));
   };
 
   // A page action runs on the page that owns it, opening that page first when needed.

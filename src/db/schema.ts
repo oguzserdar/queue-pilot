@@ -351,3 +351,14 @@ export const agentPermission = pgTable("qp_agent_permission", {
   approve: text("approve").notNull().default("ask"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * A confirmation token from approve_drafts, claimed when it is used so it schedules at most once. The row is removed
+ * again when nothing was scheduled, so a failed attempt can be retried with the same yes.
+ */
+export const approvalClaim = pgTable("qp_approval_claim", {
+  nonce: text("nonce").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
+});

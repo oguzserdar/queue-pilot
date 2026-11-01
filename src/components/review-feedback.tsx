@@ -46,7 +46,11 @@ export function ReviewFeedback({ linkId, commentId, channelId, reviewer, candida
   const [kept, setKept] = useState(false);
   const [busy, start] = useTransition();
 
-  const toggle = (id: string, on: boolean) => setSelected(s => { const n = new Set(s); if (on && n.size < 30) n.add(id); else n.delete(id); return n; });
+  // A preview belongs to the drafts it was made for: changing the choice drops it, so Apply and Keep never use an old one.
+  const toggle = (id: string, on: boolean) => {
+    setSelected(s => { const n = new Set(s); if (on && n.size < 30) n.add(id); else n.delete(id); return n; });
+    if (plan) { setPlan(null); setDone({}); setKept(false); setMessage("You changed the drafts. Preview again to see the changes for these."); }
+  };
   const preview = () => start(async () => {
     setMessage(""); setPlan(null); setDone({}); setKept(false); setScope("accounts");
     try { const r = await proposeCommentChanges(linkId, commentId, [...selected]); if (r.ok) setPlan(r.plan); else setMessage(r.message); }
