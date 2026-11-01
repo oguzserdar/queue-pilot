@@ -20,7 +20,7 @@ const MARK: Record<TriageItem["kind"], PostState> = { breaks: "breaks", failed: 
  * Everything that needs the person, grouped by why, one action each. J and K move, X ticks, A approves, Enter opens.
  * Ticked drafts are approved together from the bar at the bottom.
  */
-export function TriageList({ items, live }: { items: TriageItem[]; live: boolean }) {
+export function TriageList({ items, live, onRemaining }: { items: TriageItem[]; live: boolean; onRemaining?: (n: number) => void }) {
   const [focus, setFocus] = useState(-1);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [done, setDone] = useState<Set<string>>(new Set());
@@ -30,13 +30,24 @@ export function TriageList({ items, live }: { items: TriageItem[]; live: boolean
   const rows = useRef<(HTMLLIElement | null)[]>([]);
   const shown = TRIAGE_GROUPS.map((g) => ({ ...g, items: items.filter((i) => i.kind === g.kind && !(i.postId && done.has(i.postId))) })).filter((g) => g.items.length);
   const flat = shown.flatMap((g) => g.items);
+  useEffect(() => { onRemaining?.(flat.length); }, [flat.length, onRemaining]);
+
+  // An approved row folds away, and the rows below slide up into its place, before it leaves the list.
+  const leave = async (ids: string[]) => {
+    const els = ids.map((id) => document.querySelector<HTMLElement>(`[data-post="${CSS.escape(id)}"]`)).filter((el): el is HTMLElement => !!el);
+    els.forEach((el) => { el.style.height = `${el.offsetHeight}px`; });
+    void document.body.offsetHeight;
+    els.forEach((el) => el.setAttribute("data-leaving", ""));
+    if (els.length && !matchMedia("(prefers-reduced-motion: reduce)").matches) await new Promise((r) => setTimeout(r, 300));
+    setDone((s) => new Set([...s, ...ids]));
+  };
 
   const approve = (ids: string[]) => start(async () => {
-    if (!live) { setDone((s) => new Set([...s, ...ids])); setPicked(new Set()); toast({ type: "success", title: `${ids.length} approved`, description: "On this example page only." }); return; }
+    if (!live) { await leave(ids); setPicked(new Set()); toast({ type: "success", title: `${ids.length} approved`, description: "On this example page only." }); return; }
     const r = await approveDrafts(ids);
     if (!r.ok) { toast({ type: "error", title: "Nothing was scheduled", description: r.kind === "limited" ? "Buffer's request limit is reached. Try again in a few minutes." : "Buffer could not be reached." }); return; }
-    setDone((s) => new Set([...s, ...r.approved]));
     setPicked(new Set());
+    await leave(r.approved);
     if (r.approved.length) toast({ type: "success", title: `${r.approved.length} post${r.approved.length === 1 ? "" : "s"} scheduled in Buffer` });
     if (r.refused.length) toast({ type: "error", title: `${r.refused.length} not scheduled`, description: r.refused.map((x) => x.reason).join(" ") });
     router.refresh();
@@ -89,7 +100,7 @@ export function TriageList({ items, live }: { items: TriageItem[]; live: boolean
               i += 1;
               const at = i;
               return (
-                <li key={item.id} ref={(el) => { rows.current[at] = el; }} className={styles.row} data-focus={focus === at || undefined} data-picked={(item.run === "approve" && item.postId && picked.has(item.postId)) || undefined} data-picking={picked.size > 0 || undefined} onMouseEnter={() => setFocus(at)}>
+                <li key={item.id} data-post={item.postId} ref={(el) => { rows.current[at] = el; }} className={styles.row} data-focus={focus === at || undefined} data-picked={(item.run === "approve" && item.postId && picked.has(item.postId)) || undefined} data-picking={picked.size > 0 || undefined} onMouseEnter={() => setFocus(at)}>
                   {/* One slot: the state mark, which turns into a tick box on hover, focus, or once anything is ticked. */}
                   <span className={styles.lead}>
                     <span className={styles.leadMark}><StateMark state={MARK[item.kind]} /></span>

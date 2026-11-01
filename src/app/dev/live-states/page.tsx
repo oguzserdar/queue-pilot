@@ -9,6 +9,8 @@ import { PlaybookView } from "@/components/playbook-view";
 import { devReadRule } from "./read-rule";
 import { demoWeek } from "@/lib/demo-data";
 import { slotKey } from "@/lib/week-model";
+import { NeedsYouView } from "@/components/needs-you-view";
+import type { TriageItem } from "@/lib/triage-model";
 
 /** Development only: the signed-in Ideas, Voice and Week screens, for screenshots and the layout gate. Production answers 404. */
 export default async function Page({ searchParams }: { searchParams: Promise<{ screen?: string; channels?: string }> }) {
@@ -17,7 +19,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const asked = params.screen;
   const channelCount = params.channels === "1" ? 1 : params.channels === "2" ? 2 : 4;
   const shellChannels = exampleChannels.slice(0, channelCount).map(c => ({ ...c, name: c.handle }));
-  const screen = asked === "voice" || asked === "settings" || asked === "week" || asked === "playbook" ? asked : "ideas";
+  const screen = asked === "voice" || asked === "settings" || asked === "week" || asked === "playbook" || asked === "needs" ? asked : "ideas";
+  if (screen === "needs") {
+    // Example rows, not live: approving folds the row away without calling Buffer.
+    const at = (i: number, title: string, time: string, account: string): TriageItem => ({ id: `approve-${i}`, kind: "approve", title, detail: `${time} · ${account}`, href: "/week", action: "Approve", postId: `p${i}`, run: "approve" });
+    const triage = [at(1, "Queue Pilot opens review links on Monday.", "Mon 9:00", "Company"), at(2, "On Monday, QP adds account-specific rules.", "Mon 12:00", "Company"), at(3, "I am building QP around my edits.", "Tue 9:00", "Personal"), at(4, "Why one clear point beats three.", "Wed 9:00", "Personal")];
+    const shell: ShellAccount = { email: "mark@weeknightdinners.example", channels: shellChannels, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Mark Evans", image: null };
+    return <AppShell account={shell} signInOpen><NeedsYouView needs={[]} readiness={[]} greeting="Good evening" triage={triage} /></AppShell>;
+  }
   if (screen === "playbook") {
     const shell: ShellAccount = { email: "mark@weeknightdinners.example", channels: shellChannels, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Mark Evans", image: null };
     return <AppShell account={shell} signInOpen><PlaybookView mode="live" initial={[]} reader={devReadRule} /></AppShell>;

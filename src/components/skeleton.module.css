@@ -1,0 +1,11 @@
+/* Placeholders at the content's own geometry while Buffer is read; a soft sweep says it is working. */
+.bar { display: block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--surface-muted) 25%, var(--border) 50%, var(--surface-muted) 75%); background-size: 200% 100%; animation: sweep 1.4s linear infinite; }
+.post { display: flex; flex-direction: column; gap: 7px; padding: 9px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); }
+.slot { height: 34px; border-radius: 8px; border: 1px dashed var(--border-control); }
+.rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 90px; gap: var(--space-3); align-items: center; padding: 14px var(--space-4); }
+.row + .row { border-top: 1px solid var(--border-subtle); }
+.lines { display: flex; flex-direction: column; gap: 7px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); justify-self: center; }
+@keyframes sweep { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .bar { animation: none; } }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirmed } from "./use-confirmed";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/registry/components/button/button";
 import { Select } from "@/registry/components/select/select";
@@ -29,7 +30,10 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
   const [text, setText] = useState("");
   const [network, setNetwork] = useState("all");
   const [level, setLevel] = useState("warn");
+  // A problem with the sentence sits on the field; one from saving sits by the button.
+  const [fieldProblem, setFieldProblem] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [added, confirmAdded] = useConfirmed();
   const [busy, setBusy] = useState(false);
   // Set at once, unlike state: a held or doubled ⌘ Enter must not add the same rule twice before the re-render.
   const adding = useRef(false);
@@ -61,12 +65,12 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
     if (adding.current) return;
     const raw: Record<string, unknown> = { kind: "guidance", text, channels: network === "all" || network.startsWith("account:") ? "all" : [network], ...(network.startsWith("account:") ? { accountIds: [network.slice(8)] } : {}), level, ...(current ? { reading: current } : {}) };
     const rule = parseNewRule(raw);
-    if (typeof rule === "string") return setProblem(rule);
+    if (typeof rule === "string") return setFieldProblem(rule);
     adding.current = true;
     setBusy(true);
     const err = await onAdd(rule, raw).finally(() => { adding.current = false; setBusy(false); });
     setProblem(err);
-    if (!err) { setText(""); setReading(null); }
+    if (!err) { setText(""); setReading(null); confirmAdded(); }
   };
 
   return (
@@ -79,7 +83,8 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
         rows={2}
         placeholder={'Say "stock", never "broth". Name the dish in the first line.'}
         maxLength={200}
-        onChange={(e) => { setText(e.target.value); setProblem(null); }}
+        error={fieldProblem ?? undefined}
+        onChange={(e) => { setText(e.target.value); setProblem(null); setFieldProblem(null); }}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submit(); } }}
       />
       {text.length > 150 && <p className={styles.count} aria-live="polite"><span className="tnum">{text.length}</span> of 200 characters</p>}
@@ -101,7 +106,7 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
         <Select label="If a draft breaks it" value={level} onValueChange={setLevel} options={[{ value: "warn", label: "Save it and flag it" }, { value: "block", label: "Do not save it" }]} />
       </div>
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
-      <div><Button type="submit" variant="primary" disabled={busy || !text.trim()}>{busy ? "Adding…" : "Add rule"}</Button></div>
+      <div><Button type="submit" variant="primary" disabled={busy || (!text.trim() && !added)}>{busy ? "Adding…" : added ? "✓ Added" : "Add rule"}</Button></div>
     </form>
   );
 }

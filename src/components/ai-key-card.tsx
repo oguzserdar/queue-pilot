@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirmed } from "./use-confirmed";
 import { Alert } from "@/registry/components/alert/alert";
 import { Badge } from "@/registry/components/badge/badge";
 import { AiUsage } from "./ai-usage";
@@ -23,6 +24,8 @@ export type ShownAiKey = { provider: string; masked: string; model: string | nul
 export function AiKeyCard({ shown, allowance, notice }: { shown: ShownAiKey | undefined; allowance: { used: number; cap: number; budgetUsd: number; leftUsd: number; resetsAt: string } | null; notice: { ok: boolean; text: string } | null }) {
   const [value, setValue] = useState("");
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(notice);
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [saved, confirmSaved] = useConfirmed(2400);
   const { toast } = useToastStack();
   // A success becomes a short message in the corner; a problem stays next to the button that caused it.
   const say = (m: NonNullable<typeof message>) => { if (m.ok) { toast({ type: "success", title: m.text }); setMessage(null); } else setMessage(m); };
@@ -86,14 +89,15 @@ export function AiKeyCard({ shown, allowance, notice }: { shown: ShownAiKey | un
             e.preventDefault();
             start(async () => {
               const r = await saveAiKey(value);
-              if (r.ok) setValue("");
-              say(r.ok ? { ok: true, text: "Saved. Use Write drafts with my AI on Next week." } : { ok: false, text: r.message });
+              // A bad key is said on the key field; a saved one confirms on the button.
+              if (r.ok) { setValue(""); setKeyError(null); setMessage(null); confirmSaved(); }
+              else setKeyError(r.message);
             });
           }}
         >
-          <PasswordField id="ai-key-input" label="Anthropic (sk-ant-…), OpenAI (sk-…) or OpenRouter (sk-or-…) key" autoComplete="off" spellCheck={false} value={value} onChange={(e) => setValue(e.target.value)} placeholder="sk-…" />
+          <PasswordField id="ai-key-input" label="Anthropic (sk-ant-…), OpenAI (sk-…) or OpenRouter (sk-or-…) key" autoComplete="off" spellCheck={false} value={value} onChange={(e) => { setValue(e.target.value); setKeyError(null); }} placeholder="sk-…" error={keyError ?? undefined} description={saved ? "Saved. Use Write drafts with my AI on Next week." : undefined} />
           <div className={styles.deleteActions}>
-            <Button type="submit" variant="primary" size="sm" disabled={pending || !value.trim()}>{pending ? "Saving…" : "Save key"}</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={pending || (!value.trim() && !saved)}>{pending ? "Saving…" : saved ? "✓ Saved" : "Save key"}</Button>
             <a className={styles.muted} href="/api/openrouter/start">Or connect your OpenRouter account</a>
           </div>
         </form>

@@ -30,3 +30,7 @@
 .row[data-focus] .leadMark:has(+ .leadBox), .row[data-picking] .leadMark:has(+ .leadBox), .lead:focus-within .leadMark { opacity: 0; }
 .row[data-picked] { background: color-mix(in oklab, var(--qp-crimson) 6%, var(--surface)); }
 @media (hover: none) { .leadBox { opacity: 1; } .leadMark:has(+ .leadBox) { opacity: 0; } }
+/* Folding a row away: its height closes and the rows below slide up; set from the row's measured height. */
+.row { transition: background-color 120ms var(--ease-standard), height 300ms var(--ease-standard), opacity 200ms var(--ease-standard), padding 300ms var(--ease-standard); }
+.row[data-leaving] { height: 0 !important; opacity: 0; padding-block: 0; overflow: hidden; border-top-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .row { transition: none; } }

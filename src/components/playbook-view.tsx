@@ -97,8 +97,8 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       toast({ type: "success", title: "Rule added", description: "On this example page only." });
       return null;
     }
+    // The form's button confirms on itself, so no toast here.
     const res = await addRule(raw);
-    if (res.ok) toast({ type: "success", title: "Rule added", description: rule.text });
     return res.ok ? null : res.message;
   };
 

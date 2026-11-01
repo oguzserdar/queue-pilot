@@ -1,0 +1,4 @@
+.roll { display: inline-block; overflow: hidden; vertical-align: bottom; font-variant-numeric: tabular-nums; }
+.digits { display: inline-block; transition: transform 350ms var(--ease-standard), opacity 250ms var(--ease-standard); }
+@starting-style { .digits { transform: translateY(70%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .digits { transition: none; } }

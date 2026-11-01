@@ -7,6 +7,8 @@ import Link from "next/link";
 import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import type { TriageItem } from "@/lib/triage-model";
 import { TriageList } from "./triage-list";
+import { RollingNumber } from "./rolling-number";
+import { useState } from "react";
 import styles from "./needs-you-view.module.css";
 
 /** One thing on the home screen that needs the person, with the page that fixes it. */
@@ -17,6 +19,8 @@ export type ReadinessItem = { id: string; label: string; state: "done" | "todo" 
 /** Home: what needs the user right now, and until setup is complete, the readiness checklist. */
 export function NeedsYouView({ needs, readiness, greeting, triage, live = false }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string; triage?: TriageItem[]; live?: boolean }) {
   const open = triage ?? needs.filter((n) => n.tone !== "success");
+  // The list reports what is left as rows are approved, so the title counts down with it.
+  const [left, setLeft] = useState(open.length);
   const done = readiness.filter((r) => r.state === "done").length;
   const ready = done === readiness.length;
   // A new account has nothing to catch up on yet: setup is the page until it is done or something needs attention.
@@ -28,7 +32,7 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false 
     <div className={styles.page}>
       <header className={styles.head}>
         <p className={styles.greet}>{greeting}</p>
-        <h1 className={styles.title}>{settingUp ? "Set up Queue Pilot" : open.length === 0 ? "All caught up." : `${open.length} thing${open.length === 1 ? "" : "s"} need${open.length === 1 ? "s" : ""} you.`}</h1>
+        <h1 className={styles.title}>{settingUp ? "Set up Queue Pilot" : left === 0 ? "All caught up." : <><RollingNumber value={left} />{` thing${left === 1 ? "" : "s"} need${left === 1 ? "s" : ""} you.`}</>}</h1>
         {settingUp && <p className={styles.lede}>{done} of {readiness.length} done. Each step takes about a minute, and then your AI fills your week in Buffer.</p>}
       </header>
 
@@ -55,7 +59,7 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false 
         </details>
       )}
 
-      {settingUp ? null : triage ? <TriageList items={triage} live={live} /> : needs.length === 0 ? (
+      {settingUp ? null : triage ? <TriageList items={triage} live={live} onRemaining={setLeft} /> : needs.length === 0 ? (
         <EmptyState
           title="Nothing needs you right now"
           description="A draft that needs a look, or a post Buffer could not send, shows up here."

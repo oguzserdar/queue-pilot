@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirmed } from "./use-confirmed";
 import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
 import { ArrowUpRight } from "lucide-react";
 
@@ -126,6 +127,7 @@ function LiveSources({ channels, connectorUrl, sources, copies, discordResult }:
 /** The feeds the user's AI drafts from: add by URL (checked once before saving), remove one at a time. */
 function Material({ sources }: { sources: LiveSource[] }) {
   const [url, setUrl] = useState("");
+  const [added, confirmAdded] = useConfirmed();
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const { toast } = useToastStack();
   // A success becomes a short message in the corner; a problem stays next to the button that caused it.
@@ -136,8 +138,10 @@ function Material({ sources }: { sources: LiveSource[] }) {
     start(async () => {
       const res = await addSource(url);
       if (res.ok) {
+        // The feed appears in the list and the button confirms; no corner message.
         setUrl("");
-        say({ tone: "ok", text: `Added ${res.title}.` });
+        setMessage(null);
+        confirmAdded();
       } else setMessage({ tone: "bad", text: res.message });
     });
 
@@ -174,11 +178,11 @@ function Material({ sources }: { sources: LiveSource[] }) {
           inputMode="url"
           placeholder="https://"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => { setUrl(e.target.value); if (message?.tone === "bad") setMessage(null); }}
           error={message?.tone === "bad" ? message.text : undefined}
         />
-        <Button type="submit" variant="primary" disabled={pending || !url.trim()}>
-          {pending ? "Checking the feed…" : "Add feed"}
+        <Button type="submit" variant="primary" disabled={pending || (!url.trim() && !added)}>
+          {pending ? "Checking the feed…" : added ? "✓ Added" : "Add feed"}
         </Button>
       </form>
       <p className={styles.addHint}>For example yourname.substack.com/feed or github.com/you/app/releases.atom</p>

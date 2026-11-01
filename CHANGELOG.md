@@ -13,6 +13,9 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ### Changed
 - Needs you groups drafts by what needs attention, with selection for bulk approval and a setup strip.
+- Form problems show on the field that caused them and clear as you type. Add rule, Add feed and Save key confirm on the button itself.
+- Approving on Needs you folds the row away and the count above rolls down.
+- Next week and Needs you show placeholders in the page's own shape while Buffer is read.
 - Playbook shows each rule once, where it came from and where it applies. Turn inherited rules off for one account and undo the change.
 - Command search opens writing, sharing, approval and rule actions. Draft status marks are consistent across the app.
 - A connected AI can schedule only under the permission set in Settings: ask first by default, allow directly, or turn off. Ask-first confirmations bind the exact draft content, account, time and attachments, expire after ten minutes and can be used once.
