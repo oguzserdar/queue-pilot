@@ -6,7 +6,7 @@ import type { JudgeInput } from "./judge";
 
 const Answer = z.object({
   kind: z.enum(["fact", "one_off", "preference", "unclear"]),
-  reason: z.string().min(1).max(800),
+  reason: z.string().min(1).max(800).describe("Explain why this comment has this classification. Do not claim any edits were applied or passed checks; checks run after this plan."),
   preference: z.string().max(200).nullable(),
   edits: z.array(z.object({ draft: z.number().int().min(1), text: z.string().min(1).max(25_000), reason: z.string().min(1).max(500) })).max(30),
 });

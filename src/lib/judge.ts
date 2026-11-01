@@ -30,7 +30,7 @@ export const rulesFor = (rules: Rule[], network: string, channelId?: string) => 
 /** A rule as the model reads it: its meaning in any language. */
 export function describeRule(r: Rule): string {
   return r.kind === "banned" ? `Never ${r.where === "start" ? "open the post with" : r.where === "end" ? "end the post with" : "use"} ${r.phrases.map((p) => `"${p}"`).join(" or ")}, nor a translation of it or wording that means the same.${r.where ? ` Elsewhere in the post it is allowed.` : ""}`
-    : r.kind === "replace" ? `Say "${r.to}", never "${r.from}". This covers translations, other word forms and words that mean the same as "${r.from}".`
+    : r.kind === "replace" ? `Say "${r.to}", never "${r.from}". This covers translations, other word forms and words that mean the same as "${r.from}". ${r.from.toLocaleLowerCase() === r.to.toLocaleLowerCase() ? "This is a capitalization change: require the replacement’s exact capitalization." : "Capitalization variants of the replacement are allowed. This wording replacement does not impose lowercase or uppercase spelling."}`
     : r.kind === "ends_with" ? `End with "${r.phrase}", or the same line in the post's language.`
     : r.text;
 }

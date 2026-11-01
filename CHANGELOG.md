@@ -19,6 +19,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Connect lists every tool by what it reads, changes or asks permission for.
 
 ### Fixed
+- A wording replacement accepts capitalization variants of the preferred phrase. Explicit case-only replacements still enforce their requested spelling. Review-plan reasons describe the classification without claiming later checks passed.
 - Require complete current passing checks for applicable mandatory rules before approval. Missing or uncertain mandatory verdicts offer Check again. Warning-only failures remain approvable.
 - Recheck reads the selected drafts freshly from Buffer. Changed content invalidates an approval confirmation, and an unconfirmed scheduling response cannot make it reusable.
 - Respect the single-key shortcut setting on Needs you. Changing the drafts selected for review clears the previous preview.

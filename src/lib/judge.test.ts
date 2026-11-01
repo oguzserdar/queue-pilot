@@ -28,6 +28,17 @@ describe("rules as decision questions", () => {
   });
 });
 
+describe("replacement capitalization", () => {
+  it("allows capitalization variants for a wording change but preserves a case-only correction", () => {
+    const abbreviation: Rule = { ...broth, from: "queue pilot", to: "qp", text: 'Say "qp", never "queue pilot".' };
+    const question = questionsFor([abbreviation]).rule_b1.instructions;
+    expect(question).toContain("Capitalization variants of the replacement are allowed");
+    const capitalization: Rule = { ...broth, from: "openai", to: "OpenAI", text: 'Say "OpenAI", never "openai".' };
+    expect(questionsFor([capitalization]).rule_b1.instructions).toContain("require the replacement’s exact capitalization");
+    expect(questionsFor([capitalization]).rule_b1.instructions).not.toContain("variants of the replacement are allowed");
+  });
+});
+
 describe("judgeDrafts", () => {
   it("fails a German draft on the broth rule and quotes the German word", async () => {
     const d = deciding(() => ({ rule_b1: choice("fail", 0.97), rule_g1: choice("pass", 0.9) }));
