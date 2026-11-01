@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { approveDrafts, recheckMyDrafts } from "@/app/(app)/actions";
 import { readSingleKeys, SINGLE_KEYS_EVENT } from "./keyboard-shortcuts";
 import { Button } from "@/registry/components/button/button";
+import { HoverCard } from "@/registry/components/hover-card/hover-card";
 import { Checkbox } from "@/registry/components/checkbox/checkbox";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { isTypingTarget } from "@/lib/shortcuts";
@@ -107,10 +108,20 @@ export function TriageList({ items, live, onRemaining }: { items: TriageItem[]; 
                       ? <Checkbox aria-label={`Select: ${item.title}`} checked={picked.has(item.postId)} onCheckedChange={() => toggle(item.postId!)} />
                       : <StateMark state={MARK[item.kind]} />}
                   </span>
-                  <div className={styles.text}>
+                  {(() => {
+                    const text = (
+                      <div className={styles.text}>
                     <span className={styles.title}>{item.title}</span>
                     <span className={styles.detail}>{item.postId && item.kind !== "comment" ? `Draft · ${item.detail}` : item.detail}</span>
                   </div>
+                    );
+                    // Long drafts and reasons stay one line in the row; the whole of each opens on hover or focus.
+                    return item.full ? (
+                      <HoverCard content={<div className={styles.peek}><p className={styles.peekText}>{item.full}</p>{item.why && <p className={styles.peekWhy}>{item.why}</p>}</div>}>
+                        {text}
+                      </HoverCard>
+                    ) : text;
+                  })()}
                   {item.run === "approve" ? (
                     <Button variant="secondary" size="sm" disabled={pending} onClick={() => approve([item.postId!])}>{item.action}{keysOn && <kbd className={styles.key}>A</kbd>}</Button>
                   ) : item.run === "recheck" ? (

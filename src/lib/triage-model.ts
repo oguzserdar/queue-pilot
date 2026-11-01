@@ -25,7 +25,8 @@ export type TriageKind = (typeof TRIAGE_GROUPS)[number]["kind"];
  * One line. `postId` is set on a draft Queue Pilot wrote: `approve` rows can be approved from here, and `recheck`
  * rows run Check again. Other check rows open Next week to read the draft.
  */
-export type TriageItem = { id: string; kind: TriageKind; title: string; detail: string; href: string; action: string; postId?: string; run?: "approve" | "recheck" };
+/** `full` and `why`, when present, are the whole post and the whole reason, shown on hover; the row keeps one line of each. */
+export type TriageItem = { id: string; kind: TriageKind; title: string; detail: string; href: string; action: string; postId?: string; run?: "approve" | "recheck"; full?: string; why?: string };
 
 const short = (t: string, n = 200) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
 
@@ -50,9 +51,9 @@ export function triageFromBuffer(input: {
     const r = checks[p.id];
     if (worstTone(p) === "danger" || r?.state === "breaks") {
       const why = p.checks?.find((c) => c.tone === "danger")?.label ?? r?.reason ?? "It breaks a rule in your playbook.";
-      items.push({ id: `breaks-${p.id}`, kind: "breaks", title: short(p.text), detail: `${where} · ${why}`, href: "/week", action: "Fix" });
-    } else if (r?.state === "ok" || r?.state === "flagged") items.push({ id: `approve-${p.id}`, kind: "approve", title: short(p.text), detail: r.reason ? `${where} · ${r.reason}` : where, href: "/week", action: "Approve", postId: p.id, run: "approve" });
-    else if (r?.state === "check") items.push({ id: `check-${p.id}`, kind: "check", title: short(p.text), detail: `${where} · ${r.reason}`, href: "/week", action: r.stale ? "Check again" : "Read it", postId: p.id, run: r.stale ? "recheck" : undefined });
+      items.push({ id: `breaks-${p.id}`, kind: "breaks", title: short(p.text), detail: where, href: "/week", action: "Fix", full: p.text, why });
+    } else if (r?.state === "ok" || r?.state === "flagged") items.push({ id: `approve-${p.id}`, kind: "approve", title: short(p.text), detail: where, href: "/week", action: "Approve", postId: p.id, run: "approve", full: p.text, why: r.reason ?? undefined });
+    else if (r?.state === "check") items.push({ id: `check-${p.id}`, kind: "check", title: short(p.text), detail: where, href: "/week", action: r.stale ? "Check again" : "Read it", postId: p.id, run: r.stale ? "recheck" : undefined, full: p.text, why: r.reason });
   }
 
   const past = { start: new Date(now.getTime() - 7 * 86_400_000), end: now };

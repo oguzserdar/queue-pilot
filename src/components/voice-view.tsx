@@ -87,7 +87,10 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
         )}
       </section>
 
-      <section aria-labelledby="recent" className={styles.block}>
+      <section aria-labelledby="paste" className={styles.block}>
+        <div className={styles.blockHead}>
+          <h2 id="paste" className={styles.h2}>Paste a post</h2>
+        </div>
         <form className={styles.noteForm} onSubmit={(e) => {
           e.preventDefault()
           start(async () => {
@@ -96,10 +99,14 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
             if (result.ok) setPasted("")
           })
         }}>
-          <Textarea label="Paste a post you wrote" description={`Up to ${MAX_PASTED_TEXT} characters.`} value={pasted} maxLength={MAX_PASTED_TEXT} disabled={pending} onChange={(e) => setPasted(e.target.value)} />
+          <Textarea label="A post you wrote" description={`Up to ${MAX_PASTED_TEXT} characters.`} value={pasted} maxLength={MAX_PASTED_TEXT} disabled={pending} onChange={(e) => setPasted(e.target.value)} />
           <Button type="submit" variant="secondary" disabled={pending || !pasted.trim() || examples.length >= MAX_EXAMPLES}>Add example</Button>
           {pasteMessage && <p className={pasteMessage.ok ? styles.muted : styles.bad} role="status">{pasteMessage.text}</p>}
         </form>
+      </section>
+
+      {/* Its own section: pasting and picking from Buffer are two ways to add an example. */}
+      <section aria-labelledby="recent" className={styles.block}>
         <div className={styles.blockHead}>
           <h2 id="recent" className={styles.h2}>Add from Buffer</h2>
         </div>
