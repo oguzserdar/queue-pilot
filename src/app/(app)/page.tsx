@@ -44,9 +44,15 @@ export default async function Page() {
     userId ? postgresReviewStore().list(userId).catch(() => []) : [],
   ]);
   // The same test Approve uses, so this page never offers an approval the button would refuse.
-  const checks: Record<string, Readiness> = Object.fromEntries(written.map((w) => [w.postId, rules
-    ? draftReadiness(w, user.posts.find((p) => p.id === w.postId)?.text ?? "", rules)
-    : { state: "check" as const, reason: "Your playbook could not be read just now." }]));
+  const postsById = new Map(user.posts.map(p => [p.id, p]));
+  const channelsById = new Map(user.channels.map(c => [c.id, c]));
+  const checks: Record<string, Readiness> = Object.fromEntries(written.map(w => {
+    const post = postsById.get(w.postId);
+    const network = post ? channelsById.get(post.channelId)?.service ?? w.network : w.network;
+    return [w.postId, rules
+      ? draftReadiness(w, post?.text ?? "", rules, { network, channelId: post?.channelId })
+      : { state: "check" as const, reason: "The playbook could not be read just now." }];
+  }));
   const weekAgo = now.getTime() - 7 * 86_400_000;
   const comments = links.filter((l) => !l.revokedAt).flatMap((l) => l.comments.filter((c) => Date.parse(c.createdAt) > weekAgo).map((c) => ({ ...c, draft: l.drafts.find((d) => d.postId === c.postId)?.text ?? "" })));
   const triage = triageFromBuffer({ channels: user.channels, posts: user.posts, now, timeZone: user.timeZone, checks, comments });

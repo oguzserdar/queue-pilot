@@ -660,6 +660,25 @@ describe("connector approve", () => {
       expect(perm.approve).not.toHaveBeenCalled()
     } finally { limits.blocked = "" }
   })
+  it.each(["unsure", "missing"])("refuses a %s blocking result through the real approval gate", async kind => {
+    perm.mode = "direct";
+    const rule: Rule = { id: "mandatory", kind: "guidance", text: "Name the change.", channels: "all", level: "block" };
+    rules.set("person-a", [rule]);
+    const { playbookVersion } = await import("@/lib/playbook-version");
+    written.set("person-a", [{ postId: draft.id, network: "linkedin", text: draft.text, playbookRevision: playbookVersion([rule]), verdicts: kind === "missing" ? [] : [{ ruleId: rule.id, rule: rule.text, level: "block", verdict: "unsure", probability: null, quote: "", reason: "Uncertain" }] }]);
+    const result = await call("approve_drafts", { postIds: [draft.id] });
+    expect(result.isError).toBe(true);
+    expect(perm.approve).not.toHaveBeenCalled();
+  });
+  it("does not release a confirmation when a scheduling response was lost", async () => {
+    const token = answer(await call("approve_drafts", { postIds: ["d1"] })).match(/confirmToken: (\S+)/)![1];
+    perm.approve.mockResolvedValueOnce({ approved: [], refused: [{ id: "d1", reason: "Not confirmed" }], uncertain: ["d1"] });
+    await call("approve_drafts", { postIds: ["d1"], confirmToken: token });
+    perm.approve.mockClear();
+    const retry = await call("approve_drafts", { postIds: ["d1"], confirmToken: token });
+    expect(retry.isError).toBe(true);
+    expect(perm.approve).not.toHaveBeenCalled();
+  });
   it("schedules in one call when the person chose not to be asked", async () => {
     perm.mode = "direct"
     expect(answer(await call("approve_drafts", { postIds: ["d1"] }))).toContain("1 scheduled")

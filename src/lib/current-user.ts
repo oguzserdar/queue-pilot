@@ -129,7 +129,7 @@ export async function signedInUserId(): Promise<string | null> {
  * For a write on the user's behalf: their Buffer token and a fresh read of their posts (a copy under 30 seconds old is
  * kept). Null when nobody is signed in. Writes check ids against these posts, so they only ever touch the user's own.
  */
-export async function freshBufferForCurrentUser(): Promise<{ userId: string; token: string; posts: Post[]; markScheduled: (ids: string[]) => Promise<void> } | null> {
+export async function freshBufferForCurrentUser(): Promise<{ userId: string; token: string; posts: Post[]; channels: Channel[]; markScheduled: (ids: string[]) => Promise<void> } | null> {
   const { auth, userId } = await sessionUser();
   if (!auth || !userId) return null;
   const token = await bufferAccessToken(auth, userId);
@@ -140,6 +140,7 @@ export async function freshBufferForCurrentUser(): Promise<{ userId: string; tok
     userId,
     token,
     posts: snap.data.posts,
+    channels: snap.data.channels,
     // Buffer confirmed these as scheduled; record that in the saved copy so the screens show it at once.
     markScheduled: async (ids) => {
       const latest = await store.get(userId);

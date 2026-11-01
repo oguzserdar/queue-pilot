@@ -13,6 +13,12 @@ const week = { ...demoWeek, posts: [
 ] }
 
 describe("approval selection", () => {
+  it.each(["check", "breaks"] as const)("excludes %s drafts from bulk approval", state => {
+    const html = renderToStaticMarkup(<WeekView week={week} live verdicts={{ ours: [] }} readiness={{ ours: { state, reason: "Check required" } }} />);
+    expect(html).toContain("Nothing ready to approve");
+    expect(html).not.toContain("Approve 1 draft");
+  });
+
   it("counts only recorded drafts even when another app's draft is marked API-made", () => {
     const html = renderToStaticMarkup(<WeekView week={week} live verdicts={{ ours: null }} />)
     expect(html).toContain("Approve 1 draft")

@@ -19,7 +19,7 @@ const post = (id: string): Post => ({ id, channelId: "ch", status: "draft", via:
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(signedInUserId).mockResolvedValue("person-a")
-  vi.mocked(freshBufferForCurrentUser).mockResolvedValue({ userId: "person-a", token: "token-a", posts: [post("ours"), post("foreign")], markScheduled })
+  vi.mocked(freshBufferForCurrentUser).mockResolvedValue({ userId: "person-a", token: "token-a", channels: [{ id: "ch", name: "LinkedIn", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [] }], posts: [post("ours"), post("foreign")], markScheduled })
   written.get.mockResolvedValue([{ postId: "ours", network: "linkedin", text: "Draft" }])
   // Approve reads each draft from Buffer right before scheduling, then schedules it.
   vi.mocked(bufferQuery).mockImplementation((async (_t: string, query: string, vars?: Record<string, unknown>) =>

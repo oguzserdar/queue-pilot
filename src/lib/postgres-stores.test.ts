@@ -695,3 +695,26 @@ it("keeps saved learning verdicts separate for two accounts with identical edits
   const offer = { fix: { kind: "banned" as const, phrase: "excited" }, network: "linkedin", count: 2, examples: [] };
   expect(checkKey([{ ...offer, channelId: "company" }])).not.toBe(checkKey([{ ...offer, channelId: "personal" }]));
 });
+
+
+describe("approval confirmations on Postgres", () => {
+  it("claims a token exactly once under concurrent requests and scopes release to its owner", async () => {
+    const { claimApproval, releaseApproval } = await import("./agent-permission");
+    const expires = Date.now() + 60_000;
+    const results = await Promise.all([claimApproval("u1", "approval-test", expires), claimApproval("u1", "approval-test", expires)]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    await releaseApproval("u2", "approval-test");
+    expect(await claimApproval("u1", "approval-test", expires)).toBe(false);
+    await releaseApproval("u1", "approval-test");
+    expect(await claimApproval("u1", "approval-test", expires)).toBe(true);
+  });
+  it("changes the permission revision even for consecutive saves", async () => {
+    const { approvePermission, setApproveMode } = await import("./agent-permission");
+    const revisions = [];
+    for (const mode of ["ask", "off", "ask"] as const) {
+      await setApproveMode("u1", mode);
+      revisions.push((await approvePermission("u1")).revision);
+    }
+    expect(new Set(revisions).size).toBe(3);
+  });
+});

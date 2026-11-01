@@ -30,7 +30,7 @@ export async function approveMode(userId: string): Promise<ApproveMode> {
 export async function setApproveMode(userId: string, mode: ApproveMode): Promise<boolean> {
   if (!isMode(mode)) return false;
   await db().insert(agentPermission).values({ userId, approve: mode })
-    .onConflictDoUpdate({ target: agentPermission.userId, set: { approve: mode, updatedAt: sql`now()` } });
+    .onConflictDoUpdate({ target: agentPermission.userId, set: { approve: mode, updatedAt: sql`greatest(clock_timestamp(), ${agentPermission.updatedAt} + interval '1 millisecond')` } });
   return true;
 }
 

@@ -11,7 +11,7 @@ import type { Check } from "./preflight";
 
 type Query = typeof bufferQuery;
 
-export type ApproveResult = { approved: string[]; refused: { id: string; reason: string }[] };
+export type ApproveResult = { approved: string[]; refused: { id: string; reason: string }[]; uncertain?: string[] };
 
 /** At most this many drafts per press, so one request stays well inside a server time limit and Buffer's budget. */
 export const MAX_APPROVE = 25;
@@ -36,6 +36,7 @@ export async function approveDrafts(
 ): Promise<ApproveResult> {
   const byId = new Map(posts.map((p) => [p.id, p]));
   const approved: string[] = [];
+  const uncertain: string[] = [];
   const refused: ApproveResult["refused"] = [];
 
   const unique = [...new Set(ids)];
@@ -64,8 +65,10 @@ export async function approveDrafts(
         for (const rest of batch.slice(i)) refused.push({ id: rest, reason: "Buffer's request limit was reached; these are still drafts. Approve them again later." });
         break;
       }
-      refused.push({ id, reason: e instanceof Error ? e.message : "Buffer could not be reached." });
+      // A transport failure does not prove Buffer rejected the mutation. Do not make its confirmation reusable.
+      uncertain.push(id);
+      refused.push({ id, reason: "Scheduling could not be confirmed. Check this post in Buffer before trying again." });
     }
   }
-  return { approved, refused };
+  return { approved, refused, ...(uncertain.length ? { uncertain } : {}) };
 }

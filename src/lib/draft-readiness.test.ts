@@ -27,7 +27,7 @@ describe("draftReadiness", () => {
   it("needs a look, not a pass, when a blocking rule is unsure or had no answer", () => {
     const unsure = draftReadiness(w([v(warn, "pass"), v(block, "unsure")]), "Soup tonight.", rules);
     const missing = draftReadiness(w([v(warn, "pass"), v(block, "unsure", { unavailable: true })]), "Soup tonight.", rules);
-    expect([unsure.state, unsure.stale, missing.state]).toEqual(["check", undefined, "check"]);
+    expect([unsure.state, unsure.stale, missing.state]).toEqual(["check", true, "check"]);
   });
   it("needs a fresh check when the text, the rules or the check itself is missing or out of date", () => {
     expect(draftReadiness(w([v(block, "pass")]), "Edited soup.", rules)).toMatchObject({ state: "check", stale: true });
@@ -41,10 +41,38 @@ describe("draftReadiness", () => {
 
 describe("approvable", () => {
   it("refuses breaking and stale drafts with their reason and leaves the rest", () => {
-    const written = [{ ...w([v(block, "fail")]), postId: "bad" }, { ...w([v(block, "pass")]), postId: "stale" }, { ...w([v(block, "pass")]), postId: "fine" }];
+    const written = [{ ...w([v(block, "fail")]), postId: "bad" }, { ...w([v(block, "pass")]), postId: "stale" }, { ...w([v(warn, "pass"), v(block, "pass")]), postId: "fine" }];
     const posts = [{ id: "bad", text: "Soup tonight." }, { id: "stale", text: "Edited." }, { id: "fine", text: "Soup tonight." }];
     const r = approvable(["bad", "stale", "fine", "not-ours"], written, posts, rules);
     expect(r.allowed).toEqual(["fine", "not-ours"]);
     expect(r.refused.map((x) => x.id)).toEqual(["bad", "stale"]);
+  });
+});
+
+
+describe("approval cannot skip a mandatory verdict", () => {
+  it.each([
+    [v(warn, "pass")],
+    [v(warn, "pass"), v(block, "unsure")],
+    [v(warn, "pass"), v(block, "pass", { unavailable: true })],
+    [v(warn, "pass"), v(block, "pass"), v(block, "pass")],
+    [],
+  ])("refuses missing, uncertain, unavailable and duplicate results: %j", (...verdicts) => {
+    const result = approvable(["p"], [w(verdicts)], [{ id: "p", text: "Soup tonight.", channelId: "company" }], rules);
+    expect(result.allowed).toEqual([]);
+    expect(result.refused).toHaveLength(1);
+  });
+  it("does not impose another account's blocking rule", () => {
+    const accountRules = [{ ...block, accountIds: ["other"] }];
+    expect(draftReadiness(w(null), "Soup tonight.", accountRules, { network: "linkedin", channelId: "company" }).state).toBe("ok");
+  });
+  it("requires an applicable account rule missing from an otherwise current check", () => {
+    const accountRules = [{ ...block, accountIds: ["company"] }, warn];
+    const written = w([v(warn, "pass")], "Soup tonight.", playbookVersion(accountRules));
+    expect(draftReadiness(written, written.text, accountRules, { network: "linkedin", channelId: "company" }).state).toBe("check");
+  });
+  it("uses the actual network when a post moves accounts", () => {
+    const twitter = [{ ...block, channels: ["twitter"] }];
+    expect(draftReadiness(w(null), "Soup tonight.", twitter, { network: "twitter", channelId: "x" }).state).toBe("check");
   });
 });

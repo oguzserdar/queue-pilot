@@ -14,6 +14,7 @@ import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
 import { rulesForAccount } from "@/lib/rule-explain";
+import type { Readiness } from "@/lib/draft-readiness";
 import type { Rule } from "@/lib/rules";
 import type { Verdict } from "@/lib/judge";
 import { EXAMPLE_VERDICTS } from "@/lib/example-verdicts";
@@ -42,7 +43,7 @@ const RESULT_TONE = { pass: "success", fail: "danger", unsure: "warning" } as co
  * `live` is true for a signed-in user: Approve schedules the drafts in Buffer. Example data only marks them on screen.
  * `verdicts` are the playbook verdicts each draft was saved with, by post id; null means it was saved unchecked.
  */
-export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {} }: { week: WeekModel; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
+export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {} }: { week: WeekModel; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
   const { label: WEEK_LABEL, days: DAYS, channels, slots } = week;
   /** A day gets a full column when any channel has a slot or a post on it. */
   const dayHasContent = (d: number) => channels.some((c) => slots[c.id]?.[d]?.length) || posts.some((p) => p.day === d);
@@ -69,7 +70,9 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
   const posts = week.posts.filter((p) => !gone.has(p.id)).map((p) => ({
     ...p,
     text: edited[p.id] ?? p.text,
-    checks: live && p.status === "draft" && verdicts[p.id] === null
+    checks: live && p.status === "draft" && readiness[p.id] && readiness[p.id].state !== "ok"
+      ? [...(p.checks ?? []), { tone: readiness[p.id].state === "breaks" ? "danger" as const : "warning" as const, label: readiness[p.id].reason ?? "Check this draft before approving." }]
+      : live && p.status === "draft" && verdicts[p.id] === null
       ? [...(p.checks ?? []), { tone: "warning" as const, label: checkNotes[p.id] ?? "Needs a current playbook check." }]
       : p.checks,
     // Live verdict entries come from this person's writing records, including drafts saved unchecked.
@@ -83,7 +86,8 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
   const opener = useRef<HTMLButtonElement | null>(null);
   const current = posts.find((p) => p.id === selected);
   const open = countOpenSlots({ ...week, posts });
-  const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !approved.has(p.id));
+  const needsCheck = (id: string) => live && (readiness[id]?.state === "check" || readiness[id]?.state === "breaks");
+  const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !needsCheck(p.id) && !approved.has(p.id));
   const blocked = drafts.filter((p) => worstTone(p) === "danger");
   const waiting = drafts.filter((p) => p.ours !== false && !approved.has(p.id)).length;
 
@@ -375,18 +379,19 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             ))}
           </div>
           <div className={styles.actions}>
-            <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || approved.has(current.id) || pending} aria-describedby={current.ours === false ? "approve-foreign" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
+            <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
               {approved.has(current.id) ? "Approved" : "Approve this post"}
             </Button>
             {current.ours !== false && !approved.has(current.id) && (
               <>
-                {live && verdicts[current.id] === null && <Button variant="secondary" disabled={busy} onClick={() => run(() => recheckMyDrafts([current.id]).then((r) => (r.ok ? { ok: true as const } : r)), "Checked against your playbook.")}>Check again</Button>}
+                {live && (verdicts[current.id] === null || needsCheck(current.id)) && <Button variant="secondary" disabled={busy} onClick={() => run(() => recheckMyDrafts([current.id]).then((r) => (r.ok ? { ok: true as const } : r)), "Checked against your playbook.")}>Check again</Button>}
                 <Button variant="secondary" onClick={() => { setEditing(current.text); setConfirmDelete(false); setNote(null); }}>Edit</Button>
                 <Button variant="ghost" onClick={() => { setConfirmDelete(true); setEditing(null); setNote(null); }}>Delete draft</Button>
               </>
             )}
           </div>
-          {worstTone(current) === "danger" && !approved.has(current.id) && (
+          {needsCheck(current.id) && !approved.has(current.id) && <p id="approve-playbook" className={styles.muted}>{readiness[current.id]?.reason}</p>}
+          {worstTone(current) === "danger" && !needsCheck(current.id) && !approved.has(current.id) && (
             <p id="approve-off" className={styles.muted}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
           )}
           {current.ours === false && <p id="approve-foreign" className={styles.muted}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>}

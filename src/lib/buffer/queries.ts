@@ -68,16 +68,20 @@ export async function listChannels(token: string, organizationId: string, q: Que
 
 export const POST_FIELDS = "id channelId status text dueAt sentAt externalLink error { message supportUrl } assets { type mimeType source } schedulingType notificationStatus via";
 /**
- * These posts as Buffer has them right now, in one request (at most MAX_ALIASES). Used right before scheduling, never
+ * These posts as Buffer has them right now, in batches of at most MAX_ALIASES. Used right before scheduling, never
  * the saved queue copy, so what goes out is what the person was shown. A post Buffer no longer has is left out.
  */
 export async function readPostsNow(token: string, ids: string[], q: Query = bufferQuery): Promise<Post[]> {
-  const list = [...new Set(ids)].slice(0, MAX_ALIASES);
-  if (!list.length) return [];
-  const vars = list.map((_, i) => `$i${i}: PostInput!`).join(", ");
-  const parts = list.map((_, i) => `p${i}: post(input: $i${i}) { ${POST_FIELDS} }`).join(" ");
-  const data = await q<Record<string, Post | null>>(token, `query (${vars}) { ${parts} }`, Object.fromEntries(list.map((id, i) => [`i${i}`, { id }])));
-  return list.flatMap((id, i) => { const p = data[`p${i}`]; return p && p.id === id ? [p] : []; });
+  const unique = [...new Set(ids)];
+  const posts: Post[] = [];
+  for (let offset = 0; offset < unique.length; offset += MAX_ALIASES) {
+    const list = unique.slice(offset, offset + MAX_ALIASES);
+    const vars = list.map((_, i) => `$i${i}: PostInput!`).join(", ");
+    const parts = list.map((_, i) => `p${i}: post(input: $i${i}) { ${POST_FIELDS} }`).join(" ");
+    const data = await q<Record<string, Post | null>>(token, `query (${vars}) { ${parts} }`, Object.fromEntries(list.map((id, i) => [`i${i}`, { id }])));
+    posts.push(...list.flatMap((id, i) => { const p = data[`p${i}`]; return p && p.id === id ? [p] : []; }));
+  }
+  return posts;
 }
 
 const PAGE_SIZE = 50;

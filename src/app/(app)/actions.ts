@@ -13,7 +13,7 @@ import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
 import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
 import { wroteIds } from "@/lib/written-store";
 import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
-import { listRecentSent, type Post } from "@/lib/buffer/queries";
+import { listRecentSent, readPostsNow, type Post } from "@/lib/buffer/queries";
 import { FeedError, feedUrl, readFeed } from "@/lib/feeds"
 import { revokeApp } from "@/lib/ai-access";
 import { getAuth } from "@/lib/auth";
@@ -75,7 +75,7 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
     const b = await freshBufferForCurrentUser();
     if (!b) return { ok: false, kind: "signedOut" };
     // Read from Buffer now and check the playbook: a draft with an out-of-date check or a broken blocking rule is refused.
-    const { approved, refused } = await approveChecked(b.userId, b.token, ids, new Date());
+    const { approved, refused } = await approveChecked(b.userId, b.token, ids, new Date(), undefined, undefined, b.channels);
     await b.markScheduled(approved);
     revalidatePath("/", "layout");
     return { ok: true, approved, refused };
@@ -95,10 +95,15 @@ export async function recheckMyDrafts(ids: string[]): Promise<{ ok: true; checke
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
     const ours = await wroteIds(b.userId, ...ids);
     const service = new Map(b.channels.map((c) => [c.id, c.service]));
-    const drafts = b.posts.filter((p) => ours.has(p.id) && p.status === "draft").map((p) => ({ postId: p.id, text: p.text, network: service.get(p.channelId) ?? "", channelId: p.channelId }));
+    const fresh = await readPostsNow(b.token, ids.filter(id => ours.has(id)));
+    const drafts = fresh.filter((p) => ours.has(p.id) && p.status === "draft").map((p) => ({ postId: p.id, text: p.text, network: service.get(p.channelId) ?? "", channelId: p.channelId }));
     if (!drafts.length) return { ok: false, message: "Only drafts Queue Pilot wrote can be checked here." };
     const r = await recheckDrafts(b.userId, drafts);
-    if (r.ok) revalidatePath("/", "layout");
+    if (r.ok) {
+      const byId = new Map(fresh.map(p => [p.id, p]));
+      await patchSavedQueue(b.userId, posts => posts.map(p => byId.get(p.id) ?? p));
+      revalidatePath("/", "layout");
+    }
     return r;
   } catch (e) {
     if (e instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };

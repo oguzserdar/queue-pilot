@@ -73,7 +73,8 @@ describe("approveDrafts", () => {
     const { q } = fake(() => (n++ === 0 ? new Error("Buffer API error (502)") : success()));
     const res = await approveDrafts("t", ["d1", "d2"], [post({}), post({ id: "d2" })], now, wrote, q);
     expect(res.approved).toEqual(["d2"]);
-    expect(res.refused).toEqual([{ id: "d1", reason: "Buffer API error (502)" }]);
+    expect(res.refused[0].reason).toContain("could not be confirmed");
+    expect(res.uncertain).toEqual(["d1"]);
   });
 });
 

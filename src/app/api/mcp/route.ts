@@ -300,9 +300,9 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string) {
       const l = await limit("bufferWrite", userId);
       if (!l.ok) return { ...text(`Too many requests just now. Try again in ${Math.max(1, Math.ceil(l.resetSeconds / 60))} min.`), isError: true };
       if (claim && !(await claimApproval(userId, claim.nonce, claim.expires))) return { ...text("That yes was already used. Nothing more was scheduled. Show the drafts again and ask."), isError: true };
-      const res = await approveChecked(userId, b.accessToken, postIds, new Date(), undefined, fresh);
+      const res = await approveChecked(userId, b.accessToken, postIds, new Date(), undefined, fresh, b.channels);
       // A yes that scheduled nothing can be tried again; one that scheduled anything is spent.
-      if (claim && res.approved.length === 0) await releaseApproval(userId, claim.nonce);
+      if (claim && res.approved.length === 0 && !res.uncertain?.length) await releaseApproval(userId, claim.nonce);
       const done = new Set(res.approved);
       if (done.size) await patchSnapshot(userId, (posts) => posts.map((p) => (done.has(p.id) ? { ...p, status: "scheduled" as const } : p)));
       const answer = text([`${res.approved.length} scheduled in Buffer, ${res.refused.length} not.`, ...res.refused.map((r) => `Not scheduled: ${r.id} · ${r.reason}`)].join("\n"));
