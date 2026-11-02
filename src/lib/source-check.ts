@@ -23,7 +23,7 @@ export async function listSourcesToCheck(userId: string, posts: Post[]) {
   const keys = [...new Set(rows.map(r => r.source.sourceKey))];
   return Promise.all(keys.map(async sourceKey => {
     const latest = (await latestSource(userId, sourceKey))!;
-    return { sourceKey, uri: latest.uri, title: latest.title, fetchedAt: latest.fetchedAt.toISOString(), lastCheckedAt: latest.lastCheckedAt.toISOString(), contentHash: latest.contentHash,
+    return { sourceKey, uri: latest.uri, title: latest.title, fetchedAt: latest.fetchedAt.toISOString(), lastCheckedAt: latest.lastCheckedAt.toISOString(), contentHash: latest.contentHash, coverage: { partial: !!latest.metadata.truncated, window: latest.metadata.excerptWindow ?? null, kind: latest.metadata.kind ?? null },
       evidence: rows.filter(r => r.source.sourceKey === sourceKey).map(r => ({ postId: r.evidence.bufferPostId, claim: r.evidence.claim, quote: r.evidence.quote, locator: r.evidence.locator })) };
   }));
 }

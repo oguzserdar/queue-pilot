@@ -12,7 +12,7 @@ export function EvidenceDetail({ card }: { card: EvidenceCard }) {
   if (url && card.locator) url.searchParams.set("t", card.locator.slice(2));
   return <div className={styles.evidence}>
     {url ? <a href={url.toString()} target="_blank" rel="noreferrer">{card.title}{card.locator ? ` · ${sourceTimestamp(card.locator)}` : ""}</a> : <strong>{card.title}</strong>}
-    <p className={styles.caption}>{card.quote ? "Quote matches the saved source" : "Quote not found in the source"}{card.captions === "auto" ? " · Auto captions: check names" : card.captions === "unknown" ? " · Caption type unknown: check names" : ""}{card.paidPreview ? " · Paid preview" : ""}{card.truncated ? " · Source excerpt only" : ""}</p>
+    <p className={styles.caption}>{card.quote ? "Quote matches the saved source" : "Quote not found in the source"}{card.kind === "video-description" ? " · Video description only" : ""}{card.captions === "auto" ? " · Auto captions: check names" : card.captions === "unknown" ? " · Caption type unknown: check names" : ""}{card.paidPreview ? " · Paid preview" : ""}{card.truncated ? " · Source excerpt only" : ""}</p>
     {card.quote && <blockquote>{card.quote}</blockquote>}
     <p className={styles.caption}>Claim when drafted: {card.claim}</p>
   </div>;

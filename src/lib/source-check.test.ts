@@ -75,6 +75,7 @@ describe("source checks through the production operation", () => {
     expect(ai.calls).toBe(0);
   });
   it("lists only unsent owned evidence; scheduled posts are warned about, never changed", async () => {
+    expect(await listSourcesToCheck("owner", posts)).toMatchObject([{ coverage: { partial: false, window: null, kind: null } }]);
     expect(await listSourcesToCheck("other", posts)).toEqual([]);
     expect(await listSourcesToCheck("owner", [{ ...posts[0], status: "sent" }])).toEqual([]);
     posts[0].status = "scheduled";
