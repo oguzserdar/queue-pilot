@@ -13,7 +13,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Test the Supadata key from Admin and show whether the key comes from the environment or the saved setting.
 
 ### Fixed
-- A wording replacement applies when its subject appears; it does not require unrelated posts to mention that subject. Required content rules still apply.
+- A wording replacement applies when its subject appears. It does not require unrelated posts to mention that subject. Required content rules still apply.
 - Keep full podcast transcripts instead of cutting off the opening section. When a model rejects the full context, process every section and verify the extracted passages before using them.
 - Label video-description fallback when captions are unavailable. Incomplete responses and source outages cannot replace a complete saved source.
 - Keep successful drafts when another draft or source fails. Unmatched evidence is flagged rather than failing the whole batch. Queue Pilot approval requires the source evidence to pass its checks.
