@@ -53,7 +53,12 @@ export async function writeWeek(open: OpenSlot[], now: Date, deps: WriteWeekDeps
   if (!Object.keys(retry).length) return { kind: "done", saved: res.saved, refused: res.refused, flags: res.flags, retried: 0, check: res.check };
 
   // One rewrite for the slots the playbook refused, with the reason in the brief.
-  const second = await deps.write({ ...brief, slots: brief.slots.filter((s) => s.id in retry), retry });
+  let second: WrittenDraft[];
+  try { second = await deps.write({ ...brief, slots: brief.slots.filter((s) => s.id in retry), retry }); }
+  catch {
+    // Never turn an already successful Buffer save into a retryable whole-run error.
+    return { kind: "done", saved: res.saved, refused: res.refused.map(r => r.slotId in retry ? { ...r, reason: `${r.reason} The rewrite could not run; saved drafts are unchanged.` } : r), flags: res.flags, retried: Object.keys(retry).length, check: res.check };
+  }
   const again: Saved = second.length ? await deps.save(second, keysOf(second)) : { saved: [], refused: [], requests: 0, flags: [], check: res.check };
   const missing = Object.keys(retry).filter((id) => !again.saved.some((x) => x.slotId === id) && !again.refused.some((x) => x.slotId === id));
   return {

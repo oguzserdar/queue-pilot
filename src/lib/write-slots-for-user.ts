@@ -2,7 +2,7 @@
 import { BufferRateLimitedError } from "./buffer/client";
 import type { Channel, Post } from "./buffer/queries";
 import type { Provider } from "./ai-key-store";
-import { writeDrafts } from "./ai-writer";
+import { writeDrafts, type BriefMaterial } from "./ai-writer";
 import { aiErrorMessage } from "./ai-model";
 import { APICallError, NoObjectGeneratedError } from "ai";
 import { ModelListError } from "./ai-models";
@@ -39,19 +39,27 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
     if (!ai) return { ok: false, message: "AI writing is unavailable just now. Check built-in AI or your own key in Settings." };
     provider = ai.cfg.provider;
     const model = ai.language;
+    const materialNotes: string[] = [];
+    const invalidSources = new Map<string, string>();
     const r = await writeWeek(slots, now, {
       material: async () => {
         const items = await newMaterial(b.userId);
-        // A YouTube item carries only its description; with a Supadata key the transcript is added.
-        const material = [];
+        // Pending jobs resume next time. Missing captions still allow description-based drafts.
+        const material: BriefMaterial[] = [];
         for (const m of items) {
-          const transcript = m.url && isYouTubeVideo(m.url) ? await transcriptForUser(b.userId, m.url) : null;
-          // A pending long-video job remains unused; the next write resumes it.
-          if (transcript && transcript.status !== "ready") continue;
-          const text = transcript?.status === "ready" ? transcript.text : m.text;
-          const metadata = transcript?.status === "ready" ? { segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated } : { truncated: m.truncated };
-          const snapshot = await captureSource(b.userId, { sourceKey: m.key, uri: m.url ?? `urn:qp:${m.key}`, text, title: m.title.slice(0, 200) }, metadata);
-          material.push({ ...m, text, snapshotId: snapshot.id, ...metadata });
+          try {
+            const video = !!m.url && isYouTubeVideo(m.url);
+            const transcript = video ? await transcriptForUser(b.userId, m.url!) : null;
+            if (transcript?.status === "pending") { materialNotes.push(`${m.title}: transcript still processing.`); continue; }
+            const text = transcript?.status === "ready" ? transcript.text : m.text;
+            const metadata = transcript?.status === "ready"
+              ? { kind: "transcript" as const, excerptWindow: "prefix-12000" as const, segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated }
+              : { truncated: m.truncated, ...(video ? { kind: "video-description" as const } : {}) };
+            const snapshot = await captureSource(b.userId, { sourceKey: m.key, uri: m.url ?? `urn:qp:${m.key}`, text, title: m.title.slice(0, 200) }, metadata);
+            material.push({ ...m, title: video && transcript?.status !== "ready" ? `${m.title} (video description only)` : m.title, text, snapshotId: snapshot.id, ...metadata });
+          } catch {
+            materialNotes.push(`${m.title}: source could not be prepared. Other available material was used.`);
+          }
         }
         return material;
       },
@@ -60,17 +68,23 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
       write: async (brief) => {
         const drafts = (await writeDrafts(model, brief)).flatMap(d => {
           const source = brief.material.find(m => m.key === d.sourceKey);
-          return source?.snapshotId ? [{ ...d, snapshotId: source.snapshotId }] : [];
+          if (source?.snapshotId) return [{ ...d, snapshotId: source.snapshotId }];
+          invalidSources.set(d.slotId, "The writer did not identify a supplied source. This draft was not saved.");
+          return [];
         });
-        if (!drafts.length) throw new Error("The writer returned no drafts tied to a supplied source.");
         return drafts;
       },
       // The playbook check is part of this one action, so it judges with the same AI instead of taking another.
-      save: (drafts, sourceKeys) => saveDraftsForUser(b.userId, b.token, { title: "Written by Queue Pilot", drafts, open: slots, sourceKeys }, { ...ai, judges: { decider: ai.decider, explainer: ai.language } }),
+      save: async (drafts, sourceKeys) => {
+        const result = await saveDraftsForUser(b.userId, b.token, { title: "Written by Queue Pilot", drafts, open: slots, sourceKeys }, { ...ai, judges: { decider: ai.decider, explainer: ai.language } });
+        const invalid = [...invalidSources].map(([slotId, reason]) => ({ slotId, reason }));
+        invalidSources.clear();
+        return { ...result, refused: [...result.refused, ...invalid] };
+      },
     });
     if (r.kind === "nothing") {
       await giveBack();
-      return { ok: false, message: r.reason === "no-slots" ? "No empty times remain in the chosen week." : "No new material to write from. Add research under New material or connect a feed." };
+      return { ok: false, message: r.reason === "no-slots" ? "No empty times remain in the chosen week." : materialNotes.join(" ") || "No new material to write from. Add research under New material or connect a feed." };
     }
     const where = (slotId: string) => { const s = r.saved.find((x) => x.slotId === slotId); return s ? `${s.local} · ${s.channel}` : slotId; };
     return {
@@ -79,7 +93,7 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
       refused: r.refused,
       retried: r.retried,
       flags: r.flags.map((f) => ({ where: where(f.slotId), rule: f.rule, verdict: f.verdict, reason: f.reason })),
-      note: checkNote(r.check),
+      note: [checkNote(r.check), ...materialNotes].filter(Boolean).join(" ") || undefined,
     };
   } catch (e) {
     if (e instanceof AiCapError || e instanceof ModelListError) return { ok: false, message: e.message };

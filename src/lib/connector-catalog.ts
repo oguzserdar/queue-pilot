@@ -11,7 +11,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
       { label: "Your week, open times and channels", tools: ["show_next_week", "list_open_slots", "list_channels", "list_my_drafts", "refresh_buffer"] },
       { label: "Last week's results", tools: ["show_last_week_delivery"] },
       { label: "Your voice, playbook and rules", tools: ["get_my_voice", "get_playbook", "read_rule", "get_effective_rules"] },
-      { label: "New material and feeds", tools: ["list_new_material", "read_material", "list_sources", "get_transcript", "list_sources_to_check"] },
+      { label: "New material and feeds", tools: ["list_new_material", "list_sources", "list_sources_to_check"] },
       { label: "Review comments", tools: ["list_review_comments"] },
       { label: "Setup progress and AI allowance", tools: ["get_setup_status", "get_ai_usage", "list_ai_models"] },
       { label: "Checks a draft without saving", tools: ["check_draft"] },
@@ -21,6 +21,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
   {
     key: "writes", title: "Changes, when you ask", note: "Drafts stay drafts. Saves are checked against your playbook.",
     items: [
+      { label: "Reads source text and video captions; can spend transcript credits", tools: ["read_material", "get_transcript"] },
       { label: "Writes and saves drafts in empty times", tools: ["save_drafts", "write_my_week"] },
       { label: "Edits a draft it wrote", tools: ["update_draft"] },
       { label: "Adds, removes and routes rules", tools: ["add_rule", "remove_rule", "keep_suggestion", "dismiss_suggestion", "set_rule_override", "set_rule_inheritance"] },

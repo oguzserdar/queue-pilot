@@ -15,15 +15,15 @@ export const evidenceInput = z.object({
   locator: z.string().regex(/^t=\d+$/).optional(),
 });
 export type EvidenceInput = z.infer<typeof evidenceInput>;
-export type SourceMetadata = { segments?: { text: string; seconds: number }[]; captions?: "auto" | "manual" | "unknown"; paidPreview?: boolean; truncated?: boolean; etag?: string; lastModified?: string };
+export type SourceMetadata = { kind?: "transcript" | "video-description"; excerptWindow?: "prefix-12000"; segments?: { text: string; seconds: number }[]; captions?: "auto" | "manual" | "unknown"; paidPreview?: boolean; truncated?: boolean; etag?: string; lastModified?: string };
 
 /** A caller cannot make a quote or timestamp verified merely by supplying it. */
 export function verifyEvidence(draft: string, source: string, input: EvidenceInput, metadata: SourceMetadata = {}) {
   input = evidenceInput.parse(input);
   const claim = normalizeSource(input.claim);
-  if (!normalizeSource(draft).includes(claim)) throw new Error("The evidence claim must appear in the draft.");
+  const claimFound = normalizeSource(draft).includes(claim);
   const quote = normalizeSource(input.quote);
-  const found = normalizeSource(source).includes(quote);
+  const found = claimFound && normalizeSource(source).includes(quote);
   const seconds = input.locator ? Number(input.locator.slice(2)) : null;
   const segment = seconds === null ? undefined : metadata.segments?.find(s => Math.floor(s.seconds) === seconds && normalizeSource(s.text).includes(quote));
   return { claim, quote: found ? quote : null, locator: found && segment ? `t=${seconds}` : null };

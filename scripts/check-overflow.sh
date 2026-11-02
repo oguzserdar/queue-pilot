@@ -10,7 +10,7 @@ if [ "${load%.*}" -ge 24 ]; then echo "skipped: load $load"; exit 2; fi
 # Worktrees can share dependencies outside the Turbopack root.
 bundler=()
 [ "${QP_OVERFLOW_WEBPACK:-0}" = "1" ] && bundler=(--webpack)
-(pnpm exec next dev "${bundler[@]}" -p 4417 > /tmp/qp-overflow.log 2>&1 &)
+(pnpm exec next dev ${bundler[@]+"${bundler[@]}"} -p 4417 > /tmp/qp-overflow.log 2>&1 &)
 for i in $(seq 1 90); do [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4417/)" = "200" ] && break; sleep 2; done
 fail=0
 for size in "671 905" "1440 900"; do

@@ -1,3 +1,4 @@
+import type { SourceMetadata } from "../lib/source-evidence";
 /**
  * Queue Pilot's own tables (Drizzle). Better Auth's tables are generated into auth-schema.ts by its CLI
  * (`auth generate --adapter drizzle`); both files feed drizzle-kit, which writes the migrations in ../../drizzle.
@@ -373,7 +374,7 @@ export const sourceSnapshot = pgTable("qp_source_snapshot", {
   text: text("text").notNull(),
   title: text("title"),
   checkedBy: text("checked_by").notNull(),
-  metadata: jsonb("metadata").$type<{ segments?: { text: string; seconds: number }[]; captions?: "auto" | "manual" | "unknown"; paidPreview?: boolean; truncated?: boolean; etag?: string; lastModified?: string }>().notNull().default({}),
+  metadata: jsonb("metadata").$type<SourceMetadata>().notNull().default({}),
   fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => [index("qp_source_snapshot_latest").on(t.userId, t.sourceKey, t.fetchedAt)]);

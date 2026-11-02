@@ -26,8 +26,6 @@ import { materialInput, postgresMaterialStore } from "@/lib/material-store"
 import { AiCapError } from "@/lib/judge-model";
 import { TooManyRulesError, postgresRulesStore } from "@/lib/rules-store";
 import { ruleScope } from "@/lib/rules";
-import { youtubeTranscript } from "@/lib/transcripts";
-import { supadataKey } from "@/lib/env";
 import { recordAppUse, stillApproved } from "@/lib/ai-access";
 import { clientIp } from "@/lib/client-ip";
 import { limit, limitHeaders, type Action, type Limited } from "@/lib/rate-limit";
@@ -389,7 +387,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       description:
         "Gives the full text of one item from list_new_material, by its key: a release note, blog post, newsletter issue or video description, with the transcript when there is one. Read it before writing posts about that item, so the posts use its real details and not the short summary. Also accepts a key from add_material for saved research text. Feed keys stop working once the item leaves the feed. Read get_my_voice and get_playbook before writing.",
       inputSchema: z.object({ key: z.string().min(3).max(2000).describe("The key from list_new_material.") }),
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async ({ key }) => {
       if (key.startsWith("material:")) {
@@ -411,12 +409,12 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       const item = feed.items.find((it) => it.key === parts.itemKey);
       if (!item) return { ...text(`That item is no longer in ${source.title}'s feed. Call list_new_material for current items.`), isError: true };
       const transcript = item.url && isYouTubeVideo(item.url) ? await transcriptForUser(userId, item.url) : null;
-      if (transcript && transcript.status !== "ready") return text(JSON.stringify({ ...transcript, instruction: "No transcript was saved. Supply a transcript or retry later; a video description is not a replacement for its transcript." }));
+      if (transcript?.status === "pending") return text(JSON.stringify({ ...transcript, instruction: "Transcript processing. Retry later to resume." }));
       const body = transcript?.status === "ready" ? transcript.text : item.body || item.summary;
       if (!body.trim()) return text("The source returned no text. Do not draft from it.");
-      const metadata = transcript?.status === "ready" ? { segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated } : { truncated: item.truncated };
+      const metadata = transcript?.status === "ready" ? { kind: "transcript" as const, excerptWindow: "prefix-12000" as const, segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated } : { truncated: item.truncated, ...(transcript ? { kind: "video-description" as const } : {}) };
       const snap = await captureSource(userId, { sourceKey: key, uri: item.url ?? source.url, text: body, title: item.title.slice(0, 200) }, metadata);
-      return text(JSON.stringify({ title: item.title, url: item.url, snapshotId: snap.id, text: body, ...metadata, transcriptStatus: transcript?.status ?? null }));
+      return text(JSON.stringify({ title: transcript && transcript.status !== "ready" ? `${item.title} (video description only)` : item.title, url: item.url, snapshotId: snap.id, text: body, ...metadata, transcriptStatus: transcript?.status ?? null }));
     },
   );
 
@@ -537,12 +535,12 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
   server.registerTool("get_transcript", {
     title: "Read a video's transcript", description: "Read native YouTube captions through QP's configured Supadata key. Can spend one Supadata credit. Long videos return pending; call again later to resume the saved job. Never bypass a block. Returns verified segments and a snapshot for citations when ready. Unknown caption provenance is not manual-caption proof.",
     inputSchema: z.object({ url: z.string().url().max(2000) }),
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   }, async ({ url }) => {
     const result = await transcriptForUser(userId, url);
     if (result.status !== "ready") return text(JSON.stringify(result));
     const u = new URL(url); const id = u.searchParams.get("v") ?? u.pathname.split("/").pop();
-    const snapshot = await captureSource(userId, { sourceKey: `yt:${id}`, uri: url, text: result.text }, { segments: result.segments, captions: result.captions, truncated: result.truncated });
+    const snapshot = await captureSource(userId, { sourceKey: `yt:${id}`, uri: url, text: result.text }, { kind: "transcript", excerptWindow: "prefix-12000", segments: result.segments, captions: result.captions, truncated: result.truncated });
     return text(JSON.stringify({ ...result, snapshotId: snapshot.id, sourceKey: snapshot.sourceKey }));
   });
 

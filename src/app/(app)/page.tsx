@@ -1,5 +1,4 @@
-import { sourceCards } from "@/lib/source-presentation";
-import { sourceHoldsForPosts } from "@/lib/source-store";
+import { sourceCards, sourceHoldsFromCards } from "@/lib/source-presentation";
 import { SourceEvidencePanel } from "@/components/source-evidence";
 import { NeedsYouView, type NeedItem, type ReadinessItem } from "@/components/needs-you-view";
 import { setupReadiness } from "@/lib/setup-readiness";
@@ -58,9 +57,9 @@ export default async function Page() {
   }));
   const weekAgo = now.getTime() - 7 * 86_400_000;
   const comments = links.filter((l) => !l.revokedAt).flatMap((l) => l.comments.filter((c) => Date.parse(c.createdAt) > weekAgo).map((c) => ({ ...c, draft: l.drafts.find((d) => d.postId === c.postId)?.text ?? "" })));
-  const evidence = userId ? await sourceCards(userId, user.posts) : [];
-  const blocks = userId ? await sourceHoldsForPosts(userId, user.posts) : new Map<string, string>();
+  const evidence = userId ? await sourceCards(userId, user.posts, user.channels) : [];
+  const blocks = sourceHoldsFromCards(evidence);
   for (const [id, reason] of blocks) checks[id] = { state: "check", reason };
   const triage = triageFromBuffer({ channels: user.channels, posts: user.posts, now, timeZone: user.timeZone, checks, comments });
-  return <><NeedsYouView needs={needs} readiness={readiness} greeting={`Signed in as ${user.email}`} triage={triage} live /><SourceEvidencePanel cards={evidence} /></>;
+  return <><NeedsYouView needs={needs} readiness={readiness} greeting={`Signed in as ${user.email}`} triage={triage} live /><SourceEvidencePanel cards={evidence} timeZone={user.timeZone} /></>;
 }

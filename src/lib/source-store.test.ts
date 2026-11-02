@@ -27,7 +27,7 @@ describe("source evidence on Postgres", () => {
     expect(verifyEvidence(e.claim, e.claim, e)).toEqual({ ...e, locator: null });
     expect(verifyEvidence(e.claim, e.claim, e, { segments: [{ text: e.claim, seconds: 12.2 }] }).locator).toBe("t=12");
     expect(verifyEvidence(e.claim, "Seats cost $20.", e).quote).toBeNull();
-    expect(() => verifyEvidence("A different draft", e.claim, e)).toThrow();
+    expect(verifyEvidence("A different draft", e.claim, e)).toMatchObject({ quote: null, locator: null });
   });
   it("deduplicates identical reports but preserves original versions", async () => {
     const first = await store.captureSource("owner", input("dedup"));
@@ -79,4 +79,20 @@ describe("source evidence on Postgres", () => {
     await store.releaseSourceJob("owner", key, "wrong");
     expect((await store.pendingTranscriptJob("owner", key))?.value.jobId).toBe("job-123");
   });
+});
+
+it("lease renewal cannot revive an expired claim or extend its successor", async () => {
+ const key = "source:renew";
+ const old = (await store.claimSourceJob("owner", key))!;
+ await pg.query("update qp_source_job set expires_at = now() - interval '1 second' where key = $1", [key]);
+ await expect(store.renewSourceJob("owner", key, old)).rejects.toThrow();
+ const current = (await store.claimSourceJob("owner", key))!;
+ await expect(store.renewSourceJob("owner", key, old)).rejects.toThrow();
+ await expect(store.renewSourceJob("owner", key, current)).resolves.toBeUndefined();
+});
+
+it("does not replace a saved transcript with a fallback video description", async () => {
+ const first = await store.captureSource("owner", input("video-kind"), { kind: "transcript", captions: "unknown" });
+ await expect(store.captureSource("owner", input("video-kind", "Video description"), { kind: "video-description" })).rejects.toThrow("description cannot replace");
+ expect((await store.latestSource("owner", "video-kind"))?.id).toBe(first.id);
 });

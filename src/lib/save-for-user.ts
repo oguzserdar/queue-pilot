@@ -6,7 +6,8 @@
  * does not retry a save that already happened.
  */
 import type { WrittenDraft } from "./ai-writer";
-import { recordEvidence, sourceById, latestSource } from "./source-store";
+import { recordEvidence, sourceById } from "./source-store";
+import { resolveSource } from "./resolve-source";
 import { verifyEvidence } from "./source-evidence";
 import { playbookVersion } from "./playbook-version";
 import { withSavedDrafts } from "./buffer/snapshot";
@@ -104,25 +105,35 @@ export async function saveDraftsForUser(
   /** The AI an enclosing action already took; the check then judges with it instead of taking another action. */
   within?: JudgeModel,
 ): Promise<SaveResult & { flags: Flag[]; check: PlaybookCheck; judgedWith?: string }> {
-  // Validate ownership and claims before a Buffer write. Snapshots were captured while reading material.
   const evidenceWarnings: Flag[] = [];
-  // Older clients can still cite one material key. Multiple sources need an explicit snapshot per draft.
-  if (input.sourceKeys?.length) {
-    for (const draft of input.drafts) if (!draft.snapshotId) {
-      if (input.sourceKeys.length !== 1) throw new Error("Choose a source snapshot for each draft before saving.");
-      const snapshot = await latestSource(userId, input.sourceKeys[0]);
-      if (!snapshot) throw new Error("Read the source material before saving drafts from it.");
-      draft.snapshotId = snapshot.id;
-    }
-  }
+  const evidenceSources = new Map<string, string[]>();
+  const unresolved = new Set<string>();
+  const resolved = new Map<string, Awaited<ReturnType<typeof resolveSource>>>();
   for (const draft of input.drafts) {
-    if (!draft.snapshotId) continue;
-    const snapshot = await sourceById(userId, draft.snapshotId);
-    if (!snapshot) throw new Error("The source is not in this account.");
-    if (!draft.evidence?.length) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "No source quote supplied. Check evidence before approving.", quote: "" });
-    for (const e of draft.evidence ?? []) {
-      const checked = verifyEvidence(draft.text, snapshot.text, e, snapshot.metadata);
-      if (!checked.quote) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "Quote not found in the source", quote: "" });
+    if (draft.snapshotId) {
+      // An explicit foreign snapshot is never silently accepted.
+      const snapshot = await sourceById(userId, draft.snapshotId);
+      if (!snapshot) throw new Error("The source is not in this account.");
+      evidenceSources.set(draft.slotId, [snapshot.id ?? draft.snapshotId]);
+    } else {
+      const keys = draft.sourceKey ? [draft.sourceKey] : input.sourceKeys ?? [];
+      const ids: string[] = [];
+      for (const key of keys) {
+        if (!resolved.has(key)) resolved.set(key, await resolveSource(userId, key).catch(() => null));
+        const snapshot = resolved.get(key);
+        if (snapshot) ids.push(snapshot.id); else unresolved.add(draft.slotId);
+      }
+      evidenceSources.set(draft.slotId, [...new Set(ids)]);
+      if (keys.length) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "Source citation needs review before approving. The draft can still be saved.", quote: "" });
+    }
+    for (const id of evidenceSources.get(draft.slotId) ?? []) {
+      const snapshot = await sourceById(userId, id);
+      if (!snapshot) { unresolved.add(draft.slotId); continue; }
+      if (!draft.evidence?.length || !draft.snapshotId) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "No source quote supplied. Check evidence before approving.", quote: "" });
+      for (const e of draft.evidence ?? []) {
+        const checked = verifyEvidence(draft.text, snapshot.text, e, snapshot.metadata);
+        if (!checked.quote) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "The claim or quote could not be matched. Check the citation before approving.", quote: "" });
+      }
     }
   }
   const rules = await postgresRulesStore().list(userId).catch((e) => {
@@ -157,13 +168,16 @@ export async function saveDraftsForUser(
     const missingEvidence = new Set<string>();
     for (const saved of res.saved) {
       const draft = input.drafts.find(d => d.slotId === saved.slotId);
-      if (!saved.postId || !draft?.snapshotId) continue;
-      // Missing evidence is recorded as an unmatched quote, never silently shown as verified.
-      const evidence = draft.evidence?.length ? draft.evidence : [{ claim: draft.text.slice(0, 500), quote: "[No source quote supplied]" }];
-      await recordEvidence(userId, saved.postId, saved.text, draft.snapshotId, evidence).catch(() => {
-        missingEvidence.add(saved.postId!);
-        evidenceWarnings.push({ slotId: saved.slotId, rule: "Source evidence", verdict: "unsure", reason: "Draft saved, but its evidence could not be recorded. Do not retry saving the draft.", quote: "" });
-      });
+      if (!saved.postId || !draft) continue;
+      if (unresolved.has(saved.slotId)) missingEvidence.add(saved.postId);
+      // Legacy batch source keys are ambiguous: record each as unchecked, never invent a citation.
+      for (const snapshotId of evidenceSources.get(saved.slotId) ?? []) {
+        const evidence = draft.snapshotId && draft.evidence?.length ? draft.evidence : [{ claim: draft.text.slice(0, 500), quote: "[No source quote supplied]" }];
+        await recordEvidence(userId, saved.postId, saved.text, snapshotId, evidence).catch(() => {
+          missingEvidence.add(saved.postId!);
+          evidenceWarnings.push({ slotId: saved.slotId, rule: "Source evidence", verdict: "unsure", reason: "Draft saved, but its evidence could not be recorded. Do not retry saving the draft.", quote: "" });
+        });
+      }
     }
     // If evidence bookkeeping failed, do not create an ownership record that would allow QP approval.
     await postgresWrittenStore().record(userId, wrote.filter(w => !missingEvidence.has(w.postId))).catch(warn("qp-record-written-failed"));

@@ -145,7 +145,7 @@ async function call(name: string, args: Record<string, unknown> = {}, userId = "
 const answer = (r: Result) => r.content.map((c) => c.text).join("\n")
 
 beforeEach(() => {
-  sourceCalls.list.mockReset().mockResolvedValue([]); sourceCalls.report.mockClear(); sourceCalls.transcript.mockClear();
+  sourceCalls.list.mockReset().mockResolvedValue([]); sourceCalls.report.mockClear(); sourceCalls.transcript.mockReset().mockResolvedValue({ status: "pending", jobId: "job-1" });
   feedbackAnswer.value = {}
   savedVerdicts.clear()
   vi.useFakeTimers({ toFake: ["Date"] })
@@ -822,4 +822,19 @@ it("returns citations without repeating entire source documents for each draft",
   expect(response).toContain('"quote": "CSV export is live."');
   expect(response).not.toContain("FULL OLD DOCUMENT");
   expect(response).not.toContain("FULL NEW DOCUMENT");
+});
+
+it("describes transcript acquisition as a write-capable credit-spending operation", async () => {
+ const response = await rpc("tools/list", {});
+ expect(response.result.tools.find((t: { name: string }) => t.name === "get_transcript").annotations.readOnlyHint).toBe(false);
+});
+
+it("read_material returns the video description when captions are unavailable", async () => {
+ vi.mocked(safeFetch).mockImplementation(async () => new Response(releaseXml.replace("https://example.com/releases/v2", "https://youtube.com/watch?v=abcdefghijk")));
+ await call("add_source", { url: "https://example.com/feed" });
+ const key = answer(await call("list_new_material")).match(/key: (.+)/)![1];
+ sourceCalls.transcript.mockResolvedValueOnce({ status: "not-configured", message: "No key" } as never);
+ const result = JSON.parse(answer(await call("read_material", { key })));
+ expect(result).toMatchObject({ kind: "video-description", text: "CSV export is live. Includes archived rows.", snapshotId: "snapshot-test", transcriptStatus: "not-configured" });
+ expect(result.title).toContain("description only");
 });

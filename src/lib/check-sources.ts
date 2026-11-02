@@ -19,10 +19,11 @@ export async function checkSources(userId: string, readPosts: () => Promise<Post
       if (!old) continue;
       let text: string | undefined;
       let metadata = old.metadata;
-      if (isYouTubeVideo(source.uri)) {
+      if (isYouTubeVideo(source.uri) && old.metadata.kind !== "video-description") {
         const r = await transcriptForUser(userId, source.uri);
-        if (r.status !== "ready" || r.truncated) { results.push({ sourceKey: source.sourceKey, message: r.status === "ready" ? "Partial transcript: kept the previous source." : r.status === "pending" ? "Transcript processing. Check again later." : r.message }); continue; }
-        text = r.text; metadata = { segments: r.segments, captions: r.captions };
+        if (r.status !== "ready") { results.push({ sourceKey: source.sourceKey, message: r.status === "pending" ? "Transcript processing. Check again later." : r.message }); continue; }
+        if (r.truncated && !old.metadata.truncated) { results.push({ sourceKey: source.sourceKey, message: "Only a transcript excerpt returned. The previous full source was kept." }); continue; }
+        text = r.text; metadata = { kind: "transcript", excerptWindow: "prefix-12000", segments: r.segments, captions: r.captions, truncated: r.truncated };
       } else {
         const parts = splitKey(source.sourceKey);
         const feed = feeds.find(f => f.id === parts?.sourceId);
@@ -39,8 +40,9 @@ export async function checkSources(userId: string, readPosts: () => Promise<Post
         }
         if (parsed) {
           const item = parsed.items.find(i => i.key === parts?.itemKey);
-          if (item?.truncated) { results.push({ sourceKey: source.sourceKey, message: "The feed returned only an excerpt. The previous source was kept; ask your AI to check the full text." }); continue; }
+          if (item?.truncated && !old.metadata.truncated) { results.push({ sourceKey: source.sourceKey, message: "The feed returned only an excerpt. The previous source was kept; ask your AI to check the full text." }); continue; }
           text = item?.body;
+          if (item) metadata = { ...metadata, truncated: !!item.truncated };
         }
       }
       if (!text?.trim()) { results.push({ sourceKey: source.sourceKey, message: "No matching source text returned; the previous version was kept." }); continue; }

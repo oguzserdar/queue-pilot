@@ -90,3 +90,10 @@ describe("writeWeek", () => {
     expect(d.write).toHaveBeenCalledTimes(1);
   });
 });
+
+it("preserves successful saves when the retry writer throws", async () => {
+ const d = deps({ write: vi.fn().mockResolvedValueOnce([{ slotId: "a", text: "A" }, { slotId: "b", text: "B" }]).mockRejectedValueOnce(new Error("provider unavailable")), save: vi.fn(async () => ({ ...done([{ slotId: "a", text: "A" }]), refused: [{ slotId: "b", reason: `${PLAYBOOK_REFUSAL}: hype` }] })) });
+ const r = await writeWeek([slot("a", "2026-10-27T09:00:00Z"), slot("b", "2026-10-28T09:00:00Z")], now, d);
+ expect(r).toMatchObject({ kind: "done", saved: [{ slotId: "a" }], refused: [expect.objectContaining({ slotId: "b" })] });
+ expect(d.save).toHaveBeenCalledOnce();
+});

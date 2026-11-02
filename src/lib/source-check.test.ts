@@ -7,8 +7,8 @@ import { answering } from "./ai-test-model";
 import type { Post } from "./buffer/queries";
 const pg = new PGlite(); const testDb = drizzle(pg);
 vi.mock("../db", () => ({ db: () => testDb }));
-const ai = vi.hoisted(() => ({ model: null as unknown, calls: 0, settle: vi.fn(), available: true }));
-vi.mock("./judge-model", () => ({ aiFor: async () => { ai.calls++; return ai.available ? { language: ai.model, settle: ai.settle } : null; } }));
+const ai = vi.hoisted(() => ({ model: null as unknown, calls: 0, settle: vi.fn(), giveBack: vi.fn(), available: true }));
+vi.mock("./judge-model", () => ({ aiFor: async () => { ai.calls++; return ai.available ? { language: ai.model, settle: ai.settle, giveBack: ai.giveBack } : null; } }));
 vi.mock("./rate-limit", () => ({ limit: async () => ({ ok: true }) }));
 const store = await import("./source-store");
 const { reportSourceVersion, listSourcesToCheck } = await import("./source-check");
@@ -20,7 +20,7 @@ beforeAll(async () => {
   await pg.query(`insert into "user" (id,name,email) values ('owner','Owner','owner@test'),('other','Other','other@test')`);
 });
 beforeEach(async () => {
-  key = `source-${Math.random()}`; posts = [draft(key)]; ai.calls = 0; ai.available = true; ai.settle.mockClear();
+  key = `source-${Math.random()}`; posts = [draft(key)]; ai.calls = 0; ai.available = true; ai.settle.mockClear(); ai.giveBack.mockClear();
   ai.model = answering({ verdicts: [{ index: 0, holds: false, why: "The price changed to $20.", rewrite: "The price is $20." }] });
   const snapshot = await store.captureSource("owner", { sourceKey: key, uri, text: "The price is $10." });
   await store.recordEvidence("owner", key, posts[0].text, snapshot.id, [{ claim: posts[0].text, quote: posts[0].text }]);
@@ -61,6 +61,7 @@ describe("source checks through the production operation", () => {
   it("provider failure leaves a pending source change and releases its lease", async () => {
     ai.model = answering("not valid json");
     await expect(report("The price is $20.")).rejects.toThrow();
+    expect(ai.giveBack).toHaveBeenCalledOnce();
     expect(await store.claimSourceJob("owner", `source:${key}`)).not.toBeNull();
     expect((await store.sourceHoldsForPosts("owner", posts)).has(key)).toBe(true);
   });
@@ -88,4 +89,27 @@ it("distinguishes a post awaiting Buffer approval from one already scheduled", a
   expect((await report("The price is $20.")).scheduled).toEqual([]);
   const { sourceCards } = await import("./source-presentation");
   expect((await sourceCards("owner", posts))[0]).toMatchObject({ scheduled: false, editable: false });
+});
+
+it("renews the fenced lease around slow reads and inference", async () => {
+ vi.useFakeTimers({ toFake: ["Date"] });
+ try {
+   const r = await report("The price is $20.", async () => { vi.setSystemTime(new Date(Date.now() + 35_000)); return posts; });
+   expect(r).toMatchObject({ proposals: 1, pending: 0 });
+ } finally { vi.useRealTimers(); }
+});
+
+it("cards identify the account and time and derive the same holds without a second lookup", async () => {
+ await report("The price is $20.");
+ const { sourceCards, sourceHoldsFromCards } = await import("./source-presentation");
+ const cards = await sourceCards("owner", posts, [{ id: "ch", name: "Personal", service: "twitter", timezone: "America/Phoenix" } as import("./buffer/queries").Channel]);
+ expect(cards[0]).toMatchObject({ channel: "Personal", network: "twitter", dueAt: "2099-01-01", sourceKey: key });
+ expect([...sourceHoldsFromCards(cards).keys()]).toEqual([...(await store.sourceHoldsForPosts("owner", posts)).keys()]);
+});
+
+it("external updates keep excerpt coverage instead of silently becoming full-source evidence", async () => {
+ const excerptKey = `excerpt-${key}`;
+ await store.captureSource("owner", { sourceKey: excerptKey, uri, text: "Opening excerpt" }, { truncated: true, kind: "transcript", excerptWindow: "prefix-12000" });
+ await reportSourceVersion("owner", { sourceKey: excerptKey, uri, text: "Updated opening excerpt", checkedBy: "ai:client" }, async () => []);
+ expect((await store.latestSource("owner", excerptKey))?.metadata).toMatchObject({ truncated: true, kind: "transcript", excerptWindow: "prefix-12000" });
 });

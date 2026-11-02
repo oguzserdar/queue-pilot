@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db";
 import { draftEvidence, sourceJob, sourceSnapshot } from "../db/schema";
 import { sourceHash, sourceVersionInput, verifyEvidence, type EvidenceInput, type SourceMetadata } from "./source-evidence";
@@ -15,6 +15,12 @@ export async function claimSourceJob(userId: string, key: string, milliseconds =
   const rows = await db().insert(sourceJob).values({ userId, key, token, expiresAt: new Date(Date.now() + milliseconds) })
     .onConflictDoUpdate({ target: [sourceJob.userId, sourceJob.key], set: { token, value: {}, expiresAt: new Date(Date.now() + milliseconds) }, setWhere: lte(sourceJob.expiresAt, new Date()) }).returning();
   return rows.length ? token : null;
+}
+/** Renewal never revives an expired lease or steals a successor's token. */
+export async function renewSourceJob(userId: string, key: string, token: string) {
+  const rows = await db().update(sourceJob).set({ expiresAt: new Date(Date.now() + 60_000) })
+    .where(and(own(userId, key), eq(sourceJob.token, token), gt(sourceJob.expiresAt, new Date()))).returning({ token: sourceJob.token });
+  if (!rows.length) throw new SourceBusyError();
 }
 export async function releaseSourceJob(userId: string, key: string, token: string) {
   await db().delete(sourceJob).where(and(own(userId, key), eq(sourceJob.token, token)));
@@ -44,6 +50,7 @@ export async function appendSource(userId: string, input: unknown, checkedBy: st
     const [lease] = await tx.select().from(sourceJob).where(and(own(userId, `source:${data.sourceKey}`), eq(sourceJob.token, token))).for("update");
     if (!lease || lease.expiresAt <= new Date()) throw new SourceBusyError();
     const [latest] = await tx.select().from(sourceSnapshot).where(and(eq(sourceSnapshot.userId, userId), eq(sourceSnapshot.sourceKey, data.sourceKey))).orderBy(desc(sourceSnapshot.fetchedAt), desc(sourceSnapshot.id)).limit(1);
+    if (latest && metadata.kind === "video-description" && (latest.metadata.kind === "transcript" || latest.metadata.captions)) throw new Error("A video description cannot replace its saved transcript.");
     if (latest && metadata.truncated && !latest.metadata.truncated) throw new Error("Only an excerpt was returned. The previous full source was kept.");
     const hash = sourceHash(data.text);
     if (latest?.contentHash === hash) {
@@ -98,8 +105,9 @@ export function evidenceNeedsCheck(e: DraftEvidence, latest: SourceSnapshot, dra
 export async function sourceHoldsForPosts(userId: string, posts: { id: string; text: string }[]) {
   const rows = await evidenceForPosts(userId, posts.map(p => p.id));
   const snapshots = await Promise.all([...new Set(rows.map(r => r.snapshotId))].map(id => sourceById(userId, id)));
-  const latest = new Map<string, SourceSnapshot>();
-  for (const snap of snapshots) if (snap && !latest.has(snap.sourceKey)) { const last = await latestSource(userId, snap.sourceKey); if (last) latest.set(snap.sourceKey, last); }
+  const keys = [...new Set(snapshots.flatMap(s => s ? [s.sourceKey] : []))];
+  const currentSources = await Promise.all(keys.map(key => latestSource(userId, key)));
+  const latest = new Map(currentSources.flatMap(s => s ? [[s.sourceKey, s] as const] : []));
   const blocked = new Map<string, string>();
   for (const row of rows) {
     const original = snapshots.find(s => s?.id === row.snapshotId);

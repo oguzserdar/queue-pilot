@@ -72,5 +72,5 @@ export async function writeDrafts(model: LanguageModel, brief: Brief): Promise<W
   if (!brief.slots.length) return [];
   const { system, prompt } = buildPrompt(brief);
   const { output } = await generateText({ model, output: Output.object({ schema: DraftsSchema }), system, prompt, maxRetries: 1 });
-  return keepAsked(output.drafts, new Set(brief.slots.map((s) => s.id))).map(d => ({ ...d, snapshotId: brief.material.find(m => m.key === d.sourceKey)?.snapshotId }));
+  return keepAsked(output.drafts, new Set(brief.slots.map((s) => s.id)));
 }
