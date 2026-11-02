@@ -13,4 +13,6 @@
 .message { white-space: pre-line; line-height: 1.6; font-size: 14px; }
 .warning { color: #9b3c12; font-size: 14px; }
 .card summary { cursor: pointer; font-size: 14px; padding-block: 10px; }
+.checked > summary { cursor: pointer; font-size: 14px; padding-block: 12px; }
+.checked > summary:focus-visible { outline: 2px solid var(--accent, #921653); outline-offset: 3px; }
 @media (max-width: 700px) { .columns { grid-template-columns: 1fr; } .panel { padding: 16px; } }

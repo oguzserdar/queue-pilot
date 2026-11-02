@@ -7,7 +7,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ### Added
 - Read native YouTube captions through Supadata and keep the full transcript with its timestamps. Long-running requests resume from their saved job. Read another passage from the saved transcript without fetching it again.
-- Keep source evidence with a draft: the claim, an exact quote and a timestamp when available. Check quotations against the saved source and show links back to the cited moment.
+- Keep source evidence with a draft: the claim, an exact quote and a timestamp when available. Check quotations against the saved source and show links back to the cited moment. Open saved quotes from Needs you, including drafts whose evidence already passes.
 - Check sources on request. When a source changes, check the affected drafts by meaning and propose corrections for review. Show the account, posting time, affected draft count and source comparison in Needs you. Applying a correction is a separate action.
 - Add `get_transcript`, `list_sources_to_check` and `report_source_version`, bringing the connector to 45 tools. Add the check-sources skill and source citations to the fill-week guidance.
 - Test the Supadata key from Admin and show whether the key comes from the environment or the saved setting.

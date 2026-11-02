@@ -21,6 +21,7 @@ export function EvidenceDetail({ card }: { card: EvidenceCard }) {
 export function SourceEvidencePanel({ cards, timeZone = "UTC" }: { cards: EvidenceCard[]; timeZone?: string }) {
   const [pending, start] = useTransition(); const [message, setMessage] = useState(""); const router = useRouter();
   const needs = cards.filter(c => c.needsCheck);
+  const checked = cards.filter(c => !c.needsCheck);
   const affected = new Map<string, Set<string>>();
   for (const card of needs) { const key = card.sourceKey ?? card.uri; const ids = affected.get(key) ?? new Set<string>(); ids.add(card.postId); affected.set(key, ids); }
   const count = new Set(cards.map(c => c.postId)).size;
@@ -31,6 +32,14 @@ export function SourceEvidencePanel({ cards, timeZone = "UTC" }: { cards: Eviden
       <Button variant="secondary" size="sm" disabled={pending} onClick={() => start(async () => { const r = await checkMySources(); setMessage(r.ok ? r.results.map(x => x.message).join("\n") || "No waiting drafts with sources to check." : r.message); router.refresh(); })}>{pending ? "Checking…" : "Check sources"}</Button>
     </header>
     {message && <p className={styles.message} role="status">{message}</p>}
+    {checked.length > 0 && <details className={styles.checked}>
+      <summary>View saved quotes and drafts ({new Set(checked.map(c => c.postId)).size})</summary>
+      {checked.map((card, i) => <article className={styles.card} key={`${card.postId}-${card.snapshotId}-${i}`}>
+        <h3>{card.channel ?? "Draft"}{card.network ? ` · ${card.network === "twitter" ? "X" : card.network === "linkedin" ? "LinkedIn" : card.network}` : ""} · {sourceDraftTime(card.dueAt, card.timeZone ?? timeZone)}</h3>
+        <p className={styles.message}>{card.draftText}</p>
+        <EvidenceDetail card={card} />
+      </article>)}
+    </details>}
     {needs.map((card, i) => <article className={styles.card} key={`${card.postId}-${card.snapshotId}-${i}`}>
       <h3>{card.channel ?? "Draft"}{card.network ? ` · ${card.network === "twitter" ? "X" : card.network === "linkedin" ? "LinkedIn" : card.network}` : ""} · {sourceDraftTime(card.dueAt, card.timeZone ?? timeZone)}</h3>
       <p className={styles.caption}>{(affected.get(card.sourceKey ?? card.uri)?.size ?? 0)} {(affected.get(card.sourceKey ?? card.uri)?.size ?? 0) === 1 ? "draft needs" : "drafts need"} review from this source</p>
