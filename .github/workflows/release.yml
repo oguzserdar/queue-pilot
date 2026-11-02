@@ -31,6 +31,13 @@ jobs:
           test -s notes.md || (echo "CHANGELOG.md has no section for $version" && exit 1)
           title=$(grep -m1 "^## \[$version\]" CHANGELOG.md | sed -E 's/^## \[[^]]+\] - [0-9-]+ ?//')
           pre=""; case "$version" in *-*) pre="--prerelease";; esac
+          # A reviewed, unpublished tag may move to include a final fix. Keep its
+          # curated draft and attachments instead of creating a duplicate release.
+          existing=$(gh release list --limit 100 --json tagName --jq ".[] | select(.tagName == \"$TAG\") | .tagName")
+          if [ -n "$existing" ]; then
+            echo "Release $TAG already exists; preserving its notes and attachments."
+            exit 0
+          fi
           gh release create "$TAG" --title "$TAG${title:+ $title}" --notes-file notes.md --generate-notes --draft --verify-tag $pre
 
   image:
