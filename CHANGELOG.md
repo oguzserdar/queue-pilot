@@ -5,6 +5,8 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-02 Drafts with source evidence
+
 ### Added
 - Read native YouTube captions through Supadata and keep the full transcript with its timestamps. Long-running requests resume from their saved job. Read another passage from the saved transcript without fetching it again.
 - Keep source evidence with a draft: the claim, an exact quote and a timestamp when available. Check quotations against the saved source and show links back to the cited moment. Open saved quotes from Needs you, including drafts whose evidence already passes.
