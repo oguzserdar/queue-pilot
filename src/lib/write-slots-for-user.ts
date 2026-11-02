@@ -86,6 +86,7 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
       await giveBack();
       return { ok: false, message: r.reason === "no-slots" ? "No empty times remain in the chosen week." : materialNotes.join(" ") || "No new material to write from. Add research under New material or connect a feed." };
     }
+    if (!r.saved.length && r.refused.length && r.refused.every(x => x.reason.startsWith("The writer did not identify a supplied source."))) await giveBack();
     const where = (slotId: string) => { const s = r.saved.find((x) => x.slotId === slotId); return s ? `${s.local} · ${s.channel}` : slotId; };
     return {
       ok: true,

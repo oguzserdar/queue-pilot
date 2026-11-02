@@ -39,6 +39,7 @@ it("skips one unavailable snapshot and reports why while saving other material",
 it("reports invalid source associations instead of dropping drafts silently", async () => {
  m.write.mockResolvedValue([{ slotId: "a", text: "Draft", sourceKey: "unknown" }]);
  expect(await writeSlotsForUser(load)).toMatchObject({ ok: true, saved: [], refused: [expect.objectContaining({ slotId: "a" })] });
+ expect(m.giveBack).toHaveBeenCalledOnce();
 });
 it("retains saved results when the rewrite returns an invalid source", async () => {
  m.save.mockResolvedValueOnce({ saved: [{ slotId: "a", local: "Mon", channel: "Personal" }], refused: [{ slotId: "b", reason: "Breaks your playbook: hype" }], flags: [], check: "judged" });
