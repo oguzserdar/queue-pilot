@@ -6,6 +6,7 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import * as z from "zod";
 import { evidenceInput, type EvidenceInput } from "./source-evidence";
+import { withSourceContext } from "./source-context";
 import { limitFor } from "./char-limits";
 import { describeRule } from "./judge";
 import { appliesTo, type Rule } from "./rules";
@@ -70,7 +71,9 @@ export function keepAsked(drafts: WrittenDraft[], slotIds: Set<string>): Written
 
 export async function writeDrafts(model: LanguageModel, brief: Brief): Promise<WrittenDraft[]> {
   if (!brief.slots.length) return [];
-  const { system, prompt } = buildPrompt(brief);
-  const { output } = await generateText({ model, output: Output.object({ schema: DraftsSchema }), system, prompt, maxRetries: 1 });
-  return keepAsked(output.drafts, new Set(brief.slots.map((s) => s.id)));
+  return withSourceContext(model, brief.material, "Select distinct factual points for these social drafts, considering the entire source, including its ending: " + JSON.stringify({ slots: brief.slots, voice: brief.voice, rules: brief.rules, retry: brief.retry }), async (sources, extracted) => {
+    const { system, prompt } = buildPrompt({ ...brief, material: brief.material.map((m, i) => ({ ...m, ...sources[i], truncated: m.truncated || extracted })) });
+    const { output } = await generateText({ model, output: Output.object({ schema: DraftsSchema }), system, prompt, maxRetries: 0, abortSignal: AbortSignal.timeout(40_000) });
+    return keepAsked(output.drafts, new Set(brief.slots.map((s) => s.id)));
+  });
 }

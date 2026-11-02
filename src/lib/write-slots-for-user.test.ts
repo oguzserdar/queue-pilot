@@ -46,3 +46,9 @@ it("retains saved results when the rewrite returns an invalid source", async () 
  m.write.mockResolvedValueOnce([{ slotId: "a", text: "A", sourceKey: "video" }, { slotId: "b", text: "B", sourceKey: "video" }]).mockResolvedValueOnce([{ slotId: "b", text: "B2", sourceKey: "wrong" }]);
  expect(await writeSlotsForUser(load)).toMatchObject({ ok: true, saved: [{ channel: "Personal" }], refused: [expect.objectContaining({ slotId: "b" })] });
 });
+it("returns the action when source-context processing cannot finish, and saves no partial drafts", async () => {
+ const { SourceContextError } = await import("./source-context");
+ m.write.mockRejectedValue(new SourceContextError("Choose a model with a larger context window. The full source is still saved."));
+ expect(await writeSlotsForUser(load)).toMatchObject({ ok: false, message: expect.stringContaining("larger context window") });
+ expect(m.save).not.toHaveBeenCalled(); expect(m.giveBack).toHaveBeenCalledOnce(); expect(m.settle).toHaveBeenCalledOnce();
+});

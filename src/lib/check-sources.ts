@@ -22,8 +22,8 @@ export async function checkSources(userId: string, readPosts: () => Promise<Post
       if (isYouTubeVideo(source.uri) && old.metadata.kind !== "video-description") {
         const r = await transcriptForUser(userId, source.uri);
         if (r.status !== "ready") { results.push({ sourceKey: source.sourceKey, message: r.status === "pending" ? "Transcript processing. Check again later." : r.message }); continue; }
-        if (r.truncated && !old.metadata.truncated) { results.push({ sourceKey: source.sourceKey, message: "Only a transcript excerpt returned. The previous full source was kept." }); continue; }
-        text = r.text; metadata = { kind: "transcript", excerptWindow: "prefix-12000", segments: r.segments, captions: r.captions, truncated: r.truncated };
+        if (r.truncated) { results.push({ sourceKey: source.sourceKey, message: "Only a transcript excerpt returned. The previous source was kept; retry for the complete transcript." }); continue; }
+        text = r.text; metadata = { kind: "transcript", segments: r.segments, captions: r.captions, truncated: r.truncated };
       } else {
         const parts = splitKey(source.sourceKey);
         const feed = feeds.find(f => f.id === parts?.sourceId);

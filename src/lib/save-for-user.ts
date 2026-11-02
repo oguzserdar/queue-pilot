@@ -132,6 +132,7 @@ export async function saveDraftsForUser(
       if (!draft.evidence?.length || !draft.snapshotId) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "No source quote supplied. Check evidence before approving.", quote: "" });
       for (const e of draft.evidence ?? []) {
         const checked = verifyEvidence(draft.text, snapshot.text, e, snapshot.metadata);
+        if (e.locator && !checked.locator) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source timestamp", verdict: "unsure", reason: "The timestamp could not be matched to the quoted captions. Review it before sharing.", quote: e.quote });
         if (!checked.quote) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "The claim or quote could not be matched. Check the citation before approving.", quote: "" });
       }
     }

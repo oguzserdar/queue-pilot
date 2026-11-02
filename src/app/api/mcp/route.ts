@@ -3,7 +3,8 @@
  * Reads use the saved queue. Writes recheck it and never schedule posts.
  */
 import { evidenceInput, sourceVersionInput } from "@/lib/source-evidence";
-import { captureSource } from "@/lib/source-store";
+import { transcriptSelection } from "@/lib/transcript-selection";
+import { captureSource, sourceById } from "@/lib/source-store";
 import { listSourcesToCheck, reportSourceVersion } from "@/lib/source-check";
 import { transcriptForUser } from "@/lib/transcript-for-user";
 import { isYouTubeVideo } from "@/lib/transcripts";
@@ -412,7 +413,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       if (transcript?.status === "pending") return text(JSON.stringify({ ...transcript, instruction: "Transcript processing. Retry later to resume." }));
       const body = transcript?.status === "ready" ? transcript.text : item.body || item.summary;
       if (!body.trim()) return text("The source returned no text. Do not draft from it.");
-      const metadata = transcript?.status === "ready" ? { kind: "transcript" as const, excerptWindow: "prefix-12000" as const, segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated } : { truncated: item.truncated, ...(transcript ? { kind: "video-description" as const } : {}) };
+      const metadata = transcript?.status === "ready" ? { kind: "transcript" as const, segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated } : { truncated: item.truncated, ...(transcript ? { kind: "video-description" as const } : {}) };
       const snap = await captureSource(userId, { sourceKey: key, uri: item.url ?? source.url, text: body, title: item.title.slice(0, 200) }, metadata);
       return text(JSON.stringify({ title: transcript && transcript.status !== "ready" ? `${item.title} (video description only)` : item.title, url: item.url, snapshotId: snap.id, text: body, ...metadata, transcriptStatus: transcript?.status ?? null }));
     },
@@ -533,15 +534,24 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
   });
 
   server.registerTool("get_transcript", {
-    title: "Read a video's transcript", description: "Read native YouTube captions through QP's configured Supadata key. Can spend one Supadata credit. Long videos return pending; call again later to resume the saved job. Never bypass a block. Returns verified segments and a snapshot for citations when ready. Unknown caption provenance is not manual-caption proof.",
-    inputSchema: z.object({ url: z.string().url().max(2000) }),
+    title: "Read a video's transcript", description: "Read native YouTube captions through QP's configured Supadata key. Can spend one Supadata credit. Long videos return pending; call again later to resume the saved job. Never bypass a block. Returns the complete transcript and all returned timestamps, with a snapshot for citations when ready. Consider the whole episode, not only the opening. For a passage near the end, pass startSeconds and optionally endSeconds. Reuse snapshotId with the same URL to read saved captions without another Supadata call. Time selection never truncates the stored transcript. Unknown caption provenance is not manual-caption proof.",
+    inputSchema: z.object({ url: z.string().url().max(2000), snapshotId: z.string().optional(), startSeconds: z.number().nonnegative().optional(), endSeconds: z.number().positive().optional() }),
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-  }, async ({ url }) => {
+  }, async ({ url, snapshotId, startSeconds, endSeconds }) => {
+    if (!isYouTubeVideo(url)) return { ...text("Use a YouTube video address."), isError: true };
+    if (endSeconds !== undefined && endSeconds <= (startSeconds ?? 0)) return { ...text("The end time must be after the start time."), isError: true };
+    const u = new URL(url); const id = u.searchParams.get("v") ?? u.pathname.split("/").pop();
+    if (snapshotId) {
+      const saved = await sourceById(userId, snapshotId);
+      const original = saved && isYouTubeVideo(saved.uri) ? new URL(saved.uri) : null;
+      const originalId = original?.searchParams.get("v") ?? original?.pathname.split("/").pop();
+      if (!saved || saved.metadata.kind !== "transcript" || originalId !== id) return { ...text("That transcript is not saved for this video in your account."), isError: true };
+      return text(JSON.stringify(transcriptSelection(saved, startSeconds, endSeconds)));
+    }
     const result = await transcriptForUser(userId, url);
     if (result.status !== "ready") return text(JSON.stringify(result));
-    const u = new URL(url); const id = u.searchParams.get("v") ?? u.pathname.split("/").pop();
-    const snapshot = await captureSource(userId, { sourceKey: `yt:${id}`, uri: url, text: result.text }, { kind: "transcript", excerptWindow: "prefix-12000", segments: result.segments, captions: result.captions, truncated: result.truncated });
-    return text(JSON.stringify({ ...result, snapshotId: snapshot.id, sourceKey: snapshot.sourceKey }));
+    const snapshot = await captureSource(userId, { sourceKey: `yt:${id}`, uri: url, text: result.text }, { kind: "transcript", segments: result.segments, captions: result.captions, truncated: result.truncated });
+    return text(JSON.stringify(transcriptSelection(snapshot, startSeconds, endSeconds)));
   });
 
   server.registerPrompt(

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { TRANSCRIPT_CHARS, youtubeTranscript } from "./transcripts";
+import { youtubeTranscript } from "./transcripts";
 
 const answer = (status: number, body: unknown) => vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
 
@@ -26,9 +26,10 @@ describe("youtubeTranscript", () => {
     expect(await youtubeTranscript("https://youtu.be/abc123", "k", vi.fn().mockRejectedValue(new Error("down")))).toBeNull();
   });
 
-  it("caps a long transcript", async () => {
-    const t = await youtubeTranscript("https://youtu.be/abc123", "k", answer(200, { content: "word ".repeat(10_000) }));
-    expect(t!.length).toBeLessThanOrEqual(TRANSCRIPT_CHARS);
+  it("retains the entire transcript, including the final sentence", async () => {
+    const full = "word ".repeat(30_000) + "The final sentence matters.";
+    const t = await youtubeTranscript("https://youtu.be/abc123", "k", answer(200, { content: full }));
+    expect(t).toBe(full);
   });
 });
 
@@ -48,4 +49,14 @@ describe("native transcript jobs", () => {
     const { fetchTranscript } = await import("./transcripts");
     expect(await fetchTranscript("https://youtu.be/abc123", "key", undefined, answer(206, { content: "Partial" }))).toMatchObject({ status: "ready", truncated: true, captions: "unknown" });
   });
+});
+
+it("does not drop invalid caption rows and then call the result complete", async () => {
+ const { fetchTranscript } = await import("./transcripts");
+ expect(await fetchTranscript("https://youtu.be/abc123", "k", undefined, answer(200, { content: [{ text: "Opening", offset: 0 }, { text: "Closing", offset: null }] }))).toMatchObject({ status: "failed" });
+});
+it("retains a provider response beyond the former two-megabyte response ceiling", async () => {
+ const { fetchTranscript } = await import("./transcripts"); const full = "Background sentence. ".repeat(110_000) + "End of the episode.";
+ const result = await fetchTranscript("https://youtu.be/abc123", "k", undefined, answer(200, { content: full }));
+ expect(result).toMatchObject({ status: "ready", text: full, truncated: false });
 });

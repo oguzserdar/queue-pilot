@@ -24,14 +24,20 @@ describe("feed checks", () => {
   });
 });
 
-it("checks the same transcript excerpt window instead of skipping every long video", async () => {
+it("upgrades an older opening excerpt to the full current transcript", async () => {
  state.uri = "https://youtube.com/watch?v=abcdefghijk"; state.old.metadata.truncated = true;
- state.transcript.mockResolvedValue({ status: "ready", text: "Updated first 12000 characters", truncated: true, captions: "unknown", segments: [] });
+ state.transcript.mockResolvedValue({ status: "ready", text: "Full episode including the final correction", truncated: false, captions: "unknown", segments: [] });
  await checkSources("u", async () => []);
- expect(state.reports).toHaveBeenCalledWith("u", expect.objectContaining({ text: "Updated first 12000 characters" }), expect.any(Function), expect.objectContaining({ truncated: true }));
+ expect(state.reports).toHaveBeenCalledWith("u", expect.objectContaining({ text: "Full episode including the final correction" }), expect.any(Function), expect.objectContaining({ truncated: false }));
 });
 it("checks changed feed excerpts when the saved version was also an excerpt", async () => {
  state.old.metadata.truncated = true;
  state.response = new Response('<rss version="2.0"><channel><title>Feed</title><link>https://example.com</link><description>Feed</description><item><guid>item</guid><title>Post</title><description>Updated text. Read more</description></item></channel></rss>');
  await checkSources("u", async () => []); expect(state.reports).toHaveBeenCalled();
+});
+it("does not mistake an incomplete provider response for a source change, even from an old excerpt", async () => {
+ state.uri = "https://youtube.com/watch?v=abcdefghijk"; state.old.metadata.truncated = true;
+ state.transcript.mockResolvedValue({ status: "ready", text: "Only an unidentified section", truncated: true, captions: "unknown", segments: [] });
+ const result = await checkSources("u", async () => []);
+ expect(state.reports).not.toHaveBeenCalled(); expect(result[0].message).toContain("complete transcript");
 });

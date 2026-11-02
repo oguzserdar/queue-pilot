@@ -16,11 +16,11 @@ afterAll(() => pg.close());
 const input = (key: string, text = "Seats cost $10.") => ({ sourceKey: key, uri: "https://example.com/release", text });
 
 describe("source evidence on Postgres", () => {
-  it("normalizes whitespace without changing the words and refuses empty or overlong input", () => {
+  it("normalizes whitespace without changing the words and refuses empty input but retains long sources", () => {
     expect(sourceHash("a \n b")).toBe(sourceHash("a b"));
     expect(sourceHash("a b")).not.toBe(sourceHash("A b"));
     expect(sourceVersionInput.safeParse(input("a", " ")).success).toBe(false);
-    expect(sourceVersionInput.safeParse(input("a", "a".repeat(20_001))).success).toBe(false);
+    expect(sourceVersionInput.safeParse(input("a", "a".repeat(200_001))).success).toBe(true);
   });
   it("verifies actual quotes and locators, never invented timestamps", () => {
     const e = { claim: "Seats cost $10.", quote: "cost $10.", locator: "t=12" };
@@ -95,4 +95,10 @@ it("does not replace a saved transcript with a fallback video description", asyn
  const first = await store.captureSource("owner", input("video-kind"), { kind: "transcript", captions: "unknown" });
  await expect(store.captureSource("owner", input("video-kind", "Video description"), { kind: "video-description" })).rejects.toThrow("description cannot replace");
  expect((await store.latestSource("owner", "video-kind"))?.id).toBe(first.id);
+});
+
+it("upgrades old partial coverage and caption metadata when full text has the same hash", async () => {
+ const first = await store.captureSource("owner", input("coverage-upgrade", "Complete transcript."), { kind: "transcript", truncated: true, excerptWindow: "prefix-12000" });
+ const full = await store.captureSource("owner", input("coverage-upgrade", "Complete transcript."), { kind: "transcript", truncated: false, segments: [{ text: "Complete transcript.", seconds: 12 }] });
+ expect(full.id).toBe(first.id); expect(full.metadata.truncated).toBe(false); expect(full.metadata.excerptWindow).toBeUndefined(); expect(full.metadata.segments).toHaveLength(1);
 });

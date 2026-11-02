@@ -1,4 +1,5 @@
 /** Shared built-in writer for the browser action and authenticated connector. */
+import { SourceContextError } from "./source-context";
 import { BufferRateLimitedError } from "./buffer/client";
 import type { Channel, Post } from "./buffer/queries";
 import type { Provider } from "./ai-key-store";
@@ -53,7 +54,7 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
             if (transcript?.status === "pending") { materialNotes.push(`${m.title}: transcript still processing.`); continue; }
             const text = transcript?.status === "ready" ? transcript.text : m.text;
             const metadata = transcript?.status === "ready"
-              ? { kind: "transcript" as const, excerptWindow: "prefix-12000" as const, segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated }
+              ? { kind: "transcript" as const, segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated }
               : { truncated: m.truncated, ...(video ? { kind: "video-description" as const } : {}) };
             const snapshot = await captureSource(b.userId, { sourceKey: m.key, uri: m.url ?? `urn:qp:${m.key}`, text, title: m.title.slice(0, 200) }, metadata);
             material.push({ ...m, title: video && transcript?.status !== "ready" ? `${m.title} (video description only)` : m.title, text, snapshotId: snapshot.id, ...metadata });
@@ -97,6 +98,7 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
       note: [checkNote(r.check), ...materialNotes].filter(Boolean).join(" ") || undefined,
     };
   } catch (e) {
+    if (e instanceof SourceContextError) { await giveBack(); return { ok: false, message: e.message }; }
     if (e instanceof AiCapError || e instanceof ModelListError) return { ok: false, message: e.message };
     if (e instanceof BufferRateLimitedError) {
       await giveBack();

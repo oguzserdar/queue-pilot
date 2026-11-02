@@ -54,8 +54,10 @@ export async function appendSource(userId: string, input: unknown, checkedBy: st
     if (latest && metadata.truncated && !latest.metadata.truncated) throw new Error("Only an excerpt was returned. The previous full source was kept.");
     const hash = sourceHash(data.text);
     if (latest?.contentHash === hash) {
-      await tx.update(sourceSnapshot).set({ lastCheckedAt: new Date(), metadata: { ...latest.metadata, ...(metadata.etag ? { etag: metadata.etag } : {}), ...(metadata.lastModified ? { lastModified: metadata.lastModified } : {}) } }).where(eq(sourceSnapshot.id, latest.id));
-      return { snapshot: latest, changed: false };
+      const nextMetadata = { ...latest.metadata, ...metadata };
+      if (metadata.kind === "transcript" && metadata.truncated === false) delete nextMetadata.excerptWindow;
+      const [updated] = await tx.update(sourceSnapshot).set({ lastCheckedAt: new Date(), metadata: nextMetadata }).where(eq(sourceSnapshot.id, latest.id)).returning();
+      return { snapshot: updated, changed: false };
     }
     const [snapshot] = await tx.insert(sourceSnapshot).values({ ...data, userId, id: randomUUID(), contentHash: hash, checkedBy, metadata, fetchedAt: new Date(Math.max(Date.now(), (latest?.fetchedAt.getTime() ?? 0) + 1)) }).returning();
     return { snapshot, changed: !!latest };

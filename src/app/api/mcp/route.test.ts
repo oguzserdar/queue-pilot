@@ -1,7 +1,7 @@
 const sourceCalls = vi.hoisted(() => ({ list: vi.fn(async () => [] as { sourceKey: string; uri: string; evidence: { postId: string }[] }[]), report: vi.fn(async () => ({ changed: true, pending: 0 })), transcript: vi.fn(async () => ({ status: "pending", jobId: "job-1" })) }));
 vi.mock("@/lib/source-check", () => ({ listSourcesToCheck: (...a: unknown[]) => sourceCalls.list(...a as []), reportSourceVersion: (...a: unknown[]) => sourceCalls.report(...a as []) }));
 vi.mock("@/lib/transcript-for-user", () => ({ transcriptForUser: (...a: unknown[]) => sourceCalls.transcript(...a as []) }));
-vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }) => ({ id: "snapshot-test", ...data }), sourceById: async () => ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), sourceHoldsForPosts: async () => new Map() }));
+vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }, metadata: unknown = {}) => ({ id: "snapshot-test", ...data, metadata }), sourceById: async (user: string, id: string) => id === "saved-podcast" ? (user === "person-a" ? { id, sourceKey: "yt:abcdefghijk", uri: "https://youtube.com/watch?v=abcdefghijk", text: "Intro. Closing evidence.", metadata: { kind: "transcript", truncated: false, segments: [{ text: "Intro.", seconds: 0 }, { text: "Closing evidence.", seconds: 7190 }] } } : null) : ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), sourceHoldsForPosts: async () => new Map() }));
 vi.mock("@/lib/source-presentation", () => ({ sourceCards: vi.fn(async () => []) }));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Channel, Post } from "@/lib/buffer/queries"
@@ -837,4 +837,22 @@ it("read_material returns the video description when captions are unavailable", 
  const result = JSON.parse(answer(await call("read_material", { key })));
  expect(result).toMatchObject({ kind: "video-description", text: "CSV export is live. Includes archived rows.", snapshotId: "snapshot-test", transcriptStatus: "not-configured" });
  expect(result.title).toContain("description only");
+});
+
+it("returns complete podcasts with the closing timestamp rather than an opening excerpt", async () => {
+ const full = "Background. ".repeat(3000) + "Closing evidence.";
+ sourceCalls.transcript.mockResolvedValueOnce({ status: "ready", text: full, truncated: false, captions: "unknown", segments: [{ text: "Closing evidence.", seconds: 7190 }] } as never);
+ const result = JSON.parse(answer(await call("get_transcript", { url: "https://youtube.com/watch?v=abcdefghijk" })));
+ expect(result).toMatchObject({ text: full, truncated: false, snapshotId: "snapshot-test", coverage: { fullTranscriptSaved: true, lastCaptionSeconds: 7190, selection: null } });
+});
+it("reads a closing passage from this account's saved snapshot without another paid fetch", async () => {
+ const result = JSON.parse(answer(await call("get_transcript", { url: "https://youtu.be/abcdefghijk", snapshotId: "saved-podcast", startSeconds: 7190 })));
+ expect(result).toMatchObject({ text: "Closing evidence.", snapshotId: "saved-podcast", coverage: { fullTranscriptSaved: true } });
+ expect(sourceCalls.transcript).not.toHaveBeenCalled();
+ expect((await call("get_transcript", { url: "https://youtu.be/abcdefghijk", snapshotId: "saved-podcast", startSeconds: 7190 }, "person-b")).isError).toBe(true);
+ expect((await call("get_transcript", { url: "https://youtu.be/different123", snapshotId: "saved-podcast" })).isError).toBe(true);
+});
+it("rejects a backwards time range before spending transcript credits", async () => {
+ expect((await call("get_transcript", { url: "https://youtu.be/abcdefghijk", startSeconds: 7190, endSeconds: 12 })).isError).toBe(true);
+ expect(sourceCalls.transcript).not.toHaveBeenCalled();
 });

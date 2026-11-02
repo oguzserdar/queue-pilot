@@ -1,6 +1,4 @@
-import { readCapped } from "./feeds";
 /** Supadata native captions only. No generated transcription or block bypass. */
-export const TRANSCRIPT_CHARS = 12_000;
 const ENDPOINT = "https://api.supadata.ai/v1/transcript";
 export type TranscriptResult =
   | { status: "ready"; text: string; segments: { text: string; seconds: number }[]; captions: "auto" | "manual" | "unknown"; truncated: boolean }
@@ -31,7 +29,7 @@ export async function fetchTranscript(url: string, key: string, jobId?: string, 
     if (res.status === 429) return { status: "rate-limited", message: "Supadata asked us to wait. Try later." };
     if (res.status === 404) return { status: "unavailable", message: "No native transcript is available just now." };
     if (![200, 202, 206].includes(res.status)) return { status: "failed", message: "Supadata could not return the transcript." };
-    const body = JSON.parse(await readCapped(res, 2_000_000));
+    const body = await res.json();
     if (body.jobId && typeof body.jobId === "string" && /^[\w-]{1,200}$/.test(body.jobId)) return { status: "pending", jobId: body.jobId };
     if (jobId && ["queued", "active", "processing"].includes(body.status)) return { status: "pending", jobId };
     if (body.status === "failed" || body.error) {
@@ -39,12 +37,15 @@ export async function fetchTranscript(url: string, key: string, jobId?: string, 
       return code === "limit-exceeded" ? { status: "out-of-credits", message: "Supadata credits are used up." } : { status: "unavailable", message: "The native transcript job failed. The previous source was kept." };
     }
     const data = body.result ?? body;
+    if (Array.isArray(data.content) && data.content.some((s: { text?: unknown; offset?: unknown } | null) => !s || typeof s.text !== "string" || typeof s.offset !== "number" || !Number.isFinite(s.offset) || s.offset < 0)) {
+      return { status: "failed", message: "The transcript contained invalid captions or timestamps. No partial transcript was kept." };
+    }
     const segments = Array.isArray(data.content) ? data.content.filter((s: { text?: unknown; offset?: unknown }) => typeof s.text === "string" && typeof s.offset === "number" && Number.isFinite(s.offset) && s.offset >= 0).map((s: { text: string; offset: number }) => ({ text: s.text.replace(/\s+/g, " ").trim(), seconds: s.offset / 1000 })) : [];
     const full = (typeof data.content === "string" ? data.content : segments.map((s: { text: string }) => s.text).join(" ")).replace(/\s+/g, " ").trim();
     if (!full) return { status: "unavailable", message: "No native transcript is available just now." };
-    const text = full.slice(0, TRANSCRIPT_CHARS);
+    const text = full;
     // The documented API does not guarantee provenance; never infer ASR from mode=native.
-    return { status: "ready", text, segments: segments.filter((s: { text: string }) => text.includes(s.text)), captions: data.isGenerated === true ? "auto" : data.isGenerated === false ? "manual" : "unknown", truncated: full.length > TRANSCRIPT_CHARS || res.status === 206 };
+    return { status: "ready", text, segments, captions: data.isGenerated === true ? "auto" : data.isGenerated === false ? "manual" : "unknown", truncated: res.status === 206 };
   } catch { return { status: "failed", message: "The transcript could not be read. Try again later." }; }
 }
 
