@@ -29,6 +29,17 @@ describe("rules as decision questions", () => {
 });
 
 describe("replacement capitalization", () => {
+  it("makes replacements conditional without turning required endings into optional content", () => {
+    const replacement = questionsFor([broth]).rule_b1;
+    expect(replacement.instructions).toContain("If the post does not refer to this subject, pass this rule");
+    expect(replacement.instructions).toContain("translations, other word forms");
+    const ending: Rule = { id: "end", kind: "ends_with", phrase: "Read the notes", channels: "all", level: "block", text: "End with Read the notes" };
+    const required = questionsFor([ending]).rule_end;
+    expect(required.instructions).toContain('End with "Read the notes"');
+    expect(required.instructions).not.toContain("does not require the subject");
+    expect(required.criteria.fail).toContain("lacks what the rule requires");
+    expect(required.criteria.unsure).toContain("Required content must still be present");
+  });
   it("allows capitalization variants for a wording change but preserves a case-only correction", () => {
     const abbreviation: Rule = { ...broth, from: "queue pilot", to: "qp", text: 'Say "qp", never "queue pilot".' };
     const question = questionsFor([abbreviation]).rule_b1.instructions;

@@ -30,7 +30,7 @@ export const rulesFor = (rules: Rule[], network: string, channelId?: string) => 
 /** A rule as the model reads it: its meaning in any language. */
 export function describeRule(r: Rule): string {
   return r.kind === "banned" ? `Never ${r.where === "start" ? "open the post with" : r.where === "end" ? "end the post with" : "use"} ${r.phrases.map((p) => `"${p}"`).join(" or ")}, nor a translation of it or wording that means the same.${r.where ? ` Elsewhere in the post it is allowed.` : ""}`
-    : r.kind === "replace" ? `Say "${r.to}", never "${r.from}". This covers translations, other word forms and words that mean the same as "${r.from}". ${r.from.toLocaleLowerCase() === r.to.toLocaleLowerCase() ? "This is a capitalization change: require the replacement’s exact capitalization." : "Capitalization variants of the replacement are allowed. This wording replacement does not impose lowercase or uppercase spelling."}`
+    : r.kind === "replace" ? `Say "${r.to}", never "${r.from}", when referring to this subject. This covers translations, other word forms and words that mean the same as "${r.from}". If the post does not refer to this subject, pass this rule: a replacement does not require the subject to be mentioned. ${r.from.toLocaleLowerCase() === r.to.toLocaleLowerCase() ? "This is a capitalization change: require the replacement’s exact capitalization." : "Capitalization variants of the replacement are allowed. This wording replacement does not impose lowercase or uppercase spelling."}`
     : r.kind === "ends_with" ? `End with "${r.phrase}", or the same line in the post's language.`
     : r.text;
 }
@@ -46,7 +46,7 @@ export function questionsFor(rules: Rule[]) {
         criteria: {
           pass: "The post follows this rule.",
           fail: "The post breaks this rule: it contains what the rule forbids, in any language or wording, or lacks what the rule requires.",
-          unsure: "It is unclear whether the rule applies to this post.",
+          unsure: "There is not enough evidence to determine whether the post follows or breaks this rule. A clearly unmet condition in a conditional rule is a pass, not uncertainty. Required content must still be present.",
         },
       },
     ]),
@@ -110,7 +110,7 @@ async function judgeOne(m: Judges, draft: JudgeInput, rules: Rule[]): Promise<Ve
       if (!a) return { ...base, verdict: "unsure", probability: null, quote: "", reason: "The check gave no answer for this rule.", unavailable: true };
       if (choice !== "unsure" && probability !== null && probability < MIN_PROBABILITY)
         return { ...base, verdict: "unsure", probability, quote: "", reason: `The check leaned ${choice} but was only ${Math.round(probability * 100)}% sure.` };
-      if (choice !== "fail") return { ...base, verdict: choice, probability, quote: "", reason: choice === "unsure" ? "The check could not tell whether the rule applies." : "" };
+      if (choice !== "fail") return { ...base, verdict: choice, probability, quote: "", reason: choice === "unsure" ? "The check could not determine whether this post follows the rule." : "" };
       const { quote, reason } = await explain(m.explainer, draft, r);
       if (!quote && r.level === "block") return { ...base, verdict: "unsure", probability, quote: "", reason: `Judged as breaking the rule, but no words could be pointed at. ${reason}`.trim() };
       return { ...base, verdict: "fail", probability, quote, reason };

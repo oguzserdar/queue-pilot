@@ -29,7 +29,9 @@ describe("buildPrompt", () => {
     const { prompt } = buildPrompt(brief);
     expect(prompt).toContain(`slotId ${slotId}`);
     expect(prompt).toContain("max 3000 characters");
-    expect(prompt).toContain('Say "stock", never "broth". This covers translations, other word forms and words that mean the same as "broth".');
+    expect(prompt).toContain('Say "stock", never "broth", when referring to this subject.');
+    expect(prompt).toContain('This covers translations, other word forms and words that mean the same as "broth".');
+    expect(prompt).toContain("a replacement does not require the subject to be mentioned");
     expect(prompt).toContain("a draft that breaks it is not saved");
   });
 
