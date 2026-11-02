@@ -4,6 +4,7 @@
  * connector address in it, since each deployment has a different address.
  */
 import { createHash } from "node:crypto";
+import { CHECK_SOURCES_SKILL } from "./check-sources-skill";
 import { FILL_WEEK_STEPS } from "./fill-week-prompt";
 
 import { SKILL_NAME } from "./skill-name";
@@ -13,6 +14,9 @@ export const SKILL_DESCRIPTION =
 
 /** The connector tools and what each is for, in the order the loop uses them. */
 const TOOLS: [string, string][] = [
+  ["get_transcript", "Read native captions and verified timestamps. Resume pending jobs later, never bypass a block."],
+  ["list_sources_to_check", "Read sources cited by waiting drafts, fingerprints and original claims."],
+  ["report_source_version", "Report a full current source version for meaning checks. Uses AI only for unresolved evidence; never changes Buffer."],
   ["get_effective_rules", "Read applicable and excluded rules for an exact account, with reasons and a revision."],
   ["set_rule_override", "Include, exclude or reset a rule at a network or exact account, only when requested."],
   ["set_rule_inheritance", "Choose inherited shared/network rules; show the affected rules first. Exceptions remain saved."],
@@ -118,6 +122,6 @@ export function skillIndex(origin: string) {
   const digest = createHash("sha256").update(skillMarkdown(origin)).digest("hex");
   return {
     $schema: "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
-    skills: [{ name: SKILL_NAME, type: "skill-md", description: SKILL_DESCRIPTION, url: `/.well-known/agent-skills/${SKILL_NAME}/SKILL.md`, digest: `sha256:${digest}` }],
+    skills: [{ name: SKILL_NAME, type: "skill-md", description: SKILL_DESCRIPTION, url: `/.well-known/agent-skills/${SKILL_NAME}/SKILL.md`, digest: `sha256:${digest}` }, { name: "queue-pilot-check-sources", type: "skill-md", description: "Check sources behind waiting drafts and review evidence.", url: "/.well-known/agent-skills/queue-pilot-check-sources/SKILL.md", digest: `sha256:${createHash("sha256").update(CHECK_SOURCES_SKILL).digest("hex")}` }],
   };
 }

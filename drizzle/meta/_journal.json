@@ -162,6 +162,13 @@
       "when": 1793490947450,
       "tag": "20261031235547_approval_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793590052879,
+      "tag": "20261102032732_sudden_human_robot",
+      "breakpoints": true
     }
   ]
 }

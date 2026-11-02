@@ -1,3 +1,8 @@
+const sourceCalls = vi.hoisted(() => ({ list: vi.fn(async () => [] as { sourceKey: string; uri: string; evidence: { postId: string }[] }[]), report: vi.fn(async () => ({ changed: true, pending: 0 })), transcript: vi.fn(async () => ({ status: "pending", jobId: "job-1" })) }));
+vi.mock("@/lib/source-check", () => ({ listSourcesToCheck: (...a: unknown[]) => sourceCalls.list(...a as []), reportSourceVersion: (...a: unknown[]) => sourceCalls.report(...a as []) }));
+vi.mock("@/lib/transcript-for-user", () => ({ transcriptForUser: (...a: unknown[]) => sourceCalls.transcript(...a as []) }));
+vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }) => ({ id: "snapshot-test", ...data }), sourceById: async () => ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), sourceHoldsForPosts: async () => new Map() }));
+vi.mock("@/lib/source-presentation", () => ({ sourceCards: vi.fn(async () => []) }));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Channel, Post } from "@/lib/buffer/queries"
 import type { Written } from "@/lib/written-store"
@@ -140,6 +145,7 @@ async function call(name: string, args: Record<string, unknown> = {}, userId = "
 const answer = (r: Result) => r.content.map((c) => c.text).join("\n")
 
 beforeEach(() => {
+  sourceCalls.list.mockReset().mockResolvedValue([]); sourceCalls.report.mockClear(); sourceCalls.transcript.mockClear();
   feedbackAnswer.value = {}
   savedVerdicts.clear()
   vi.useFakeTimers({ toFake: ["Date"] })
@@ -175,7 +181,7 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(42)
+    expect(tools).toHaveLength(45)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
@@ -763,4 +769,57 @@ describe("comment to draft changes through the real connector", () => {
     expect((await call("propose_review_changes", { linkId: "link-1", commentId: "comment", postIds: ["d1"] })).isError).toBe(true);
     expect(aiCalls.settle).not.toHaveBeenCalled();
   });
+});
+
+
+describe("source evidence connector", () => {
+  it("marks source reporting as a write and binds provenance to the authenticated app", async () => {
+    const response = await rpc("tools/list", {});
+    expect(response.result.tools.find((t: { name: string }) => t.name === "report_source_version").annotations.readOnlyHint).toBe(false);
+    sourceCalls.list.mockResolvedValue([{ sourceKey: "feed:item", uri: "https://example.com/post", evidence: [{ postId: "post-a" }] }]);
+    const r = await call("report_source_version", { sourceKey: "feed:item", uri: "https://example.com/post", text: "The export limit is 1000.", checkedBy: "someone-else", userId: "person-b" });
+    expect(r.isError).not.toBe(true);
+    expect(sourceCalls.report).toHaveBeenCalledWith("person-a", expect.objectContaining({ checkedBy: "ai:test-client", text: "The export limit is 1000." }), expect.any(Function));
+  });
+  it("rejects unknown source keys and substituted source URLs before checking", async () => {
+    const input = { sourceKey: "feed:item", uri: "https://example.com/post", text: "Updated source." };
+    expect((await call("report_source_version", input)).isError).toBe(true);
+    sourceCalls.list.mockResolvedValue([{ sourceKey: "feed:item", uri: "https://example.com/real", evidence: [] }]);
+    expect((await call("report_source_version", input)).isError).toBe(true);
+    expect(sourceCalls.report).not.toHaveBeenCalled();
+  });
+  it("returns pending transcripts without saving a draft or calling the writer", async () => {
+    const r = await call("get_transcript", { url: "https://youtube.com/watch?v=abcdefghijk" });
+    expect(JSON.parse(answer(r))).toEqual({ status: "pending", jobId: "job-1" });
+    expect(sourceCalls.transcript).toHaveBeenCalledWith("person-a", "https://youtube.com/watch?v=abcdefghijk");
+    expect(posts).toHaveLength(0);
+    expect(aiCalls.settle).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("source evidence persistence", () => {
+  it("does not grant QP ownership when evidence recording fails after Buffer saves", async () => {
+    const store = await import("@/lib/source-store");
+    vi.mocked(store.recordEvidence).mockRejectedValueOnce(new Error("storage unavailable"));
+    const slotId = answer(await call("list_open_slots")).match(/ch@[^ ]+/)![0];
+    const result = await call("save_drafts", { title: "Release", drafts: [{ slotId, text: "CSV export is live.", snapshotId: "snapshot-test", evidence: [{ claim: "CSV export is live.", quote: "CSV export is live." }] }] });
+    expect(result.isError).not.toBe(true);
+    expect(posts).toHaveLength(1);
+    expect(answer(result)).toContain("evidence could not be recorded");
+    expect(written.get("person-a") ?? []).toHaveLength(0);
+    expect(buffer.calls.some(c => /schedulePost|publishPost/.test(c.query))).toBe(false);
+  });
+});
+
+
+it("returns citations without repeating entire source documents for each draft", async () => {
+  const { sourceCards } = await import("@/lib/source-presentation");
+  posts = [{ id: "p", channelId: "ch", text: "CSV export is live.", status: "draft", dueAt: "2026-11-02T09:00:00.000Z", sentAt: null, externalLink: null, error: null }];
+  written.set("person-a", [{ postId: "p", text: posts[0].text, network: "linkedin" }]);
+  vi.mocked(sourceCards).mockResolvedValueOnce([{ postId: "p", snapshotId: "s", title: "Release", uri: "https://example.com", claim: "CSV export is live.", quote: "CSV export is live.", locator: null, lastCheckedAt: "2026-11-01", needsCheck: false, changed: false, scheduled: false, editable: true, oldText: "FULL OLD DOCUMENT", newText: "FULL NEW DOCUMENT", draftText: posts[0].text, why: "Quote matches" }]);
+  const response = answer(await call("list_my_drafts"));
+  expect(response).toContain('"quote": "CSV export is live."');
+  expect(response).not.toContain("FULL OLD DOCUMENT");
+  expect(response).not.toContain("FULL NEW DOCUMENT");
 });

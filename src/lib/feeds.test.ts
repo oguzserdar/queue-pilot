@@ -123,6 +123,7 @@ describe("full text and keys", () => {
     expect(item.summary).toBe("Teaser only.");
     expect(item.body.startsWith("The whole post.")).toBe(true);
     expect(item.body.length).toBeLessThanOrEqual(BODY_CHARS);
+    expect(item.truncated).toBe(true);
   });
   it("splits a scoped key back into feed and item, keeping colons inside the item key", () => {
     expect(splitKey("src1:tag:github.com,2008:v1.4.0")).toEqual({ sourceId: "src1", itemKey: "tag:github.com,2008:v1.4.0" });
@@ -157,4 +158,10 @@ describe("YouTube channel feeds", () => {
     const { items } = itemsFromXml(YOUTUBE);
     expect(items.find((i) => i.url === "https://www.youtube.com/watch?v=def456")?.body).toBe("");
   });
+});
+
+
+it("labels a publisher's Read more cutoff as an excerpt without guessing paid status", () => {
+  const xml = `<rss version="2.0"><channel><title>Feed</title><item><guid>one</guid><description><![CDATA[<p>Opening paragraph.</p><p><a href="https://example.com/full">Read more</a></p>]]></description></item></channel></rss>`;
+  expect(itemsFromXml(xml).items[0]).toMatchObject({ truncated: true, body: "Opening paragraph. Read more" });
 });

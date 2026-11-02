@@ -1,3 +1,4 @@
+import { sourceCards } from "./source-presentation";
 /** Account-scoped controls shared by every connected AI. No browser-session actions or privileged account controls. */
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod";
@@ -189,9 +190,10 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     const posts = postsBetween(b.posts, range.start, range.end).filter(p => p.status === "draft");
     const written = await postgresWrittenStore().get(userId, posts.map(p => p.id));
     const revision = playbookVersion(await postgresRulesStore().list(userId));
+    const evidence = await sourceCards(userId, posts);
     return result({ asOf: b.fetchedAt.toISOString(), drafts: posts.flatMap(p => {
       const w = written.find(w => w.postId === p.id);
-      return w ? [{ postId: p.id, channelId: p.channelId, text: p.text, dueAt: p.dueAt, status: p.status, changedSinceCheck: p.text !== w.text, rulesChangedSinceCheck: w.playbookRevision !== revision, verdicts: p.text === w.text && w.playbookRevision === revision ? w.verdicts ?? null : null }] : [];
+      return w ? [{ evidence: evidence.filter(e => e.postId === p.id).map(({ oldText: _old, newText: _new, draftText: _draft, ...citation }) => citation), postId: p.id, channelId: p.channelId, text: p.text, dueAt: p.dueAt, status: p.status, changedSinceCheck: p.text !== w.text, rulesChangedSinceCheck: w.playbookRevision !== revision, verdicts: p.text === w.text && w.playbookRevision === revision ? w.verdicts ?? null : null }] : [];
     }) });
   });
   server.registerTool("refresh_buffer", { title: "Refresh Buffer data", description: "Refresh the saved queue after a user changes channels or slots in Buffer. Shares the app's request limit and keeps data under 30 seconds old. Use sparingly, then read the relevant tools.", annotations: { ...write, idempotentHint: true, openWorldHint: true } }, async () => { const b = await buffer(true); return result({ refreshedAt: b.fetchedAt.toISOString(), channels: b.channels.length }); });

@@ -5,6 +5,7 @@
 import { approveDrafts, type ApproveResult } from "./approve-drafts";
 import { bufferQuery } from "./buffer/client";
 import { readPostsNow, type Post, type Channel } from "./buffer/queries";
+import { sourceHoldsForPosts } from "./source-store";
 import { approvable } from "./draft-readiness";
 import { postgresRulesStore } from "./rules-store";
 import { postgresWrittenStore } from "./written-store";
@@ -19,6 +20,9 @@ export async function approveChecked(userId: string, token: string, ids: string[
   const networks = new Map(channels?.map(c => [c.id, c.service]));
   const unknown = new Set(channels ? posts.filter(p => !networks.has(p.channelId)).map(p => p.id) : []);
   const gate = approvable(ids.filter(id => !unknown.has(id)), written, posts.map(p => ({ ...p, network: networks.get(p.channelId) })), rules);
+  const sourceBlocks = await sourceHoldsForPosts(userId, posts);
+  for (const id of gate.allowed.filter(id => sourceBlocks.has(id))) gate.refused.push({ id, reason: sourceBlocks.get(id)! });
+  gate.allowed = gate.allowed.filter(id => !sourceBlocks.has(id));
   const res: ApproveResult = gate.allowed.length ? await approveDrafts(token, gate.allowed, posts, now, new Set(written.map((w) => w.postId)), q) : { approved: [], refused: [] };
   return { ...res, refused: [...[...unknown].map(id => ({ id, reason: "This account is not in the current connection. Refresh Buffer before approving." })), ...gate.refused, ...res.refused], posts };
 }

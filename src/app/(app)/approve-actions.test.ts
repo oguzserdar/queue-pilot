@@ -1,3 +1,4 @@
+vi.mock("@/lib/source-store", () => ({ sourceHoldsForPosts: async () => new Map() }));
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Post } from "@/lib/buffer/queries"
 

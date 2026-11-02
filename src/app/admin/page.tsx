@@ -1,3 +1,4 @@
+import { TestTranscriptKey } from "@/components/test-transcript-key";
 import { SignInButton } from "@/components/sign-in-button";
 import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
@@ -132,6 +133,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
                       </li>
                     ))}
                   </ol>
+                  {r.key === "supadata_api_key" && <TestTranscriptKey />}
                   {saved === r.key ? <p className={styles.ok} role="status">Saved.</p> : null}
                   {cleared === r.key ? <p className={styles.ok} role="status">Removed. {r.source === "environment" ? "The server's value applies again." : ""}</p> : null}
                   {field === r.key && (problem || error) ? <p className={styles.error} role="alert">{problem ?? NOTES[error ?? ""]}</p> : null}

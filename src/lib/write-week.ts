@@ -20,7 +20,7 @@ export type WriteWeekDeps = {
   voice(): Promise<Voice>;
   rules(): Promise<Rule[]>;
   write(brief: Brief): Promise<WrittenDraft[]>;
-  save(drafts: { slotId: string; text: string }[], sourceKeys: string[]): Promise<Saved>;
+  save(drafts: WrittenDraft[], sourceKeys: string[]): Promise<Saved>;
 };
 
 export type WriteWeekResult =

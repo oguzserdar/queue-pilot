@@ -1,5 +1,7 @@
 "use client";
 
+import { EvidenceDetail } from "./source-evidence";
+import type { EvidenceCard } from "@/lib/source-presentation";
 import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
 import { ArrowUpRight } from "lucide-react";
 
@@ -43,7 +45,7 @@ const RESULT_TONE = { pass: "success", fail: "danger", unsure: "warning" } as co
  * `live` is true for a signed-in user: Approve schedules the drafts in Buffer. Example data only marks them on screen.
  * `verdicts` are the playbook verdicts each draft was saved with, by post id; null means it was saved unchecked.
  */
-export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {} }: { week: WeekModel; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
+export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [] }: { week: WeekModel; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
   const { label: WEEK_LABEL, days: DAYS, channels, slots } = week;
   /** A day gets a full column when any channel has a slot or a post on it. */
   const dayHasContent = (d: number) => channels.some((c) => slots[c.id]?.[d]?.length) || posts.some((p) => p.day === d);
@@ -160,13 +162,14 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             {p.status === "error" && <span className={styles.reason}>{p.error?.message || "Buffer did not say why."} This time counts as open again.</span>}
           </div>
         );
+        const citation = evidence.find(e => e.postId === p.id);
         const tone = worstTone(p);
         const isOn = approved.has(p.id);
         return (
           <button key={p.id} type="button" onClick={(e) => { opener.current = e.currentTarget; setSelected(p.id); setEditing(null); setConfirmDelete(false); setNote(null); setDialogOpen(true); }} className={styles.draft} data-tone={tone} data-selected={dialogOpen && selected === p.id} data-approved={isOn}>
             <span className={styles.time}>{t}<span className={styles.state}><StateMark state={postState(p, isOn)} word why={p.checks?.find((c) => c.tone === "danger")?.label} /></span></span>
             <span className={styles.text}>{p.text}</span>
-            <span className={styles.src} title={p.source?.label ?? "Draft saved in Buffer"}>{p.source ? SOURCE_SHORT[p.source.kind] : "Buffer draft"}</span>
+            <span className={styles.src} title={citation ? `${citation.title} · ${citation.needsCheck ? "Evidence needs review" : "Quote matches saved source"}` : p.source?.label ?? "Draft saved in Buffer"}>{citation ? citation.title : p.source ? SOURCE_SHORT[p.source.kind] : "Buffer draft"}</span>
           </button>
         );
       });
@@ -320,6 +323,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
           {editing === null && (
             <>
               <p className={styles.postText}>{current.text}</p>
+              {evidence.filter(e => e.postId === current.id).map((card, i) => <EvidenceDetail key={i} card={card} />)}
               {current.ours !== false && !approved.has(current.id) && (
                 <div><Button variant="secondary" size="sm" onClick={() => { setEditing(current.text); setConfirmDelete(false); setNote(null); }}>Edit text</Button></div>
               )}

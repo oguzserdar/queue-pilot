@@ -87,3 +87,10 @@ it("gives each slot only its own effective rules, including account exceptions",
   expect(personal).toContain('Say "stock"');
   expect(personal).not.toContain("Company-specific opening");
 });
+
+
+it("supplies real timestamp segments and excerpt limits to the writer", () => {
+  const prompt = buildPrompt({ ...brief, material: [{ ...brief.material[0], truncated: true, segments: [{ text: "White bean soup.", seconds: 872 }] }] }).prompt;
+  expect(prompt).toContain("Source excerpt only");
+  expect(prompt).toContain('"seconds":872');
+});

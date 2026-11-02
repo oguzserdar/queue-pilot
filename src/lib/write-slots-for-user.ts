@@ -10,8 +10,9 @@ import { slotsToWrite, writeWeek } from "./write-week";
 import { newMaterial } from "./new-material";
 import { openSlots } from "./open-slots";
 import { checkNote, saveDraftsForUser } from "./save-for-user";
-import { youtubeTranscript } from "./transcripts";
-import { supadataKey } from "./env";
+import { isYouTubeVideo } from "./transcripts";
+import { transcriptForUser } from "./transcript-for-user";
+import { captureSource } from "./source-store";
 import { postgresVoiceStore } from "./voice-store";
 import { postgresRulesStore } from "./rules-store";
 import { AiCapError, aiFor } from "./judge-model";
@@ -38,16 +39,32 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
     if (!ai) return { ok: false, message: "AI writing is unavailable just now. Check built-in AI or your own key in Settings." };
     provider = ai.cfg.provider;
     const model = ai.language;
-    const supadata = await supadataKey();
     const r = await writeWeek(slots, now, {
       material: async () => {
         const items = await newMaterial(b.userId);
         // A YouTube item carries only its description; with a Supadata key the transcript is added.
-        return Promise.all(items.map(async (m) => (supadata && m.url && /youtu\.?be/.test(m.url) ? { ...m, text: `${m.text}\n\nTranscript:\n${(await youtubeTranscript(m.url, supadata)) ?? "(none)"}` } : m)));
+        const material = [];
+        for (const m of items) {
+          const transcript = m.url && isYouTubeVideo(m.url) ? await transcriptForUser(b.userId, m.url) : null;
+          // A pending long-video job remains unused; the next write resumes it.
+          if (transcript && transcript.status !== "ready") continue;
+          const text = transcript?.status === "ready" ? transcript.text : m.text;
+          const metadata = transcript?.status === "ready" ? { segments: transcript.segments, captions: transcript.captions, truncated: transcript.truncated } : { truncated: m.truncated };
+          const snapshot = await captureSource(b.userId, { sourceKey: m.key, uri: m.url ?? `urn:qp:${m.key}`, text, title: m.title.slice(0, 200) }, metadata);
+          material.push({ ...m, text, snapshotId: snapshot.id, ...metadata });
+        }
+        return material;
       },
       voice: () => postgresVoiceStore().get(b.userId),
       rules: () => postgresRulesStore().list(b.userId),
-      write: (brief) => writeDrafts(model, brief),
+      write: async (brief) => {
+        const drafts = (await writeDrafts(model, brief)).flatMap(d => {
+          const source = brief.material.find(m => m.key === d.sourceKey);
+          return source?.snapshotId ? [{ ...d, snapshotId: source.snapshotId }] : [];
+        });
+        if (!drafts.length) throw new Error("The writer returned no drafts tied to a supplied source.");
+        return drafts;
+      },
       // The playbook check is part of this one action, so it judges with the same AI instead of taking another.
       save: (drafts, sourceKeys) => saveDraftsForUser(b.userId, b.token, { title: "Written by Queue Pilot", drafts, open: slots, sourceKeys }, { ...ai, judges: { decider: ai.decider, explainer: ai.language } }),
     });

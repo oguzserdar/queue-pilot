@@ -1,3 +1,5 @@
+import { sourceCards } from "@/lib/source-presentation";
+import { sourceHoldsForPosts } from "@/lib/source-store";
 import { postgresRulesStore } from "@/lib/rules-store";
 import { draftReadiness, type Readiness } from "@/lib/draft-readiness";
 import { playbookVersion } from "@/lib/playbook-version";
@@ -36,7 +38,10 @@ export default async function Page() {
     const network = user.channels.find(c => c.id === post?.channelId)?.service ?? w.network;
     return [w.postId, rules ? draftReadiness(w, post?.text ?? "", rules, { network, channelId: post?.channelId }) : { state: "check", reason: "The playbook could not be read. Try again." }];
   }));
+  const evidence = userId ? await sourceCards(userId, user.posts) : [];
+  const blocks = userId ? await sourceHoldsForPosts(userId, user.posts) : new Map<string, string>();
+  for (const [id, reason] of blocks) readiness[id] = { state: "check", reason };
   const writing = userId ? await writingAvailabilityFor(userId) : undefined;
   const count = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, timeZone).length;
-  return <WeekView week={week} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} />;
+  return <WeekView week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} />;
 }

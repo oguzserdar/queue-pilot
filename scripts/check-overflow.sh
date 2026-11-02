@@ -4,10 +4,13 @@
 # Run before deploying a new screen or navigation item: bash scripts/check-overflow.sh
 set -u
 cd "$(dirname "$0")/.."
-ROUTES="/ /week /delivery /playbook /ideas /voice /sources /connect /settings /sign-in /admin /embed/week /dev/sync-states?state=failed /dev/sync-states?state=limited /dev/sources-live /dev/sources-live?connected=1 /dev/live-states?screen=ideas /dev/live-states?screen=voice /dev/live-states?screen=settings /nope-page"
+ROUTES="/ /week /delivery /playbook /ideas /voice /sources /connect /settings /sign-in /admin /embed/week /dev/sync-states?state=failed /dev/sync-states?state=limited /dev/sources-live /dev/sources-live?connected=1 /dev/live-states?screen=ideas /dev/live-states?screen=voice /dev/live-states?screen=settings /dev/source-evidence /nope-page"
 load=$(uptime | sed 's/.*load averages*: *//; s/[, ].*//')
 if [ "${load%.*}" -ge 24 ]; then echo "skipped: load $load"; exit 2; fi
-(pnpm exec next dev -p 4417 > /tmp/qp-overflow.log 2>&1 &)
+# Worktrees can share dependencies outside the Turbopack root.
+bundler=()
+[ "${QP_OVERFLOW_WEBPACK:-0}" = "1" ] && bundler=(--webpack)
+(pnpm exec next dev "${bundler[@]}" -p 4417 > /tmp/qp-overflow.log 2>&1 &)
 for i in $(seq 1 90); do [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:4417/)" = "200" ] && break; sleep 2; done
 fail=0
 for size in "671 905" "1440 900"; do

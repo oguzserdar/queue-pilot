@@ -5,6 +5,9 @@
  * was written with its verdicts. Bookkeeping after Buffer accepted the drafts never turns into an error, so a caller
  * does not retry a save that already happened.
  */
+import type { WrittenDraft } from "./ai-writer";
+import { recordEvidence, sourceById, latestSource } from "./source-store";
+import { verifyEvidence } from "./source-evidence";
 import { playbookVersion } from "./playbook-version";
 import { withSavedDrafts } from "./buffer/snapshot";
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
@@ -97,10 +100,31 @@ const warn = (event: string) => (e: unknown) => console.warn(JSON.stringify({ ev
 export async function saveDraftsForUser(
   userId: string,
   accessToken: string,
-  input: { title: string; drafts: DraftInput[]; open: OpenSlot[]; sourceKeys?: string[] },
+  input: { title: string; drafts: WrittenDraft[]; open: OpenSlot[]; sourceKeys?: string[] },
   /** The AI an enclosing action already took; the check then judges with it instead of taking another action. */
   within?: JudgeModel,
 ): Promise<SaveResult & { flags: Flag[]; check: PlaybookCheck; judgedWith?: string }> {
+  // Validate ownership and claims before a Buffer write. Snapshots were captured while reading material.
+  const evidenceWarnings: Flag[] = [];
+  // Older clients can still cite one material key. Multiple sources need an explicit snapshot per draft.
+  if (input.sourceKeys?.length) {
+    for (const draft of input.drafts) if (!draft.snapshotId) {
+      if (input.sourceKeys.length !== 1) throw new Error("Choose a source snapshot for each draft before saving.");
+      const snapshot = await latestSource(userId, input.sourceKeys[0]);
+      if (!snapshot) throw new Error("Read the source material before saving drafts from it.");
+      draft.snapshotId = snapshot.id;
+    }
+  }
+  for (const draft of input.drafts) {
+    if (!draft.snapshotId) continue;
+    const snapshot = await sourceById(userId, draft.snapshotId);
+    if (!snapshot) throw new Error("The source is not in this account.");
+    if (!draft.evidence?.length) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "No source quote supplied. Check evidence before approving.", quote: "" });
+    for (const e of draft.evidence ?? []) {
+      const checked = verifyEvidence(draft.text, snapshot.text, e, snapshot.metadata);
+      if (!checked.quote) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "Quote not found in the source", quote: "" });
+    }
+  }
   const rules = await postgresRulesStore().list(userId).catch((e) => {
     console.error(JSON.stringify({ event: "qp-rules-read-failed", message: e instanceof Error ? e.message : String(e) }));
     return null;
@@ -130,10 +154,22 @@ export async function saveDraftsForUser(
     const wrote = res.saved
       .filter((x): x is typeof x & { postId: string } => x.postId !== null)
       .map((x) => ({ postId: x.postId, network: x.network, text: x.text, playbookRevision: rules ? playbookVersion(rules) : null, verdicts: gate.check === "judged" ? (gate.verdicts.get(x.slotId) ?? []) : null }));
-    await postgresWrittenStore().record(userId, wrote).catch(warn("qp-record-written-failed"));
+    const missingEvidence = new Set<string>();
+    for (const saved of res.saved) {
+      const draft = input.drafts.find(d => d.slotId === saved.slotId);
+      if (!saved.postId || !draft?.snapshotId) continue;
+      // Missing evidence is recorded as an unmatched quote, never silently shown as verified.
+      const evidence = draft.evidence?.length ? draft.evidence : [{ claim: draft.text.slice(0, 500), quote: "[No source quote supplied]" }];
+      await recordEvidence(userId, saved.postId, saved.text, draft.snapshotId, evidence).catch(() => {
+        missingEvidence.add(saved.postId!);
+        evidenceWarnings.push({ slotId: saved.slotId, rule: "Source evidence", verdict: "unsure", reason: "Draft saved, but its evidence could not be recorded. Do not retry saving the draft.", quote: "" });
+      });
+    }
+    // If evidence bookkeeping failed, do not create an ownership record that would allow QP approval.
+    await postgresWrittenStore().record(userId, wrote.filter(w => !missingEvidence.has(w.postId))).catch(warn("qp-record-written-failed"));
     if (input.sourceKeys?.length) await postgresSourceStore().markUsed(userId, input.sourceKeys).catch(warn("qp-mark-used-failed"));
   }
-  return { saved: res.saved, refused: [...gate.refused, ...res.refused], requests: res.requests, flags: flagsFor(res.saved, gate.verdicts), check: gate.check, judgedWith: jm?.source };
+  return { saved: res.saved, refused: [...gate.refused, ...res.refused], requests: res.requests, flags: [...flagsFor(res.saved, gate.verdicts), ...evidenceWarnings], check: gate.check, judgedWith: jm?.source };
 }
 
 /** What to tell the person about how their playbook was applied; undefined when it was judged or there are no rules. */

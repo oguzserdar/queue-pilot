@@ -18,6 +18,8 @@ export type FeedItem = {
   summary: string;
   /** The item's full text as the feed carries it (its content, else its description), plain, at most BODY_CHARS. */
   body: string;
+  /** True when QP truncated the body or the publisher ends it with a Read more link. */
+  truncated?: boolean;
 };
 
 /** An error whose message is written for the person adding the feed; anything else is shown as a generic sentence. */
@@ -65,9 +67,12 @@ export function itemsFromXml(xml: string): { title: string | null; items: FeedIt
       const fromMedia = it.url ? media.get(it.url) : undefined;
       const summary = plainText(it.description ?? it.content ?? fromMedia ?? "");
       // Many feeds put a teaser in the description and the whole post in content; the body prefers the whole post.
-      const full = plainText(it.content ?? it.description ?? fromMedia ?? "");
+      const html = it.content ?? it.description ?? fromMedia ?? "";
+      const full = plainText(html);
+      const excerpt = full.length > BODY_CHARS || /<a\b[^>]*>\s*Read more\s*<\/a>\s*(?:<\/p>)?\s*$/i.test(html);
       const title = (it.title ?? "").trim() || summary.slice(0, 80) || "(untitled)";
       return {
+        ...(excerpt ? { truncated: true } : {}),
         key: it.id ?? it.url ?? title,
         title,
         url: it.url ?? null,

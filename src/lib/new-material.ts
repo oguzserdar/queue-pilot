@@ -17,6 +17,6 @@ export async function newMaterial(userId: string): Promise<BriefMaterial[]> {
   return [...material.filter((item) => !used.has(item.key)).map((item) => ({ key: item.key, title: item.title, url: item.link ?? null, text: item.text })), ...sources.flatMap((src, i) => {
     const r = feeds[i];
     if (r.status === "rejected") return [];
-    return freshItems(scopeKeys(src.id, r.value.items), used, src.url, PER_FEED).map((it) => ({ key: it.key, title: `${src.title}: ${it.title}`, url: it.url, text: `Source date: ${it.published}\n${it.body || it.summary}` }));
+    return freshItems(scopeKeys(src.id, r.value.items), used, src.url, PER_FEED).map((it) => ({ key: it.key, title: `${src.title}: ${it.title}`, url: it.url, text: it.body || it.summary, published: it.published, ...(it.truncated ? { truncated: true } : {}) }));
   })]
 }

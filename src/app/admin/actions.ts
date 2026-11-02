@@ -74,3 +74,16 @@ export async function clearAdminSetting(form: FormData) {
   redirect(`/admin?cleared=${key}`);
 }
 
+
+/** Explicit admin test: one native-caption request, never generated transcription. */
+export async function testSupadataKey() {
+  await requireAdmin();
+  const userId = await signedInUserId();
+  if (!userId || !(await limit("outbound", userId)).ok) return { message: "Too many tests. Try again shortly." };
+  const { supadataKey } = await import("@/lib/env");
+  const { fetchTranscript } = await import("@/lib/transcripts");
+  const key = await supadataKey();
+  if (!key) return { message: "Not set. Add a Supadata key first." };
+  const r = await fetchTranscript("https://www.youtube.com/watch?v=dQw4w9WgXcQ", key);
+  return { message: r.status === "ready" || r.status === "pending" ? "OK. Supadata accepted the key." : r.message };
+}

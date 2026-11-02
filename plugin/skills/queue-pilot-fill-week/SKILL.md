@@ -80,3 +80,6 @@ The show-and-confirm step above still applies to drafts you write yourself with 
 - `propose_review_changes`: read `list_review_comments`, choose one comment and the draft IDs the person wants changed, and show the returned before/after proposals. A fact correction is not a writing preference. Apply chosen edits with `update_draft` and the exact `before` as `expectedText`. A returned preference token can be kept with `keep_suggestion` only as a separate choice.
 
 Review links expire after 1, 7 (default), or 30 days and can be turned off earlier. A rewrite re-reads the individual Buffer draft after checking the playbook; changed text or status stops the write. Buffer does not provide an atomic conditional edit, so the tiny read/write race with another Buffer client remains. A stored verdict is shown only while its text and playbook revision still match.
+
+## Draft evidence
+Read each source with read_material or get_transcript before drafting. Pass its snapshotId with every source-based save_drafts entry, plus evidence with the exact draft sentence and a short verbatim source quote. Include a timestamp only from the returned transcript segments. Mark calculated numbers as derived. Never present partial text, paid previews or unknown caption provenance as full verified evidence. Use queue-pilot-check-sources before approving drafts whose sources changed.

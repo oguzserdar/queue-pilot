@@ -362,3 +362,40 @@ export const approvalClaim = pgTable("qp_approval_claim", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Immutable source versions. lastCheckedAt alone advances on an unchanged report. */
+export const sourceSnapshot = pgTable("qp_source_snapshot", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  sourceKey: text("source_key").notNull(),
+  uri: text("uri").notNull(),
+  contentHash: text("content_hash").notNull(),
+  text: text("text").notNull(),
+  title: text("title"),
+  checkedBy: text("checked_by").notNull(),
+  metadata: jsonb("metadata").$type<{ segments?: { text: string; seconds: number }[]; captions?: "auto" | "manual" | "unknown"; paidPreview?: boolean; truncated?: boolean; etag?: string; lastModified?: string }>().notNull().default({}),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [index("qp_source_snapshot_latest").on(t.userId, t.sourceKey, t.fetchedAt)]);
+
+/** Original evidence survives later checks. A judgment belongs to one exact draft and source version. */
+export const draftEvidence = pgTable("qp_draft_evidence", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  bufferPostId: text("buffer_post_id").notNull(),
+  snapshotId: text("snapshot_id").notNull().references(() => sourceSnapshot.id, { onDelete: "cascade" }),
+  claim: text("claim").notNull(),
+  quote: text("quote"),
+  locator: text("locator"),
+  draftText: text("draft_text").notNull(),
+  judgment: jsonb("judgment").$type<{ snapshotId: string; draftText: string; holds: boolean; why: string; rewrite?: string; checkedAt: string }>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [primaryKey({ columns: [t.userId, t.bufferPostId, t.snapshotId, t.claim] })]);
+
+/** Expiring leases and pending transcript job IDs survive server restarts. Tokens fence stale workers. */
+export const sourceJob = pgTable("qp_source_job", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  token: text("token").notNull(),
+  value: jsonb("value").$type<{ jobId?: string }>().notNull().default({}),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, t => [primaryKey({ columns: [t.userId, t.key] })]);
