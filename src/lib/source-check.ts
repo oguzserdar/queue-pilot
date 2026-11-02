@@ -30,12 +30,14 @@ export async function listSourcesToCheck(userId: string, posts: Post[]) {
 }
 
 /** All doors use this operation. No Buffer mutation, and unchanged completed checks cost no AI action. */
-export async function reportSourceVersion(userId: string, input: z.input<typeof sourceVersionInput> & { checkedBy: string }, readPosts: () => Promise<Post[]>, metadata?: SourceMetadata) {
+export async function reportSourceVersion(userId: string, input: z.input<typeof sourceVersionInput> & { checkedBy: string; expectedSnapshotId?: string; validateUnchanged?: boolean }, readPosts: () => Promise<Post[]>, metadata?: SourceMetadata) {
   const data = sourceVersionInput.parse(input);
   const key = `source:${data.sourceKey}`;
   const token = await claimSourceJob(userId, key);
   if (!token) throw new SourceBusyError();
   try {
+    // Check under the source lease so an old saved snapshot cannot roll back a newer report.
+    if (input.expectedSnapshotId && (await latestSource(userId, data.sourceKey))?.id !== input.expectedSnapshotId) throw new Error("That saved source has a newer version. Read the latest snapshot before checking.");
     const posts = (await readWithinDeadline(readPosts)).filter(unsent);
     await renewSourceJob(userId, key, token);
     // External reports cannot silently upgrade a previously partial source to full coverage.
@@ -46,7 +48,7 @@ export async function reportSourceVersion(userId: string, input: z.input<typeof 
     const pending = rows.filter(r => {
       const p = posts.find(p => p.id === r.evidence.bufferPostId)!;
       const j = r.evidence.judgment;
-      return !(j?.snapshotId === snapshot.id && j.draftText === p.text) && (r.snapshot.id !== snapshot.id || r.evidence.draftText !== p.text || !r.evidence.quote);
+      return !(j?.snapshotId === snapshot.id && j.draftText === p.text) && (input.validateUnchanged || r.snapshot.id !== snapshot.id || r.evidence.draftText !== p.text || !r.evidence.quote);
     });
     const cachedChecks = rows.flatMap(r => {
       const post = posts.find(p => p.id === r.evidence.bufferPostId)!;

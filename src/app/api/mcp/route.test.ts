@@ -1,7 +1,7 @@
 const sourceCalls = vi.hoisted(() => ({ list: vi.fn(async () => [] as { sourceKey: string; uri: string; evidence: { postId: string }[] }[]), report: vi.fn(async () => ({ changed: true, pending: 0 })), transcript: vi.fn(async () => ({ status: "pending", jobId: "job-1" })) }));
 vi.mock("@/lib/source-check", () => ({ listSourcesToCheck: (...a: unknown[]) => sourceCalls.list(...a as []), reportSourceVersion: (...a: unknown[]) => sourceCalls.report(...a as []) }));
 vi.mock("@/lib/transcript-for-user", () => ({ transcriptForUser: (...a: unknown[]) => sourceCalls.transcript(...a as []) }));
-vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }, metadata: unknown = {}) => ({ id: "snapshot-test", ...data, metadata }), sourceById: async (user: string, id: string) => id === "saved-podcast" ? (user === "person-a" ? { id, sourceKey: "yt:abcdefghijk", uri: "https://youtube.com/watch?v=abcdefghijk", text: "Intro. Closing evidence.", metadata: { kind: "transcript", truncated: false, segments: [{ text: "Intro.", seconds: 0 }, { text: "Closing evidence.", seconds: 7190 }] } } : null) : ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), sourceHoldsForPosts: async () => new Map() }));
+vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }, metadata: unknown = {}) => ({ id: "snapshot-test", ...data, metadata }), sourceById: async (user: string, id: string) => ["saved-podcast", "long-podcast"].includes(id) ? (user === "person-a" ? { id, sourceKey: "yt:abcdefghijk", uri: "https://youtube.com/watch?v=abcdefghijk", text: id === "long-podcast" ? "Whole transcript. ".repeat(5000) + "Closing evidence." : "Intro. Closing evidence.", metadata: { kind: "transcript", truncated: false, segments: [{ text: "Intro.", seconds: 0 }, { text: "Closing evidence.", seconds: 7190 }] } } : null) : ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), sourceHoldsForPosts: async () => new Map() }));
 vi.mock("@/lib/source-presentation", () => ({ sourceCards: vi.fn(async () => []) }));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Channel, Post } from "@/lib/buffer/queries"
@@ -855,4 +855,28 @@ it("reads a closing passage from this account's saved snapshot without another p
 it("rejects a backwards time range before spending transcript credits", async () => {
  expect((await call("get_transcript", { url: "https://youtu.be/abcdefghijk", startSeconds: 7190, endSeconds: 12 })).isError).toBe(true);
  expect(sourceCalls.transcript).not.toHaveBeenCalled();
+});
+
+
+describe("saved source validation without transcript round-trip", () => {
+  const input = { sourceKey: "yt:abcdefghijk", uri: "https://youtube.com/watch?v=abcdefghijk", snapshotId: "long-podcast" };
+  beforeEach(() => sourceCalls.list.mockResolvedValue([{ sourceKey: input.sourceKey, uri: input.uri, evidence: [{ postId: "post-a" }] }]));
+  it("passes the full stored transcript and asks for a first semantic check", async () => {
+    const result = await call("report_source_version", input);
+    expect(result.isError).not.toBe(true);
+    expect(sourceCalls.report).toHaveBeenCalledWith("person-a", expect.objectContaining({ text: "Whole transcript. ".repeat(5000) + "Closing evidence.", expectedSnapshotId: "long-podcast", validateUnchanged: true }), expect.any(Function), expect.objectContaining({ kind: "transcript" }));
+    expect(JSON.parse(answer(result))).toMatchObject({ checkedAgainst: "saved-source" });
+  });
+  it("rejects another account's snapshot and a mismatched source before inference", async () => {
+    expect((await call("report_source_version", input, "person-b")).isError).toBe(true);
+    sourceCalls.list.mockResolvedValue([{ sourceKey: "different", uri: input.uri, evidence: [] }]);
+    expect((await call("report_source_version", { ...input, sourceKey: "different" })).isError).toBe(true);
+    expect(sourceCalls.report).not.toHaveBeenCalled();
+  });
+  it("rejects ambiguous and missing source content", async () => {
+    expect((await call("report_source_version", { ...input, text: "partial" })).isError).toBe(true);
+    const { snapshotId: _id, ...missing } = input;
+    expect((await call("report_source_version", missing)).isError).toBe(true);
+    expect(sourceCalls.report).not.toHaveBeenCalled();
+  });
 });

@@ -114,3 +114,23 @@ it("external updates keep excerpt coverage instead of silently becoming full-sou
  await reportSourceVersion("owner", { sourceKey: excerptKey, uri, text: "Updated opening excerpt", checkedBy: "ai:client" }, async () => []);
  expect((await store.latestSource("owner", excerptKey))?.metadata).toMatchObject({ truncated: true, kind: "transcript", excerptWindow: "prefix-12000" });
 });
+
+
+it("explicit saved-source validation judges an unchanged draft once and reuses the verdict", async () => {
+ const saved = (await store.latestSource("owner", key))!;
+ ai.model = answering({ verdicts: [{ index: 0, holds: true, why: "The full source supports this draft." }] });
+ const run = () => reportSourceVersion("owner", { sourceKey: key, uri, text: saved.text, checkedBy: "user", expectedSnapshotId: saved.id, validateUnchanged: true }, async () => posts, saved.metadata);
+ expect(await run()).toMatchObject({ changed: false, checks: [{ holds: true }] });
+ expect(ai.calls).toBe(1);
+ expect(await run()).toMatchObject({ changed: false, checks: [{ holds: true }] });
+ expect(ai.calls).toBe(1);
+});
+
+it("a stale saved snapshot cannot overwrite a newer source or spend AI", async () => {
+ const old = (await store.latestSource("owner", key))!;
+ await store.captureSource("owner", { sourceKey: key, uri, text: "New source version." });
+ await expect(reportSourceVersion("owner", { sourceKey: key, uri, text: old.text, checkedBy: "user", expectedSnapshotId: old.id, validateUnchanged: true }, async () => posts, old.metadata)).rejects.toThrow("newer version");
+ expect((await store.latestSource("owner", key))?.text).toBe("New source version.");
+ expect(ai.calls).toBe(0);
+ expect(await store.claimSourceJob("owner", `source:${key}`)).not.toBeNull();
+});

@@ -15,6 +15,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Test the Supadata key from Admin and show whether the key comes from the environment or the saved setting.
 
 ### Fixed
+- Validate complete saved transcripts by snapshot ID so an AI chat’s output limit cannot shorten the evidence. The first explicit validation judges meaning. Identical checks reuse the result. Stale snapshots cannot replace newer source versions.
 - A wording replacement applies when its subject appears. It does not require unrelated posts to mention that subject. Required content rules still apply.
 - Keep full podcast transcripts instead of cutting off the opening section. When a model rejects the full context, process every section and verify the extracted passages before using them.
 - Label video-description fallback when captions are unavailable. Incomplete responses and source outages cannot replace a complete saved source.

@@ -521,8 +521,8 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
   }, async () => text(JSON.stringify(await listSourcesToCheck(userId, (await bufferFor(auth, userId)).posts))));
 
   server.registerTool("report_source_version", {
-    title: "Check a newer source version", description: "Report actual current source text only when the user asks for a source check. QP computes the fingerprint and judges affected drafts by meaning using the AI allowance. Never report an outage, preview or empty response as a replacement. Returns proposed corrections; changes nothing in Buffer. Scheduled posts stay scheduled and must be reviewed in Buffer. This is a write-capable tool because it stores source versions and may spend an AI action.",
-    inputSchema: sourceVersionInput,
+    title: "Check source evidence", description: "When the user asks for a source check, pass snapshotId to validate drafts against the complete latest saved source without copying a long transcript through the chat. This checks saved evidence, not whether the website has changed. Alternatively pass text with actual newly fetched complete source text, never both text and snapshotId. QP computes the fingerprint and judges affected drafts by meaning using the AI allowance. Never report an outage, preview or empty response as a replacement. Returns proposed corrections; changes nothing in Buffer. Scheduled posts stay scheduled and must be reviewed in Buffer. This is a write-capable tool because it stores source versions and may spend an AI action.",
+    inputSchema: sourceVersionInput.extend({ text: sourceVersionInput.shape.text.optional(), snapshotId: z.string().min(1).max(100).optional() }).refine(v => (v.text !== undefined) !== (v.snapshotId !== undefined), "Provide complete text or snapshotId, not both."),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }, async input => {
     const b = await bufferFor(auth, userId, { force: true });
@@ -530,7 +530,14 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     const source = tracked.find(s => s.sourceKey === input.sourceKey);
     if (!source || source.uri !== input.uri) return { ...text("Use the exact sourceKey and URI from list_sources_to_check."), isError: true };
     const ids = source.evidence.map(e => e.postId);
-    return text(JSON.stringify(await reportSourceVersion(userId, { ...input, checkedBy: `ai:${clientId}` }, () => readPostsNow(b.accessToken, [...new Set(ids)]))));
+    const read = () => readPostsNow(b.accessToken, [...new Set(ids)]);
+    if (input.snapshotId) {
+      const saved = await sourceById(userId, input.snapshotId);
+      if (!saved || saved.sourceKey !== input.sourceKey || saved.uri !== input.uri || saved.metadata.truncated || saved.metadata.excerptWindow) return { ...text("Use a complete saved snapshot for this exact source in your account."), isError: true };
+      const result = await reportSourceVersion(userId, { sourceKey: saved.sourceKey, uri: saved.uri, text: saved.text, title: saved.title ?? undefined, checkedBy: `ai:${clientId}`, expectedSnapshotId: saved.id, validateUnchanged: true }, read, saved.metadata);
+      return text(JSON.stringify({ ...result, checkedAgainst: "saved-source", sourceFetchedAt: saved.fetchedAt, instruction: "Checked against the complete saved source. This did not fetch a newer website version." }));
+    }
+    return text(JSON.stringify(await reportSourceVersion(userId, { ...input, text: input.text!, checkedBy: `ai:${clientId}` }, read)));
   });
 
   server.registerTool("get_transcript", {
