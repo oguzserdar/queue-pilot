@@ -50,5 +50,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
           { postId: "p2", channel: "LinkedIn", text: "We rebuilt export this month. Here is what we learned from 40 support tickets about CSV files, and the three changes that came out of them." },
           { postId: "p3", channel: "Bluesky", text: "New on the blog: why we stopped sending weekly digests nobody opened." },
         ]}
-      /> : <BriefingView mode="live" />}</AppShell>;
+      /> : <BriefingView mode="live" ideasPreview={[{ organizationId: "org", more: false, columns: [
+        { id: "unassigned", name: "Unassigned", ideas: [{ id: "i1", title: "Knife skills in five minutes", text: "New video. No open time left this week, so it waits here." }, { id: "i2", title: null, text: "Ask readers for their go-to Sunday soup and share the best three." }] },
+        { id: "todo", name: "To Do", ideas: [{ id: "i3", title: "Weeknight Dinners 42: one-pan gnocchi", text: "Lands Sunday. Draft LinkedIn and X posts for the week after." }] },
+        { id: "doing", name: "In Progress", ideas: [] },
+        { id: "done", name: "Done", ideas: [{ id: "i4", title: "White bean and kale soup", text: "Posted on LinkedIn, X and Bluesky." }] },
+      ] }]} />}</AppShell>;
 }

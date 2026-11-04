@@ -58,6 +58,9 @@ describe("Buffer ideas board", () => {
     ]);
     const r = await listIdeas("t", "org", 3, run);
     expect(r.ideas.map((i) => [i.id, i.group])).toEqual([["i1", "Next week"], ["i2", null], ["i3", null]]);
+    // The board's columns come back in Buffer's order; an idea in a column that no longer exists counts as unassigned.
+    expect(r.groups).toEqual([{ id: "g1", name: "Next week", isLocked: false }]);
+    expect(r.ideas.map((i) => i.groupId)).toEqual(["g1", null, null]);
     expect(r.more).toBe(true);
     expect(r.ideas[0].createdAt).toBe("2025-11-03T09:00:00.000Z");
     expect(calls[2].variables).toMatchObject({ first: 1, after: "c2" });

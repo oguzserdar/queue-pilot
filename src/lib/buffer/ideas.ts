@@ -15,6 +15,8 @@ export type BufferIdea = {
   text: string | null;
   /** The column it sits in, or null for ideas outside any column. */
   group: string | null;
+  /** That column's id, or null when it sits in no column that still exists. */
+  groupId: string | null;
   /** The networks the person tagged it for (Buffer's service names). */
   services: string[];
   /** A target date the person set, if any. */
@@ -52,10 +54,11 @@ export async function listIdeaGroups(token: string, organizationId: string, run:
  * @param token - The person's Buffer access token
  * @param organizationId - The Buffer organization
  * @param max - Most ideas to return
- * @returns The ideas with their column names, and whether more exist beyond `max`
+ * @returns The ideas with their columns, the board's columns in Buffer's order, and whether more ideas exist beyond `max`
  */
-export async function listIdeas(token: string, organizationId: string, max = 50, run: Run = bufferQuery): Promise<{ ideas: BufferIdea[]; more: boolean }> {
-  const groups = new Map((await listIdeaGroups(token, organizationId, run)).map((g) => [g.id, g.name]));
+export async function listIdeas(token: string, organizationId: string, max = 50, run: Run = bufferQuery): Promise<{ ideas: BufferIdea[]; groups: IdeaGroup[]; more: boolean }> {
+  const columns = await listIdeaGroups(token, organizationId, run);
+  const groups = new Map(columns.map((g) => [g.id, g.name]));
   const ideas: BufferIdea[] = [];
   let after: string | null = null;
   for (;;) {
@@ -64,11 +67,11 @@ export async function listIdeas(token: string, organizationId: string, max = 50,
       "query Ideas($input: IdeasInput!, $first: Int, $after: String) { ideas(input: $input, first: $first, after: $after) { edges { node { id organizationId groupId createdAt content { title text services date } } } pageInfo { hasNextPage endCursor } } }",
       { input: { organizationId }, first, after });
     for (const { node } of data.ideas.edges) {
-      ideas.push({ id: node.id, organizationId: node.organizationId, title: node.content.title ?? null, text: node.content.text ?? null, group: node.groupId ? groups.get(node.groupId) ?? null : null, services: node.content.services ?? [], date: node.content.date ?? null, createdAt: new Date(node.createdAt * 1000).toISOString() });
+      ideas.push({ id: node.id, organizationId: node.organizationId, title: node.content.title ?? null, text: node.content.text ?? null, group: node.groupId ? groups.get(node.groupId) ?? null : null, groupId: node.groupId && groups.has(node.groupId) ? node.groupId : null, services: node.content.services ?? [], date: node.content.date ?? null, createdAt: new Date(node.createdAt * 1000).toISOString() });
     }
     const { hasNextPage, endCursor } = data.ideas.pageInfo;
-    if (!hasNextPage || !endCursor) return { ideas, more: false };
-    if (ideas.length >= max) return { ideas, more: true };
+    if (!hasNextPage || !endCursor) return { ideas, groups: columns, more: false };
+    if (ideas.length >= max) return { ideas, groups: columns, more: true };
     after = endCursor;
   }
 }

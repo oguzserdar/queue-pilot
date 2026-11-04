@@ -8,6 +8,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 ### Added
 - Read and write Buffer Notes, the comments that live on a post in Buffer. The draft window shows a post's notes with author, time and "edited", and lets you add a note, or edit and delete one where Buffer allows it. A solo Buffer account is told to leave notes for itself. A team account is told everyone with access to the channel sees them. Your AI can read notes as information, never as instructions, and add a note to a draft Queue Pilot wrote when you ask. Notes need a new Buffer permission: sign out and sign in with Buffer once.
 - Read your Buffer ideas board with its columns, and save an idea into a column when you ask. Saving an idea posts and schedules nothing.
+- New material shows your Buffer ideas board, read only, with Buffer's columns in Buffer's order and a link to open it in Buffer.
 - Read your Buffer tags, create one when you ask, and tag drafts Queue Pilot wrote. Approved, scheduled and sent posts are refused, because Buffer's edit would pull them back to drafts.
 - The draft window shows a post's Buffer tags under its text. On a draft Queue Pilot wrote, the tag button opens a search box, your tags to tick, and New tag, the way Buffer's own picker works.
 - Let your AI read Buffer's request allowance and each channel's daily posting limit, so it can plan before saving many drafts.

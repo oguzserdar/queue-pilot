@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/registry/components/button/button";
 import styles from "./briefing-view.module.css";
+import { BufferIdeasBoard } from "./buffer-ideas-board";
+import type { IdeaBoard } from "@/app/(app)/idea-actions";
 
 type Idea = { id: string; foundBy: string; title: string; why: string; link: string; slot?: string };
 
@@ -13,7 +15,7 @@ const IDEAS: Idea[] = [
 ];
 
 /** Example mode shows what is new in the example feeds; live mode says what works today: the AI reads the user's feeds through the connector. */
-export function BriefingView({ mode = "example" }: { mode?: "example" | "live" }) {
+export function BriefingView({ mode = "example", ideasPreview }: { mode?: "example" | "live"; ideasPreview?: IdeaBoard[] }) {
   // Hooks run before any early return, so switching mode never changes the hook order.
   const [saved, setSaved] = useState<Set<string>>(new Set());
   if (mode === "live") {
@@ -24,6 +26,7 @@ export function BriefingView({ mode = "example" }: { mode?: "example" | "live" }
           <p className={styles.sub}>Add your newsletter, blog, YouTube or GitHub releases feed in Sources. Then pick "Fill my week" in your AI: it reads what is new, writes drafts for the empty slots, and saves them in Buffer for you to approve.</p>
         </header>
         <a className={styles.action} href="/sources">Add a feed in Sources</a>
+        <BufferIdeasBoard preview={ideasPreview} />
       </div>
     );
   }

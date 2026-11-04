@@ -1,0 +1,21 @@
+/* The Buffer ideas board on New material: columns side by side like Buffer's board, scrolling sideways inside. */
+.section { display: grid; gap: var(--space-3); min-width: 0; margin-top: var(--space-6); }
+.head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-2) var(--space-4); }
+.h2 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
+.sub { margin: 2px 0 0; color: var(--text-muted); font-size: var(--text-sm); }
+.open { display: inline-flex; align-items: center; gap: 4px; color: var(--qp-crimson); font-size: var(--text-sm); font-weight: 500; text-decoration: none; }
+.open:hover { text-decoration: underline; }
+.open:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; border-radius: 4px; }
+.board { display: grid; gap: var(--space-2); min-width: 0; }
+.org { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); font-weight: 600; }
+
+.columns { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 260px); gap: var(--space-3); min-width: 0; padding-bottom: 6px; overflow-x: auto; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
+.column { display: grid; align-content: start; gap: var(--space-2); min-height: 120px; padding: 10px; border-radius: var(--radius-card, 12px); background: var(--surface-muted); scroll-snap-align: start; }
+.colHead { display: flex; align-items: center; gap: 6px; margin: 0; padding: 2px 2px 4px; font-size: var(--text-sm); font-weight: 600; }
+.count { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--surface); color: var(--text-secondary); font-size: var(--text-xs); font-weight: 500; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.cards { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.card { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
+.title { margin: 0; font-size: var(--text-sm); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.text { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.empty { margin: 0; padding: 18px 4px; color: var(--text-muted); font-size: var(--text-sm); text-align: center; }
+.muted { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
