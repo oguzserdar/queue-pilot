@@ -29,8 +29,7 @@ export class NotesNotAllowedError extends Error {
   }
 }
 
-/** The longest note Queue Pilot sends; Buffer's own limit is not documented. */
-export const MAX_NOTE = 5_000;
+export { MAX_NOTE } from "./note-limits";
 
 type Run = typeof bufferQuery;
 

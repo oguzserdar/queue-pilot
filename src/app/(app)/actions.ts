@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { BufferRateLimitedError } from "@/lib/buffer/client";
-import { bufferForReading, bufferForWriting, forceRefreshCurrentUser, freshBufferForCurrentUser, signedInUserId } from "@/lib/current-user";
-import { listPostNotes, NotesNotAllowedError } from "@/lib/buffer/notes";
+import { bufferForWriting, forceRefreshCurrentUser, freshBufferForCurrentUser, signedInUserId } from "@/lib/current-user";
 import { postgresAiKeyStore, providerOf } from "@/lib/ai-key-store";
 import { writeSlotsForUser, type WriteWeekActionResult } from "@/lib/write-slots-for-user";
 import { aiErrorMessage } from "@/lib/ai-model";
@@ -729,21 +728,3 @@ export async function deleteMyDraft(postId: string): Promise<SourceActionResult>
   }
 }
 
-/** One team note as the draft window shows it. */
-export type DraftNote = { id: string; author: string | null; createdAt: string; text: string };
-
-/** The Buffer notes on one post in the signed-in person's queue, newest first. */
-export async function readDraftNotes(postId: string): Promise<{ ok: true; notes: DraftNote[]; more: boolean } | { ok: false; message: string }> {
-  if (typeof postId !== "string" || !postId || postId.length > 200) return { ok: false, message: "No such post." };
-  try {
-    const b = await bufferForReading();
-    if (!b) return { ok: false, message: "Sign in with Buffer first." };
-    if (!b.posts.some((p) => p.id === postId)) return { ok: false, message: "This post is not in your queue." };
-    const { notes, more } = await listPostNotes(b.token, postId, 20);
-    return { ok: true, more, notes: notes.map((n) => ({ id: n.id, author: n.author, createdAt: n.createdAt, text: n.text })) };
-  } catch (e) {
-    if (e instanceof NotesNotAllowedError) return { ok: false, message: e.message };
-    console.error(JSON.stringify({ event: "qp-read-notes-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Buffer did not return the notes. Try again in a minute." };
-  }
-}

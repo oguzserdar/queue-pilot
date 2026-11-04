@@ -22,7 +22,7 @@ import type { Verdict } from "@/lib/judge";
 import { EXAMPLE_VERDICTS } from "@/lib/example-verdicts";
 import { WriteWeekButton } from "./write-week-button";
 import { DraftNotes } from "./draft-notes";
-import type { DraftNote } from "@/app/(app)/actions";
+import type { DraftNote } from "@/app/(app)/note-actions";
 import { ShareReviewButton } from "./share-review-button";
 import type { WritingAvailability } from "@/lib/writing-availability";
 import { ChannelIcon } from "./channel-icon";
