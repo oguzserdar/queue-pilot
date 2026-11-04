@@ -17,7 +17,7 @@ const { forgetSettings, postgresSettingsStore, recentSettingChanges, SETTINGS_TT
 const { postgresVoiceStore, MAX_EXAMPLES, MAX_NOTE, TooManyExamplesError } = await import("./voice-store");
 const { addPastedExample } = await import("./voice-store")
 const { postgresMaterialStore } = await import("./material-store")
-const { approvedApps, recordAppUse, revokeApp, stillApproved, consentClientLabel } = await import("./ai-access");
+const { approvalState, approvedApps, recordAppUse, removeUnusedApps, renameApp, revokeApp, stillApproved, consentClientLabel, UNUSED_DAYS } = await import("./ai-access");
 const { deleteAccount } = await import("./delete-account");
 const { connectCodeFor } = await import("./telegram");
 const { postgresRulesStore, MAX_RULES, TooManyRulesError } = await import("./rules-store");
@@ -254,6 +254,8 @@ describe("AI app access on real Postgres", () => {
   it("lists a user's approved apps and revoke removes the approval and that app's tokens for that user only", async () => {
     const now = "2026-11-03T12:00:00Z";
     const later = "2026-12-03T12:00:00Z";
+    // Fixed "now" for the approval checks, so the unused-connection rule never turns this test red later.
+    const at = new Date("2026-11-03T13:00:00Z");
     await pg.query("insert into \"user\" (id, name, email) values ('ua', 'A', 'a@x'), ('ub', 'B', 'b@x')");
     await pg.query("insert into oauth_client (id, client_id, name, uri, redirect_uris) values ('c1', 'claude', 'Claude', 'https://claude.ai', '{https://claude.ai/cb}'), ('c2', 'chatgpt', 'ChatGPT', null, '{https://chatgpt.com/cb}')");
     await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values
@@ -268,21 +270,83 @@ describe("AI app access on real Postgres", () => {
     expect((await approvedApps("ua"))[0]).toMatchObject({ name: "ChatGPT", brand: null });
     // Someone else's approval cannot be revoked.
     expect(await revokeApp("ua", "k3")).toBe(false);
-    expect(await stillApproved("ua", "claude")).toBe(true);
+    expect(await stillApproved("ua", "claude", at)).toBe(true);
     expect(await revokeApp("ua", "k1")).toBe(true);
-    expect(await stillApproved("ua", "claude")).toBe(false);
-    expect(await stillApproved("ub", "claude")).toBe(true);
+    expect(await stillApproved("ua", "claude", at)).toBe(false);
+    expect(await stillApproved("ub", "claude", at)).toBe(true);
     // A banned person's AI app stops at once, even with a valid refresh token; an expired ban no longer counts.
     await pg.query(`update "user" set banned = true where id = 'ub'`);
-    expect(await stillApproved("ub", "claude")).toBe(false);
+    expect(await stillApproved("ub", "claude", at)).toBe(false);
     await pg.query(`update "user" set ban_expires = now() - interval '1 day' where id = 'ub'`);
-    expect(await stillApproved("ub", "claude")).toBe(true);
+    expect(await stillApproved("ub", "claude", at)).toBe(true);
     await pg.query(`update "user" set banned = false, ban_expires = null where id = 'ub'`);
     expect((await approvedApps("ua")).map((a) => a.name)).toEqual(["ChatGPT"]);
     const left = (q: string) => pg.query<{ id: string }>(q).then((r) => r.rows.map((x) => x.id).sort());
     expect(await left("select id from oauth_refresh_token")).toEqual(["r2", "r3"]);
     expect(await left("select id from oauth_access_token")).toEqual(["ar2", "ar3"]);
     expect((await approvedApps("ub")).map((a) => a.name)).toEqual(["Claude"]);
+  });
+
+  it("names a connection, shows where it returns to, and stops and removes one unused for UNUSED_DAYS", async () => {
+    const approved = "2026-11-01T12:00:00Z";
+    await pg.query("insert into \"user\" (id, name, email) values ('ud', 'D', 'apps-d@x'), ('ue', 'E', 'apps-e@x')");
+    // The desktop app registers under another app's name, with that app's callbacks plus a local one.
+    await pg.query("insert into oauth_client (id, client_id, name, redirect_uris) values ('c5', 'bot', 'Cursor', '{https://cursor.com/cb,http://localhost:8787/callback}'), ('c6', 'web', 'Grok', '{https://grok.com/cb}')");
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values
+      ('k5', 'bot', 'ud', '{openid}', '${approved}', '${approved}'), ('k6', 'web', 'ud', '{openid}', '${approved}', '${approved}'), ('k7', 'web', 'ue', '{openid}', '${approved}', '${approved}')`);
+    const day = (n: number) => new Date(Date.parse(approved) + n * 86_400_000);
+    const bot = async (now = day(1)) => (await approvedApps("ud", now)).find((a) => a.consentId === "k5")!;
+    expect(await bot()).toMatchObject({ name: "Cursor", label: null, returnsTo: ["cursor.com", "This computer"], unused: false });
+
+    // Naming: only one's own connection, trimmed and capped; an empty name clears it.
+    expect(await renameApp("ue", "k5", "Not mine")).toBe(false);
+    expect(await renameApp("ud", "k5", "  Grok Bot desktop  ")).toBe(true);
+    expect((await bot()).label).toBe("Grok Bot desktop");
+    expect(await renameApp("ud", "k5", "x".repeat(200))).toBe(true);
+    expect((await bot()).label).toHaveLength(60);
+    expect(await renameApp("ud", "k5", "   ")).toBe(true);
+    expect((await bot()).label).toBeNull();
+
+    // A call keeps a connection alive; the other one, never used, stops after UNUSED_DAYS.
+    await recordAppUse("ud", "bot", day(20));
+    const late = day(UNUSED_DAYS + 1);
+    expect(await stillApproved("ud", "bot", late)).toBe(true);
+    expect(await stillApproved("ud", "web", late)).toBe(false);
+    expect(await stillApproved("ud", "web", day(UNUSED_DAYS - 1))).toBe(true);
+    expect((await approvedApps("ud", late)).map((a) => [a.consentId, a.unused]).sort()).toEqual([["k5", false], ["k6", true]]);
+
+    // Removing unused ones touches only this person's unused connections, and takes the name with it.
+    await renameApp("ud", "k6", "Old web");
+    expect(await removeUnusedApps("ud", late)).toBe(1);
+    expect((await approvedApps("ud", late)).map((a) => a.consentId)).toEqual(["k5"]);
+    expect((await pg.query("select 1 from qp_ai_app_label where user_id = 'ud'")).rows).toHaveLength(0);
+    expect((await approvedApps("ue", late)).map((a) => a.consentId)).toEqual(["k7"]);
+  });
+
+  it("counts the 30 days exactly, from the last call or else from approval, per person, and survives calls at once", async () => {
+    const approved = "2026-11-01T00:00:00.000Z";
+    const DAY = 86_400_000;
+    await pg.query("insert into \"user\" (id, name, email) values ('uf', 'F', 'apps-f@x'), ('ug', 'G', 'apps-g@x')");
+    await pg.query("insert into oauth_client (id, client_id, name, redirect_uris) values ('c7', 'claude-f', 'Claude', '{https://claude.ai/cb}')");
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values ('k8', 'claude-f', 'uf', '{openid}', '${approved}', '${approved}')`);
+    const at = (ms: number) => new Date(Date.parse(approved) + ms);
+    // Never called: counted from approval. Exactly UNUSED_DAYS is still fine; one millisecond more is not.
+    expect(await approvalState("uf", "claude-f", at(UNUSED_DAYS * DAY))).toEqual({ state: "approved" });
+    expect(await approvalState("uf", "claude-f", at(UNUSED_DAYS * DAY + 1))).toEqual({ state: "unused", consentId: "k8" });
+    // Someone else never sees this approval, stale or not.
+    expect(await approvalState("ug", "claude-f", at(UNUSED_DAYS * DAY + 1))).toEqual({ state: "none" });
+    // Five calls at the same moment all count, and the clock now runs from the last of them.
+    const used = at(10 * DAY);
+    await Promise.all(Array.from({ length: 5 }, () => recordAppUse("uf", "claude-f", used)));
+    expect((await approvedApps("uf", used))[0].calls).toBe(5);
+    expect(await approvalState("uf", "claude-f", at(10 * DAY + UNUSED_DAYS * DAY))).toEqual({ state: "approved" });
+    expect(await approvalState("uf", "claude-f", at(10 * DAY + UNUSED_DAYS * DAY + 1))).toMatchObject({ state: "unused" });
+    // Retiring the stale approval leaves nothing to reuse; a fresh approval starts a fresh clock.
+    expect(await revokeApp("uf", "k8")).toBe(true);
+    expect(await approvalState("uf", "claude-f", at(60 * DAY))).toEqual({ state: "none" });
+    const again = at(60 * DAY).toISOString();
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values ('k9', 'claude-f', 'uf', '{openid}', '${again}', '${again}')`);
+    expect(await approvalState("uf", "claude-f", at(60 * DAY + 1000))).toEqual({ state: "approved" });
   });
 
   it("records each connector call, so an approved app that never called says so, and revoking clears the record", async () => {

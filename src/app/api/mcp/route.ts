@@ -29,7 +29,7 @@ import { materialInput, postgresMaterialStore } from "@/lib/material-store"
 import { AiCapError } from "@/lib/judge-model";
 import { TooManyRulesError, postgresRulesStore } from "@/lib/rules-store";
 import { ruleScope } from "@/lib/rules";
-import { recordAppUse, stillApproved } from "@/lib/ai-access";
+import { approvalState, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
 import { clientIp } from "@/lib/client-ip";
 import { limit, limitHeaders, type Action, type Limited } from "@/lib/rate-limit";
 import { toolErrorMessage } from "@/lib/tool-error";
@@ -620,8 +620,8 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
  * The answer for a token whose approval was revoked: the same RFC 9728 challenge an unauthenticated call gets (built
  * like @better-auth/mcp's own toChallengeResponse), so the AI app knows to send the person through sign-in again.
  */
-function revokedChallenge(resource: string): Response {
-  const challenge = createResourceServerChallenge(new APIError("UNAUTHORIZED", { message: "Access to Queue Pilot was revoked. Connect it again to continue." }), resource);
+function revokedChallenge(resource: string, message = "Access to Queue Pilot was revoked. Connect it again to continue."): Response {
+  const challenge = createResourceServerChallenge(new APIError("UNAUTHORIZED", { message }), resource);
   const headers = new Headers(challenge?.headers);
   headers.set("Content-Type", "application/json");
   return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code: -32000, message: challenge?.message ?? "Unauthorized" }, id: null }), { status: 401, headers });
@@ -648,7 +648,14 @@ async function handle(req: Request): Promise<Response> {
       if (!userId) return Response.json({ error: "This token does not name a user. Connect Queue Pilot again." }, { status: 401 });
       // The token verifies by signature alone; this makes Revoke in Settings take effect on the very next call.
       const clientId = typeof claims.azp === "string" ? claims.azp : "";
-      if (!clientId || !(await stillApproved(userId, clientId))) return revokedChallenge(resource);
+      if (!clientId) return revokedChallenge(resource);
+      const approval = await approvalState(userId, clientId);
+      if (approval.state === "none") return revokedChallenge(resource);
+      if (approval.state === "unused") {
+        // Retire the stale approval, so connecting again asks afresh instead of reusing it and being refused again.
+        await revokeApp(userId, approval.consentId);
+        return revokedChallenge(resource, `This connection went ${UNUSED_DAYS} days without use, so Queue Pilot turned it off. Connect it again to continue.`);
+      }
       // Seen-in-use record for the Connect screen; a failed write never blocks the call.
       await recordAppUse(userId, clientId).catch((e) => console.error(JSON.stringify({ event: "qp-app-use-write-failed", message: e instanceof Error ? e.message : String(e) })));
       const l = await limit("mcp", `${userId}:${clientId}`);

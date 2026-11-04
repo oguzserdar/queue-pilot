@@ -8,7 +8,6 @@ import { Button } from "@/registry/components/button/button";
 import { AiMark } from "./ai-mark";
 import { CopyButton } from "@/registry/components/copy-button/copy-button";
 import { setupLine } from "@/lib/agent-setup";
-import { sinceText } from "@/lib/connect-links";
 import { aiBrand } from "@/lib/ai-brand";
 import { APP_ONLY, CONNECTOR_CATALOG } from "@/lib/connector-catalog";
 import styles from "./connect-view.module.css";
@@ -93,7 +92,7 @@ const AIS: AiSetup[] = [
  * `approved` lists the AI apps the person approved, with when each last called the connector, so "connected" here
  * always means the app really reached Queue Pilot.
  */
-export function ConnectView({ connectorUrl, example = false, approved = null, now = Date.now() }: { connectorUrl: string; example?: boolean; approved?: ApprovedApp[] | null; now?: number }) {
+export function ConnectView({ connectorUrl, example = false, approved = null }: { connectorUrl: string; example?: boolean; approved?: ApprovedApp[] | null }) {
   // Which app's setup is open in the modal; the page itself only lists the apps.
   const [open, setOpen] = useState<string | null>(null);
   const [grokSurface, setGrokSurface] = useState("Grok web");
@@ -104,18 +103,13 @@ export function ConnectView({ connectorUrl, example = false, approved = null, no
       <header className={styles.head}>
         <h1 className={styles.title}>Connect your AI</h1>
         <p className={styles.sub}>Your AI does the writing. Queue Pilot gives it your Buffer slots, your schedule and your material, and checks what it writes before you approve.</p>
-        {!example && !approved?.length && <p className={styles.sub} role="status">No AI app is connected yet.</p>}
+        {/* Connections are managed in one place, Settings; here a single line confirms what is connected. */}
         {!example && !!approved?.length && (
-          <ul className={styles.used} aria-label="Your connected AI apps">
-            {approved.map((a) => (
-              <li key={a.consentId}>
-                <strong className={styles.connectedName}>{a.brand ? <AiMark name={a.brand} size={16} /> : null}{a.name}</strong>
-                <span className={a.lastUsedAt ? styles.ok : styles.muted}>
-                  {a.lastUsedAt ? <><span className={styles.okMark} aria-hidden="true" />Last used {sinceText(a.lastUsedAt, now)}</> : "Approved, not used yet"}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <p className={styles.connectedLine}>
+            <span className={styles.connectedMarks} aria-hidden="true">{[...new Set(approved.map((a) => a.brand).filter((b): b is string => !!b))].map((b) => <AiMark key={b} name={b} size={16} />)}</span>
+            <span>Connected: {[...new Set(approved.map((a) => a.brand ?? a.name))].join(", ")}</span>
+            <a href="/settings?tab=ai">Manage</a>
+          </p>
         )}
       </header>
 

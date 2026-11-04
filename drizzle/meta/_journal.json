@@ -169,6 +169,13 @@
       "when": 1793590052879,
       "tag": "20261102032732_sudden_human_robot",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793761392880,
+      "tag": "20261104030312_ai_app_label",
+      "breakpoints": true
     }
   ]
 }

@@ -250,6 +250,21 @@ export const requestCount = pgTable(
 );
 
 /**
+ * The name a person gave one of their AI app connections ("Grok Bot desktop"), so two connections from the same app
+ * can be told apart. One row per person and AI app; removed with the connection.
+ */
+export const aiAppLabel = pgTable(
+  "qp_ai_app_label",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull(),
+    label: text("label").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.clientId] })],
+);
+
+/**
  * When each AI app the person approved last used the connector, so the Connect screen can show "last used 2 min ago"
  * instead of an approval that may never have been used. One row per person and AI app, updated on every connector call.
  */

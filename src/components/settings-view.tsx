@@ -61,7 +61,7 @@ const EXAMPLE_ACCOUNT: SettingsAccount = {
   image: null,
   channelNames: ["LinkedIn", "Instagram", "Bluesky", "X"],
   rateLimit: EXAMPLE_RATE_LIMIT,
-  apps: [{ consentId: "example-claude", name: "Claude", site: null, approvedAt: "2026-10-20T09:00:00.000Z", lastUsedAt: "2026-10-28T08:12:00.000Z", calls: 42 }],
+  apps: [{ consentId: "example-claude", name: "Claude", brand: "Claude", site: null, approvedAt: "2026-10-20T09:00:00.000Z", lastUsedAt: "2026-10-28T08:12:00.000Z", calls: 42, label: null, returnsTo: ["claude.ai"], unused: false }],
   aiKey: null,
   allowance: { used: 3, cap: 10, budgetUsd: 100, leftUsd: 96.4, resetsAt: "00:00" },
   devices: [{ id: "example-device", device: "Chrome on Mac", lastActive: "2026-10-28T08:00:00.000Z", current: true }],
@@ -140,7 +140,7 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
         <TabsContent value="ai">
           <div className={styles.tab}>
       <section className={styles.block} aria-labelledby="ai-apps">
-        <h2 id="ai-apps" className={styles.h2}>Who can use your Buffer</h2>
+        <h2 id="ai-apps" className={styles.h2}>Connected AI apps</h2>
         <p className={styles.muted}>AI apps you allowed to read your queue and save drafts through Queue Pilot.</p>
         <AiApps apps={account.apps} />
       </section>

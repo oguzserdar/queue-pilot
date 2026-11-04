@@ -40,7 +40,8 @@ vi.mock("@better-auth/mcp", () => ({
     return sub ? handler(req, { sub, azp: "test-client" }) : new Response("Unauthorized", { status: 401 })
   },
 }))
-vi.mock("@/lib/ai-access", () => ({ stillApproved: async () => true, recordAppUse: async () => {}, approvedApps: async () => [{ name: "ChatGPT", lastUsedAt: "2026-10-29T12:00:00Z" }] }))
+const approval = vi.hoisted(() => ({ state: { state: "approved" } as { state: "approved" } | { state: "unused"; consentId: string } | { state: "none" }, revoke: vi.fn(async (..._a: unknown[]) => true) }));
+vi.mock("@/lib/ai-access", () => ({ approvalState: async () => approval.state, revokeApp: approval.revoke, UNUSED_DAYS: 30, recordAppUse: async () => {}, approvedApps: async () => [{ name: "ChatGPT", lastUsedAt: "2026-10-29T12:00:00Z" }] }))
 const limits = vi.hoisted(() => ({ blocked: "" }));
 vi.mock("@/lib/rate-limit", () => ({ limit: async (kind: string) => ({ ok: kind !== limits.blocked }), limitHeaders: () => ({}) }))
 vi.mock("@/lib/buffer-token", () => ({ bufferAccessToken: async (_auth: unknown, userId: string) => userId }))
@@ -179,6 +180,30 @@ describe("connector voice writes", () => {
       name: "queue-pilot", title: "Queue Pilot", version: (await import("../../../../package.json")).default.version, websiteUrl: "https://app.example",
       icons: [{ src: "https://app.example/icon-512.png", mimeType: "image/png", sizes: ["512x512"] }],
     });
+  });
+  it("turns off a connection unused for 30 days, retires its approval, and says how to reconnect", async () => {
+    approval.state = { state: "unused", consentId: "consent-7" };
+    approval.revoke.mockClear();
+    try {
+      const res = await POST(new Request("https://app.example/api/mcp", {
+        method: "POST", headers: { authorization: "Bearer person-a", "content-type": "application/json", accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+      }));
+      expect(res.status).toBe(401);
+      expect(res.headers.get("www-authenticate")).toBeTruthy();
+      expect((await res.json()).error.message).toMatch(/30 days without use.*Connect it again/);
+      // The stale approval is removed, so reconnecting asks afresh instead of reusing it and being refused again.
+      expect(approval.revoke).toHaveBeenCalledWith("person-a", "consent-7");
+      approval.state = { state: "none" };
+      const gone = await POST(new Request("https://app.example/api/mcp", {
+        method: "POST", headers: { authorization: "Bearer person-a", "content-type": "application/json", accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+      }));
+      expect(gone.status).toBe(401);
+      expect((await gone.json()).error.message).toMatch(/revoked/);
+    } finally {
+      approval.state = { state: "approved" };
+    }
   });
   it("lists all tools with serializable input schemas", async () => {
     const response = await rpc("tools/list", {})

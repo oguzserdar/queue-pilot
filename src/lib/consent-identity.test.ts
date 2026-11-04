@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { approvedClientBrand, consentIdentity } from "./consent-identity";
+import { approvedClientBrand, consentIdentity, returnPlaces } from "./consent-identity";
 
 describe("consent identity", () => {
   it("does not use one familiar callback to brand an approved app with unrelated remote callbacks", () => {
@@ -39,5 +39,12 @@ describe("consent identity", () => {
     expect(consentIdentity("Cursor", "opaque", "cursor://auth/callback").destination).toBe("Returns you to the cursor app");
     expect(consentIdentity("Cursor", "opaque", "http://localhost.evil.test/callback").destination).toBe("Returns you to localhost.evil.test");
     expect(consentIdentity("Cursor", "opaque", "http://[::1]:8787/callback").destination).toBe("Returns you to a program on this computer");
+  });
+
+  it("lists where an approved app sends you back, once each, so two connections of one app can be told apart", () => {
+    expect(returnPlaces(["https://cursor.com/cb", "http://localhost:8787/callback", "https://cursor.com/other", "http://127.0.0.1:9/x"])).toEqual(["cursor.com", "This computer"]);
+    expect(returnPlaces(["cursor://auth/callback"])).toEqual(["The cursor app"]);
+    expect(returnPlaces(["http://localhost.evil.test/cb"])).toEqual(["localhost.evil.test"]);
+    expect(returnPlaces(["not a url", "https://user:pw@grok.com/cb"])).toEqual([]);
   });
 });

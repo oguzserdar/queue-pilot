@@ -12,19 +12,9 @@
 .ok { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-weight: 600; color: var(--success); white-space: nowrap; }
 .okMark { width: 7px; height: 7px; border-radius: 2px; background: var(--success); }
 
-.used {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0 0;
-  display: grid;
-  gap: 6px;
-}
-.used li {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  flex-wrap: wrap;
-}
+/* One line under the intro confirming what is connected, with a link to manage it in Settings. */
+.connectedLine { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 12px 0 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.connectedMarks { display: inline-flex; align-items: center; gap: 6px; }
 
 
 /* The page lists the apps; each one's steps open in a modal. */
@@ -43,7 +33,6 @@
 .onboard p { margin: 4px 0 0; }
 .onboardTitle { margin: 0; font-size: var(--text-base); font-weight: 600; }
 .onboardMarks { display: inline-flex; gap: 8px; }
-.connectedName { display: inline-flex; align-items: center; gap: 6px; }
 .connectionMarks { display: flex; align-items: center; justify-content: center; gap: 16px; }
 .connectionMarks > span { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; background: var(--surface-muted); }
 .connectionMarks > img { border-radius: 12px; }

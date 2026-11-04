@@ -15,7 +15,8 @@ import { wroteIds } from "@/lib/written-store";
 import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
 import { listRecentSent, readPostsNow, type Post } from "@/lib/buffer/queries";
 import { FeedError, feedUrl, readFeed } from "@/lib/feeds"
-import { revokeApp } from "@/lib/ai-access";
+import { removeUnusedApps, renameApp, revokeApp } from "@/lib/ai-access";
+import { MAX_LABEL } from "@/lib/ai-app-limits";
 import { getAuth } from "@/lib/auth";
 import { deleteAccount } from "@/lib/delete-account";
 import { addPastedExample, exampleFromQueue, InvalidVoiceExampleError, MAX_NOTE, postgresVoiceStore, TooManyExamplesError } from "@/lib/voice-store"
@@ -280,6 +281,37 @@ export async function revokeAiApp(consentId: string): Promise<SourceActionResult
   revalidatePath("/settings");
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+/** Names one of the person's AI app connections so it can be told apart from another of the same app. */
+export async function renameAiApp(consentId: string, label: string): Promise<SourceActionResult> {
+  const userId = await signedInUserId();
+  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (typeof consentId !== "string" || consentId.length > 200 || typeof label !== "string") return { ok: false, message: "Unknown app." };
+  if (label.trim().length > MAX_LABEL) return { ok: false, message: `Keep the name under ${MAX_LABEL} characters.` };
+  try {
+    if (!(await renameApp(userId, consentId, label))) return { ok: false, message: "That app is not connected to your account." };
+  } catch (e) {
+    console.error(JSON.stringify({ event: "qp-rename-app-failed", message: e instanceof Error ? e.message : String(e) }));
+    return { ok: false, message: "Queue Pilot could not save the name just now. Try again in a minute." };
+  }
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+/** Removes every AI app connection that has gone unused long enough to stop working. */
+export async function removeUnusedAiApps(): Promise<SourceActionResult> {
+  const userId = await signedInUserId();
+  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  try {
+    const removed = await removeUnusedApps(userId);
+    revalidatePath("/settings");
+    revalidatePath("/", "layout");
+    return { ok: true, title: removed === 1 ? "Removed 1 unused connection." : `Removed ${removed} unused connections.` };
+  } catch (e) {
+    console.error(JSON.stringify({ event: "qp-remove-unused-apps-failed", message: e instanceof Error ? e.message : String(e) }));
+    return { ok: false, message: "Queue Pilot could not remove them just now. Try again in a minute." };
+  }
 }
 
 /** Signs this person out of Queue Pilot on every other browser; this one stays signed in. */
