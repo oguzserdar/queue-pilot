@@ -1,18 +1,13 @@
 /**
  * @fileoverview Buffer daily posting limits: one request per organization, documented fields and inputs only.
  */
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { bufferReference, documentedFields } from "./reference.test-support";
 import { postingLimits } from "./posting-limits";
 
-const REFERENCE = readFileSync(join(__dirname, "fixtures/buffer-api-reference.md"), "utf8");
-function fieldsOf(type: string): Set<string> {
-  const start = REFERENCE.indexOf(`\n#### ${type}\n`);
-  if (start < 0) throw new Error(`type ${type} not in the reference`);
-  const next = REFERENCE.indexOf("\n#### ", start + 6);
-  return new Set([...REFERENCE.slice(start, next < 0 ? undefined : next).matchAll(/^- `(\w+)`:/gm)].map((m) => m[1]));
-}
+const REFERENCE = await bufferReference();
+const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
 
 describe("Buffer daily posting limits", () => {
   it("control: a made-up field is caught", () => {

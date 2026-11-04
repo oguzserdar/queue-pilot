@@ -2,18 +2,13 @@
  * @fileoverview Buffer tags: documented types and fields only, paging, typed refusals, and setting tags keeps a draft
  * a draft.
  */
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { bufferReference, documentedFields } from "./reference.test-support";
 import { createTag, listTags, setDraftTags } from "./tags";
 
-const REFERENCE = readFileSync(join(__dirname, "fixtures/buffer-api-reference.md"), "utf8");
-function fieldsOf(type: string): Set<string> {
-  const start = REFERENCE.indexOf(`\n#### ${type}\n`);
-  if (start < 0) throw new Error(`type ${type} not in the reference`);
-  const next = REFERENCE.indexOf("\n#### ", start + 6);
-  return new Set([...REFERENCE.slice(start, next < 0 ? undefined : next).matchAll(/^- `(\w+)`:/gm)].map((m) => m[1]));
-}
+const REFERENCE = await bufferReference();
+const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
 
 type Call = { query: string; variables: Record<string, unknown> };
 function fake(answers: unknown[]) {

@@ -1,23 +1,14 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { bufferReference, documentedFields } from "./reference.test-support";
 import { CHANNEL_FIELDS, POST_FIELDS, type Post } from "./queries";
 import { saveDrafts } from "../save-drafts";
 import { approveDrafts } from "../approve-drafts";
 
-// Buffer's API refuses unauthenticated queries before validating fields, so field names are checked here against a
-// saved copy of developers.buffer.com/reference.md (fixtures/, saved 3 Nov 2026). Refresh the copy when Buffer's
-// changelog changes a type.
-const REFERENCE = readFileSync(join(__dirname, "fixtures/buffer-api-reference.md"), "utf8");
+// Buffer's API refuses unauthenticated queries before validating fields, so field names are checked here against
+// Buffer's published reference (developers.buffer.com/reference.md), downloaded by reference.test-support.ts.
+const REFERENCE = await bufferReference();
 
-/** The field names documented under "#### <type>" in the reference. */
-function fieldsOf(type: string): Set<string> {
-  const start = REFERENCE.indexOf(`\n#### ${type}\n`);
-  if (start < 0) throw new Error(`type ${type} not in the reference`);
-  const next = REFERENCE.indexOf("\n#### ", start + 6);
-  const section = REFERENCE.slice(start, next < 0 ? undefined : next);
-  return new Set([...section.matchAll(/^- `(\w+)`:/gm)].map((m) => m[1]));
-}
+const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
 
 /** Splits "a b { c d } e" into top-level fields with their sub-selections. */
 function selection(fields: string): { name: string; sub: string | null }[] {

@@ -2,19 +2,14 @@
  * @fileoverview Buffer ideas board: documented fields only, columns by name, paging, both success shapes, typed
  * refusals, and no retry after a failed create.
  */
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { bufferReference, documentedFields, typeSection } from "./reference.test-support";
 import { createIdea, IDEA_SERVICES, listIdeas } from "./ideas";
 
-const REFERENCE = readFileSync(join(__dirname, "fixtures/buffer-api-reference.md"), "utf8");
-function section(type: string): string {
-  const start = REFERENCE.indexOf(`\n#### ${type}\n`);
-  if (start < 0) throw new Error(`type ${type} not in the reference`);
-  const next = REFERENCE.indexOf("\n#### ", start + 6);
-  return REFERENCE.slice(start, next < 0 ? undefined : next);
-}
-const fieldsOf = (type: string) => new Set([...section(type).matchAll(/^- `(\w+)`:/gm)].map((m) => m[1]));
+const REFERENCE = await bufferReference();
+const section = (type: string) => typeSection(REFERENCE, type);
+const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
 
 type Call = { query: string; variables: Record<string, unknown> };
 function fake(answers: unknown[]) {
