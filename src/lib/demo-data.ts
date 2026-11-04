@@ -45,7 +45,8 @@ export const DAYS = ["Mon 26", "Tue 27", "Wed 28", "Thu 29", "Fri 30", "Sat 31",
 export const slots: Record<ChannelId, Record<number, string[]>> = {
   linkedin: { 1: ["12:00"], 3: ["15:00"], 4: ["12:00"] },
   instagram: { 1: ["18:00"], 4: ["10:00"] },
-  bluesky: { 2: ["9:00"] },
+  threads: { 1: ["9:00"], 4: ["16:00"] },
+  substack: { 2: ["18:00"] },
   x: { 0: ["9:00"], 3: ["9:00"] },
 };
 
@@ -58,15 +59,19 @@ const draftsAndPosts: Post[] = [
   { id: "p2", channel: "instagram", day: 4, time: "10:00", status: "scheduled", text: "Sunday bake, part two." },
   {
     id: "d1", channel: "linkedin", day: 1, time: "12:00", status: "draft", source: issue41,
-    text: "White bean and kale soup, and the trick for crisp sourdough croutons. Weeknight Dinners 41.",
+    editedFrom: "Excited to share this week's soup! White bean and kale, and the trick for crisp sourdough croutons. Weeknight Dinners 41.",
+    text: "White bean and kale soup, done in 30 minutes, and the trick for crisp sourdough croutons. Weeknight Dinners 41.",
   },
   {
     id: "d2", channel: "instagram", day: 1, time: "18:00", status: "draft", source: issue41,
-    editedFrom: "The soup I make on repeat when it turns cold. Recipe in the newsletter, link in bio.",
     text: "My cold-night soup. Recipe in the newsletter, link in bio.",
   },
   {
-    id: "d3", channel: "bluesky", day: 2, time: "9:00", status: "draft", source: issue41,
+    id: "d6", channel: "threads", day: 1, time: "9:00", status: "draft", source: issue41,
+    text: "White bean and kale soup, done in 30 minutes. Recipe in Weeknight Dinners 41.",
+  },
+  {
+    id: "d3", channel: "substack", day: 2, time: "18:00", status: "draft", source: issue41,
     text: "White beans, kale, stale bread made useful. Weeknight Dinners 41 is out.",
   },
   {

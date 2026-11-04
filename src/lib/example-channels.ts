@@ -1,5 +1,5 @@
 /** Fictional channels shared by the example account and its sidebar. */
-export type ChannelId = "linkedin" | "instagram" | "bluesky" | "x";
+export type ChannelId = "linkedin" | "instagram" | "threads" | "substack" | "x";
 
 export type Channel = {
   id: ChannelId;
@@ -15,6 +15,7 @@ export type Channel = {
 export const channels: Channel[] = [
   { id: "linkedin", service: "linkedin", name: "LinkedIn", handle: "Mark Evans", isDisconnected: false, isQueuePaused: false },
   { id: "instagram", service: "instagram", name: "Instagram", handle: "@weeknightdinners", isDisconnected: false, isQueuePaused: false },
-  { id: "bluesky", service: "bluesky", name: "Bluesky", handle: "weeknightdinners.bsky.social", isDisconnected: true, isQueuePaused: false },
+  { id: "threads", service: "threads", name: "Threads", handle: "@weeknightdinners", isDisconnected: false, isQueuePaused: false },
+  { id: "substack", service: "substack", name: "Substack", handle: "weeknightdinners.substack.com", isDisconnected: true, isQueuePaused: false },
   { id: "x", service: "twitter", name: "X", handle: "@weeknightdinners", isDisconnected: false, isQueuePaused: false },
 ];

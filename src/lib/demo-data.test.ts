@@ -9,8 +9,8 @@ describe("example drafts", () => {
       for (const c of p.checks ?? []) expect(allowed.has(c.label) || /^Fits .+ \(\d[\d,]* of [\d,]+ characters\)$/.test(c.label) || /^\d+ characters; .+ allows \d+$/.test(c.label)).toBe(true);
   });
 
-  it("flag the disconnected Bluesky channel the way a real draft is flagged", () => {
-    const bluesky = posts.find((p) => p.channel === "bluesky" && p.status === "draft")!;
-    expect(bluesky.checks?.[0]).toMatchObject({ tone: "danger", label: expect.stringContaining("disconnected in Buffer") });
+  it("flag the disconnected Substack channel the way a real draft is flagged", () => {
+    const substack = posts.find((p) => p.channel === "substack" && p.status === "draft")!;
+    expect(substack.checks?.[0]).toMatchObject({ tone: "danger", label: expect.stringContaining("disconnected in Buffer") });
   });
 });

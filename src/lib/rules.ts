@@ -38,6 +38,7 @@ export const NETWORKS: Record<string, string> = {
   twitter: "X",
   bluesky: "Bluesky",
   threads: "Threads",
+  substack: "Substack",
   facebook: "Facebook",
   mastodon: "Mastodon",
 };

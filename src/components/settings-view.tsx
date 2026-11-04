@@ -59,7 +59,7 @@ const EXAMPLE_ACCOUNT: SettingsAccount = {
   email: "mark@weeknightdinners.example",
   name: "Mark Evans",
   image: null,
-  channelNames: ["LinkedIn", "Instagram", "Bluesky", "X"],
+  channelNames: ["LinkedIn", "Instagram", "Threads", "Substack", "X"],
   rateLimit: EXAMPLE_RATE_LIMIT,
   apps: [{ consentId: "example-claude", name: "Claude", site: null, approvedAt: "2026-10-20T09:00:00.000Z", lastUsedAt: "2026-10-28T08:12:00.000Z", calls: 42 }],
   aiKey: null,

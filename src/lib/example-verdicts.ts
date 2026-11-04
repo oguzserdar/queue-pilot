@@ -17,6 +17,7 @@ export const EXAMPLE_VERDICTS: Record<string, Verdict[]> = {
   ],
   d2: [v("r3", "pass", "Recipe in the newsletter, link in bio.", "Ends with the line."), v("r4", "pass", "", "No broth, and no other word for it.")],
   d3: [v("r4", "pass", "", "No broth, and no other word for it.")],
+  d6: [v("r4", "pass", "", "No broth, and no other word for it.")],
   d4: [v("r4", "pass", "", "No broth, and no other word for it.")],
   d5: [
     v("r1", "unsure", "", "It names three swaps, not one dish; the rule may not fit a list post."),

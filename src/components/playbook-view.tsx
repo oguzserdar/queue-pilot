@@ -30,7 +30,7 @@ function reviewEvidence(value: unknown): { comment: string; reason: string } | n
 }
 
 const EXAMPLE: ShownRule[] = EXAMPLE_RULES;
-const OFFERED: ShownRule = { id: "r5", kind: "guidance", channels: ["instagram"], level: "warn", text: "Start with the dish, not a feeling.", origin: "You changed the opening in 2 drafts" };
+const OFFERED: ShownRule = { id: "r5", kind: "banned", phrases: ["Excited to share"], where: "start", channels: ["linkedin"], level: "warn", text: "No “Excited to share”. Start with the dish.", origin: "You cut that opening in 2 drafts" };
 const HOLD_TONE = { "Blocks drafts": "danger", "Flags drafts": "warning" } as const;
 const HOLD_HINT = { "Blocks drafts": "A draft that breaks it is rewritten once, then not saved", "Flags drafts": "A draft that breaks it is saved and flagged for you" };
 
@@ -121,8 +121,8 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       {offer === "open" && (
         <section className={styles.offer} aria-labelledby="offer-title">
           <h2 id="offer-title" className={styles.h2}>You made the same fix twice</h2>
-          <p className={styles.diff}><del><span className="sr-only">Before: </span>The soup I make on repeat</del> <span className="sr-only">After: </span>My cold-night soup.</p>
-          <p className={styles.muted}>On Instagram you replaced a feeling with the dish, on Tuesday and last Friday.</p>
+          <p className={styles.diff}><del><span className="sr-only">Before: </span>Excited to share this week&apos;s soup!</del> <span className="sr-only">After: </span>White bean and kale soup, done in 30 minutes.</p>
+          <p className={styles.muted}>On LinkedIn you cut &ldquo;Excited to share&rdquo; from the opening, on Tuesday and last Friday.</p>
           <p className={styles.proposed}>Keep as a rule: "{OFFERED.text}"</p>
           <div className={styles.actions}>
             <Button variant="primary" size="sm" onClick={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }}>Keep as a rule</Button>
@@ -130,7 +130,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
           </div>
         </section>
       )}
-      {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the dish.</p>}
+      {offer === "kept" && <p className={styles.done} role="status">Kept. LinkedIn drafts now start with the dish.</p>}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
       {live && accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} onDelete={(r) => remove(r.id)} onAdd={focusAdd} />}
