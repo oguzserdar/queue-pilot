@@ -5,4 +5,4 @@
  */
 export const AUTHORIZE_URL = "https://auth.buffer.com/auth";
 export const TOKEN_URL = "https://auth.buffer.com/token";
-export const SCOPES = ["posts:read", "posts:write", "ideas:read", "ideas:write", "account:read", "offline_access"];
+export const SCOPES = ["posts:read", "posts:write", "ideas:read", "ideas:write", "notes:read", "notes:write", "account:read", "offline_access"];

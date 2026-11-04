@@ -6,7 +6,7 @@ import { saveDrafts } from "../save-drafts";
 import { approveDrafts } from "../approve-drafts";
 
 // Buffer's API refuses unauthenticated queries before validating fields, so field names are checked here against a
-// saved copy of developers.buffer.com/reference.md (fixtures/, saved 21 Oct 2026). Refresh the copy when Buffer's
+// saved copy of developers.buffer.com/reference.md (fixtures/, saved 3 Nov 2026). Refresh the copy when Buffer's
 // changelog changes a type.
 const REFERENCE = readFileSync(join(__dirname, "fixtures/buffer-api-reference.md"), "utf8");
 

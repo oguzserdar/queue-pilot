@@ -57,6 +57,19 @@ Fetch all channels for the organization taking into account the current's user p
 **Arguments:**
 - `input`: `ChannelsInput!` - Query's input.
 
+#### collaborationNotes
+
+The authorized Notes in a thread, in descending creation order.
+
+**Status:** ⚠️ Experimental
+
+**Returns:** `CollaborationNotesConnection!`
+
+**Arguments:**
+- `after`: `String` - The opaque cursor after which to read Notes.
+- `first`: `Int` - The number of Notes to read, from 1 through 100. The default is 10.
+- `input`: `CollaborationNotesInput!` - The thread whose Notes to read.
+
 #### configuration
 
 Global, per-organization configuration: the connected `channels` the actor can
@@ -312,6 +325,17 @@ post. To add a new post, call createPost first.
 **Arguments:**
 - `input`: `AddPostToContentItemInput!` - Input for addPostToContentItem.
 
+#### createCollaborationNote
+
+Creates a collaboration Note in a thread.
+
+**Status:** ⚠️ Experimental
+
+**Returns:** `CreateCollaborationNotePayload!`
+
+**Arguments:**
+- `input`: `CreateCollaborationNoteInput!` - The new Note content.
+
 #### createContentItem
 
 Create a content item together with all of its channel-specific post variants
@@ -402,6 +426,17 @@ This API is an early preview and can change without a deprecation period.
 **Arguments:**
 - `input`: `CreateTagInput!` - Identifies the organization to create the tag in, and the name and color to
 give the tag.
+
+#### deleteCollaborationNote
+
+Deletes a collaboration Note.
+
+**Status:** ⚠️ Experimental
+
+**Returns:** `DeleteCollaborationNotePayload!`
+
+**Arguments:**
+- `input`: `DeleteCollaborationNoteInput!` - The Note to delete.
 
 #### deleteContentItem
 
@@ -530,6 +565,17 @@ and the mutation reports success.
 **Arguments:**
 - `input`: `RemovePostFromContentItemInput!` - Input for removePostFromContentItem.
 
+#### updateCollaborationNote
+
+Updates a collaboration Note.
+
+**Status:** ⚠️ Experimental
+
+**Returns:** `UpdateCollaborationNotePayload!`
+
+**Arguments:**
+- `input`: `UpdateCollaborationNoteInput!` - The replacement Note content.
+
 #### updateContentItem
 
 Update a content item's title or target date. Fields that are
@@ -656,10 +702,12 @@ Annotation representing all the entities in the text
 **Fields:**
 - `content`: `String!` - The content of the annotation. Annotations can sometimes be different from the actual text content.
 E.g., Mastodon mentions have 'text: @buffer', but includes the server name in the content, 'content: @buffer@threads.net'
+- `displayValue`: `String` - The display value, when present
 - `indices`: `[Int!]!` - The indices of the annotation in the text
+- `serviceEntityId`: `String` - The service entity ID, when present
 - `text`: `String!` - The text representation of the annotation, eg '@buffer'
 - `type`: `AnnotationType!` - The type of the annotation
-- `url`: `String!` - The URL the annotation points to
+- `url`: `String!` - The URL the annotation points to. Empty string when the annotation has no link.
 
 #### Author
 
@@ -774,6 +822,54 @@ Error returned when the channel needs a refresh
 
 **Fields:**
 - `channelIds`: `[ChannelId!]!` - ChannelIds that need refreshing
+- `message`: `String!` - Error message
+
+#### CollaborationNote
+
+A collaboration Note in a Post or ContentItem thread.
+
+**Status:** ⚠️ Experimental
+
+**Fields:**
+- `id`: `NoteId!` - The Note ID.
+- `allowedActions`: `[NoteAction!]!` - The actions the current account can perform on the Note.
+- `annotations`: `[Annotation!]!` - The annotations in the Note text.
+- `author`: `Author` - The author, or null when the account no longer exists.
+- `authorId`: `AccountId!` - The author's Account ID, including when the account no longer exists.
+- `text`: `String!` - The Note text.
+- `createdAt`: `DateTime!` - The date and time of Note creation.
+- `updatedAt`: `DateTime!` - The date and time of the last Note update.
+
+#### CollaborationNoteEdge
+
+A Note and its pagination cursor.
+
+**Status:** ⚠️ Experimental
+
+**Fields:**
+- `cursor`: `String!` - The opaque cursor for this Note.
+- `node`: `CollaborationNote!` - The Note.
+
+#### CollaborationNotesConnection
+
+A page of authorized Notes.
+
+**Status:** ⚠️ Experimental
+
+**Fields:**
+- `edges`: `[CollaborationNoteEdge!]!` - The Notes in this page.
+- `pageInfo`: `PaginationPageInfo!` - The pagination information for this page.
+
+#### CollaborationNoteThreadClosedError
+
+Error returned when a Note is created in a thread that accepts no new Notes.
+Existing Notes in the thread stay readable.
+
+**Status:** ⚠️ Experimental
+
+**Implements:** MutationError
+
+**Fields:**
 - `message`: `String!` - Error message
 
 #### Configuration
@@ -900,6 +996,15 @@ or `max` is always present — a rule that bounds neither is never emitted.
 - `min`: `Int` - Minimum allowed count. Null = no lower bound (optional).
 - `property`: `ContentProperty!` - The content property this rule constrains.
 
+#### CreateCollaborationNoteSuccess
+
+The result of a successful collaboration Note creation.
+
+**Status:** ⚠️ Experimental
+
+**Fields:**
+- `edge`: `CollaborationNoteEdge!` - The new Note and its cursor.
+
 #### CreateContentItemDraftFailure
 
 createContentItemDraft failure. When any part of the input is invalid,
@@ -1016,6 +1121,15 @@ Counts include existing posts only, excluding the proposed post.
 - `limit`: `Int` - The network daily posting limit. Null means unlimited.
 - `scheduled`: `Int!` - Number of existing scheduled posts in the evaluated window.
 - `sent`: `Int!` - Number of existing sent posts in the evaluated window.
+
+#### DeleteCollaborationNoteSuccess
+
+The result of a successful collaboration Note deletion.
+
+**Status:** ⚠️ Experimental
+
+**Fields:**
+- `noteId`: `NoteId!` - The deleted Note ID.
 
 #### DeleteContentItemFailure
 
@@ -1149,13 +1263,14 @@ new type.
 **Status:** ⚠️ Experimental
 
 **Fields:**
-- `engagementType`: `EngagementType!` - The kind of engagement this entry configures (comment / mention).
+- `engagementType`: `EngagementType!` - The kind of engagement this entry configures (comment / mention /
+directMessage).
 - `media`: `MediaConfiguration!` - Media configuration. Always present; `supportsMedia: false` = the platform
 doesn't deliver attached media to Buffer, so none can be shown.
 - `metadata`: `EngagementMetadata` - Optional network-specific engagement metadata (e.g. Google Business).
 null when none applies.
-- `reactions`: `ReactionsConfiguration!` - Reactions. Always present; empty `supportedReactions` = reacting via Buffer
-isn't supported.
+- `reactions`: `ReactionsConfiguration!` - Reactions. Always present; empty `supportedReactions` with `supportsAnyEmoji:
+false` = reacting via Buffer isn't supported.
 - `replying`: `ReplyingConfiguration!` - Reply configuration. Always present; `supportsReplying: false` = replying via
 Buffer not supported.
 - `supportedAiFeatures`: `[AiFeature!]!` - AI features supported for this engagement type. Empty when none.
@@ -2020,8 +2135,8 @@ Returns null for custom or unrecognized colors.
 #### ReactionsConfiguration
 
 Reactions configuration. `restingIcon` is always populated; `supportedReactions`
-empty = reacting via Buffer isn't supported, one = single-button liking, multiple
-= a reaction set.
+empty = reacting via Buffer isn't supported (unless `supportsAnyEmoji`), one =
+single-button liking, multiple = a reaction set.
 
 **Status:** ⚠️ Experimental
 
@@ -2033,7 +2148,11 @@ reconnect to grant it. On the service-level catalog this is channel-agnostic
 and may overstate the requirement, since it can vary with a channel's login
 flow; the per-channel configuration resolves it exactly.
 - `restingIcon`: `ReactionIcon!` - The resting-state icon — the pre-reaction icon.
-- `supportedReactions`: `[EngagementSupportedReaction!]!` - The reactions the user can apply. Empty when reacting via Buffer isn't supported.
+- `supportedReactions`: `[EngagementSupportedReaction!]!` - The reactions the user can apply. Empty when reacting via Buffer isn't
+supported, or when `supportsAnyEmoji` is true.
+- `supportsAnyEmoji`: `Boolean!` - Whether the user can react with any single emoji (e.g. direct messages). When
+true, offer an emoji picker and send the chosen emoji to the network's emoji
+reaction mutation; `supportedReactions` is empty.
 
 #### RemovePostFromContentItemSuccess
 
@@ -2055,6 +2174,7 @@ so reply metadata can be added later.
 **Fields:**
 - `prefixReplyWithMention`: `Boolean!` - Whether replies should be prefixed with the author's @mention.
 - `supportsReplying`: `Boolean!` - Whether replying to this engagement type via Buffer is supported.
+- `supportsReplyTo`: `Boolean!` - Whether a reply can quote a specific message.
 
 #### RequiresRule
 
@@ -2373,6 +2493,15 @@ Error returned when unexpected error occurs
 **Fields:**
 - `message`: `String!` - Error message
 
+#### UpdateCollaborationNoteSuccess
+
+The result of a successful collaboration Note update.
+
+**Status:** ⚠️ Experimental
+
+**Fields:**
+- `note`: `CollaborationNote!` - The updated Note.
+
 #### UpdateContentItemDraftFailure
 
 updateContentItemDraft failure.
@@ -2570,6 +2699,19 @@ of the first calendar day in the window, for example
 - `tags`: `TagComparator` - Filter to posts with specific tags.
 When omitted, all posts are included regardless of tags.
 
+#### AnnotationInput
+
+An annotation in text input.
+
+**Fields:**
+- `content`: `String!` - The text content in the annotation span.
+- `displayValue`: `String` - The display value, when present.
+- `indices`: `[Int!]!` - The start and exclusive end offsets in the text.
+- `serviceEntityId`: `String` - The service entity ID, when present.
+- `text`: `String!` - The text representation of the annotation.
+- `type`: `AnnotationType!` - The annotation type.
+- `url`: `String` - The annotation URL, when present.
+
 #### AnnotationInputFacebook
 
 Annotation representing all the entities in the text
@@ -2642,6 +2784,22 @@ Input to pass when fetching channels.
 - `filter`: `ChannelsFiltersInput` - A list of option filters - passing null means we don't want to filter
 - `organizationId`: `OrganizationId!` - The Organization id to fetch channels for
 
+#### CollaborationNotesInput
+
+The Notes thread to read.
+
+**Fields:**
+- `subject`: `CollaborationNoteSubjectInput!` - The entity whose Notes thread to read.
+
+#### CollaborationNoteSubjectInput
+
+The entity whose Notes thread to use. Set exactly one field.
+
+**Fields:**
+- `contentItemId`: `ContentItemId` - The ContentItem ID. Selects the ContentItem's own thread, not the threads of
+its Posts.
+- `postId`: `PostId` - The Post ID.
+
 #### ConfigurationInput
 
 Input for the configuration query.
@@ -2699,6 +2857,15 @@ Filter for a content item's target date. Provide exactly one field
 returns only dated items, `absent` only undated ones.
 - `range`: `DateTimeComparator` - Only return content items whose target date falls within this range.
 A range with no bounds returns every content item that has a target date.
+
+#### CreateCollaborationNoteInput
+
+The content for a new collaboration Note.
+
+**Fields:**
+- `annotations`: `[AnnotationInput!]` - The annotations for the Note. Omit or pass null to use an empty list.
+- `subject`: `CollaborationNoteSubjectInput!` - The entity whose Notes thread gets the Note.
+- `text`: `String!` - The Note text.
 
 #### CreateContentItemDraftInput
 
@@ -2829,6 +2996,13 @@ Comparator for filtering by date
 the specified date
 - `start`: `DateTime` - Include results with dates equal to or after
 the specified date
+
+#### DeleteCollaborationNoteInput
+
+The collaboration Note to delete.
+
+**Fields:**
+- `noteId`: `NoteId!` - The Note ID.
 
 #### DeleteContentItemInput
 
@@ -3512,6 +3686,15 @@ thread, including the root post, must be provided here. Posts are
 published in order, each replying to the previous one. The first item is
 the root post and should match the top-level `text` on the post input.
 
+#### UpdateCollaborationNoteInput
+
+The content that replaces a collaboration Note.
+
+**Fields:**
+- `annotations`: `[AnnotationInput!]` - The annotations for the Note. Omit or pass null to replace them with an empty list.
+- `noteId`: `NoteId!` - The Note ID.
+- `text`: `String!` - The replacement Note text.
+
 #### UpdateContentItemDraftInput
 
 Input for updateContentItemDraft.
@@ -3718,6 +3901,12 @@ never both, although a content item keeps its draft after it becomes posts.
 
 **Possible types:** DraftContent | PostContent
 
+#### CreateCollaborationNotePayload
+
+The possible results from collaboration Note creation.
+
+**Possible types:** CreateCollaborationNoteSuccess | InvalidInputError | LimitReachedError | CollaborationNoteThreadClosedError
+
 #### CreateContentItemDraftPayload
 
 All possible responses for createContentItemDraft.
@@ -3776,6 +3965,12 @@ types. Every error member implements that interface, so the selection keeps
 working across the change.
 
 **Possible types:** TagActionSuccess | InvalidInputError | DuplicateError | LimitReachedError | NotFoundError | UnauthorizedError | UnexpectedError | RestProxyError
+
+#### DeleteCollaborationNotePayload
+
+The possible results from collaboration Note deletion.
+
+**Possible types:** DeleteCollaborationNoteSuccess | VoidMutationError
 
 #### DeleteContentItemPayload
 
@@ -3897,6 +4092,12 @@ All possible responses for removePostFromContentItem.
 Payload returned when searching Instagram audio
 
 **Possible types:** SearchInstagramAudioSuccess | ChannelRefreshRequired
+
+#### UpdateCollaborationNotePayload
+
+The possible results from collaboration Note update.
+
+**Possible types:** UpdateCollaborationNoteSuccess | InvalidInputError
 
 #### UpdateContentItemDraftError
 
@@ -4157,6 +4358,7 @@ Discriminator used in inputs/filters to scope a query to specific types.
 
 **Values:**
 - `comment` - Fetch comments (direct replies to Buffer-managed posts).
+- `directMessage` - Direct messages (private conversations between the account and another user).
 - `mention` - Fetch mentions (references to the account across the network).
 
 #### Feature
@@ -4461,6 +4663,7 @@ Standard reaction icon set used by `IconVisual`. Grows additively.
 
 **Values:**
 - `heart`
+- `smilingFace` - 🙂 (U+1F642).
 - `star`
 - `thumbsUp`
 

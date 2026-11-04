@@ -8,7 +8,8 @@
 export const API_URL = "https://api.buffer.com";
 
 export class BufferApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  /** Buffer's machine-readable error code when it sent one, e.g. INSUFFICIENT_SCOPE for a permission the token lacks. */
+  constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
     this.name = "BufferApiError";
   }
@@ -95,8 +96,8 @@ export async function bufferQuery<T>(token: string, query: string, variables?: R
       const detail = await errorDetail(res);
       throw new BufferApiError(`Buffer API returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
     }
-    const json = (await res.json()) as { data?: T; errors?: { message: string }[] };
-    if (json.errors?.length) throw new BufferApiError(json.errors.map((e) => e.message).join("; "), 200);
+    const json = (await res.json()) as { data?: T; errors?: { message: string; extensions?: { code?: string } }[] };
+    if (json.errors?.length) throw new BufferApiError(json.errors.map((e) => e.message).join("; "), 200, json.errors.find((e) => e.extensions?.code)?.extensions?.code);
     if (!json.data) throw new BufferApiError("Buffer API returned no data", 200);
     return json.data;
   }

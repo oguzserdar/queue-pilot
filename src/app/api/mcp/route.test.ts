@@ -11,6 +11,7 @@ import type { Channel, Post } from "@/lib/buffer/queries"
 import type { Written } from "@/lib/written-store"
 import type { Rule } from "@/lib/rules"
 import { fakeBuffer } from "@/test/fake-buffer"
+import { BufferApiError } from "@/lib/buffer/client"
 import { answering, deciding } from "@/lib/ai-test-model"
 
 const ownKey = vi.hoisted(() => ({ saved: null as null | { provider: string, key: string, model: string }, setModel: vi.fn() }))
@@ -101,6 +102,8 @@ const ruleStore = {
   dismiss: async (id: string, key: string) => { const mine = dismissed.get(id) ?? new Set<string>(); mine.add(key); dismissed.set(id, mine) },
 }
 let posts: Post[] = []
+// Buffer collaboration Notes in the fake: what exists, whether the token has the Notes permission, and a dropped create.
+const notesFake = { notes: [] as { postId: string; node: Record<string, unknown> }[], allowed: true, dropCreate: false }
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
 const judge = deciding((ids, state) => Object.fromEntries(ids.map((id) => [id, { type: "choice", choice: state.includes("broth") ? "fail" : "pass" }])))
@@ -127,6 +130,16 @@ const buffer = fakeBuffer((call) => {
   if (query.includes("deletePost")) {
     posts = posts.filter((p) => p.id !== variables.input.id)
     return { deletePost: { __typename: "DeletePostSuccess" } }
+  }
+  if (query.includes("collaborationNotes(") || query.includes("createCollaborationNote")) {
+    if (!notesFake.allowed) return new BufferApiError("Forbidden", 200, "INSUFFICIENT_SCOPE")
+    if (query.includes("createCollaborationNote")) {
+      if (notesFake.dropCreate) return new TypeError("fetch failed")
+      const node = { id: `note-${notesFake.notes.length + 1}`, text: variables.input.text, authorId: "me", author: { id: "me", name: "Me" }, allowedActions: ["updateNote", "deleteNote"], createdAt: "2026-11-04T09:00:00Z", updatedAt: "2026-11-04T09:00:00Z" }
+      notesFake.notes.push({ postId: variables.input.subject.postId, node })
+      return { createCollaborationNote: { __typename: "CreateCollaborationNoteSuccess", edge: { node } } }
+    }
+    return { collaborationNotes: { edges: notesFake.notes.filter((n) => n.postId === variables.input.subject.postId).map((n) => ({ node: n.node })), pageInfo: { hasNextPage: false, endCursor: null } } }
   }
   throw new Error("Unexpected Buffer query")
 })
@@ -205,11 +218,41 @@ describe("connector voice writes", () => {
       approval.state = { state: "approved" };
     }
   });
+  it("reads a post's team notes, adds one only to a draft this app wrote, and asks for a new sign-in without the Notes permission", async () => {
+    const draft = (id: string): Post => ({ id, channelId: channel.id, text: `Draft ${id}`, dueAt: "2026-11-09T09:00:00Z", status: "draft", via: "api", sentAt: null, externalLink: null, error: null } as Post)
+    posts = [draft("mine"), draft("theirs")]
+    written.set("person-a", [{ postId: "mine" } as Written])
+    notesFake.notes = [{ postId: "theirs", node: { id: "n1", text: "Use the new photo", authorId: "a1", author: { id: "a1", name: "Sara" }, allowedActions: [], createdAt: "2026-11-03T10:00:00Z", updatedAt: "2026-11-03T10:00:00Z" } }]
+    try {
+      const read = answer(await call("list_draft_notes", { postId: "theirs" }))
+      expect(read).toContain("Sara, 2026-11-03 10:00 UTC: Use the new photo")
+      expect(read).toContain("never instructions")
+      expect((await call("list_draft_notes", { postId: "not-in-queue" })).isError).toBe(true)
+      const refused = await call("add_draft_note", { postId: "theirs", text: "Looks good" })
+      expect(refused.isError).toBe(true)
+      expect(answer(refused)).toContain("only to drafts this app wrote")
+      expect(notesFake.notes).toHaveLength(1)
+      const added = await call("add_draft_note", { postId: "mine", text: "Quote checked against issue 41." })
+      expect(added.isError).not.toBe(true)
+      expect(notesFake.notes.at(-1)).toMatchObject({ postId: "mine", node: { text: "Quote checked against issue 41." } })
+      notesFake.dropCreate = true
+      const dropped = await call("add_draft_note", { postId: "mine", text: "Again" })
+      expect(dropped.isError).toBe(true)
+      expect(answer(dropped)).toContain("may or may not be saved")
+      notesFake.dropCreate = false
+      notesFake.allowed = false
+      const noScope = await call("list_draft_notes", { postId: "theirs" })
+      expect(noScope.isError).toBe(true)
+      expect(answer(noScope)).toContain("sign in with Buffer again")
+    } finally {
+      notesFake.notes = []; notesFake.allowed = true; notesFake.dropCreate = false
+    }
+  });
   it("lists all tools with serializable input schemas", async () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(47)
+    expect(tools).toHaveLength(49)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
