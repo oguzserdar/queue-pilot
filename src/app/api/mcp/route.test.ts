@@ -105,6 +105,8 @@ let posts: Post[] = []
 // Buffer collaboration Notes in the fake: what exists, whether the token has the Notes permission, and a dropped create.
 const notesFake = { notes: [] as { postId: string; node: Record<string, unknown> }[], allowed: true, dropCreate: false }
 // The Buffer ideas board in the fake: its columns, its ideas, and a dropped create.
+// Buffer tags in the fake.
+const tagsFake = { tags: [] as { id: string; name: string; color: string; isLocked: boolean }[] }
 const ideasFake = { groups: [{ id: "g1", name: "Next week", isLocked: false }], ideas: [] as Record<string, unknown>[], dropCreate: false }
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
@@ -126,7 +128,7 @@ const buffer = fakeBuffer((call) => {
   if (query.includes("post(input")) return { post: structuredClone(posts.find(p => p.id === variables.input.id)) }
   if (query.includes("editPost")) {
     expect(variables.input.saveToDraft).toBe(true)
-    posts = posts.map((p) => p.id === variables.input.id ? { ...p, text: variables.input.text } : p)
+    posts = posts.map((p) => p.id === variables.input.id ? { ...p, ...(variables.input.text !== undefined ? { text: variables.input.text } : {}), ...(variables.input.tagIds ? { tagIds: variables.input.tagIds } : {}) } : p)
     return { editPost: { __typename: "PostActionSuccess" } }
   }
   if (query.includes("deletePost")) {
@@ -142,6 +144,14 @@ const buffer = fakeBuffer((call) => {
       return { createCollaborationNote: { __typename: "CreateCollaborationNoteSuccess", edge: { node } } }
     }
     return { collaborationNotes: { edges: notesFake.notes.filter((n) => n.postId === variables.input.subject.postId).map((n) => ({ node: n.node })), pageInfo: { hasNextPage: false, endCursor: null } } }
+  }
+  if (query.includes("tagsV2(")) return { tagsV2: { edges: tagsFake.tags.map((node) => ({ node })), pageInfo: { hasNextPage: false, endCursor: null } } }
+  if (query.includes("createTag(")) {
+    const { name, color } = variables.input.tag
+    if (tagsFake.tags.some((t) => t.name === name)) return { createTag: { __typename: "DuplicateError", message: "Duplicate" } }
+    const tag = { id: `tag-${tagsFake.tags.length + 1}`, name, color, isLocked: false }
+    tagsFake.tags.push(tag)
+    return { createTag: { __typename: "TagActionSuccess", tag } }
   }
   if (query.includes("ideaGroups(")) return { ideaGroups: ideasFake.groups }
   if (query.includes("ideas(input")) return { ideas: { edges: ideasFake.ideas.map((node) => ({ node })), pageInfo: { hasNextPage: false, endCursor: null } } }
@@ -282,11 +292,31 @@ describe("connector voice writes", () => {
       ideasFake.ideas = []; ideasFake.dropCreate = false
     }
   });
+  it("creates tags and sets them only on a draft this app wrote, keeping its text and draft status", async () => {
+    const draft = (id: string, status = "draft"): Post => ({ id, channelId: channel.id, text: `Draft ${id}`, dueAt: "2026-11-09T09:00:00Z", status, via: "api", sentAt: null, externalLink: null, error: null } as Post)
+    posts = [draft("mine"), draft("theirs"), draft("queued", "scheduled")]
+    written.set("person-a", [{ postId: "mine" } as Written, { postId: "queued" } as Written])
+    try {
+      expect(answer(await call("list_tags"))).toContain("No tags yet")
+      expect((await call("create_tag", { name: "Soups" })).isError).not.toBe(true)
+      expect(answer(await call("create_tag", { name: "Soups" }))).toContain("exact name exists")
+      expect(answer(await call("list_tags"))).toContain("- Soups")
+      expect(answer(await call("tag_draft", { postId: "theirs", tags: ["Soups"] }))).toContain("only drafts this app wrote")
+      expect(answer(await call("tag_draft", { postId: "queued", tags: ["Soups"] }))).toContain("only drafts can be tagged")
+      expect(answer(await call("tag_draft", { postId: "mine", tags: ["soups"] }))).toContain("Names must match exactly")
+      const tagged = await call("tag_draft", { postId: "mine", tags: ["Soups"] })
+      expect(tagged.isError).not.toBe(true)
+      expect(posts.find((p) => p.id === "mine")).toMatchObject({ text: "Draft mine", status: "draft", tagIds: ["tag-1"] })
+      expect(posts.find((p) => p.id === "queued")).toMatchObject({ status: "scheduled" })
+    } finally {
+      tagsFake.tags = []
+    }
+  });
   it("lists all tools with serializable input schemas", async () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(51)
+    expect(tools).toHaveLength(54)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)

@@ -39,6 +39,7 @@ import { wroteIds } from "@/lib/written-store";
 import { createPostNote, listPostNotes, MAX_NOTE as MAX_BUFFER_NOTE, NotesNotAllowedError } from "@/lib/buffer/notes";
 import { BufferApiError } from "@/lib/buffer/client";
 import { createIdea, IDEA_SERVICES, listIdeaGroups, listIdeas, MAX_IDEA_TEXT, MAX_IDEA_TITLE } from "@/lib/buffer/ideas";
+import { createTag, listTags, MAX_TAG_NAME, setDraftTags } from "@/lib/buffer/tags";
 import { MAX_APPROVE } from "@/lib/approve-drafts";
 import { approveChecked } from "@/lib/approve-checked";
 import { approvePermission, claimApproval, releaseApproval, signApproval, verifyApproval } from "@/lib/agent-permission";
@@ -392,6 +393,67 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         if (e instanceof BufferApiError) throw e;
         return { ...text("Buffer did not answer, so the idea may or may not be saved. Read list_buffer_ideas before trying again."), isError: true };
       }
+    },
+  );
+
+  server.registerTool(
+    "list_tags",
+    {
+      title: "Read the Buffer tags",
+      description: "Lists the tags in the person's Buffer organization: labels shared by everyone in it, for grouping posts and ideas. A locked tag can still be applied but not renamed.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async () => {
+      const b = await bufferFor(auth, userId);
+      const all = (await Promise.all(b.organizationIds.map((org) => listTags(b.accessToken, org)))).flat();
+      if (!all.length) return text("No tags yet. The Free plan allows 3, a paid plan 250.");
+      return text([`${all.length} tag${all.length === 1 ? "" : "s"}:`, ...all.map((t) => `- ${t.name}${t.isLocked ? " (locked)" : ""}`)].join("\n"));
+    },
+  );
+
+  server.registerTool(
+    "create_tag",
+    {
+      title: "Create a Buffer tag",
+      description: "Creates one tag in the person's Buffer organization when they ask. Everyone in the organization sees it, and it counts toward the plan's limit (Free 3, paid 250). Names are compared exactly, so check list_tags first.",
+      inputSchema: z.object({ name: z.string().min(1).max(MAX_TAG_NAME).describe("The tag's name."), organizationId: z.string().max(200).optional().describe("Only when the person has more than one Buffer organization.") }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ name, organizationId }) => {
+      const b = await bufferFor(auth, userId, { force: true });
+      const org = organizationId ?? (b.organizationIds.length === 1 ? b.organizationIds[0] : undefined);
+      if (!org || !b.organizationIds.includes(org)) return { ...text(`Not created: choose one organizationId: ${b.organizationIds.join(", ") || "none found"}.`), isError: true };
+      const r = await createTag(b.accessToken, org, name.trim());
+      if (r.ok) return text(`Tag "${r.value.name}" created.`);
+      const why = r.kind === "duplicate" ? "a tag with that exact name exists" : r.kind === "limit" ? "the organization is at its plan's tag limit" : r.message;
+      return { ...text(`Not created: ${why}.`), isError: true };
+    },
+  );
+
+  server.registerTool(
+    "tag_draft",
+    {
+      title: "Set the tags on a draft",
+      description: "Sets exactly these tags on one draft this app wrote, replacing the tags it had; an empty list removes them. Use tag names from list_tags. The draft stays a draft with the same text and time. Approved, scheduled and sent posts are refused.",
+      inputSchema: z.object({ postId: z.string().min(1).max(200).describe("A post id from show_next_week."), tags: z.array(z.string().min(1).max(MAX_TAG_NAME)).max(50).describe("Exact tag names from list_tags.") }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ postId, tags }) => {
+      const b = await bufferFor(auth, userId, { force: true });
+      const post = b.posts.find((p) => p.id === postId);
+      if (!post) return { ...text("Not changed: no such post in the user's queue. Use a post id from show_next_week."), isError: true };
+      // Buffer's edit keeps it a draft; on a scheduled post that same edit would unschedule it, so only drafts qualify.
+      if (post.status !== "draft") return { ...text("Not changed: only drafts can be tagged here; this post is approved, scheduled or sent."), isError: true };
+      if (!(await wroteIds(userId, postId)).has(postId)) return { ...text("Not changed: only drafts this app wrote can be tagged."), isError: true };
+      const org = b.channels.find((c) => c.id === post.channelId)?.organizationId ?? (b.organizationIds.length === 1 ? b.organizationIds[0] : undefined);
+      if (!org) return { ...text("Not changed: could not tell which organization this post belongs to."), isError: true };
+      const known = await listTags(b.accessToken, org);
+      const ids = tags.map((name) => known.find((t) => t.name === name)?.id);
+      const missing = tags.filter((_, i) => !ids[i]);
+      if (missing.length) return { ...text(`Not changed: no tag named ${missing.map((m) => `"${m}"`).join(", ")}. Tags: ${known.map((t) => t.name).join(", ") || "none"}. Names must match exactly.`), isError: true };
+      const r = await setDraftTags(b.accessToken, postId, [...new Set(ids as string[])]);
+      return r.ok ? text(tags.length ? `Tags set: ${tags.join(", ")}. The draft is otherwise unchanged.` : "Tags removed. The draft is otherwise unchanged.") : { ...text(`Not changed: ${r.message}`), isError: true };
     },
   );
 

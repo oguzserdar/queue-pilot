@@ -1,0 +1,79 @@
+/**
+ * @fileoverview The organization's Buffer tags: read them, create one, and set the tags on a draft (Buffer's tags
+ * guide, read 4 Nov 2026). Buffer calls the whole tag API an early preview. Tags belong to the organization and are
+ * shared by everyone in it; plans allow 3 (Free) or 250 (paid). Reading needs posts:read, writing posts:write.
+ */
+import { bufferQuery } from "./client";
+
+/** One tag as Queue Pilot shows it. */
+export type BufferTag = { id: string; name: string; color: string; isLocked: boolean };
+
+/** Buffer's own limit on a tag name. */
+export const MAX_TAG_NAME = 100;
+/** The color Queue Pilot gives a new tag when none is chosen: a six-digit hex triplet, as Buffer requires. */
+export const DEFAULT_TAG_COLOR = "#8F2457";
+
+type Run = typeof bufferQuery;
+
+/**
+ * Every tag in one organization, sorted by name as Buffer returns them.
+ *
+ * @param token - The person's Buffer access token
+ * @param organizationId - The Buffer organization
+ * @returns All its tags (the plan caps them at 250)
+ */
+export async function listTags(token: string, organizationId: string, run: Run = bufferQuery): Promise<BufferTag[]> {
+  const tags: BufferTag[] = [];
+  let after: string | null = null;
+  // At most 3 pages of 100: a paid plan holds 250 tags.
+  for (let page = 0; page < 3; page++) {
+    const data: { tagsV2: { edges: { node: BufferTag }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } } = await run(token,
+      "query Tags($input: TagsInput!, $first: Int, $after: String) { tagsV2(input: $input, first: $first, after: $after) { edges { node { id name color isLocked } } pageInfo { hasNextPage endCursor } } }",
+      { input: { organizationId }, first: 100, after });
+    tags.push(...data.tagsV2.edges.map((e) => e.node));
+    if (!data.tagsV2.pageInfo.hasNextPage || !data.tagsV2.pageInfo.endCursor) break;
+    after = data.tagsV2.pageInfo.endCursor;
+  }
+  return tags;
+}
+
+/** A tag write's outcome, with Buffer's reason when it refused. */
+export type TagWriteResult<T> = { ok: true; value: T } | { ok: false; kind: "duplicate" | "limit" | "invalid" | "other"; message: string };
+
+const refusal = (typename: string, message?: string): TagWriteResult<never> => ({
+  ok: false,
+  kind: typename === "DuplicateError" ? "duplicate" : typename === "LimitReachedError" ? "limit" : typename === "InvalidInputError" ? "invalid" : "other",
+  message: message ?? "Buffer did not save the tag.",
+});
+
+/**
+ * Creates a tag in the organization. Names are compared exactly, so a different capitalisation is a new tag.
+ *
+ * @param token - The person's Buffer access token
+ * @param organizationId - The Buffer organization
+ * @param name - 1 to MAX_TAG_NAME characters
+ * @param color - A six-digit hex triplet such as #8F2457
+ * @returns The tag as Buffer saved it, or Buffer's refusal (duplicate name, plan limit, invalid input)
+ */
+export async function createTag(token: string, organizationId: string, name: string, color = DEFAULT_TAG_COLOR, run: Run = bufferQuery): Promise<TagWriteResult<BufferTag>> {
+  const data = await run<{ createTag: { __typename: string; tag?: BufferTag; message?: string } }>(token,
+    "mutation CreateTag($input: CreateTagInput!) { createTag(input: $input) { __typename ... on TagActionSuccess { tag { id name color isLocked } } ... on MutationError { message } } }",
+    { input: { organizationId, tag: { name, color } } });
+  const r = data.createTag;
+  return r.__typename === "TagActionSuccess" && r.tag ? { ok: true, value: r.tag } : refusal(r.__typename, r.message);
+}
+
+/**
+ * Sets exactly these tags on one draft, keeping it a draft with its text and time unchanged.
+ *
+ * @param token - The person's Buffer access token
+ * @param postId - The draft
+ * @param tagIds - The complete list of tags it should carry; empty removes them all
+ * @returns Whether Buffer accepted the edit
+ */
+export async function setDraftTags(token: string, postId: string, tagIds: string[], run: Run = bufferQuery): Promise<{ ok: true } | { ok: false; message: string }> {
+  const data = await run<{ editPost: { __typename: string; message?: string } }>(token,
+    "mutation SetTags($input: EditPostInput!) { editPost(input: $input) { __typename ... on MutationError { message } } }",
+    { input: { id: postId, tagIds, saveToDraft: true } });
+  return data.editPost.__typename === "PostActionSuccess" ? { ok: true } : { ok: false, message: data.editPost.message ?? "Buffer did not change the tags." };
+}
