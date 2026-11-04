@@ -7,12 +7,13 @@
  * told who can see them. Every note lives in Buffer; Queue Pilot keeps none and never treats one as an instruction.
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowUp, Pencil, Trash2 } from "lucide-react";
+import { ArrowUp, Info, Pencil, StickyNote, Trash2 } from "lucide-react";
 import { addDraftNote, deleteDraftNote, editDraftNote, readDraftNotes, type DraftNote } from "@/app/(app)/note-actions";
 import { MAX_NOTE } from "@/lib/buffer/note-limits";
 import { Avatar } from "@/registry/components/avatar/avatar";
 import { Skeleton } from "@/registry/components/skeleton/skeleton";
 import { Button } from "@/registry/components/button/button";
+import { Tooltip } from "@/registry/components/tooltip/tooltip";
 import styles from "./draft-notes.module.css";
 
 type Loaded = { notes: DraftNote[]; more: boolean; team: boolean };
@@ -96,16 +97,29 @@ export function DraftNotes({ postId, preview }: { postId: string; preview?: Load
 
   const notes = state.status === "done" ? state.notes : [];
   const team = state.status === "done" && state.team;
+  // Buffer's own wording for a solo account, read from its Notes panel on 4 Nov.
+  const visibility = team ? "Everyone with access to this channel in Buffer sees notes." : "Notes are visible only to you.";
 
   return (
     <section className={styles.notes} aria-labelledby={`notes-${postId}`}>
-      <h3 id={`notes-${postId}`} className={styles.h3}>Notes{notes.length > 0 && <span className={styles.count}>{notes.length}{state.status === "done" && state.more ? "+" : ""}</span>}</h3>
+      <div className={styles.head}>
+        <h3 id={`notes-${postId}`} className={styles.h3}>Notes{notes.length > 0 && <span className={styles.count}>{notes.length}{state.status === "done" && state.more ? "+" : ""}</span>}</h3>
+        {state.status === "done" && (
+          <Tooltip content={visibility} side="top">
+            <button type="button" className={styles.info} aria-label={`About note visibility: ${visibility}`}><Info size={14} strokeWidth={1.8} aria-hidden="true" /></button>
+          </Tooltip>
+        )}
+      </div>
       {state.status === "loading" && <Skeleton label="Loading notes" lines={2} avatar />}
       {state.status === "failed" && <p className={styles.muted} role="status">{state.message}</p>}
       {state.status === "done" && (
         <>
           {notes.length === 0 ? (
-            <p className={styles.empty}>{team ? "No notes yet. Everyone with access to this channel in Buffer sees them." : "No notes yet. Leave a note for yourself."}</p>
+            <div className={styles.empty}>
+              <span className={styles.emptyIcon} aria-hidden="true"><StickyNote size={18} strokeWidth={1.6} /></span>
+              <p className={styles.emptyTitle}>No notes yet</p>
+              <p className={styles.emptyText}>{team ? "Leave a note for your team." : "Leave a note for yourself."}</p>
+            </div>
           ) : (
             <ul className={styles.thread}>
               {notes.map((n) => (
@@ -158,7 +172,6 @@ export function DraftNotes({ postId, preview }: { postId: string; preview?: Load
               <ArrowUp size={16} strokeWidth={2} aria-hidden="true" />
             </button>
           </div>
-          {team && notes.length > 0 && <p className={styles.muted}>Everyone with access to this channel in Buffer sees notes.</p>}
           {error && <p className={styles.error} role="alert">{error}</p>}
         </>
       )}

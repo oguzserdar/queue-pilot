@@ -2,8 +2,17 @@
 .notes { display: flex; flex-direction: column; gap: var(--space-3); }
 .h3 { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: 600; }
 .count { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--surface-muted); color: var(--text-secondary); font-size: var(--text-xs); font-weight: 500; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.head { display: flex; align-items: center; gap: 6px; }
+.info { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: help; transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard); }
+.info:hover { color: var(--foreground); background: var(--surface-muted); }
+.info:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 1px; }
 .muted { color: var(--text-muted); font-size: var(--text-xs); }
-.empty { color: var(--text-muted); font-size: var(--text-sm); }
+
+/* Empty: icon, title, one line, centred, the way Buffer's own panel shows it. */
+.empty { display: grid; justify-items: center; gap: 2px; padding: var(--space-4) var(--space-2); text-align: center; }
+.emptyIcon { display: inline-grid; place-items: center; width: 36px; height: 36px; margin-bottom: 6px; border-radius: 999px; background: var(--surface-muted); color: var(--text-secondary); }
+.emptyTitle { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.emptyText { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
 .error { color: var(--danger); font-size: var(--text-xs); }
 
 .thread { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
@@ -44,4 +53,4 @@
 .send:not(:disabled):active { transform: scale(0.94); }
 .send:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .composer[data-busy] .send { opacity: 0.6; }
-@media (prefers-reduced-motion: reduce) { .note, .tools, .tool, .field, .send { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .note, .tools, .tool, .field, .send, .info { transition: none; } }
