@@ -35,20 +35,32 @@ describe("Buffer tags", () => {
     const { run, calls } = fake([
       { tagsV2: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } },
       { createTag: { __typename: "TagActionSuccess", tag: tag("t1") } },
+      { post: { id: "p1", text: "Soup night.", status: "draft" } },
       { editPost: { __typename: "PostActionSuccess" } },
     ]);
     await listTags("t", "org", run);
     await createTag("t", "org", "Soups", undefined, run);
-    await setDraftTags("t", "p1", ["t1"], run);
+    expect(await setDraftTags("t", "p1", ["t1"], run)).toEqual({ ok: true });
     for (const c of calls) for (const [, type] of c.query.matchAll(/\$\w+: (\w+)!/g)) if (!["String", "Int"].includes(type)) expect(() => fieldsOf(type), type).not.toThrow();
     for (const f of ["id", "name", "color", "isLocked"]) expect(fieldsOf("Tag").has(f)).toBe(true);
     expect(fieldsOf("TagsInput").has("organizationId")).toBe(true);
     for (const f of ["organizationId", "tag"]) expect(fieldsOf("CreateTagInput").has(f)).toBe(true);
     for (const f of ["name", "color"]) expect(fieldsOf("TagToCreateInput").has(f)).toBe(true);
-    for (const f of ["id", "tagIds", "saveToDraft"]) expect(fieldsOf("EditPostInput").has(f)).toBe(true);
+    for (const f of ["id", "text", "tagIds", "saveToDraft"]) expect(fieldsOf("EditPostInput").has(f)).toBe(true);
     expect(calls[1].variables).toEqual({ input: { organizationId: "org", tag: { name: "Soups", color: "#8F2457" } } });
-    // Setting tags never schedules: the draft stays a draft, and text and time are not sent at all.
-    expect(calls[2].variables).toEqual({ input: { id: "p1", tagIds: ["t1"], saveToDraft: true } });
+    expect(calls[2].variables).toEqual({ input: { id: "p1" } });
+    // Buffer reads a missing text as an empty post ("Post must have either text or media", fixed for approve in
+    // v0.4), so the draft's own text, read just now, goes with the tags. It stays a draft; the time is not sent.
+    expect(calls[3].variables).toEqual({ input: { id: "p1", text: "Soup night.", tagIds: ["t1"], saveToDraft: true } });
+  });
+
+  it("re-reads the post and refuses anything that is no longer a draft, without editing it", async () => {
+    for (const status of ["scheduled", "sent", "needs_approval"]) {
+      const { run, calls } = fake([{ post: { id: "p1", text: "Soup night.", status } }]);
+      const r = await setDraftTags("t", "p1", ["t1"], run);
+      expect(r.ok).toBe(false);
+      expect(calls.some((c) => c.query.includes("editPost"))).toBe(false);
+    }
   });
 
   it("reads every page, at 100 a page, up to a paid plan's 250", async () => {
@@ -66,6 +78,7 @@ describe("Buffer tags", () => {
       { createTag: { __typename: "DuplicateError", message: "A tag with that name exists" } },
       { createTag: { __typename: "LimitReachedError", message: "Tag limit reached" } },
       { createTag: { __typename: "InvalidInputError", message: "Name too long" } },
+      { post: { id: "p1", text: "Soup night.", status: "draft" } },
       { editPost: { __typename: "InvalidInputError", message: "Unknown tag" } },
     ]);
     expect(await createTag("t", "org", "Soups", undefined, run)).toMatchObject({ ok: false, kind: "duplicate" });

@@ -66,14 +66,22 @@ export async function createTag(token: string, organizationId: string, name: str
 /**
  * Sets exactly these tags on one draft, keeping it a draft with its text and time unchanged.
  *
+ * Reads the post from Buffer first: Buffer treats an edit without text as an empty post and refuses it, so the
+ * draft's current text goes with the tags; and a post that stopped being a draft is refused without an edit,
+ * because the same edit would pull a scheduled post back to drafts.
+ *
  * @param token - The person's Buffer access token
  * @param postId - The draft
  * @param tagIds - The complete list of tags it should carry; empty removes them all
- * @returns Whether Buffer accepted the edit
+ * @returns Whether Buffer accepted the edit, or why it was not made
  */
 export async function setDraftTags(token: string, postId: string, tagIds: string[], run: Run = bufferQuery): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { post } = await run<{ post: { id: string; text: string | null; status: string } | null }>(token,
+    "query DraftForTags($input: PostInput!) { post(input: $input) { id text status } }", { input: { id: postId } });
+  if (!post) return { ok: false, message: "This post is no longer in Buffer." };
+  if (post.status !== "draft") return { ok: false, message: "Only drafts can be tagged here; this post is approved, scheduled or sent." };
   const data = await run<{ editPost: { __typename: string; message?: string } }>(token,
     "mutation SetTags($input: EditPostInput!) { editPost(input: $input) { __typename ... on MutationError { message } } }",
-    { input: { id: postId, tagIds, saveToDraft: true } });
+    { input: { id: postId, text: post.text ?? "", tagIds, saveToDraft: true } });
   return data.editPost.__typename === "PostActionSuccess" ? { ok: true } : { ok: false, message: data.editPost.message ?? "Buffer did not change the tags." };
 }
