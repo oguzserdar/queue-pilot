@@ -33,6 +33,9 @@ export type Post = {
   editedFrom?: string;
   /** False for a draft the person wrote in Buffer: Queue Pilot never changes or deletes those. Example drafts are Queue Pilot's. */
   ours?: boolean;
+  /** When Buffer says the post was created, and the name of who created it, when Buffer gives them. */
+  createdAt?: string;
+  createdBy?: string | null;
 };
 
 export type Check = { tone: "success" | "warning" | "danger"; label: string };

@@ -28,7 +28,7 @@ function selection(fields: string): { name: string; sub: string | null }[] {
   return out;
 }
 
-const NESTED: Record<string, string> = { error: "PostPublishingError", assets: "Asset" };
+const NESTED: Record<string, string> = { error: "PostPublishingError", assets: "Asset", author: "Author" };
 
 describe("Buffer fields we query", () => {
   it("control: a made-up field is caught", () => {

@@ -85,3 +85,15 @@ export function worstTone(p: { checks?: { tone: string }[] }): "danger" | "warni
 
 /** How each tone reads on a post. */
 export const TONE_LABEL = { success: "Ready", warning: "Check", danger: "Will fail" } as const;
+
+/**
+ * "Created 5 days ago by Mark Evans", the way Buffer labels a post: whole calendar days in the viewer's own time zone,
+ * so a post made late on Friday reads "yesterday" on Saturday morning. "today" and "yesterday" for recent ones.
+ */
+export function createdLine(iso: string, by: string | null, now = Date.now(), timeZone?: string): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+  const day = (t: number) => Date.parse(`${fmt.format(new Date(t))}T00:00:00Z`);
+  const days = Math.round((day(now) - day(Date.parse(iso))) / 86_400_000);
+  const when = days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+  return `Created ${when}${by ? ` by ${by}` : ""}`;
+}

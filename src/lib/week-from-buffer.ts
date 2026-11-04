@@ -79,6 +79,7 @@ export function weekFromBuffer(channels: Channel[], posts: BufferPost[], range: 
       text: p.text,
       status: STATUS[p.status],
       ours: p.via === "api",
+      ...(p.createdAt ? { createdAt: p.createdAt, createdBy: p.author?.name ?? null } : {}),
       ...(p.error ? { error: { message: p.error.message, supportUrl: p.error.supportUrl ?? "" } } : {}),
     });
   }

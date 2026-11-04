@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Channel, Post } from "./buffer/queries";
 import { openSlots } from "./open-slots";
-import { cellEntries, countOpenSlots, slotKey, zoneLabel } from "./week-model";
+import { cellEntries, countOpenSlots, createdLine, slotKey, zoneLabel } from "./week-model";
 import { nextWeekRange, weekFromBuffer } from "./week-from-buffer";
 
 const channel = (over: Partial<Channel> = {}): Channel => ({
@@ -104,5 +104,16 @@ describe("firstEmptySlot", () => {
       slots: { a: { 0: ["9:00", "17:00"], 2: ["8:00"] }, b: { 0: ["7:00"] } },
     } as never;
     expect(firstEmptySlot(week)).toEqual({ channelId: "a", day: 0, time: "17:00" });
+  });
+});
+
+describe("created line", () => {
+  it("says when and by whom a post was created, the way Buffer does", () => {
+    const now = Date.parse("2026-11-04T12:00:00Z");
+    // Counted in calendar days where the viewer is: 23:46 UTC on 30 Oct is still 30 Oct in Edmonton, already 31 Oct in Istanbul.
+    expect(createdLine("2026-10-30T23:46:00Z", "Mark Evans", now, "America/Edmonton")).toBe("Created 5 days ago by Mark Evans");
+    expect(createdLine("2026-10-30T23:46:00Z", "Mark Evans", now, "Europe/Istanbul")).toBe("Created 4 days ago by Mark Evans");
+    expect(createdLine("2026-11-03T10:00:00Z", null, now, "UTC")).toBe("Created yesterday");
+    expect(createdLine("2026-11-04T09:00:00Z", "Mark Evans", now, "UTC")).toBe("Created today by Mark Evans");
   });
 });

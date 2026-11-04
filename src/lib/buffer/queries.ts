@@ -38,6 +38,10 @@ export type Post = {
   notificationStatus?: "notified" | "markedAsPublished" | null;
   /** How the post was created: "api" for drafts an app saved, "buffer" for ones the person wrote in Buffer. Optional because older snapshots lack it. */
   via?: "api" | "buffer" | "network";
+  /** When the post was created in Buffer. Optional because older snapshots lack it. */
+  createdAt?: string;
+  /** Who created it: Buffer's name for the account, null when unset or deleted. Older snapshots lack it. */
+  author?: { id: string; name: string | null } | null;
 };
 
 type Query = typeof bufferQuery;
@@ -70,7 +74,7 @@ export async function listChannels(token: string, organizationId: string, q: Que
   return data.channels.map((c) => ({ ...c, organizationId }));
 }
 
-export const POST_FIELDS = "id channelId status text dueAt sentAt externalLink error { message supportUrl } assets { type mimeType source } schedulingType notificationStatus via";
+export const POST_FIELDS = "id channelId status text dueAt sentAt externalLink error { message supportUrl } assets { type mimeType source } schedulingType notificationStatus via createdAt author { id name }";
 /**
  * These posts as Buffer has them right now, in batches of at most MAX_ALIASES. Used right before scheduling, never
  * the saved queue copy, so what goes out is what the person was shown. A post Buffer no longer has is left out.

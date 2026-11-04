@@ -34,7 +34,7 @@ import { postState, STATE_WORD } from "@/lib/post-state";
 import { StateMark } from "./state-mark";
 import { SlotComposer, type ComposerSlot } from "./slot-composer";
 import type { Source } from "@/lib/demo-data";
-import { cellEntries, countOpenSlots, firstEmptySlot, slotKey, worstTone, zoneLabel, type WeekModel, type WeekPost as Post } from "@/lib/week-model";
+import { cellEntries, countOpenSlots, firstEmptySlot, slotKey, worstTone, zoneLabel, type WeekModel, type WeekPost as Post, createdLine } from "@/lib/week-model";
 import styles from "./week-view.module.css";
 
 const SOURCE_SHORT: Record<Source["kind"], string> = { newsletter: "Newsletter", blog: "Blog", youtube: "YouTube", github: "GitHub" };
@@ -328,6 +328,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             <>
               <p className={styles.postText}>{current.text}</p>
               {live && <DraftTags key={`tags-${current.id}`} postId={current.id} preview={tagsPreview?.[current.id]} />}
+              {live && current.createdAt && <p className={styles.muted}>{createdLine(current.createdAt, current.createdBy ?? null)}</p>}
               {evidence.filter(e => e.postId === current.id).map((card, i) => <EvidenceDetail key={i} card={card} />)}
               {current.ours !== false && !approved.has(current.id) && (
                 <div><Button variant="secondary" size="sm" onClick={() => { setEditing(current.text); setConfirmDelete(false); setNote(null); }}>Edit text</Button></div>
