@@ -225,7 +225,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         drafts: z.array(z.object({ slotId: z.string().describe("A slot id from list_open_slots."), text: z.string().min(1).max(25_000).describe("The post text. It must fit the slot's character limit."), snapshotId: z.string().max(100).optional().describe("Snapshot ID returned by read_material, get_transcript or add_web_page"), evidence: z.array(evidenceInput).max(8).optional() })).min(1).max(50),
         sourceKeys: z.array(z.string().max(2000)).max(20).optional().describe("Keys of the list_new_material items these drafts are about; they are marked as used once a draft is saved."),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ title, drafts, sourceKeys }) => {
       // Re-read the queue right now, so a slot filled since list_open_slots is refused instead of double-booked.
@@ -252,7 +252,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       description:
         "Replaces the text of one draft in the user's Buffer queue. The old text is gone after this. Use a post id from show_next_week. The post stays a draft in the same slot. Only drafts can be changed: an approved, scheduled or sent post is refused. Only drafts this app wrote can be changed. Read get_my_voice and get_playbook before rewriting. The new text must fit the network's limit and follow the playbook. If it cites saved source evidence, check that evidence again with report_source_version before approval. To repair citation fields only, supply snapshotId and evidence, with the current unchanged text in both text and expectedText. This replaces evidence for that attached snapshot without editing Buffer or creating another draft. It requires exact draft claims and source quotes and rejects outdated sources.",
       inputSchema: z.object({ postId: z.string().min(1).max(200).describe("A post id from show_next_week."), text: z.string().min(1).max(25_000).describe("The full new text of the post."), expectedText: z.string().max(25_000).optional().describe("Exact text read before proposing this edit. A newer edit in Buffer is refused, never overwritten. Required for evidence repair."), snapshotId: z.string().min(1).max(100).optional().describe("For evidence repair only: the current source snapshot already attached to this draft."), evidence: z.array(evidenceInput).min(1).max(8).optional().describe("For evidence repair only: all replacement claims and quotes for this snapshot. Keep text unchanged and provide expectedText.") }),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     async ({ postId, text: newText, expectedText, snapshotId, evidence }) => {
       const b = await bufferFor(auth, userId, { force: true });
@@ -280,7 +280,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       description:
         "Deletes one draft from the user's Buffer queue and leaves its slot empty. This cannot be undone. Ask the user before you call it. Use a post id from show_next_week. Only drafts this app wrote can be deleted. An approved, scheduled or sent post is refused.",
       inputSchema: z.object({ postId: z.string().min(1).max(200).describe("A post id from show_next_week.") }),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     async ({ postId }) => {
       const b = await bufferFor(auth, userId, { force: true });

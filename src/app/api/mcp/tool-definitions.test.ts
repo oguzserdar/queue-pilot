@@ -26,4 +26,14 @@ describe("MCP tool definitions", () => {
     expect(config).toMatch(/description:/);
     if (hint(config, "readOnlyHint") === "true") expect(hint(config, "destructiveHint")).toBe("false");
   });
+
+  // MCP: "If true, this tool may interact with an 'open world' of external entities." Every tool that writes to the
+  // person's Buffer reaches outside Queue Pilot, so it says so; a client may treat these with more care.
+  const BUFFER_WRITES = ["save_drafts", "update_draft", "delete_draft", "approve_drafts", "add_draft_note", "save_idea", "create_tag", "tag_draft"];
+  it.each(BUFFER_WRITES)("%s writes to Buffer and is marked open-world and not read-only", (name) => {
+    const tool = tools.find((t) => t.name === name);
+    expect(tool, name).toBeDefined();
+    expect(hint(tool!.config, "openWorldHint")).toBe("true");
+    expect(hint(tool!.config, "readOnlyHint")).toBe("false");
+  });
 });
