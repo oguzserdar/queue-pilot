@@ -27,7 +27,7 @@ What the AI cannot do at all: publish now, schedule without the person's yes, ed
 
 **1. One named tool per job, no generic "run any mutation" tool.** A generic tool hands the AI the whole API, including deletes. Named tools let the server check each call against a rule, and let the person read in plain words what their AI may do. All tools: `src/app/api/mcp/route.ts`.
 
-**2. Know which drafts are yours.** Buffer's `via` field doesn't tell you which app owns a draft (drafts we created came back as `buffer`). Queue Pilot keeps its own record of what it wrote, per person, and every edit, delete, note and tag checks it first: `wroteIds` in `src/lib/written-store.ts`.
+**2. Know which drafts are yours.** Buffer's `via` field doesn't tell you which app owns a draft (drafts Queue Pilot created came back as `buffer`). Queue Pilot keeps its own record of what it wrote, per person, and every edit, delete, note and tag checks it first: `wroteIds` in `src/lib/written-store.ts`.
 
 **3. Re-read before you write.** The AI may be acting on a copy that is minutes old. Before an edit, Queue Pilot reads the post from Buffer again and refuses if the text no longer matches what the AI saw (`src/lib/edit-drafts.ts`). Before tagging, it reads the post's status and current text (`src/lib/buffer/tags.ts`).
 
@@ -37,9 +37,9 @@ What the AI cannot do at all: publish now, schedule without the person's yes, ed
 
 **6. Say honestly what each tool does.** Every tool declares MCP's `readOnlyHint`, `destructiveHint` and `openWorldHint`, and every tool that writes to Buffer says `openWorldHint: true`, so a client can treat it with more care. A test keeps that true: `src/app/api/mcp/tool-definitions.test.ts`.
 
-## Compared with Buffer's own MCP server
+## When Buffer's own MCP server is the better fit
 
-Buffer runs its own MCP server at `mcp.buffer.com` ([guide](https://developers.buffer.com/guides/integrations/mcp.md)). It is broader on purpose: any post, threads, media, templates, metrics. As of 4 November 2026:
+Buffer runs its own MCP server at `mcp.buffer.com` ([guide](https://developers.buffer.com/guides/integrations/mcp.md)). It is broader on purpose, and it is the right choice when someone wants their assistant to do anything they could do in Buffer: threads, media, templates, metrics, publishing. Queue Pilot is narrower on purpose. As of 4 November 2026:
 
 | | Buffer's MCP | Queue Pilot |
 |---|---|---|
@@ -51,14 +51,6 @@ Buffer runs its own MCP server at `mcp.buffer.com` ([guide](https://developers.b
 | Everything else | Two generic tools "reach the rest of the GraphQL API"; their names aren't published | Not reachable |
 | Scope | "Covers your whole account… no per-organization scoping" | The person's own drafts, organization-scoped tags |
 
-Both are reasonable. Buffer's server is for people who want their assistant to do anything they could do. Queue Pilot's is for people who want their assistant to prepare the week and leave the decision to them.
+Use Buffer's server for full control from your assistant. Use a narrow server like Queue Pilot's when you want your assistant to prepare the week and leave the decision to you. They work side by side.
 
-## What we'd like from Buffer
-
-These would help every builder, not just us:
-
-1. Name the two generic MCP tools in the guide, and say whether they can make changes.
-2. Named MCP tools for tags and notes, now that both have API mutations (tags since 29 September, notes since 3 November).
-3. A way to limit an MCP connection, for example read-only or drafts-only, for people who want their assistant to prepare posts but never publish.
-
-See also: [Building on the Buffer API: what we learned](buffer-api-notes.md) for sign-in, rate limits and draft writing.
+See also: [Building on the Buffer API: what I learned](buffer-api-notes.md) for sign-in, rate limits and draft writing.

@@ -1,6 +1,6 @@
-# Building on the Buffer API: what we learned
+# Building on the Buffer API: what I learned
 
-Notes from building Queue Pilot on Buffer's API. Putting them here so the next builder has somewhere to start. Source links and the code we use are included below.
+Notes from building Queue Pilot on Buffer's API. Putting them here so the next builder has somewhere to start. Source links and the code I use are included below.
 
 Last checked: 30 October 2026. Use the [API limits page](https://developers.buffer.com/guides/api-limits.html) for current quotas and the [schema changelog](https://developers.buffer.com/changelog) for field changes. The 27 October rollout date comes from Buffer's [Discord announcement](https://discord.com/channels/956701996063285369/1371849521423974512/1564678705551376536).
 
@@ -17,15 +17,15 @@ Last checked: 30 October 2026. Use the [API limits page](https://developers.buff
 
 - An OAuth app shares one request allowance across its users. Since 27 October, that allowance grows with the number of authorized Buffer accounts, up to 1,000. With `U` accounts, it gets `100 + 10U` requests per 15 minutes, `500 + 25U` per 24 hours and `15,000 + 100U` per 30 days. Personal API keys and Buffer's own MCP connections share a separate allowance based on the account's plan ([API limits](https://developers.buffer.com/guides/api-limits.html), [announcement](https://discord.com/channels/956701996063285369/1371849521423974512/1564678705551376536)).
 - Read the `RateLimit` header on every response. It carries each window as `"100-in-15min";r=98;t=897`; the policy name changes with the quota. Identify a window by its length (`w`) in `RateLimit-Policy`, rather than its name. QP currently reads remaining requests and reset times; its parser doesn't read `w` yet. On HTTP 429, QP retries once only when `Retry-After` fits its five-second wait budget; otherwise it reports the reset time (`src/lib/buffer/client.ts`).
-- We keep a saved copy of each person's channels, posting slots and posts from 7 days back to 14 ahead. Screens read that copy. Refreshes run one at a time per person, so opening several screens doesn't repeat the same API calls (`src/lib/buffer/snapshot.ts`).
+- I keep a saved copy of each person's channels, posting slots and posts from 7 days back to 14 ahead. Screens read that copy. Refreshes run one at a time per person, so opening several screens doesn't repeat the same API calls (`src/lib/buffer/snapshot.ts`).
 - Combine top-level fields in one request, use aliases for repeated fields (up to 30 per request), and filter on Buffer's side ([efficient API usage](https://developers.buffer.com/guides/efficient-api-usage.html)).
-- Catching edits needs another step. The [guide](https://developers.buffer.com/guides/efficient-api-usage.html) suggests a `createdAt` checkpoint for new posts. An older draft keeps its creation date when someone edits it, so that query misses the edit. `Post.updatedAt` is readable, but the published [post filters](https://developers.buffer.com/reference.html#PostsFiltersInput) don't include it. We refresh the posts in our saved time window and compare their text with our writing records. The guide currently documents polling, with no developer webhooks.
+- Catching edits needs another step. The [guide](https://developers.buffer.com/guides/efficient-api-usage.html) suggests a `createdAt` checkpoint for new posts. An older draft keeps its creation date when someone edits it, so that query misses the edit. `Post.updatedAt` is readable, but the published [post filters](https://developers.buffer.com/reference.html#PostsFiltersInput) don't include it. I refresh the posts in my saved time window and compare their text with my writing records. The guide currently documents polling, with no developer webhooks.
 - QP's refresh lock and stored rate-limit headers are per user. They prevent duplicate refreshes for that user. Coordinating the shared OAuth pool across users still needs an app-wide throttle.
 
 ## Writing drafts
 
 - `createContentItem` writes one item and a post for each channel in a single all-or-nothing call, and each network's post can have its own text and time ([content items](https://developers.buffer.com/guides/content-items.html)). It is marked Experimental, so keep a `createPost`-per-channel fallback behind the same function (`src/lib/save-drafts.ts`).
-- For a draft with no channel yet, the experimental `createContentItemDraft` accepts a `correlationId`. Retrying with the same ID in the same organization returns the existing item ([reference](https://developers.buffer.com/reference.html#CreateContentItemDraftInput)). We haven't used this operation in QP. Its retry guarantee applies to that operation; it doesn't cover our `createPost` or `createContentItem` calls.
+- For a draft with no channel yet, the experimental `createContentItemDraft` accepts a `correlationId`. Retrying with the same ID in the same organization returns the existing item ([reference](https://developers.buffer.com/reference.html#CreateContentItemDraftInput)). I haven't used this operation in QP. Its retry guarantee applies to that operation; it doesn't cover my `createPost` or `createContentItem` calls.
 - `saveToDraft: true` keeps a post as a draft. Buffer does not check posting limits for drafts, so check them yourself before saving.
 - Set `aiAssisted: true` on drafts an AI wrote.
 - Images go in as a public URL with alt text: `ImageAssetInput` takes `url` and requires `metadata.altText`. There is no upload endpoint yet.
