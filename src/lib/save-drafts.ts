@@ -7,6 +7,7 @@
  */
 import { BufferApiError, bufferQuery } from "./buffer/client";
 import { tooLong } from "./char-limits";
+import { DAILY_LIMITS_QUERY as LIMITS, type LimitStatus } from "./buffer/posting-limits";
 import type { OpenSlot } from "./open-slots";
 
 type Query = typeof bufferQuery;
@@ -33,14 +34,10 @@ const CREATE_POST = `mutation ($input: CreatePostInput!) {
   }
 }`;
 
-const LIMITS = `query ($input: DailyPostingLimitsInput!) {
-  dailyPostingLimits(input: $input) { channelId isAtLimit limit scheduled sent }
-}`;
 
 /** At most this many limit checks per save; each is one request (one intended time, one organization). */
 export const MAX_LIMIT_CHECKS = 12;
 
-type LimitStatus = { channelId: string; isAtLimit: boolean; limit: number | null; scheduled: number; sent: number };
 
 /**
  * Asks Buffer whether adding a post at each slot's time would go over the network's daily limit

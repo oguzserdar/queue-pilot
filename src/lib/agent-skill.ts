@@ -62,6 +62,7 @@ const TOOLS: [string, string][] = [
   ["list_tags", "The Buffer organization's tags."],
   ["create_tag", "Creates a tag when the person asks; it counts toward the plan's tag limit."],
   ["tag_draft", "Sets the tags on a draft this app wrote. Exact names from list_tags."],
+  ["get_buffer_limits", "Buffer's remaining request allowance and each channel's daily posting limit. Check before large saves."],
   ["approve_drafts", "Schedules drafts only when the person asks. If it returns a confirm token, show the drafts and get a clear yes first."],
   ["show_next_week", "Monday to Sunday of their queue, slot by slot."],
   ["show_last_week_delivery", "Which posts went out last week, with Buffer's reason for any that did not."],

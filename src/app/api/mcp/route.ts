@@ -40,6 +40,8 @@ import { createPostNote, listPostNotes, MAX_NOTE as MAX_BUFFER_NOTE, NotesNotAll
 import { BufferApiError } from "@/lib/buffer/client";
 import { createIdea, IDEA_SERVICES, listIdeaGroups, listIdeas, MAX_IDEA_TEXT, MAX_IDEA_TITLE } from "@/lib/buffer/ideas";
 import { createTag, listTags, MAX_TAG_NAME, setDraftTags } from "@/lib/buffer/tags";
+import { postingLimits } from "@/lib/buffer/posting-limits";
+import { remainingOf } from "@/lib/rate-limit-text";
 import { MAX_APPROVE } from "@/lib/approve-drafts";
 import { approveChecked } from "@/lib/approve-checked";
 import { approvePermission, claimApproval, releaseApproval, signApproval, verifyApproval } from "@/lib/agent-permission";
@@ -65,7 +67,7 @@ async function bufferFor(auth: Auth, userId: string, opts: { force?: boolean } =
     return last;
   });
   if (!snap) throw new Error("Could not read your Buffer account yet; try again in a minute");
-  return { accessToken, organizationIds: snap.data.organizationIds ?? [], timeZone: snap.data.channels[0]?.timezone || snap.data.timezone || "UTC", channels: snap.data.channels, posts: snap.data.posts, fetchedAt: snap.fetchedAt, range: knownRange(snap.data, new Date()) };
+  return { accessToken, rateLimit: snap.rateLimit ?? [], organizationIds: snap.data.organizationIds ?? [], timeZone: snap.data.channels[0]?.timezone || snap.data.timezone || "UTC", channels: snap.data.channels, posts: snap.data.posts, fetchedAt: snap.fetchedAt, range: knownRange(snap.data, new Date()) };
 }
 
 /** Applies a change Buffer just accepted to the saved copy, so the next read shows it without another Buffer call. */
@@ -454,6 +456,30 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       if (missing.length) return { ...text(`Not changed: no tag named ${missing.map((m) => `"${m}"`).join(", ")}. Tags: ${known.map((t) => t.name).join(", ") || "none"}. Names must match exactly.`), isError: true };
       const r = await setDraftTags(b.accessToken, postId, [...new Set(ids as string[])]);
       return r.ok ? text(tags.length ? `Tags set: ${tags.join(", ")}. The draft is otherwise unchanged.` : "Tags removed. The draft is otherwise unchanged.") : { ...text(`Not changed: ${r.message}`), isError: true };
+    },
+  );
+
+  server.registerTool(
+    "get_buffer_limits",
+    {
+      title: "Read Buffer's limits",
+      description: "Reports how much of Buffer's request allowance is left (as of the last sync) and, for each connected channel, how many posts count toward the network's daily posting limit right now and whether one more would go over. Use it before saving many drafts or when a save is refused for a limit. Costs one Buffer request per organization.",
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async () => {
+      const b = await bufferFor(auth, userId);
+      const quota = b.rateLimit.length ? `Buffer requests left: ${b.rateLimit.map((w) => remainingOf(w.policy, w.remaining)).join(" · ")}, as of ${b.fetchedAt.toISOString().slice(0, 16).replace("T", " ")} UTC.` : "Buffer did not report its request allowance on the last sync.";
+      const usable = b.channels.filter((c) => !c.isDisconnected && c.organizationId);
+      if (!usable.length) return text([quota, "No connected channels to check posting limits for."].join("\n"));
+      const { limits } = await postingLimits(b.accessToken, usable.map((c) => ({ id: c.id, organizationId: c.organizationId! })), new Date());
+      const lines = usable.map((c) => {
+        const l = limits.find((x) => x.channelId === c.id);
+        if (!l) return `- ${c.name} (${c.service}): Buffer did not report a limit.`;
+        const used = l.scheduled + l.sent;
+        return `- ${c.name} (${c.service}): ${l.limit === null ? `no daily limit (${used} counted now)` : `${used} of ${l.limit} in the network's daily window (${l.scheduled} scheduled, ${l.sent} sent)`}${l.isAtLimit ? ". One more post now would go over." : "."}`;
+      });
+      return text([quota, "Daily posting limits right now:", ...lines].join("\n"));
     },
   );
 

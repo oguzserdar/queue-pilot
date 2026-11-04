@@ -312,11 +312,17 @@ describe("connector voice writes", () => {
       tagsFake.tags = []
     }
   });
+  it("reports each channel's daily posting limit and Buffer's request allowance", async () => {
+    const r = answer(await call("get_buffer_limits"))
+    expect(r).toContain("Daily posting limits right now:")
+    expect(r).toContain("- My channel (linkedin): no daily limit (0 counted now).")
+    expect(r).toMatch(/Buffer requests left|did not report its request allowance/)
+  });
   it("lists all tools with serializable input schemas", async () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(54)
+    expect(tools).toHaveLength(55)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
