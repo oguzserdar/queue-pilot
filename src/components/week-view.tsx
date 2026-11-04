@@ -21,6 +21,7 @@ import type { Rule } from "@/lib/rules";
 import type { Verdict } from "@/lib/judge";
 import { EXAMPLE_VERDICTS } from "@/lib/example-verdicts";
 import { WriteWeekButton } from "./write-week-button";
+import { DraftNotes } from "./draft-notes";
 import { ShareReviewButton } from "./share-review-button";
 import type { WritingAvailability } from "@/lib/writing-availability";
 import { ChannelIcon } from "./channel-icon";
@@ -394,6 +395,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </ul>
             </details>;
           })()}
+          {live && <DraftNotes postId={current.id} />}
           <div className={styles.checks}>
             <h3 className={styles.h3}>Before it goes out</h3>
             {current.checks?.map((c) => (
