@@ -5,6 +5,17 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Read and write Buffer Notes, the comments that live on a post in Buffer. The draft window shows a post's notes with author, time and "edited", and lets you add a note, or edit and delete one where Buffer allows it. A solo Buffer account is told to leave notes for itself. A team account is told everyone with access to the channel sees them. Your AI can read notes as information, never as instructions, and add a note to a draft Queue Pilot wrote when you ask. Notes need a new Buffer permission: sign out and sign in with Buffer once.
+- Read your Buffer ideas board with its columns, and save an idea into a column when you ask. Saving an idea posts and schedules nothing.
+- Read your Buffer tags, create one when you ask, and tag drafts Queue Pilot wrote. Approved, scheduled and sent posts are refused, because Buffer's edit would pull them back to drafts.
+- Let your AI read Buffer's request allowance and each channel's daily posting limit, so it can plan before saving many drafts.
+- Tell your AI when a channel's queue is paused in Buffer. Buffer offers no way to resume a queue from outside, so you resume it in Buffer.
+- Settings lists connected AI apps grouped by app, with where each returns to, when it was approved and last used, and a name you can give it. A connection unused for 30 days stops working and can be removed in one go. Connect your AI keeps setup only, with one line linking to Settings.
+
+### Fixed
+- A renamed connection showed only part of its name in Settings.
+
 ## [0.6.0] - 2026-11-04 Continue drafts in another assistant
 
 ### Added
