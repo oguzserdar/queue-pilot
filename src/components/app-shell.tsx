@@ -97,8 +97,10 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
             {NAV_GROUPS.map((group) => (
               <div key={group.label ?? "home"} className={styles.group}>
                 {group.label && <span className={styles.groupLabel}>{group.label}</span>}
-                {group.items.map(({ href, label, Icon }) => {
-                  const active = href === "/" ? path === "/" : path.startsWith(href);
+                {group.items.map(({ href: to, label, Icon }) => {
+                  // Signed out, `/` is the landing page, so the example account's home lives at /example.
+                  const href = to === "/" && !account ? "/example" : to;
+                  const active = to === "/" ? path === href : path.startsWith(href);
                   return <NavItem key={href} href={href} label={label} Icon={Icon} active={active} className={active ? `${styles.link} ${styles.active}` : styles.link} iconClassName={styles.navIcon} pendingClassName={styles.pending} />;
                 })}
               </div>

@@ -4,7 +4,7 @@
 # Run before deploying a new screen or navigation item: bash scripts/check-overflow.sh
 set -u
 cd "$(dirname "$0")/.."
-ROUTES="/ /week /delivery /playbook /ideas /voice /sources /connect /settings /sign-in /admin /embed/week /dev/sync-states?state=failed /dev/sync-states?state=limited /dev/sources-live /dev/sources-live?connected=1 /dev/live-states?screen=ideas /dev/live-states?screen=voice /dev/live-states?screen=settings /dev/source-evidence /nope-page"
+ROUTES="/ /example /week /delivery /playbook /ideas /voice /sources /connect /settings /sign-in /admin /embed/week /dev/sync-states?state=failed /dev/sync-states?state=limited /dev/sources-live /dev/sources-live?connected=1 /dev/live-states?screen=ideas /dev/live-states?screen=voice /dev/live-states?screen=settings /dev/source-evidence /nope-page"
 load=$(uptime | sed 's/.*load averages*: *//; s/[, ].*//')
 if [ "${load%.*}" -ge 24 ]; then echo "skipped: load $load"; exit 2; fi
 # Worktrees can share dependencies outside the Turbopack root.
