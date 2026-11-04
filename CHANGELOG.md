@@ -5,6 +5,8 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-04 Continue drafts in another assistant
+
 ### Added
 - Search the web and read a page through the connector, with `search_context` and `add_web_page`. Search returns titles, links, dates and short excerpts, never whole pages. `add_web_page` keeps the complete page as a source, the way a transcript is kept, and returns its text with a `snapshotId`, so drafts can quote it with evidence and a quote from the end of a long page still checks. Podcast searches return episodes whose pages are full transcripts. Both need an Exa key in Admin and do nothing without one. Test the key from Admin.
 - Serve the plugin's task skills (fill week, check week, fix drafts, check sources) with the main skill, so every install route gets the same set. The setup line installs all five.
