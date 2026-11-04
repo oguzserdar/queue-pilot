@@ -14,6 +14,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
       { label: "New material and feeds", tools: ["list_new_material", "list_sources", "list_sources_to_check"] },
       { label: "Review comments", tools: ["list_review_comments"] },
       { label: "Your team's notes on a post in Buffer", tools: ["list_draft_notes"] },
+      { label: "Your Buffer ideas board", tools: ["list_buffer_ideas"] },
       { label: "Setup progress and AI allowance", tools: ["get_setup_status", "get_ai_usage", "list_ai_models"] },
       { label: "Checks a draft without saving", tools: ["check_draft"] },
       { label: "Finds and proposes rules and fixes", tools: ["list_rule_suggestions", "propose_rule_fixes", "propose_review_changes"] },
@@ -24,6 +25,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
     items: [
       { label: "Reads source text, video captions and web pages; can spend transcript and search credits", tools: ["read_material", "get_transcript", "search_context", "add_web_page"] },
       { label: "Writes and saves drafts in empty times", tools: ["save_drafts", "write_my_week"] },
+      { label: "Saves ideas to your Buffer ideas board", tools: ["save_idea"] },
       { label: "Edits a draft it wrote", tools: ["update_draft"] },
       { label: "Adds, removes and routes rules", tools: ["add_rule", "remove_rule", "keep_suggestion", "dismiss_suggestion", "set_rule_override", "set_rule_inheritance"] },
       { label: "Saves your voice and examples", tools: ["save_my_voice_note", "add_voice_example", "remove_voice_example"] },

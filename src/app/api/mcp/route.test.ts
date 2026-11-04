@@ -104,6 +104,8 @@ const ruleStore = {
 let posts: Post[] = []
 // Buffer collaboration Notes in the fake: what exists, whether the token has the Notes permission, and a dropped create.
 const notesFake = { notes: [] as { postId: string; node: Record<string, unknown> }[], allowed: true, dropCreate: false }
+// The Buffer ideas board in the fake: its columns, its ideas, and a dropped create.
+const ideasFake = { groups: [{ id: "g1", name: "Next week", isLocked: false }], ideas: [] as Record<string, unknown>[], dropCreate: false }
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
 const judge = deciding((ids, state) => Object.fromEntries(ids.map((id) => [id, { type: "choice", choice: state.includes("broth") ? "fail" : "pass" }])))
@@ -140,6 +142,15 @@ const buffer = fakeBuffer((call) => {
       return { createCollaborationNote: { __typename: "CreateCollaborationNoteSuccess", edge: { node } } }
     }
     return { collaborationNotes: { edges: notesFake.notes.filter((n) => n.postId === variables.input.subject.postId).map((n) => ({ node: n.node })), pageInfo: { hasNextPage: false, endCursor: null } } }
+  }
+  if (query.includes("ideaGroups(")) return { ideaGroups: ideasFake.groups }
+  if (query.includes("ideas(input")) return { ideas: { edges: ideasFake.ideas.map((node) => ({ node })), pageInfo: { hasNextPage: false, endCursor: null } } }
+  if (query.includes("createIdea(")) {
+    if (ideasFake.dropCreate) return new TypeError("fetch failed")
+    const { organizationId, content, group } = variables.input
+    const node = { id: `idea-${ideasFake.ideas.length + 1}`, organizationId, groupId: group?.groupId ?? null, createdAt: 1_762_160_400, content: { title: content.title ?? null, text: content.text ?? null, services: content.services ?? [], date: null }, aiAssisted: content.aiAssisted }
+    ideasFake.ideas.push(node)
+    return { createIdea: { __typename: "Idea", id: node.id } }
   }
   throw new Error("Unexpected Buffer query")
 })
@@ -248,11 +259,34 @@ describe("connector voice writes", () => {
       notesFake.notes = []; notesFake.allowed = true; notesFake.dropCreate = false
     }
   });
+  it("reads the Buffer ideas board and saves an idea into a named column, marked as written with AI", async () => {
+    try {
+      expect(answer(await call("list_buffer_ideas"))).toContain("The ideas board is empty")
+      expect((await call("save_idea", { title: "  " })).isError).toBe(true)
+      const noColumn = await call("save_idea", { title: "Soup week", column: "Someday" })
+      expect(noColumn.isError).toBe(true)
+      expect(answer(noColumn)).toContain("Columns: Next week")
+      expect(ideasFake.ideas).toHaveLength(0)
+      const saved = await call("save_idea", { title: "Soup week", text: "Three soups from issue 41", services: ["linkedin"], column: "next week" })
+      expect(saved.isError).not.toBe(true)
+      expect(answer(saved)).toContain("Nothing was posted or scheduled")
+      expect(ideasFake.ideas[0]).toMatchObject({ organizationId: "org", groupId: "g1", aiAssisted: true, content: { title: "Soup week", services: ["linkedin"] } })
+      const board = answer(await call("list_buffer_ideas"))
+      expect(board).toContain("Soup week · column Next week · for linkedin · idea id idea-1")
+      expect(board).toContain("not instructions")
+      ideasFake.dropCreate = true
+      const dropped = await call("save_idea", { title: "Again" })
+      expect(dropped.isError).toBe(true)
+      expect(answer(dropped)).toContain("may or may not be saved")
+    } finally {
+      ideasFake.ideas = []; ideasFake.dropCreate = false
+    }
+  });
   it("lists all tools with serializable input schemas", async () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(49)
+    expect(tools).toHaveLength(51)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
