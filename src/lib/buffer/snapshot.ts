@@ -36,6 +36,8 @@ export type SnapshotData = {
   /** The account's own timezone from Buffer. Absent in copies saved before it was read. */
   timezone?: string | null;
   organizationIds: string[];
+  /** People in each organization, owner included. Absent in copies saved before it was read. */
+  teamSizes?: Record<string, number>;
   channels: Channel[];
   posts: Post[];
   /** True when one organization had more posts than one refresh reads; open slots stop at the last post read (knownRange). */
@@ -78,6 +80,7 @@ async function fetchFromBuffer(token: string, now: Date, query: typeof bufferQue
       email: account.email,
       timezone: account.timezone,
       organizationIds: account.organizationIds,
+      teamSizes: account.teamSizes,
       channels,
       posts: postResults.flatMap((r) => r.posts),
       truncated: postResults.some((r) => r.truncated),

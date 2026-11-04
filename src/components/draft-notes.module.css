@@ -1,15 +1,47 @@
-.notes { display: flex; flex-direction: column; gap: 10px; }
-.h3 { font-size: var(--text-sm); font-weight: 600; }
-.muted { color: var(--text-muted); font-size: var(--text-xs); margin-top: 2px; }
-.list { display: flex; flex-direction: column; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
-.note { display: flex; flex-direction: column; gap: 2px; padding-left: var(--space-3); border-left: 2px solid var(--border); }
-.meta { color: var(--text-muted); font-size: var(--text-xs); }
-.text { font-size: var(--text-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
-.compose { display: grid; gap: var(--space-2); }
-.row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
-.actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-.confirm { display: grid; gap: var(--space-2); font-size: var(--text-sm); }
-.links { display: flex; gap: var(--space-3); }
-.link { padding: 0; border: 0; background: none; font: inherit; font-size: var(--text-xs); color: var(--text-muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.link:hover { color: var(--foreground); }
-.link:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; border-radius: 2px; }
+/* Notes in the draft window: a quiet thread like Buffer's own panel, tools on hover, one composer at the bottom. */
+.notes { display: flex; flex-direction: column; gap: var(--space-3); }
+.h3 { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); font-weight: 600; }
+.count { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--surface-muted); color: var(--text-secondary); font-size: var(--text-xs); font-weight: 500; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-muted); font-size: var(--text-xs); }
+.empty { color: var(--text-muted); font-size: var(--text-sm); }
+.error { color: var(--danger); font-size: var(--text-xs); }
+
+.thread { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.note { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; padding: 8px 8px 8px 6px; margin-inline: -6px; border-radius: var(--radius-control); transition: background-color var(--duration-fast) var(--ease-standard); }
+.note[data-active] { background: var(--surface-muted); }
+.avatar { margin-top: 1px; }
+.body { display: grid; gap: 2px; min-width: 0; }
+.meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding-right: 56px; color: var(--text-muted); font-size: var(--text-xs); }
+.author { color: var(--foreground); font-size: var(--text-sm); font-weight: 600; }
+.text { margin: 0; font-size: var(--text-sm); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Edit and Delete sit top right; on a pointer device they appear when the note is hovered or a tool has focus. */
+.tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; }
+.tool { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
+.tool:hover { background: var(--surface); color: var(--foreground); }
+.tool[data-tone="danger"]:hover { color: var(--danger); }
+.tool:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .note:hover { background: var(--surface-muted); }
+  .tools { opacity: 0; transition: opacity var(--duration-fast) var(--ease-standard); }
+  .note:hover .tools, .tools:focus-within { opacity: 1; }
+}
+
+.editBox, .confirm { display: grid; gap: var(--space-2); margin-top: 4px; }
+.confirm { font-size: var(--text-sm); }
+.inline { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* One field style for adding and editing: grows with the text, never wider than the column. */
+.field { display: block; box-sizing: border-box; width: 100%; min-height: 36px; max-height: 160px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); font: inherit; font-size: var(--text-sm); line-height: 1.5; resize: none; overflow-y: auto; transition: border-color var(--duration-fast) var(--ease-standard); }
+.field::placeholder { color: var(--text-muted); }
+.field:hover { border-color: var(--border-strong); }
+.field:focus { outline: none; border-color: var(--qp-crimson); box-shadow: 0 0 0 3px color-mix(in oklab, var(--qp-crimson) 14%, transparent); }
+
+.composer { position: relative; }
+.composer .field { padding-right: 44px; }
+.send { position: absolute; right: 5px; bottom: 5px; display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: var(--qp-crimson); color: #fff; cursor: pointer; transition: opacity var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
+.send:disabled { background: var(--surface-muted); color: var(--text-muted); cursor: default; }
+.send:not(:disabled):active { transform: scale(0.94); }
+.send:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.composer[data-busy] .send { opacity: 0.6; }
+@media (prefers-reduced-motion: reduce) { .note, .tools, .tool, .field, .send { transition: none; } }

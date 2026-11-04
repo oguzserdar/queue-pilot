@@ -10,19 +10,22 @@ import { createPostNote, deletePostNote, listPostNotes, MAX_NOTE, NotesNotAllowe
 import { limit } from "@/lib/rate-limit";
 
 /** One team note as the draft window shows it. */
-export type DraftNote = { id: string; author: string | null; createdAt: string; text: string; canEdit: boolean; canDelete: boolean };
+export type DraftNote = { id: string; author: string | null; avatar: string | null; createdAt: string; edited: boolean; text: string; canEdit: boolean; canDelete: boolean };
 type Result<T> = ({ ok: true } & T) | { ok: false; message: string };
 
-const toDraftNote = (n: BufferNote): DraftNote => ({ id: n.id, author: n.author, createdAt: n.createdAt, text: n.text, canEdit: n.allowedActions.includes("updateNote"), canDelete: n.allowedActions.includes("deleteNote") });
+const toDraftNote = (n: BufferNote): DraftNote => ({ id: n.id, author: n.author, avatar: n.avatar, createdAt: n.createdAt, edited: n.updatedAt > n.createdAt, text: n.text, canEdit: n.allowedActions.includes("updateNote"), canDelete: n.allowedActions.includes("deleteNote") });
 const FAILED = "Buffer did not answer. Try again in a minute.";
 
 /** The person's Buffer access for one post in their own queue, or why not. */
-async function forPost(postId: unknown): Promise<{ ok: true; token: string; userId: string } | { ok: false; message: string }> {
+async function forPost(postId: unknown): Promise<{ ok: true; token: string; userId: string; team: boolean } | { ok: false; message: string }> {
   if (typeof postId !== "string" || !postId || postId.length > 200) return { ok: false, message: "No such post." };
   const b = await bufferForReading();
   if (!b) return { ok: false, message: "Sign in with Buffer first." };
-  if (!b.posts.some((p) => p.id === postId)) return { ok: false, message: "This post is not in your queue." };
-  return { ok: true, token: b.token, userId: b.userId };
+  const post = b.posts.find((p) => p.id === postId);
+  if (!post) return { ok: false, message: "This post is not in your queue." };
+  // A team is an organization with more than one person; notes are worded for a team only then.
+  const org = b.channels.find((c) => c.id === post.channelId)?.organizationId;
+  return { ok: true, token: b.token, userId: b.userId, team: !!org && (b.teamSizes[org] ?? 1) > 1 };
 }
 
 /** Turns a failure into words for the person; a missing Notes permission says to sign in again. */
@@ -33,12 +36,12 @@ function failure(e: unknown, event: string): { ok: false; message: string } {
 }
 
 /** The Buffer notes on one post in the signed-in person's queue, newest first. */
-export async function readDraftNotes(postId: string): Promise<Result<{ notes: DraftNote[]; more: boolean }>> {
+export async function readDraftNotes(postId: string): Promise<Result<{ notes: DraftNote[]; more: boolean; team: boolean }>> {
   try {
     const p = await forPost(postId);
     if (!p.ok) return p;
     const { notes, more } = await listPostNotes(p.token, postId, 20);
-    return { ok: true, more, notes: notes.map(toDraftNote) };
+    return { ok: true, more, team: p.team, notes: notes.map(toDraftNote) };
   } catch (e) {
     return failure(e, "qp-read-notes-failed");
   }

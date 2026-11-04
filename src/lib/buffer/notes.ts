@@ -14,6 +14,8 @@ export type BufferNote = {
   text: string;
   /** The author's name, or null when their account was deleted. */
   author: string | null;
+  /** The author's picture, when Buffer has one. */
+  avatar: string | null;
   authorId: string;
   /** What this person may do with the note, as Buffer reports it ("updateNote", "deleteNote"). */
   allowedActions: string[];
@@ -33,11 +35,11 @@ export { MAX_NOTE } from "./note-limits";
 
 type Run = typeof bufferQuery;
 
-const NOTE_FIELDS = "id text authorId author { id name } allowedActions createdAt updatedAt";
+const NOTE_FIELDS = "id text authorId author { id name avatar } allowedActions createdAt updatedAt";
 
-type RawNote = { id: string; text: string; authorId: string; author: { id: string; name: string } | null; allowedActions: string[]; createdAt: string; updatedAt: string };
+type RawNote = { id: string; text: string; authorId: string; author: { id: string; name: string | null; avatar?: string | null } | null; allowedActions: string[]; createdAt: string; updatedAt: string };
 
-const toNote = (n: RawNote): BufferNote => ({ id: n.id, text: n.text, author: n.author?.name ?? null, authorId: n.authorId, allowedActions: n.allowedActions ?? [], createdAt: n.createdAt, updatedAt: n.updatedAt });
+const toNote = (n: RawNote): BufferNote => ({ id: n.id, text: n.text, author: n.author?.name ?? null, avatar: n.author?.avatar || null, authorId: n.authorId, allowedActions: n.allowedActions ?? [], createdAt: n.createdAt, updatedAt: n.updatedAt });
 
 /** Runs one Notes request, turning a missing permission into NotesNotAllowedError. */
 async function notesRequest<T>(run: Run, token: string, query: string, variables: Record<string, unknown>): Promise<T> {

@@ -42,7 +42,7 @@ describe("Buffer Notes", () => {
     await listPostNotes("t", "p1", 10, run);
     await createPostNote("t", "p1", "Please check the quote.", run);
     for (const f of ["id", "text", "authorId", "author", "allowedActions", "createdAt", "updatedAt"]) expect(fieldsOf("CollaborationNote").has(f)).toBe(true);
-    for (const f of ["id", "name"]) expect(fieldsOf("Author").has(f)).toBe(true);
+    for (const f of ["id", "name", "avatar"]) expect(fieldsOf("Author").has(f)).toBe(true);
     expect(fieldsOf("CollaborationNoteSubjectInput").has("postId")).toBe(true);
     for (const f of ["subject", "text", "annotations"]) expect(fieldsOf("CreateCollaborationNoteInput").has(f)).toBe(true);
     expect(fieldsOf("CollaborationNotesInput").has("subject")).toBe(true);

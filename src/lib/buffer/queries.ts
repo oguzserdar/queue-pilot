@@ -42,10 +42,14 @@ export type Post = {
 
 type Query = typeof bufferQuery;
 
-/** The signed-in Buffer account: email, its own timezone (set in Buffer's preferences) and the ids of its organizations. */
-export async function getAccount(token: string, q: Query = bufferQuery): Promise<{ email: string; timezone: string | null; organizationIds: string[] }> {
-  const { account } = await q<{ account: { email: string; timezone?: string | null; organizations: { id: string }[] } }>(token, "{ account { email timezone organizations { id } } }");
-  return { email: account.email, timezone: account.timezone || null, organizationIds: account.organizations.map((o) => o.id) };
+/**
+ * The signed-in Buffer account: email, its own timezone (set in Buffer's preferences), the ids of its organizations,
+ * and how many people each organization has (Buffer gives a count, not a list), so screens can tell a solo account
+ * from a team.
+ */
+export async function getAccount(token: string, q: Query = bufferQuery): Promise<{ email: string; timezone: string | null; organizationIds: string[]; teamSizes: Record<string, number> }> {
+  const { account } = await q<{ account: { email: string; timezone?: string | null; organizations: { id: string; members?: { totalCount: number } | null }[] } }>(token, "{ account { email timezone organizations { id members { totalCount } } } }");
+  return { email: account.email, timezone: account.timezone || null, organizationIds: account.organizations.map((o) => o.id), teamSizes: Object.fromEntries(account.organizations.filter((o) => typeof o.members?.totalCount === "number").map((o) => [o.id, o.members!.totalCount])) };
 }
 
 /** The ids of every organization the signed-in Buffer account belongs to. */

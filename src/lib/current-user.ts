@@ -160,12 +160,12 @@ export async function bufferForWriting(): Promise<{ userId: string; token: strin
 }
 
 /** For a read on the user's behalf: their Buffer token and their saved posts (refreshed when stale, never forced). */
-export async function bufferForReading(): Promise<{ userId: string; token: string; posts: Post[] } | null> {
+export async function bufferForReading(): Promise<{ userId: string; token: string; posts: Post[]; channels: Channel[]; teamSizes: Record<string, number> } | null> {
   const { auth, userId } = await sessionUser();
   if (!auth || !userId) return null;
   const token = await bufferAccessToken(auth, userId);
   const snap = await refreshSnapshot(userId, token, { store: postgresSnapshotStore() });
-  return snap ? { userId, token, posts: snap.data.posts } : null;
+  return snap ? { userId, token, posts: snap.data.posts, channels: snap.data.channels, teamSizes: snap.data.teamSizes ?? {} } : null;
 }
 
 /** The Refresh button: re-reads Buffer now (a copy under 30 seconds old is kept). False when nobody is signed in. */

@@ -18,7 +18,7 @@ const post = { id: "mine", channelId: "ch", status: "draft", text: "Soup", dueAt
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(bufferForReading).mockResolvedValue({ userId: "person-a", token: "tok", posts: [post] } as never)
+  vi.mocked(bufferForReading).mockResolvedValue({ userId: "person-a", token: "tok", posts: [post], channels: [{ id: "ch", organizationId: "org" }], teamSizes: { org: 1 } } as never)
 })
 
 describe("readDraftNotes", () => {
@@ -42,10 +42,19 @@ describe("readDraftNotes", () => {
         { node: { id: "n1", text: "Older", authorId: "b", author: null, allowedActions: [], createdAt: "2026-11-03T10:00:00Z", updatedAt: "2026-11-03T10:00:00Z" } },
       ], pageInfo: { hasNextPage: false, endCursor: null } } }
     }
-    expect(await readDraftNotes("mine")).toEqual({ ok: true, more: false, notes: [
-      { id: "n2", author: "Sara", createdAt: "2026-11-04T10:00:00Z", text: "Use the new photo", canEdit: false, canDelete: false },
-      { id: "n1", author: null, createdAt: "2026-11-03T10:00:00Z", text: "Older", canEdit: false, canDelete: false },
+    expect(await readDraftNotes("mine")).toEqual({ ok: true, more: false, team: false, notes: [
+      { id: "n2", author: "Sara", avatar: null, createdAt: "2026-11-04T10:00:00Z", edited: false, text: "Use the new photo", canEdit: false, canDelete: false },
+      { id: "n1", author: null, avatar: null, createdAt: "2026-11-03T10:00:00Z", edited: false, text: "Older", canEdit: false, canDelete: false },
     ] })
+  })
+
+  it("calls an organization with more than one person a team, and a solo one not", async () => {
+    buffer.answer = () => ({ collaborationNotes: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } })
+    expect(await readDraftNotes("mine")).toMatchObject({ ok: true, team: false })
+    vi.mocked(bufferForReading).mockResolvedValue({ userId: "person-a", token: "tok", posts: [post], channels: [{ id: "ch", organizationId: "org" }], teamSizes: { org: 3 } } as never)
+    expect(await readDraftNotes("mine")).toMatchObject({ ok: true, team: true })
+    vi.mocked(bufferForReading).mockResolvedValue({ userId: "person-a", token: "tok", posts: [post], channels: [], teamSizes: {} } as never)
+    expect(await readDraftNotes("mine")).toMatchObject({ ok: true, team: false })
   })
 
   it("tells the person to sign in again when the Notes permission is missing, and reports other failures plainly", async () => {
