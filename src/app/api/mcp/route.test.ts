@@ -318,6 +318,16 @@ describe("connector voice writes", () => {
     expect(r).toContain("- My channel (linkedin): no daily limit (0 counted now).")
     expect(r).toMatch(/Buffer requests left|did not report its request allowance/)
   });
+  it("says in the week view when a channel's queue is paused in Buffer", async () => {
+    expect(answer(await call("show_next_week"))).not.toContain("paused")
+    channel.isQueuePaused = true
+    snapshots = memorySnapshotStore() // a fresh read of Buffer, not the copy saved a moment ago
+    try {
+      expect(answer(await call("show_next_week"))).toContain("My channel's queue is paused in Buffer, so its scheduled posts will not go out")
+    } finally {
+      channel.isQueuePaused = false
+    }
+  });
   it("lists all tools with serializable input schemas", async () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()

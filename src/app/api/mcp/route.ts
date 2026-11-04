@@ -168,7 +168,9 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
           }),
         ),
       );
-      return text(`${week.label}\n${lines.join("\n") || "No posting slots set in Buffer."}${asOf(b.fetchedAt)}`);
+      // Buffer reports a paused queue but offers no way to resume it, so the person must do that in Buffer.
+      const paused = b.channels.filter((c) => c.isQueuePaused).map((c) => `${c.name}'s queue is paused in Buffer, so its scheduled posts will not go out until the person resumes it in Buffer.`);
+      return text(`${week.label}\n${[...paused, ...lines].join("\n") || "No posting slots set in Buffer."}${asOf(b.fetchedAt)}`);
     },
   );
 
