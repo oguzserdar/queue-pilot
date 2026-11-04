@@ -8,7 +8,7 @@ Last checked: 30 October 2026. Use the [API limits page](https://developers.buff
 
 ## Sign-in and scopes
 
-- Apps sign people in with OAuth 2.0 and PKCE. The scopes are `posts:read posts:write ideas:read ideas:write account:read account:write snippets:read snippets:write offline_access`. Ask for `offline_access` to get a refresh token. Queue Pilot asks for `posts:read posts:write ideas:read ideas:write account:read offline_access` (`src/lib/buffer/oauth.ts`).
+- Apps sign people in with OAuth 2.0 and PKCE. The scopes are `posts:read posts:write ideas:read ideas:write account:read account:write snippets:read snippets:write notes:read notes:write offline_access`. The Notes scopes arrived on 3 Nov 2026, and existing tokens do not gain them: people must authorize the app again. Ask for `offline_access` to get a refresh token. Queue Pilot asks for `posts:read posts:write ideas:read ideas:write notes:read notes:write account:read offline_access` (`src/lib/buffer/oauth.ts`).
 - Post results (likes, clicks, reach) are not readable by OAuth apps. Buffer's [post metrics guide](https://developers.buffer.com/guides/post-metrics) limits them to personal API keys; the required `insightsRead` permission is unavailable to OAuth app clients. Queue Pilot currently learns from edits, not engagement metrics.
 - During Buffer Commit everyone can create two extra app clients, and an app client's name can be changed after you create it (Buffer staff in the Buffer Community Discord, 22 Oct 2026).
 - Include `prompt=consent` alongside `offline_access`, as in the [current authorization example](https://developers.buffer.com/guides/authentication.html). QP already sends both (`src/lib/auth.ts`). A [builder reported](https://discord.com/channels/956701996063285369/1371849521423974512/1565335572040523928) that adding the prompt resolved a missing refresh token.
@@ -49,3 +49,5 @@ Last checked: 30 October 2026. Use the [API limits page](https://developers.buff
 
 - Buffer announces schema updates in the `api-notifications` channel of the Buffer Community Discord. Recent examples: `ChannelAction.approvePosts` (15 Oct), the daily posting limit definition (19 Oct), replies and reactions configuration (21 and 22 Oct).
 - A test that checks the fields you query against Buffer's published reference catches a renamed field before it reaches people (`src/lib/buffer/schema-fields.test.ts`).
+
+For how Queue Pilot exposes these writes to an AI safely, see [Giving an AI safe write access to Buffer](agent-write-tools.md).

@@ -106,6 +106,8 @@ When Buffer sends a post, Queue Pilot can copy it to your Telegram channel and y
 
 Measured by `src/lib/session-cost.test.ts`, which runs the real code against a fake Buffer that counts every call.
 
+Building your own MCP server on Buffer? [Giving an AI safe write access to Buffer](docs/agent-write-tools.md) lists every Buffer write Queue Pilot exposes to an AI, the rule each one follows, and the test that proves it. [What we learned](docs/buffer-api-notes.md) covers sign-in, rate limits and writing drafts.
+
 ## Run your own copy
 
 ### On Vercel
