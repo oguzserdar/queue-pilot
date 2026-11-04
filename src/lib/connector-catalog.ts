@@ -13,7 +13,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
       { label: "Your voice, playbook and rules", tools: ["get_my_voice", "get_playbook", "read_rule", "get_effective_rules"] },
       { label: "New material and feeds", tools: ["list_new_material", "list_sources", "list_sources_to_check"] },
       { label: "Review comments", tools: ["list_review_comments"] },
-      { label: "Your team's notes on a post in Buffer", tools: ["list_draft_notes"] },
+      { label: "Notes on a post in Buffer", tools: ["list_draft_notes"] },
       { label: "Your Buffer ideas board", tools: ["list_buffer_ideas"] },
       { label: "Your Buffer tags", tools: ["list_tags"] },
       { label: "Buffer's request allowance and daily posting limits", tools: ["get_buffer_limits"] },
@@ -42,7 +42,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
     items: [
       { label: "Schedules drafts in Buffer", tools: ["approve_drafts"] },
       { label: "Deletes a draft it wrote", tools: ["delete_draft"] },
-      { label: "Adds a note your team sees on a draft it wrote", tools: ["add_draft_note"] },
+      { label: "Adds a Buffer note to a draft it wrote", tools: ["add_draft_note"] },
     ],
   },
 ];
