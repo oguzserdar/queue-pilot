@@ -8,7 +8,7 @@
 
 .row {
   display: grid; align-items: center; gap: 4px 16px; padding: 10px 16px;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) 8.75rem 9.25rem 7.5rem;
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) 8.75rem 9.25rem 7.5rem;
   border-top: 1px solid var(--border-subtle);
 }
 .who { display: grid; gap: 2px; min-width: 0 }

@@ -13,17 +13,18 @@ type State = { status: "loading" } | { status: "done"; notes: DraftNote[]; more:
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
-/** Notes for one post in the person's queue. */
-export function DraftNotes({ postId }: { postId: string }) {
-  const [state, setState] = useState<State>({ status: "loading" });
+/** Notes for one post in the person's queue; `preview` shows given notes instead of asking Buffer (local preview page only). */
+export function DraftNotes({ postId, preview }: { postId: string; preview?: DraftNote[] }) {
+  const [state, setState] = useState<State>(preview ? { status: "done", notes: preview, more: false } : { status: "loading" });
   useEffect(() => {
+    if (preview) return;
     let live = true;
     setState({ status: "loading" });
     readDraftNotes(postId)
       .then((r) => { if (live) setState(r.ok ? { status: "done", notes: r.notes, more: r.more } : { status: "failed", message: r.message }); })
       .catch(() => { if (live) setState({ status: "failed", message: "Buffer did not return the notes. Try again in a minute." }); });
     return () => { live = false; };
-  }, [postId]);
+  }, [postId, preview]);
 
   return (
     <section className={styles.notes} aria-labelledby={`notes-${postId}`}>
