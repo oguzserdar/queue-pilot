@@ -15,7 +15,7 @@ import type { ApprovedApp } from "@/lib/ai-access";
 import { Button } from "@/registry/components/button/button";
 import { TabsContent, TabsList, TabsTrigger } from "@/registry/components/tabs/tabs";
 import styles from "./settings-view.module.css";
-import { quotaOf, windowOf } from "@/lib/rate-limit-text";
+import { remainingOf } from "@/lib/rate-limit-text";
 
 /** The example account's last RateLimit reading, in the format Buffer sends (developers.buffer.com/guides/api-limits). */
 const EXAMPLE_RATE_LIMIT = [{ policy: "100-in-15min", remaining: 97 }, { policy: "250-in-24h", remaining: 212 }];
@@ -115,7 +115,7 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
               <div className={styles.name}>
                 <strong>Buffer requests left</strong>
                 <span className={styles.muted}>
-                  {account.rateLimit.map((w) => `${w.remaining.toLocaleString("en-US")} of ${quotaOf(w.policy)} per ${windowOf(w.policy)}`).join(" · ")}. As of the last sync; Queue Pilot reuses its saved copy, so clicks cost none.
+                  {account.rateLimit.map((w) => remainingOf(w.policy, w.remaining)).join(" · ")}. As of the last sync; Queue Pilot reuses its saved copy, so clicks cost none.
                 </span>
               </div>
             </div>

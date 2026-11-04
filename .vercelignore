@@ -5,4 +5,5 @@ node_modules
 .next
 scripts/*
 !scripts/migrate-on-deploy.mjs
+!scripts/sync-plugin-skills.mjs
 .local

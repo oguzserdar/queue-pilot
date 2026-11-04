@@ -17,7 +17,7 @@ describe("MCP tool definitions", () => {
   it("finds every tool (control)", () => {
     expect(tools.map((t) => t.name)).toContain("save_drafts");
     expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["save_my_voice_note", "add_voice_example", "add_material"]))
-    expect(tools.length).toBe(19)
+    expect(tools.length).toBe(21)
   });
 
   it.each(tools)("$name sets the three hints, a title and a description", ({ config }) => {

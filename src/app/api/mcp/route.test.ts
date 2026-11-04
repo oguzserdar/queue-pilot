@@ -1,7 +1,10 @@
-const sourceCalls = vi.hoisted(() => ({ list: vi.fn(async () => [] as { sourceKey: string; uri: string; evidence: { postId: string }[] }[]), report: vi.fn(async () => ({ changed: true, pending: 0 })), transcript: vi.fn(async () => ({ status: "pending", jobId: "job-1" })) }));
+const exaState = vi.hoisted(() => ({ key: "exa-test" as string | null, search: vi.fn(async (..._a: unknown[]) => ({ status: "ready", results: [] }) as unknown), page: vi.fn(async (..._a: unknown[]) => ({ status: "failed", message: "Exa could not read that page." }) as unknown) }));
+vi.mock("@/lib/exa", async (original) => ({ ...await original<typeof import("@/lib/exa")>(), searchWeb: (...a: unknown[]) => exaState.search(...a), readPage: (...a: unknown[]) => exaState.page(...a) }));
+vi.mock("@/lib/env", async (original) => ({ ...await original<typeof import("@/lib/env")>(), exaKey: async () => exaState.key }));
+const sourceCalls = vi.hoisted(() => ({ captured: [] as unknown[][], repair: vi.fn(async () => {}), list: vi.fn(async () => [] as { sourceKey: string; uri: string; evidence: { postId: string }[] }[]), report: vi.fn(async () => ({ changed: true, pending: 0 })), transcript: vi.fn(async () => ({ status: "pending", jobId: "job-1" })) }));
 vi.mock("@/lib/source-check", () => ({ listSourcesToCheck: (...a: unknown[]) => sourceCalls.list(...a as []), reportSourceVersion: (...a: unknown[]) => sourceCalls.report(...a as []) }));
 vi.mock("@/lib/transcript-for-user", () => ({ transcriptForUser: (...a: unknown[]) => sourceCalls.transcript(...a as []) }));
-vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }, metadata: unknown = {}) => ({ id: "snapshot-test", ...data, metadata }), sourceById: async (user: string, id: string) => ["saved-podcast", "long-podcast"].includes(id) ? (user === "person-a" ? { id, sourceKey: "yt:abcdefghijk", uri: "https://youtube.com/watch?v=abcdefghijk", text: id === "long-podcast" ? "Whole transcript. ".repeat(5000) + "Closing evidence." : "Intro. Closing evidence.", metadata: { kind: "transcript", truncated: false, segments: [{ text: "Intro.", seconds: 0 }, { text: "Closing evidence.", seconds: 7190 }] } } : null) : ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), sourceHoldsForPosts: async () => new Map() }));
+vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }, metadata: unknown = {}) => { sourceCalls.captured.push([data, metadata]); return { id: "snapshot-test", ...data, metadata }; }, sourceById: async (user: string, id: string) => ["saved-podcast", "long-podcast"].includes(id) ? (user === "person-a" ? { id, sourceKey: "yt:abcdefghijk", uri: "https://youtube.com/watch?v=abcdefghijk", text: id === "long-podcast" ? "Whole transcript. ".repeat(5000) + "Closing evidence." : "Intro. Closing evidence.", metadata: { kind: "transcript", truncated: false, segments: [{ text: "Intro.", seconds: 0 }, { text: "Closing evidence.", seconds: 7190 }] } } : null) : ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), replaceDraftEvidence: (...a: unknown[]) => sourceCalls.repair(...a as []), sourceHoldsForPosts: async () => new Map() }));
 vi.mock("@/lib/source-presentation", () => ({ sourceCards: vi.fn(async () => []) }));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Channel, Post } from "@/lib/buffer/queries"
@@ -145,7 +148,7 @@ async function call(name: string, args: Record<string, unknown> = {}, userId = "
 const answer = (r: Result) => r.content.map((c) => c.text).join("\n")
 
 beforeEach(() => {
-  sourceCalls.list.mockReset().mockResolvedValue([]); sourceCalls.report.mockClear(); sourceCalls.transcript.mockReset().mockResolvedValue({ status: "pending", jobId: "job-1" });
+  sourceCalls.repair.mockClear(); sourceCalls.list.mockReset().mockResolvedValue([]); sourceCalls.report.mockClear(); sourceCalls.transcript.mockReset().mockResolvedValue({ status: "pending", jobId: "job-1" });
   feedbackAnswer.value = {}
   savedVerdicts.clear()
   vi.useFakeTimers({ toFake: ["Date"] })
@@ -181,7 +184,7 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(45)
+    expect(tools).toHaveLength(47)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
@@ -852,6 +855,64 @@ it("reads a closing passage from this account's saved snapshot without another p
  expect((await call("get_transcript", { url: "https://youtu.be/abcdefghijk", snapshotId: "saved-podcast", startSeconds: 7190 }, "person-b")).isError).toBe(true);
  expect((await call("get_transcript", { url: "https://youtu.be/different123", snapshotId: "saved-podcast" })).isError).toBe(true);
 });
+it("searches the web through the operator's Exa key and never saves anything", async () => {
+ exaState.search.mockResolvedValueOnce({ status: "ready", results: [{ title: "T", url: "https://example.com/a", publishedDate: null, author: null, excerpts: ["short"] }] });
+ const result = JSON.parse(answer(await call("search_context", { query: "export limits", numResults: 3 })));
+ expect(result.results[0].url).toBe("https://example.com/a");
+ expect(exaState.search).toHaveBeenCalledWith({ query: "export limits", numResults: 3 }, "exa-test");
+ expect(await material.list("person-a")).toHaveLength(0);
+});
+it("says plainly when no Exa key is set", async () => {
+ exaState.key = null;
+ await call("search_context", { query: "anything" });
+ expect(exaState.search).toHaveBeenLastCalledWith({ query: "anything" }, "");
+ exaState.key = "exa-test";
+});
+it("keeps a read web page whole as a source snapshot with its link, for evidence", async () => {
+ exaState.page.mockResolvedValueOnce({ status: "ready", page: { title: "Release notes", url: "https://example.com/notes#top", text: "Exports allow 1,000 rows.", truncated: false } });
+ const result = JSON.parse(answer(await call("add_web_page", { url: "https://example.com/notes" })));
+ expect(result).toMatchObject({ status: "saved", snapshotId: "snapshot-test", link: "https://example.com/notes#top", text: "Exports allow 1,000 rows.", truncated: false });
+ expect(await material.list("person-a")).toHaveLength(0);
+});
+it("returns a page longer than the old material limit without cutting its ending", async () => {
+ const episode = `${"Host: question. Guest: answer. ".repeat(3000)}Guest: and that is the final correction.`;
+ exaState.page.mockResolvedValueOnce({ status: "ready", page: { title: "Episode", url: "https://example.com/ep", text: episode, truncated: false } });
+ const result = JSON.parse(answer(await call("add_web_page", { url: "https://example.com/ep" })));
+ expect(result.characters).toBe(episode.length);
+ expect(result.text.endsWith("final correction.")).toBe(true);
+ expect(result.truncated).toBe(false);
+});
+it("tells the AI when a page passed the size ceiling and stores it as an excerpt, never as the whole", async () => {
+ exaState.page.mockResolvedValueOnce({ status: "ready", page: { title: "Huge", url: "https://example.com/huge", text: "Opening of a huge page.", truncated: true } });
+ expect(JSON.parse(answer(await call("add_web_page", { url: "https://example.com/huge" })))).toMatchObject({ status: "saved", truncated: true });
+ expect(sourceCalls.captured.at(-1)).toEqual([expect.objectContaining({ sourceKey: "web:https://example.com/huge", uri: "https://example.com/huge" }), { truncated: true }]);
+});
+it("stores a complete page as complete, under its address without the fragment", async () => {
+ exaState.page.mockResolvedValueOnce({ status: "ready", page: { title: "Notes", url: "https://example.com/notes#top", text: "Whole page.", truncated: false } });
+ await call("add_web_page", { url: "https://example.com/notes" });
+ expect(sourceCalls.captured.at(-1)).toEqual([expect.objectContaining({ sourceKey: "web:https://example.com/notes", uri: "https://example.com/notes" }), { truncated: false }]);
+});
+it("sends the AI from search_context to add_web_page and its snapshotId, not to read_material", async () => {
+ const tools = (await rpc("tools/list", {})).result.tools as { name: string; description: string }[];
+ const description = tools.find((t) => t.name === "search_context")!.description;
+ expect(description).toContain("add_web_page");
+ expect(description).toContain("snapshotId");
+ expect(description).not.toContain("read_material");
+});
+it("saves nothing when the page cannot be read", async () => {
+ const result = JSON.parse(answer(await call("add_web_page", { url: "https://example.com/gone" })));
+ expect(result.status).toBe("failed");
+ expect(await material.list("person-a")).toHaveLength(0);
+});
+it("rejects a search or page address that is not a web address", async () => {
+ expect((await call("add_web_page", { url: "javascript:alert(1)" })).isError).toBe(true);
+ expect((await call("search_context", { query: "x", category: "videos" })).isError).toBe(true);
+ expect((await call("search_context", { query: "x", numResults: 50 })).isError).toBe(true);
+});
+it("marks the Exa tools as not read-only, because they spend credits", async () => {
+ const response = await rpc("tools/list", {});
+ for (const name of ["search_context", "add_web_page"]) expect(response.result.tools.find((t: { name: string }) => t.name === name).annotations.readOnlyHint).toBe(false);
+});
 it("rejects a backwards time range before spending transcript credits", async () => {
  expect((await call("get_transcript", { url: "https://youtu.be/abcdefghijk", startSeconds: 7190, endSeconds: 12 })).isError).toBe(true);
  expect(sourceCalls.transcript).not.toHaveBeenCalled();
@@ -879,4 +940,26 @@ describe("saved source validation without transcript round-trip", () => {
     expect((await call("report_source_version", missing)).isError).toBe(true);
     expect(sourceCalls.report).not.toHaveBeenCalled();
   });
+});
+
+
+it("exposes exact evidence wording and repairs an existing owned draft without a Buffer write", async () => {
+ const tools = (await rpc("tools/list", {})).result.tools;
+ for (const name of ["save_drafts", "update_draft"]) {
+   const tool = tools.find((t: { name: string }) => t.name === name);
+   const evidence = name === "save_drafts" ? tool.inputSchema.properties.drafts.items.properties.evidence : tool.inputSchema.properties.evidence;
+   expect(evidence.items.properties.claim.description).toContain("Do not paraphrase");
+   expect(evidence.items.properties.quote.description).toContain("word for word");
+ }
+ posts = [{ id: "repair", channelId: "ch", text: "CSV export is live.", status: "draft", via: "api", dueAt: "2026-11-02T09:00:00Z", sentAt: null, externalLink: null, error: null }];
+ written.set("person-a", [{ postId: "repair", network: "linkedin", text: posts[0].text }] as Written[]);
+ const args = { postId: "repair", text: posts[0].text, expectedText: posts[0].text, snapshotId: "snapshot-test", evidence: [{ claim: posts[0].text, quote: posts[0].text }] };
+ const before = structuredClone(posts);
+ expect((await call("update_draft", args)).isError).not.toBe(true);
+ expect(sourceCalls.repair).toHaveBeenCalledWith("person-a", "repair", posts[0].text, "snapshot-test", args.evidence);
+ expect(posts).toEqual(before);
+ sourceCalls.repair.mockClear();
+ expect((await call("update_draft", args, "person-b")).isError).toBe(true);
+ expect((await call("update_draft", { ...args, expectedText: undefined })).isError).toBe(true);
+ expect(sourceCalls.repair).not.toHaveBeenCalled();
 });

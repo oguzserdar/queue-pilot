@@ -2,6 +2,7 @@
 
 import { Claude, Cursor, Grok, OpenAI } from "@lobehub/icons";
 import type { ComponentType } from "react";
+import { aiBrand } from "@/lib/ai-brand";
 
 /**
  * Provider logos from @lobehub/icons, which tracks each provider's official mark.
@@ -22,6 +23,6 @@ const MARKS: Record<string, ComponentType<MarkProps>> = {
 
 /** The logo for an AI by its display name, or nothing when we ship no logo for it. */
 export function AiMark({ name, size = 14, className }: { name: string } & MarkProps) {
-  const Mark = MARKS[name];
+  const Mark = MARKS[aiBrand(name) ?? ""];
   return Mark ? <Mark size={size} className={className} /> : null;
 }

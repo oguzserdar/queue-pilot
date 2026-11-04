@@ -35,14 +35,20 @@ export async function readConfig(): Promise<{ ok: true; env: Env } | { ok: false
   return { ok: false, missing: r.error.issues.map((i) => String(i.path[0])) };
 }
 
-/** The Supadata key for YouTube transcripts, saved in /admin or in the environment; null when neither is set. */
-export async function supadataKey(): Promise<string | null> {
+/** A key saved in /admin or in the environment; null when neither is set. */
+async function operatorKey(setting: "supadata_api_key" | "exa_api_key", envName: string): Promise<string | null> {
   const master = process.env.SETTINGS_KEY;
-  if (!master || !hasDatabase()) return process.env.SUPADATA_API_KEY || null;
+  if (!master || !hasDatabase()) return process.env[envName] || null;
   try {
-    return (await resolveSetting(postgresSettingsStore(), "supadata_api_key", master))?.value ?? null;
+    return (await resolveSetting(postgresSettingsStore(), setting, master))?.value ?? null;
   } catch (e) {
     console.error(JSON.stringify({ event: "qp-settings-read-failed", message: e instanceof Error ? e.message : String(e) }));
-    return process.env.SUPADATA_API_KEY || null;
+    return process.env[envName] || null;
   }
 }
+
+/** The Supadata key for YouTube transcripts, saved in /admin or in the environment; null when neither is set. */
+export const supadataKey = () => operatorKey("supadata_api_key", "SUPADATA_API_KEY");
+
+/** The Exa key for web search and page reading, saved in /admin or in the environment; null when neither is set. */
+export const exaKey = () => operatorKey("exa_api_key", "EXA_API_KEY");

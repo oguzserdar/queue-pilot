@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db";
 import { draftEvidence, sourceJob, sourceSnapshot } from "../db/schema";
-import { sourceHash, sourceVersionInput, verifyEvidence, type EvidenceInput, type SourceMetadata } from "./source-evidence";
+import { evidenceProblem, sourceHash, sourceVersionInput, verifyEvidence, type EvidenceInput, type SourceMetadata } from "./source-evidence";
 
 export type SourceSnapshot = typeof sourceSnapshot.$inferSelect;
 export type DraftEvidence = typeof draftEvidence.$inferSelect;
@@ -83,6 +83,39 @@ export async function recordEvidence(userId: string, postId: string, draftText: 
 export async function evidenceForPosts(userId: string, ids: string[]) {
   if (!ids.length) return [];
   return db().select().from(draftEvidence).where(and(eq(draftEvidence.userId, userId), inArray(draftEvidence.bufferPostId, ids)));
+}
+
+/** Repair only an existing citation on this account's draft. Other sources stay attached.
+ * The caller checks current Buffer ownership/status/text. Evidence retains that exact text,
+ * so a concurrent Buffer edit makes it stale instead of inheriting this validation.
+ */
+export async function replaceDraftEvidence(userId: string, postId: string, draftText: string, snapshotId: string, inputs: EvidenceInput[]) {
+  if (!inputs.length || inputs.length > 8) throw new Error("Supply between one and eight evidence entries.");
+  const source = await sourceById(userId, snapshotId);
+  if (!source) throw new Error("The source is not in this account.");
+  const key = `source:${source.sourceKey}`;
+  const token = await claimSourceJob(userId, key);
+  if (!token) throw new SourceBusyError();
+  try { await db().transaction(async tx => {
+    const [lease] = await tx.select().from(sourceJob).where(and(own(userId, key), eq(sourceJob.token, token))).for("update");
+    if (!lease || lease.expiresAt <= new Date()) throw new SourceBusyError();
+    const where = and(eq(draftEvidence.userId, userId), eq(draftEvidence.bufferPostId, postId), eq(draftEvidence.snapshotId, snapshotId));
+    const existing = await tx.select().from(draftEvidence).where(where).for("update");
+    if (!existing.length) throw new Error("That source is not attached to this draft in this account.");
+    const [snapshot] = await tx.select().from(sourceSnapshot).where(and(eq(sourceSnapshot.userId, userId), eq(sourceSnapshot.id, snapshotId)));
+    if (!snapshot) throw new Error("The source is not in this account.");
+    const [latest] = await tx.select().from(sourceSnapshot).where(and(eq(sourceSnapshot.userId, userId), eq(sourceSnapshot.sourceKey, snapshot.sourceKey))).orderBy(desc(sourceSnapshot.fetchedAt), desc(sourceSnapshot.id)).limit(1);
+    if (latest?.id !== snapshotId || snapshot.metadata.truncated) throw new Error("This source is outdated or incomplete. Check its current version before repairing evidence.");
+    // Quote repair must not erase a current finding that the source contradicts this draft.
+    const failedCheck = existing.find(e => e.judgment?.snapshotId === snapshotId && e.judgment.draftText === draftText && !e.judgment.holds)?.judgment;
+    const rows = inputs.map(input => {
+      const problem = evidenceProblem(draftText, snapshot.text, input, snapshot.metadata);
+      if (problem) throw new Error(problem);
+      return { userId, bufferPostId: postId, snapshotId, draftText, ...verifyEvidence(draftText, snapshot.text, input, snapshot.metadata), ...(failedCheck ? { judgment: failedCheck } : {}) };
+    });
+    await tx.delete(draftEvidence).where(where);
+    await tx.insert(draftEvidence).values(rows).onConflictDoNothing();
+  }); } finally { await releaseSourceJob(userId, key, token); }
 }
 export async function evidenceForSource(userId: string, sourceKey: string) {
   return db().select({ evidence: draftEvidence, snapshot: sourceSnapshot }).from(draftEvidence)

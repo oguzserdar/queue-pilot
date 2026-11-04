@@ -32,7 +32,7 @@ const DELETE_POST = `mutation ($input: DeletePostInput!) {
  * The draft with this id among the caller's own posts, or the reason it cannot be changed. `wrote` holds the post ids
  * Queue Pilot recorded writing for this person.
  */
-function ownDraft(id: string, posts: Post[], wrote: ReadonlySet<string>): Post | string {
+export function ownDraft(id: string, posts: Post[], wrote: ReadonlySet<string>): Post | string {
   const p = posts.find((x) => x.id === id);
   if (!p) return "That post is not in the user's Buffer queue. Call show_next_week for current drafts.";
   if (p.status !== "draft") return "That post is no longer a draft (it was approved or sent), so it can only be changed in Buffer.";

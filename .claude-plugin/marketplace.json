@@ -1,12 +1,16 @@
 {
   "name": "queue-pilot",
-  "owner": { "name": "Queue Pilot" },
+  "owner": {
+    "name": "Queue Pilot"
+  },
   "plugins": [
     {
       "name": "queue-pilot",
       "source": "./plugin/",
       "description": "Fill your empty Buffer times with drafts from your own material, checked against your playbook.",
-      "version": "0.1.0"
+      "version": "0.5.0",
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
     }
   ]
 }

@@ -17,7 +17,7 @@ const { forgetSettings, postgresSettingsStore, recentSettingChanges, SETTINGS_TT
 const { postgresVoiceStore, MAX_EXAMPLES, MAX_NOTE, TooManyExamplesError } = await import("./voice-store");
 const { addPastedExample } = await import("./voice-store")
 const { postgresMaterialStore } = await import("./material-store")
-const { approvedApps, recordAppUse, revokeApp, stillApproved } = await import("./ai-access");
+const { approvedApps, recordAppUse, revokeApp, stillApproved, consentClientLabel } = await import("./ai-access");
 const { deleteAccount } = await import("./delete-account");
 const { connectCodeFor } = await import("./telegram");
 const { postgresRulesStore, MAX_RULES, TooManyRulesError } = await import("./rules-store");
@@ -241,6 +241,16 @@ describe("research material on real Postgres", () => {
 })
 
 describe("AI app access on real Postgres", () => {
+  it("shows the registered consent name instead of an opaque id, with safe unnamed fallbacks", async () => {
+    await pg.query("insert into oauth_client (id, client_id, name, redirect_uris) values ('consent-grok', 'random-opaque-client-id', ' Grok ', '{https://grok.com/callback}')");
+    expect(await consentClientLabel("random-opaque-client-id")).toBe("Grok");
+    expect(await consentClientLabel("https://claude.ai/oauth/client.json")).toBe("claude.ai");
+    expect(await consentClientLabel("https://chatgpt.com/oauth/codex/client.json")).toBe("Codex");
+    expect(await consentClientLabel("https://chatgpt.com/other/client.json")).toBe("chatgpt.com");
+    expect(await consentClientLabel("https://chatgpt.com.evil.test/oauth/codex/client.json")).toBe("chatgpt.com.evil.test");
+    expect(await consentClientLabel("unknown-opaque-id")).toBe("An AI app");
+    expect(await consentClientLabel("javascript:alert(1)")).toBe("An AI app");
+  });
   it("lists a user's approved apps and revoke removes the approval and that app's tokens for that user only", async () => {
     const now = "2026-11-03T12:00:00Z";
     const later = "2026-12-03T12:00:00Z";
@@ -253,6 +263,9 @@ describe("AI app access on real Postgres", () => {
       await pg.query(`insert into oauth_access_token (id, token, client_id, user_id, expires_at, created_at, scopes) values ('a${id}', 'ta-${id}', '${client}', '${user}', '${later}', '${now}', '{openid}')`);
     }
     expect((await approvedApps("ua")).map((a) => a.name)).toEqual(["ChatGPT", "Claude"]);
+    expect((await approvedApps("ua")).map((a) => a.brand)).toEqual(["ChatGPT", "Claude"]);
+    await pg.query("update oauth_client set redirect_uris = '{https://unrelated.example/cb}' where client_id = 'chatgpt'");
+    expect((await approvedApps("ua"))[0]).toMatchObject({ name: "ChatGPT", brand: null });
     // Someone else's approval cannot be revoked.
     expect(await revokeApp("ua", "k3")).toBe(false);
     expect(await stillApproved("ua", "claude")).toBe(true);

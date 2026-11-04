@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { quotaOf, windowOf } from "./rate-limit-text";
+import { quotaOf, windowOf, remainingOf } from "./rate-limit-text";
 
 describe("rate limit text", () => {
   it("reads Buffer's documented policy names", () => {
@@ -19,4 +19,11 @@ describe("rate limit text", () => {
     expect(windowOf("5-in-weird")).toBe("weird");
     expect(quotaOf("weird")).toBe("?");
   });
+});
+
+it("never mistakes a window duration for an allowance", () => {
+ expect(remainingOf("15m", 124)).toBe("124 remaining per 15 minutes");
+ expect(remainingOf("24h", 569)).toBe("569 remaining per 24 hours");
+ expect(remainingOf("30d", 14771)).toBe("14,771 remaining per 30 days");
+ expect(remainingOf("110-in-15min", 98)).toBe("98 of 110 per 15 minutes");
 });

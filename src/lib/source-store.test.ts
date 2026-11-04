@@ -102,3 +102,35 @@ it("upgrades old partial coverage and caption metadata when full text has the sa
  const full = await store.captureSource("owner", input("coverage-upgrade", "Complete transcript."), { kind: "transcript", truncated: false, segments: [{ text: "Complete transcript.", seconds: 12 }] });
  expect(full.id).toBe(first.id); expect(full.metadata.truncated).toBe(false); expect(full.metadata.excerptWindow).toBeUndefined(); expect(full.metadata.segments).toHaveLength(1);
 });
+
+it("repairs invalid claims atomically, preserves other sources, and cannot cross accounts", async () => {
+ const s = await store.captureSource("owner", input("repair", "Seats cost $10."));
+ const other = await store.captureSource("owner", input("repair-other", "Doors open at 9."));
+ const draft = "Seats cost $10. Doors open at 9.";
+ await store.recordEvidence("owner", "repair-p", draft, s.id, [{ claim: "A ticket is ten dollars", quote: "Seats cost $10." }]);
+ await store.recordEvidence("owner", "repair-p", draft, other.id, [{ claim: "Doors open at 9.", quote: "Doors open at 9." }]);
+ const valid = [{ claim: "Seats cost $10.", quote: "cost $10." }];
+ await expect(store.replaceDraftEvidence("other", "repair-p", draft, s.id, valid)).rejects.toThrow("not in this account");
+ await expect(store.replaceDraftEvidence("owner", "unknown-p", draft, s.id, valid)).rejects.toThrow("not attached");
+ await expect(store.replaceDraftEvidence("owner", "repair-p", draft, s.id, [...valid, { claim: "paraphrased", quote: "cost $10." }])).rejects.toThrow("exact draft");
+ expect((await store.evidenceForPosts("owner", ["repair-p"])).find(e => e.snapshotId === s.id)?.quote).toBeNull();
+ await store.replaceDraftEvidence("owner", "repair-p", draft, s.id, valid);
+ const rows = await store.evidenceForPosts("owner", ["repair-p"]);
+ expect(rows).toHaveLength(2); expect(rows.find(e => e.snapshotId === s.id)?.quote).toBe("cost $10.");
+ expect(rows.find(e => e.snapshotId === other.id)?.quote).toBe("Doors open at 9.");
+ await store.captureSource("owner", input("repair", "Seats cost $20."));
+ await expect(store.replaceDraftEvidence("owner", "repair-p", draft, s.id, valid)).rejects.toThrow("outdated");
+});
+
+it("citation repair retains a failed meaning check and shares the source-check lease", async () => {
+ const s = await store.captureSource("owner", input("repair-failed"));
+ const evidence = [{ claim: s.text, quote: s.text }];
+ await store.recordEvidence("owner", "failed-p", s.text, s.id, evidence);
+ const token = (await store.claimSourceJob("owner", "source:repair-failed"))!;
+ const [row] = await store.evidenceForPosts("owner", ["failed-p"]);
+ await store.saveSourceJudgment("owner", "repair-failed", token, row, { snapshotId: s.id, draftText: s.text, holds: false, why: "Later passage contradicts it.", checkedAt: new Date().toISOString() });
+ await expect(store.replaceDraftEvidence("owner", "failed-p", s.text, s.id, evidence)).rejects.toThrow("already being checked");
+ await store.releaseSourceJob("owner", "source:repair-failed", token);
+ await store.replaceDraftEvidence("owner", "failed-p", s.text, s.id, evidence);
+ expect((await store.sourceHoldsForPosts("owner", [{ id: "failed-p", text: s.text }])).get("failed-p")).toBe("Later passage contradicts it.");
+});

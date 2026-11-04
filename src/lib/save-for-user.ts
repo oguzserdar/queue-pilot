@@ -8,7 +8,7 @@
 import type { WrittenDraft } from "./ai-writer";
 import { recordEvidence, sourceById } from "./source-store";
 import { resolveSource } from "./resolve-source";
-import { verifyEvidence } from "./source-evidence";
+import { evidenceProblem } from "./source-evidence";
 import { playbookVersion } from "./playbook-version";
 import { withSavedDrafts } from "./buffer/snapshot";
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
@@ -131,9 +131,8 @@ export async function saveDraftsForUser(
       if (!snapshot) { unresolved.add(draft.slotId); continue; }
       if (!draft.evidence?.length || !draft.snapshotId) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "No source quote supplied. Check evidence before approving.", quote: "" });
       for (const e of draft.evidence ?? []) {
-        const checked = verifyEvidence(draft.text, snapshot.text, e, snapshot.metadata);
-        if (e.locator && !checked.locator) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source timestamp", verdict: "unsure", reason: "The timestamp could not be matched to the quoted captions. Review it before sharing.", quote: e.quote });
-        if (!checked.quote) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "The claim or quote could not be matched. Check the citation before approving.", quote: "" });
+        const problem = evidenceProblem(draft.text, snapshot.text, e, snapshot.metadata);
+        if (problem) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: `${problem} Repair the saved draft's evidence with update_draft; do not save a duplicate.`, quote: "" });
       }
     }
   }

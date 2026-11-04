@@ -10,6 +10,7 @@
 .expiredIcon { align-self: center; border-radius: 14px; }
 .helpLink { text-align: center; color: var(--qp-crimson); font-weight: 600; }
 .title strong { font-weight: 700; }
+.clientNote { margin-top: -8px; text-align: center; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.5; overflow-wrap: anywhere; }
 .account { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
 .avatar { width: 32px; height: 32px; border-radius: 999px; flex: none; display: grid; place-items: center; background: var(--surface-muted); font-weight: 600; object-fit: cover; }
 .who { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }

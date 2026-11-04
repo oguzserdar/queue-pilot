@@ -33,6 +33,7 @@ export const SETTINGS = {
   ai_cap_per_person: { group: "ai", label: "Actions per person per day", help: "How many AI actions one person can run on your key each day.", type: "int", env: "AI_CAP_PER_PERSON", default: "10" },
   ai_cap_total: { group: "ai", label: "Actions per day, everyone", help: "Optional ceiling on all built-in AI actions in one day, to spread the budget over time. Empty means no daily ceiling.", type: "int", env: "AI_CAP_TOTAL", default: null },
   supadata_api_key: { group: "sources", label: "Supadata API key", help: "Optional. Adds YouTube transcripts to the material drafts are written from.", type: "secret", env: "SUPADATA_API_KEY", default: null },
+  exa_api_key: { group: "sources", label: "Exa API key", help: "Optional. Lets the AI search the web for deeper context and save a page as material.", type: "secret", env: "EXA_API_KEY", default: null },
 } as const satisfies Record<string, Def>;
 
 /** One operator setting. */

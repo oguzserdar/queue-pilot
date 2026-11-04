@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { SKILL_DESCRIPTION, SKILL_TOOL_NAMES, skillIndex, skillMarkdown } from "./agent-skill";
+import { SKILL_DESCRIPTION, SKILL_TOOL_NAMES, servedSkills, skillIndex, skillMarkdown } from "./agent-skill";
 
 const origin = "https://qp.example.com";
 
@@ -39,5 +39,16 @@ describe("agent skill", () => {
     expect(entry.url).toBe("/.well-known/agent-skills/queue-pilot/SKILL.md");
     expect(entry.digest).toBe(`sha256:${createHash("sha256").update(skillMarkdown(origin)).digest("hex")}`);
     expect(skillIndex(origin).$schema).toBe("https://schemas.agentskills.io/discovery/0.2.0/schema.json");
+  });
+
+  it("lists every skill it serves, each with the digest of the text served", () => {
+    const served = servedSkills(origin);
+    const index = skillIndex(origin).skills;
+    expect(index.map((e) => e.name).sort()).toEqual(Object.keys(served).sort());
+    for (const e of index) {
+      expect(e.url).toBe(`/.well-known/agent-skills/${e.name}/SKILL.md`);
+      expect(e.digest).toBe(`sha256:${createHash("sha256").update(served[e.name]).digest("hex")}`);
+      expect(e.description.length).toBeGreaterThan(20);
+    }
   });
 });

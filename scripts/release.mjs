@@ -41,7 +41,13 @@ for (const pluginPath of pluginPaths) {
   writeFileSync(pluginPath, `${JSON.stringify({ ...plugin, version }, null, 2)}\n`);
 }
 
-git("add", "CHANGELOG.md", "package.json", ...pluginPaths);
+// The marketplace entry carries its own version; a mismatch with plugin.json makes the plugin validator warn.
+const marketplacePath = ".claude-plugin/marketplace.json";
+const marketplace = JSON.parse(readFileSync(marketplacePath, "utf8"));
+for (const entry of marketplace.plugins) entry.version = version;
+writeFileSync(marketplacePath, `${JSON.stringify(marketplace, null, 2)}\n`);
+
+git("add", "CHANGELOG.md", "package.json", ...pluginPaths, marketplacePath);
 git("commit", "-m", `chore(release): v${version}${name ? ` ${name}` : ""}`);
 git("tag", "-a", `v${version}`, "-m", `v${version}${name ? ` ${name}` : ""}`);
 console.log(`Tagged v${version}. Publish with: git push --follow-tags`);

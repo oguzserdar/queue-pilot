@@ -1,18 +1,10 @@
 import { headers } from "next/headers";
 import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
 import { getAuth } from "@/lib/auth";
+import { consentClientLabel } from "@/lib/ai-access";
 import { ConsentCard } from "./consent-card";
 import { ConsentForm } from "./consent-form";
 import styles from "./consent.module.css";
-
-/** A readable name for the AI client: the host of a Client ID Metadata Document URL, or the registered id. */
-function clientLabel(clientId: string): string {
-  try {
-    return new URL(clientId).host;
-  } catch {
-    return clientId;
-  }
-}
 
 export default async function ConsentPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
@@ -37,5 +29,6 @@ export default async function ConsentPage({ searchParams }: { searchParams: Prom
     );
   }
 
-  return <ConsentCard client={clientLabel(String(params.client_id ?? ""))} user={session.user} scopes={String(params.scope ?? "").split(" ").filter(Boolean)}><ConsentForm /></ConsentCard>;
+  const client = await consentClientLabel(String(params.client_id ?? ""));
+  return <ConsentCard client={client} clientId={String(params.client_id ?? "")} redirectUri={String(params.redirect_uri ?? "")} user={session.user} scopes={String(params.scope ?? "").split(" ").filter(Boolean)}><ConsentForm /></ConsentCard>;
 }

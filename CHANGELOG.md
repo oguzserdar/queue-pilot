@@ -5,6 +5,23 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Search the web and read a page through the connector, with `search_context` and `add_web_page`. Search returns titles, links, dates and short excerpts, never whole pages. `add_web_page` keeps the complete page as a source, the way a transcript is kept, and returns its text with a `snapshotId`, so drafts can quote it with evidence and a quote from the end of a long page still checks. Podcast searches return episodes whose pages are full transcripts. Both need an Exa key in Admin and do nothing without one. Test the key from Admin.
+- Serve the plugin's task skills (fill week, check week, fix drafts, check sources) with the main skill, so every install route gets the same set. The setup line installs all five.
+- Offer the fill-week skill a deeper-context step: search, show the results, save only the page the person picks.
+
+### Fixed
+- The served check-sources skill was out of date and lacked the snapshot validation the plugin copy had. Both now come from the plugin files, and a test fails when they differ.
+- Codex setup no longer signs in twice, and installs skills in the current folder instead of the deprecated one.
+- Claude Code setup skips a second connector when the Queue Pilot plugin already added one.
+- Cursor setup says where to sign in. The README no longer promises an Add to Cursor button that does not exist.
+- The plugin marketplace version follows the plugin version at release, so the plugin validator stops warning.
+- Remove the old unauthenticated test connector code.
+- Repair source quotes on an existing draft, checking its owner, current text and source before replacing evidence. Failed source judgments remain failed after repair.
+- Keep Grok web and Grok Bot desktop under one setup card. Support native sign-in callbacks and show the return destination on consent, with provider logos only for matching addresses.
+- Explain exact draft sentences and source quotations in the tool fields, and return specific mismatch messages.
+- Show the Buffer allowance correctly when its response supplies a time window without a quota total.
+
 ## [0.5.0] - 2026-11-02 Drafts with source evidence
 
 ### Added

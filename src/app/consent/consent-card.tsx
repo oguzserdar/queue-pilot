@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Check, Link2 } from "lucide-react";
 import { AiMark } from "@/components/ai-mark";
+import { consentIdentity } from "@/lib/consent-identity";
 import styles from "./consent.module.css";
 
 /** Plain-language meaning of each scope an AI client may ask for. Unknown scopes are listed as-is. */
@@ -12,9 +13,8 @@ const SCOPE_TEXT: Record<string, string> = {
 };
 
 /** Shared permission presentation; authorization remains in the page and consent action. */
-export function ConsentCard({ client, user, scopes, children }: { client: string; user: { name: string; email: string; image?: string | null }; scopes: string[]; children: ReactNode }) {
-  // Match the exact metadata host, never a partial name or a caller-provided redirect URL.
-  const brand = client === "claude.ai" ? "Claude" : client === "chatgpt.com" ? "ChatGPT" : null;
+export function ConsentCard({ client, clientId = "", redirectUri = "", user, scopes, children }: { client: string; clientId?: string; redirectUri?: string; user: { name: string; email: string; image?: string | null }; scopes: string[]; children: ReactNode }) {
+  const { brand, destination } = consentIdentity(client, clientId, redirectUri);
   const { name, email, image } = user;
   return (
     <main className={styles.page}>
@@ -27,6 +27,8 @@ export function ConsentCard({ client, user, scopes, children }: { client: string
           <img className={styles.appTile} src="/icon-192.png" alt="" width={56} height={56} />
         </div>
         <h1 id="consent-title" className={styles.title}><strong>{brand ?? client}</strong> wants to connect to Queue Pilot</h1>
+        <p className={styles.clientNote}>{destination}</p>
+        {brand === "Cursor" ? <p className={styles.clientNote}>Connecting from Grok Bot? It registers this connection as Cursor.</p> : null}
         <div className={styles.account}>
           {image
             ? /* eslint-disable-next-line @next/next/no-img-element -- the person's own Buffer picture */ <img className={styles.avatar} src={image} alt="" width={32} height={32} />

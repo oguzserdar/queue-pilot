@@ -21,7 +21,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
   {
     key: "writes", title: "Changes, when you ask", note: "Drafts stay drafts. Saves are checked against your playbook.",
     items: [
-      { label: "Reads source text and video captions; can spend transcript credits", tools: ["read_material", "get_transcript"] },
+      { label: "Reads source text, video captions and web pages; can spend transcript and search credits", tools: ["read_material", "get_transcript", "search_context", "add_web_page"] },
       { label: "Writes and saves drafts in empty times", tools: ["save_drafts", "write_my_week"] },
       { label: "Edits a draft it wrote", tools: ["update_draft"] },
       { label: "Adds, removes and routes rules", tools: ["add_rule", "remove_rule", "keep_suggestion", "dismiss_suggestion", "set_rule_override", "set_rule_inheritance"] },

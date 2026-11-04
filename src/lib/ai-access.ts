@@ -8,11 +8,13 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken, user } from "../db/auth-schema";
 import { aiAppUse, securityEvent } from "../db/schema";
+import { approvedClientBrand } from "./consent-identity";
 
 /** An AI app the person approved for the connector, with when it last called Queue Pilot. */
 export type ApprovedApp = {
   consentId: string;
   name: string;
+  brand?: string | null;
   site: string | null;
   approvedAt: string;
   /** When the app last called the connector, or null when it has not used Queue Pilot since it was approved. */
@@ -20,10 +22,26 @@ export type ApprovedApp = {
   calls: number;
 };
 
+/** Display metadata only; call after validating the signed consent request and the user's session. */
+export async function consentClientLabel(clientId: string): Promise<string> {
+  let metadataHost: string | null = null;
+  try {
+    const url = new URL(clientId);
+    if (url.origin === "https://chatgpt.com" && url.pathname === "/oauth/codex/client.json" && !url.username && !url.password && !url.search && !url.hash) return "Codex";
+    if (url.protocol === "https:") metadataHost = url.hostname;
+  } catch { /* An opaque id is not a useful application name. */ }
+  // Preserve exact metadata-host branding; a self-declared client name is not verified branding.
+  if (metadataHost && ["claude.ai", "chatgpt.com", "grok.com"].includes(metadataHost)) return metadataHost;
+  const [client] = await db().select({ name: oauthClient.name }).from(oauthClient)
+    .where(eq(oauthClient.clientId, clientId)).limit(1);
+  if (client?.name?.trim()) return client.name.trim();
+  return metadataHost ?? "An AI app";
+}
+
 /** The user's approved apps, newest first, with the name and site the app registered. */
 export async function approvedApps(userId: string): Promise<ApprovedApp[]> {
   const rows = await db()
-    .select({ consentId: oauthConsent.id, name: oauthClient.name, uri: oauthClient.uri, clientId: oauthConsent.clientId, createdAt: oauthConsent.createdAt, lastUsedAt: aiAppUse.lastUsedAt, calls: aiAppUse.calls })
+    .select({ consentId: oauthConsent.id, name: oauthClient.name, uri: oauthClient.uri, redirectUris: oauthClient.redirectUris, clientId: oauthConsent.clientId, createdAt: oauthConsent.createdAt, lastUsedAt: aiAppUse.lastUsedAt, calls: aiAppUse.calls })
     .from(oauthConsent)
     .leftJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
     .leftJoin(aiAppUse, and(eq(aiAppUse.userId, oauthConsent.userId), eq(aiAppUse.clientId, oauthConsent.clientId)))
@@ -32,6 +50,7 @@ export async function approvedApps(userId: string): Promise<ApprovedApp[]> {
   return rows.map((r) => ({
     consentId: r.consentId,
     name: r.name?.trim() || "An AI app",
+    brand: approvedClientBrand(r.name ?? "", r.clientId, r.redirectUris ?? []),
     site: r.uri ?? null,
     approvedAt: r.createdAt.toISOString(),
     lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,

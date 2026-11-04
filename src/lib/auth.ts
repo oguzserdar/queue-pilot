@@ -105,6 +105,9 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
         // Older clients still register dynamically; newer ones use Client ID Metadata Documents (cimd below).
         allowDynamicClientRegistration: true,
         allowUnauthenticatedClientRegistration: true,
+        // Desktop MCP clients may omit application_type. Infer native only from its callback shape;
+        // the provider still validates every URI, respects explicit types, and requires PKCE.
+        clientRegistrationDefaultApplicationType: "infer",
         // Access tokens verify by signature alone; ten minutes bounds how long one outlives a revoke for endpoints
         // that do not check the approval (the connector itself checks it on every call). Refresh keeps sessions going.
         accessTokenExpiresIn: 600,

@@ -43,6 +43,14 @@
 .onboard p { margin: 4px 0 0; }
 .onboardTitle { margin: 0; font-size: var(--text-base); font-weight: 600; }
 .onboardMarks { display: inline-flex; gap: 8px; }
+.connectedName { display: inline-flex; align-items: center; gap: 6px; }
+.connectionMarks { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.connectionMarks > span { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; background: var(--surface-muted); }
+.connectionMarks > img { border-radius: 12px; }
+.surfaceChoice { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-control); background: var(--surface-muted); }
+.surfaceChoice button { flex: 1; padding: 8px 12px; border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; font: inherit; font-size: var(--text-sm); color: var(--text-secondary); cursor: pointer; }
+.surfaceChoice button[aria-pressed="true"] { background: var(--surface); border-color: var(--border); color: var(--foreground); font-weight: 600; }
+.surfaceChoice button:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .chatTitle { margin: var(--space-4) 0 0; font-size: var(--text-base); font-weight: 600; }
 @media (max-width: 640px) { .onboard { grid-template-columns: minmax(0, 1fr); } }
 .dialogBody { display: flex; flex-direction: column; gap: var(--space-4); }

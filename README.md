@@ -53,7 +53,7 @@ Queue Pilot is a connector. Your AI app signs in with Buffer through it once, th
 | **Grok** | grok.com/connectors → New Connector → Custom, then paste the address below as the MCP server URL |
 | **Claude Code** | `claude mcp add --transport http --scope user queue-pilot <address>`, then `/mcp` to sign in |
 | **Codex** | `codex mcp add queue-pilot --url <address>` opens sign-in. If no browser opens, run `codex mcp login queue-pilot` |
-| **Cursor** | Press **Add to Cursor** on the Connect screen, or put `{"url": "<address>"}` under `mcpServers` in `~/.cursor/mcp.json` |
+| **Cursor** | Put `{"url": "<address>"}` under `mcpServers` in `~/.cursor/mcp.json`, then sign in to queue-pilot from Cursor's MCP settings |
 | **Any other MCP app** | Add a remote (Streamable HTTP) server with the address below, then sign in with Buffer |
 
 The address of the hosted copy:
@@ -70,9 +70,9 @@ Then ask, for example: *"Fill my empty Buffer times next week from my newsletter
 - **Follow your playbook.** Read, add or remove rules when you ask, and try a draft against them with `check_draft` before saving it.
 - **Write your week.** Read the open slots, run Queue Pilot's writer with `write_my_week` for up to ten drafts, then read the drafts and their checks with `list_my_drafts`. It can also edit or delete drafts Queue Pilot wrote.
 
-Give your AI the [Fill my week skill](https://github.com/oguzserdar/queue-pilot/blob/main/plugin/skills/queue-pilot-fill-week/SKILL.md) for the steps to follow once connected.
+Give your AI the skills for the steps to follow once connected: the setup line on the Connect page installs all five, or add the [plugin](plugin/skills) in Claude Code. The [Fill my week skill](plugin/skills/queue-pilot-fill-week/SKILL.md) is the one to start with.
 
-Approving and scheduling stay with you, along with account settings, AI keys and app access. The connector cannot schedule, publish, or change posts Queue Pilot did not write.
+The connector schedules only drafts Queue Pilot wrote, only when you ask, and asks you first unless you change that in Settings. Account settings, AI keys and app access stay with you. It cannot change posts Queue Pilot did not write.
 
 ## Your AI key, or ours
 
@@ -139,6 +139,7 @@ Everything an operator can change lives in `/admin`: Buffer app keys, the hosted
 | `AI_CAP_PER_PERSON` | Actions per person per day | How many AI actions one person can run on your key each day. | 10 |
 | `AI_CAP_TOTAL` | Actions per day, everyone | Optional ceiling on all built-in AI actions in one day, to spread the budget over time. Empty means no daily ceiling. | none |
 | `SUPADATA_API_KEY` | Supadata API key | Optional. Adds YouTube transcripts to the material drafts are written from. | none |
+| `EXA_API_KEY` | Exa API key | Optional. Lets the AI search the web for deeper context and save a page as material. | none |
 
 The budget is enforced by Queue Pilot: before each built-in AI action it compares what was spent with the budget, and it records each action's real cost. It does not limit the key at your provider, so also set a spend limit there.
 

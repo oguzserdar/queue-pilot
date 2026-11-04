@@ -87,3 +87,16 @@ export async function testSupadataKey() {
   const r = await fetchTranscript("https://www.youtube.com/watch?v=dQw4w9WgXcQ", key);
   return { message: r.status === "ready" || r.status === "pending" ? "OK. Supadata accepted the key." : r.message };
 }
+
+/** Explicit admin test: one small search, which may use one Exa credit. */
+export async function testExaKey() {
+  await requireAdmin();
+  const userId = await signedInUserId();
+  if (!userId || !(await limit("outbound", userId)).ok) return { message: "Too many tests. Try again shortly." };
+  const { exaKey } = await import("@/lib/env");
+  const { searchWeb } = await import("@/lib/exa");
+  const key = await exaKey();
+  if (!key) return { message: "Not set. Add an Exa key first." };
+  const r = await searchWeb({ query: "Queue Pilot", numResults: 1 }, key);
+  return { message: r.status === "ready" ? "OK. Exa accepted the key." : r.message };
+}
