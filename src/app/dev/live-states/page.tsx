@@ -23,7 +23,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   if (screen === "needs") {
     // Example rows, not live: approving folds the row away without calling Buffer.
     const at = (i: number, title: string, time: string, account: string): TriageItem => ({ id: `approve-${i}`, kind: "approve", title, detail: `${time} · ${account}`, href: "/week", action: "Approve", postId: `p${i}`, run: "approve" });
-    const triage = [at(1, "Queue Pilot opens review links on Monday.", "Mon 9:00", "Company"), at(2, "On Monday, QP adds account-specific rules.", "Mon 12:00", "Company"), at(3, "I am building QP around my edits.", "Tue 9:00", "Personal"), at(4, "Why one clear point beats three.", "Wed 9:00", "Personal")];
+    const triage = [at(1, "Queue Pilot opens review links on Monday.", "Mon 9:00", "Company"), at(2, "On Monday, QP adds account-specific rules.", "Mon 12:00", "Company"), at(3, "I am building QP around my edits.", "Tue 9:00", "Personal"), at(4, "Why one clear point beats three.", "Wed 9:00", "Personal"),
+      ...[["Three pantry swaps that save a weeknight.", "Mon 2 Nov, 08:06"], ["My cold-night soup. Recipe in the newsletter.", "Tue 3 Nov, 12:00"]].map(([title, when], i): TriageItem => ({ id: `overdue-${i}`, kind: "overdue", title, detail: `${when} · Company`, href: "https://publish.buffer.com", action: "Open Buffer", full: title, why: "Its time passed while it was a draft, so Buffer did not post it. Pick a new time or delete it in Buffer." }))];
     const shell: ShellAccount = { email: "mark@weeknightdinners.example", channels: shellChannels, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Mark Evans", image: null };
     return <AppShell account={shell} signInOpen><NeedsYouView needs={[]} readiness={[]} greeting="Good evening" triage={triage} /></AppShell>;
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveDrafts, recheckMyDrafts } from "@/app/(app)/actions";
@@ -15,7 +16,8 @@ import type { PostState } from "@/lib/post-state";
 import { StateMark } from "./state-mark";
 import styles from "./triage-list.module.css";
 
-const MARK: Record<TriageItem["kind"], PostState> = { breaks: "breaks", failed: "failed", approve: "draft", check: "check", comment: "draft", empty: "empty" };
+const MARK: Record<TriageItem["kind"], PostState> = { breaks: "breaks", failed: "failed", overdue: "draft", approve: "draft", check: "check", comment: "draft", empty: "empty" };
+const external = (href: string) => /^https?:\/\//.test(href);
 
 /**
  * Everything that needs the person, grouped by why, one action each. J and K move, X ticks, A approves, Enter opens.
@@ -83,7 +85,7 @@ export function TriageList({ items, live, onRemaining }: { items: TriageItem[]; 
         rows.current[next]?.scrollIntoView({ block: "nearest" });
       } else if (k === "x" && item?.run === "approve" && item.postId) { e.preventDefault(); toggle(item.postId); }
       else if (k === "a" && item?.run === "approve" && item.postId && !pending) { e.preventDefault(); approve([item.postId]); }
-      else if (k === "enter" && item && document.activeElement === document.body) { e.preventDefault(); router.push(item.href); }
+      else if (k === "enter" && item && document.activeElement === document.body) { e.preventDefault(); if (external(item.href)) window.open(item.href, "_blank", "noreferrer"); else router.push(item.href); }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -126,6 +128,8 @@ export function TriageList({ items, live, onRemaining }: { items: TriageItem[]; 
                     <Button variant="secondary" size="sm" disabled={pending} onClick={() => approve([item.postId!])}>{item.action}{keysOn && <kbd className={styles.key}>A</kbd>}</Button>
                   ) : item.run === "recheck" ? (
                     <Button variant="secondary" size="sm" disabled={pending} onClick={() => recheck(item.postId!)}>{item.action}</Button>
+                  ) : external(item.href) ? (
+                    <a href={item.href} target="_blank" rel="noreferrer" className={styles.action}>{item.action}<ArrowUpRight size={14} strokeWidth={2} aria-hidden="true" />{keysOn && <kbd className={styles.key}>↵</kbd>}</a>
                   ) : (
                     <Link href={item.href} className={styles.action}>{item.action}{keysOn && <kbd className={styles.key}>↵</kbd>}</Link>
                   )}

@@ -11,6 +11,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Read your Buffer tags, create one when you ask, and tag drafts Queue Pilot wrote. Approved, scheduled and sent posts are refused, because Buffer's edit would pull them back to drafts.
 - The draft window shows a post's Buffer tags under its text. On a draft Queue Pilot wrote, the tag button opens a search box, your tags to tick, and New tag, the way Buffer's own picker works.
 - Let your AI read Buffer's request allowance and each channel's daily posting limit, so it can plan before saving many drafts.
+- Needs you lists drafts from the last seven days whose time passed, under Overdue in Buffer, with a link to Buffer. Buffer never posts a draft, so these wait for a new time or a delete.
 - Tell your AI when a channel's queue is paused in Buffer. Buffer offers no way to resume a queue from outside, so you resume it in Buffer.
 - Settings lists connected AI apps grouped by app, with where each returns to, when it was approved and last used, and a name you can give it. A connection unused for 30 days stops working and can be removed in one go. Connect your AI keeps setup only, with one line linking to Settings.
 

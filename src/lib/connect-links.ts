@@ -28,3 +28,5 @@ export function sinceText(iso: string, now: number): string {
 
 /** Where a person adds or reconnects channels in Buffer. */
 export const BUFFER_CHANNELS_URL = "https://publish.buffer.com/settings/channels";
+/** Buffer's own app, where a person changes a post's time or deletes it. */
+export const BUFFER_PUBLISH_URL = "https://publish.buffer.com";

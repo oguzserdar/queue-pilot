@@ -9,11 +9,13 @@ import { postsBetween } from "./posts-between";
 import { nextWeekRange, weekFromBuffer } from "./week-from-buffer";
 import { cellEntries, worstTone } from "./week-model";
 import type { Readiness } from "./draft-readiness";
+import { BUFFER_PUBLISH_URL } from "./connect-links";
 
 /** Why something needs the person; the groups appear in this order. */
 export const TRIAGE_GROUPS = [
   { kind: "breaks", label: "Won't go out as it is" },
   { kind: "failed", label: "Didn't go out" },
+  { kind: "overdue", label: "Overdue in Buffer" },
   { kind: "approve", label: "Ready to approve" },
   { kind: "check", label: "Check before approving" },
   { kind: "comment", label: "Reviewers said" },
@@ -59,6 +61,12 @@ export function triageFromBuffer(input: {
   const past = { start: new Date(now.getTime() - 7 * 86_400_000), end: now };
   for (const d of deliveriesFromBuffer(channels, postsBetween(posts, past.start, past.end), past, now).filter((d) => d.tone === "danger"))
     items.push({ id: `failed-${d.id}`, kind: "failed", title: d.title, detail: `${d.channel} · ${d.error?.message ?? "Buffer did not say why."}`, href: "/delivery", action: "See why", full: d.title, why: d.error?.message ?? "Buffer did not say why." });
+
+  // A draft whose time passed is never posted: Buffer marks it Overdue and waits for a new time. Only the last seven
+  // days are in the snapshot, so older ones are not counted here.
+  const when = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  for (const p of postsBetween(posts, past.start, past.end).filter((p) => p.status === "draft" && p.dueAt))
+    items.push({ id: `overdue-${p.id}`, kind: "overdue", title: short(p.text), detail: `${when.format(new Date(p.dueAt!))} · ${name(p.channelId)}`, href: BUFFER_PUBLISH_URL, action: "Open Buffer", full: p.text, why: "Its time passed while it was a draft, so Buffer did not post it. Pick a new time or delete it in Buffer." });
 
   for (const c of comments)
     items.push({ id: `comment-${c.id}`, kind: "comment", title: `${c.name}: "${short(c.text, 70)}"`, detail: `On "${short(c.draft, 50)}"`, href: "/reviews", action: "Suggest edits", full: `${c.name}: "${c.text}"`, why: `On "${c.draft}"` });
