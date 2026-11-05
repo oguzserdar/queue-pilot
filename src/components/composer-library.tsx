@@ -2,7 +2,9 @@
 
 /**
  * The composer's Templates and Hashtags buttons, placed in the editor the way schedulers place them: a button in the
- * composer opens a library, and picking an entry puts its text into the post to edit. Templates come from Buffer's
+ * composer opens a library, and picking an entry puts its text into the post to edit. Each list belongs to one slot or account: callers key
+ * this component by that id, so switching accounts starts both lists fresh and never carries one organization's
+ * entries or cursor to another. Templates come from Buffer's
  * library (the organization's and the person's own listed first); hashtags are the organization's saved sets. Each list
  * loads when its button is first opened.
  */

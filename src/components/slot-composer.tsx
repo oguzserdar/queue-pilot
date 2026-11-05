@@ -77,7 +77,7 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
               </>
             ) : (
               <>
-                {slot.id && <ComposerLibrary slotId={slot.id} onInsert={insert} disabled={busy} />}
+                {slot.id && <ComposerLibrary key={slot.id} slotId={slot.id} onInsert={insert} disabled={busy} />}
                 <Textarea
                   label="Post"
                   autoFocus

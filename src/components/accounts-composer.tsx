@@ -140,7 +140,7 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
 
                 {tab === "main" || !picked.some((a) => a.id === tab) ? (
                   <>
-                    {picked[0] && <ComposerLibrary slotId={picked[0].id} onInsert={insert} disabled={busy} />}
+                    {picked[0] && <ComposerLibrary key={picked[0].id} slotId={picked[0].id} onInsert={insert} disabled={busy} />}
                     <Textarea label="Main text" autoFocus value={main} rows={6} disabled={busy} onChange={(e) => { setMain(e.target.value); setProblem(null); }} />
                     <p className={styles.muted}>
                       {picked.length === 0 ? "Pick at least one account above." : `${picked.length - Object.keys(custom).filter((id) => chosen.includes(id)).length} of ${picked.length} account${picked.length === 1 ? "" : "s"} use this text.`}
@@ -162,7 +162,7 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
                           </>
                         ) : (
                           <>
-                            <ComposerLibrary slotId={a.id} onInsert={insert} disabled={busy} />
+                            <ComposerLibrary key={a.id} slotId={a.id} onInsert={insert} disabled={busy} />
                             <Textarea label={`Text for ${a.name}`} autoFocus value={own} rows={6} disabled={busy} onChange={(e) => { setCustom((c) => ({ ...c, [a.id]: e.target.value })); setProblem(null); setRefused(({ [a.id]: _gone, ...rest }) => rest); }} />
                             <div className={weekStyles.composerFoot}><span>{a.limitFrom === "buffer" ? `${a.name}'s limit from Buffer` : `${a.service} limit`}</span>{counter(a)}</div>
                             <Button variant="ghost" size="sm" disabled={busy} onClick={() => setCustom(({ [a.id]: _gone, ...rest }) => rest)}>Use the main text again</Button>
