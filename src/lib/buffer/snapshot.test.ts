@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { bufferQuery } from "./client";
-import { MIN_FORCED_REFRESH_MS, MIN_REFRESH_MS, SnapshotBusyError, memorySnapshotStore, refreshSnapshot } from "./snapshot";
+import { MIN_FORCED_REFRESH_MS, MIN_REFRESH_MS, SnapshotBusyError, memorySnapshotStore, patchAfterWrite, refreshSnapshot, withPosts, withoutPosts } from "./snapshot";
 
 const NOW = new Date("2026-10-26T09:00:00Z");
 
@@ -165,3 +165,31 @@ describe("refreshSnapshot for a write (force)", () => {
   });
 });
 
+describe("patchAfterWrite", () => {
+  const made = { id: "p2", channelId: "c1", status: "draft" as const, text: "New draft", dueAt: "2026-10-28T15:00:00Z", sentAt: null, externalLink: null, error: null };
+
+  it("shows a confirmed write at once even though the copy is younger than the forced-refresh window", async () => {
+    const store = memorySnapshotStore();
+    const { query } = fakeBuffer();
+    await refreshSnapshot("u1", "tok", { store, query, now: () => NOW });
+    await patchAfterWrite("u1", store, (snap) => withPosts(snap, [made]));
+    // The next read inside the 30-second window returns the saved copy, which now has the new post.
+    const read = await refreshSnapshot("u1", "tok", { store, query: fakeBuffer().query, now: () => new Date(NOW.getTime() + 1_000) }, { force: true });
+    expect(read?.data.posts.map((p) => p.id)).toEqual(["p1", "p2"]);
+    await patchAfterWrite("u1", store, (snap) => withoutPosts(snap, ["p2"]));
+    expect((await store.get("u1"))?.data.posts.map((p) => p.id)).toEqual(["p1"]);
+  });
+
+  it("waits for a read that started before the write, so that older read cannot overwrite the change", async () => {
+    const store = memorySnapshotStore();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const slow = fakeBuffer();
+    const slowQuery = (async (...args: Parameters<typeof bufferQuery>) => { await gate; return (slow.query as unknown as (...a: unknown[]) => unknown)(...args); }) as unknown as typeof bufferQuery;
+    const before = refreshSnapshot("u1", "tok", { store, query: slowQuery, now: () => NOW });
+    const patched = patchAfterWrite("u1", store, (snap) => withPosts(snap, [made]));
+    release();
+    await Promise.all([before, patched]);
+    expect((await store.get("u1"))?.data.posts.map((p) => p.id)).toEqual(["p1", "p2"]);
+  });
+});

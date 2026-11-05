@@ -18,7 +18,11 @@ import { recordEvidence, sourceById } from "./source-store";
 import { limit } from "./rate-limit";
 import { postgresWrittenStore, wroteIds } from "./written-store";
 import { postgresPromotionAttempts, promotionFingerprint } from "./promotion-attempts";
-import type { Channel } from "./buffer/queries";
+import { patchAfterWrite, withoutPosts, withPosts } from "./buffer/snapshot";
+import { postgresSnapshotStore } from "./buffer/snapshot-store";
+import type { Channel, Post, PostStatus } from "./buffer/queries";
+
+const STATUSES = new Set<string>(["draft", "error", "needs_approval", "scheduled", "sending", "sent"]);
 
 /** What the flow needs from the person's Buffer connection. */
 export type ItemBuffer = { token: string; organizationIds: string[]; channels: Channel[]; posts: { id: string; channelId: string }[] };
@@ -100,6 +104,21 @@ export function contentItemFlow(userId: string) {
     // Complete only when every version's draft is recorded; evidence failures and non-drafts keep recovery pending.
     return { created: versions.length - missing.length, recorded, missing, notes, complete: recorded === versions.length };
   };
+  /**
+   * Puts the posts Buffer confirmed for an item into the saved copy, so the next week or drafts read shows them without
+   * a refresh (the copy is otherwise reused for up to 30 seconds after any read). A failed patch leaves the copy as it was.
+   */
+  const showInCopy = async (view: ContentItemView) => {
+    if (view.body.kind !== "posts" || !view.body.posts.length) return;
+    const made: Post[] = view.body.posts.map((p) => ({ id: p.id, channelId: p.channelId, status: STATUSES.has(p.status) ? (p.status as PostStatus) : "draft", text: p.text, dueAt: p.dueAt, sentAt: null, externalLink: null, error: null }));
+    await patchCopy((s) => withPosts(s, made));
+  };
+  /** Takes posts Buffer confirmed deleting out of the saved copy. */
+  const dropFromCopy = async (ids: string[]) => { if (ids.length) await patchCopy((s) => withoutPosts(s, ids)); };
+  const patchCopy = async (change: Parameters<typeof patchAfterWrite>[2]) => {
+    try { await patchAfterWrite(userId, postgresSnapshotStore(), change); }
+    catch (e) { console.warn(JSON.stringify({ event: "qp-snapshot-patch-after-item-write-failed", message: e instanceof Error ? e.message : String(e) })); }
+  };
   const counts = (d: { created: number; recorded: number }) => `Buffer has ${d.created} draft${d.created === 1 ? "" : "s"} from this promotion; Queue Pilot recorded ${d.recorded} as its own.`;
   const nameOf = (b: ItemBuffer) => (id: string) => b.channels.find((c) => c.id === id)?.name ?? id;
 
@@ -158,6 +177,7 @@ export function contentItemFlow(userId: string) {
       const done = await reconcile(item, versions, channels.map((c) => c!.service), null);
       if (done.missing.length) return result(`That item has posts, but not for every version given (${done.missing.join(", ")}). Read get_content_item.`, true);
       if (done.complete) await attempts.markRecorded(userId, item.id, attempt.token);
+      await showInCopy(item);
       return result([`Already turned into drafts. ${counts(done)} They need a fresh check before approving.`, ...done.notes, ...(done.complete ? [] : ["Call again with the same versions to finish recording."]), describe(item, nameOf(b))].join("\n"), !done.complete);
     }
     if (item.body.mediaCount) return media;
@@ -195,6 +215,7 @@ export function contentItemFlow(userId: string) {
     if ("ok" in outcome && outcome.ok) {
       const done = await reconcile(outcome.value, versions, channels.map((c) => c!.service), checks);
       if (done.complete) await attempts.markRecorded(userId, item.id, token);
+      await showInCopy(outcome.value);
       const flagged = checks.flatMap((c, i) => c.status === "flagged" || c.status === "uncertain" ? [`${channels[i]!.name}: ${c.status}`] : []);
       return result([`${counts(done)} None are scheduled.${flagged.length ? ` Flagged: ${flagged.join("; ")}.` : ""}`, ...evidenceNotes, ...done.notes, ...(done.complete ? [] : ["Call again with the same versions to finish recording."]), describe(outcome.value, nameOf(b))].join("\n"), !done.complete, { item: outcome.value, created: done.created, recorded: done.recorded });
     }
@@ -205,10 +226,11 @@ export function contentItemFlow(userId: string) {
     if (now?.body.kind === "posts") {
       const done = await reconcile(now, versions, channels.map((c) => c!.service), checks);
       if (done.complete) await attempts.markRecorded(userId, item.id, token);
+      await showInCopy(now);
       return result([`${why}\nThe drafts were created anyway. ${counts(done)} None are scheduled.`, ...done.notes, ...(done.complete ? [] : ["Call again with the same versions to finish recording."]), describe(now, nameOf(b))].join("\n"), !done.complete);
     }
     return result(`${why}\n${now ? "The item is still a channel-less draft; nothing was created." : "The item could not be read back. Read get_content_item before trying again."}`, true);
   }
 
-  return { pickOrg, chooseOrg, ownItem, readBack, notFound, nameOf, save, promote };
+  return { pickOrg, chooseOrg, ownItem, readBack, notFound, nameOf, save, promote, dropFromCopy };
 }

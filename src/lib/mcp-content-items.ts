@@ -129,7 +129,10 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
     let why: string;
     try {
       const r = await deleteContentItem(b.token, item.id);
-      if (r.ok) return result("Content item deleted, with its posts and their notes.");
+      if (r.ok) {
+        await flow.dropFromCopy(item.body.kind === "posts" ? item.body.posts.map((p) => p.id) : []);
+        return result("Content item deleted, with its posts and their notes.");
+      }
       why = failure(r);
     } catch (e) {
       if (e instanceof BufferApiError && e.status === 401) throw e;
@@ -138,7 +141,9 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
     // Buffer: a delete can report an error after it took effect. Say what the read shows, never guess.
     const now = await readBack(b, item.id);
     if (now === "unknown") return result(`${why}\nThe item could not be read back, so whether it was deleted is unknown. Read get_content_item before trying again.`, true);
-    return now ? result(`Not deleted: ${why}`, true) : result(`${why}\nBuffer no longer finds the item, so the delete took effect.`);
+    if (now) return result(`Not deleted: ${why}`, true);
+    await flow.dropFromCopy(item.body.kind === "posts" ? item.body.posts.map((p) => p.id) : []);
+    return result(`${why}\nBuffer no longer finds the item, so the delete took effect.`);
   });
 
   const linkInput = z.object({ contentItemId: itemId, postId: z.string().min(1).max(200).describe("A post id from show_next_week or get_content_item.") });

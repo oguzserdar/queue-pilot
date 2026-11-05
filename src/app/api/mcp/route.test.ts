@@ -13,6 +13,7 @@ import type { Rule } from "@/lib/rules"
 import { fakeBuffer } from "@/test/fake-buffer"
 import { BufferApiError } from "@/lib/buffer/client"
 import { answering, deciding } from "@/lib/ai-test-model"
+import { nextWeekRange } from "@/lib/week-from-buffer"
 
 const ownKey = vi.hoisted(() => ({ saved: null as null | { provider: string, key: string, model: string }, setModel: vi.fn() }))
 vi.mock("@/lib/ai-key-store", async (orig) => ({
@@ -117,7 +118,7 @@ const tagsFake = { tags: [] as { id: string; name: string; color: string; isLock
 // Buffer content items in the fake, keyed by id; promote can succeed, refuse, or fail after creating the drafts.
 const itemsFake = { items: new Map<string, any>(), extraChannels: [] as Channel[], promote: "ok" as "ok" | "refuse" | "failAfter" | "throwAfter", promotes: 0, dropCreate: false, readFails: false, deleteThrows: false, reads: 0, attachOnRead: 0 }
 // Buffer's template library, snippets, teammates and channel configuration in the fake.
-const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, maxLength: 3000, snippetsAllowed: true, snippetsEntitled: true, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
+const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, maxLength: 3000, snippetsAllowed: true, snippetsEntitled: true, templateCount: 0, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
 const ideasFake = { groups: [{ id: "g1", name: "Next week", isLocked: false }], ideas: [] as Record<string, unknown>[], dropCreate: false }
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
@@ -154,12 +155,14 @@ const buffer = fakeBuffer((call) => {
     itemsFake.promotes++
     const it = itemsFake.items.get(variables.input.id)!
     if (itemsFake.promote === "refuse") return { promoteContentItemDraftToPosts: { __typename: "PromoteContentItemDraftToPostsFailure", message: "Invalid", errors: [{ __typename: "PostInvalidInputError", message: "Bad", channelId: "ch" }] } }
-    const made: Post[] = variables.input.posts.map((p: { channelId: string; text: string; saveToDraft: boolean; needsApproval: boolean; mode: string }) => {
+    // Like Buffer: a queued draft gets the next free time (here Wednesday next week, 15:00 UTC); a custom time is kept.
+    const queued = new Date(nextWeekRange(new Date(), "UTC").start.getTime() + (2 * 24 + 15) * 3600_000).toISOString()
+    const made: Post[] = variables.input.posts.map((p: { channelId: string; text: string; saveToDraft: boolean; needsApproval: boolean; mode: string; dueAt?: string }) => {
       expect(p).toMatchObject({ saveToDraft: true, needsApproval: false })
-      return { id: `post-${++serial}`, channelId: p.channelId, text: p.text, dueAt: null, status: "draft", via: "api", sentAt: null, externalLink: null, error: null } as Post
+      return { id: `post-${++serial}`, channelId: p.channelId, text: p.text, dueAt: p.dueAt ?? queued, status: "draft", via: "api", sentAt: null, externalLink: null, error: null } as Post
     })
     posts.push(...made)
-    it.body = { __typename: "PostContent", posts: made.map((m) => ({ id: m.id, channelId: m.channelId, status: "draft", text: m.text, dueAt: null })) }
+    it.body = { __typename: "PostContent", posts: made.map((m) => ({ id: m.id, channelId: m.channelId, status: "draft", text: m.text, dueAt: m.dueAt })) }
     if (itemsFake.promote === "failAfter") return { promoteContentItemDraftToPosts: { __typename: "PromoteContentItemDraftToPostsFailure", message: "Post processing failed", errors: [] } }
     if (itemsFake.promote === "throwAfter") return new TypeError("fetch failed")
     return { promoteContentItemDraftToPosts: { __typename: "PromoteContentItemDraftToPostsSuccess", contentItem: structuredClone(it) } }
@@ -170,6 +173,9 @@ const buffer = fakeBuffer((call) => {
     return { updateContentItem: { __typename: "UpdateContentItemSuccess", contentItem: structuredClone(it) } }
   }
   if (query.includes("deleteContentItem(")) {
+    // Like Buffer: deleting an item deletes the posts made from it.
+    const gone = itemsFake.items.get(variables.input.id)?.body?.posts?.map((p: { id: string }) => p.id) ?? []
+    posts = posts.filter((p) => !gone.includes(p.id))
     itemsFake.items.delete(variables.input.id)
     if (itemsFake.deleteThrows) { itemsFake.readFails = true; return new TypeError("fetch failed") }
     return { deleteContentItem: { __typename: "EmptySuccess", _empty: "" } }
@@ -228,6 +234,13 @@ const buffer = fakeBuffer((call) => {
     const node = { id: `idea-${ideasFake.ideas.length + 1}`, organizationId, groupId: group?.groupId ?? null, createdAt: 1_762_160_400, content: { title: content.title ?? null, text: content.text ?? null, services: content.services ?? [], date: null }, aiAssisted: content.aiAssisted }
     ideasFake.ideas.push(node)
     return { createIdea: { __typename: "Idea", id: node.id } }
+  }
+  if (query.includes("postTemplates(") && libFake.templateCount) {
+    // Like Buffer's library: N templates paged by `first`, with long placeholder labels; one late template is about holidays.
+    const from = variables.after ? Number(String(variables.after).slice(1)) : 0
+    const to = Math.min(from + variables.first, libFake.templateCount)
+    const nodes = Array.from({ length: to - from }, (_, k) => { const n = from + k; return { id: `tpl-${n}`, title: n === 150 ? "Holiday hours" : `Release note ${n}`, description: n === 150 ? "Tell people when you are closed" : "Share what shipped this week and why it matters to the people who use it", emoji: "🚀", body: "I read {{the piece: an article, a post, a podcast episode, with the author's name}}. {{why it matters: what it changes for the people you make things for}}", visibility: "public", organizationId: variables.input.organizationId, updatedAt: "2026-11-01T00:00:00Z" } })
+    return { postTemplates: { edges: nodes.map((node) => ({ node })), pageInfo: { hasNextPage: to < libFake.templateCount, endCursor: `o${to}` } } }
   }
   if (query.includes("postTemplates(")) {
     const i = variables.after ? Number(String(variables.after).slice(1)) : 0
@@ -461,14 +474,55 @@ describe("connector voice writes", () => {
       expect(noScope.isError).toBe(true)
       expect(answer(noScope)).toContain("Sign in with Buffer again")
       expect(answer(await call("save_snippet", { name: "Launch", hashtags: "#ship" }))).toContain("Sign in with Buffer again")
+      // One Buffer page per answer here (the fake serves one template per page): the cursor resumes after it.
       const first = answer(await call("list_post_templates"))
-      expect(first).toContain("4 templates (partial list)")
-      expect(first).toContain('cursor "c4"')
-      const rest = answer(await call("list_post_templates", { cursor: "c4" }))
-      expect(rest).toContain("2 templates:")
-      expect(rest).not.toContain("cursor")
+      expect(first).toContain("1 template (partial list)")
+      expect(first).toContain('cursor "c1"')
     } finally {
       libFake.snippetsAllowed = true; libFake.templatePages = 1
+    }
+  });
+  it("lists Buffer's 165 templates 40 per answer, under 20 KB each, with a cursor that skips and repeats nothing", async () => {
+    libFake.templateCount = 165
+    try {
+      const seen: string[] = []
+      let cursor: string | undefined
+      for (let i = 0; i < 10; i++) {
+        const out = answer(await call("list_post_templates", cursor ? { cursor } : {}))
+        expect(new TextEncoder().encode(out).length, `answer ${i}`).toBeLessThan(20_000)
+        seen.push(...[...out.matchAll(/template id (tpl-\d+)/g)].map((m) => m[1]))
+        // Short placeholder names only; the full labels stay in get_post_template.
+        if (i === 0) { expect(out).toContain("fills: the piece, why it matters"); expect(out).not.toContain("a podcast episode") }
+        cursor = out.match(/cursor "([^"]+)"/)?.[1]
+        if (!cursor) break
+      }
+      expect(seen).toHaveLength(165)
+      expect(new Set(seen).size).toBe(165)
+      expect(seen).toEqual(Array.from({ length: 165 }, (_, n) => `tpl-${n}`))
+    } finally {
+      libFake.templateCount = 0
+    }
+  });
+  it("finds a template on a later page by search, and continues a search without skipping", async () => {
+    libFake.templateCount = 165
+    try {
+      const found = answer(await call("list_post_templates", { search: "holiday" }))
+      expect(found).toContain('1 template matching "holiday"')
+      expect(found).toContain("template id tpl-150")
+      expect(found).toContain("looked at 165 templates")
+      // A search with many matches stops after the page that reaches 40, returns every match on the pages read, and
+      // its cursor continues the same search from the next page.
+      const many = answer(await call("list_post_templates", { search: "release" }))
+      const firstIds = [...many.matchAll(/template id (tpl-\d+)/g)].map((m) => m[1])
+      expect(firstIds.length).toBeGreaterThanOrEqual(40)
+      const next = many.match(/cursor "([^"]+)"/)?.[1]
+      expect(next).toBeDefined()
+      const rest = answer(await call("list_post_templates", { search: "release", cursor: next }))
+      const restIds = [...rest.matchAll(/template id (tpl-\d+)/g)].map((m) => m[1])
+      expect(new Set([...firstIds, ...restIds]).size).toBe(firstIds.length + restIds.length)
+      expect(Number(restIds[0].slice(4))).toBe(Number(firstIds.at(-1)!.slice(4)) + 1)
+    } finally {
+      libFake.templateCount = 0
     }
   });
   it("saves, replaces and deletes a snippet, and reads them back", async () => {
@@ -542,11 +596,18 @@ describe("connector voice writes", () => {
       expect(itemsFake.promotes).toBe(0)
       const ok = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions }))
       expect(ok).toContain("Buffer has 2 drafts from this promotion; Queue Pilot recorded 2 as its own. None are scheduled.")
+      // The next read tells the truth without a manual refresh: both new drafts are listed.
+      const listed = answer(await call("list_my_drafts"))
+      for (const v of versions) expect(listed).toContain(v.text)
       expect(posts.filter((p) => p.status !== "draft")).toEqual([])
       const mine = written.get("person-a") ?? []
       expect(mine.map((w) => w.text).sort()).toEqual(versions.map((v) => v.text).sort())
       expect(mine.every((w) => Array.isArray(w.verdicts) && w.playbookRevision)).toBe(true)
       expect(vi.mocked(recordEvidence).mock.calls.map((c) => [c[2], c[4]])).toEqual(versions.map((v) => [v.text, v.evidence]))
+      // Deleting the item deletes its posts, and the next read no longer lists them.
+      expect(answer(await call("delete_content_item", { contentItemId: "ci-1" }))).toContain("deleted")
+      const after = answer(await call("list_my_drafts"))
+      for (const v of versions) expect(after).not.toContain(v.text)
     })
 
     it("records the drafts after an unclear promote, whether Buffer returns a failure or the answer is lost, and a retry never promotes twice", async () => {
@@ -557,6 +618,8 @@ describe("connector voice writes", () => {
         const v = [{ channelId: "ch", text: "Soup night on LinkedIn." }]
         const first = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))
         expect(first, mode).toContain("The drafts were created anyway. Buffer has 1 draft from this promotion; Queue Pilot recorded 1 as its own.")
+        // Also after a recovery: the drafts Buffer did create show up on the next read.
+        expect(answer(await call("list_my_drafts")), mode).toContain("Soup night on LinkedIn.")
         const recorded = structuredClone(written.get("person-a"))
         expect(recorded?.map((w) => w.text)).toEqual(["Soup night on LinkedIn."])
         expect(attemptStore.store.rows.get("person-a|ci-1")?.recordedAt).toBeInstanceOf(Date)

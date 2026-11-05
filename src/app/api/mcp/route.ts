@@ -39,7 +39,7 @@ import { repairDraftEvidence } from "@/lib/repair-draft-evidence";
 import { wroteIds } from "@/lib/written-store";
 import { createPostNote, listPostNotes, MAX_NOTE as MAX_BUFFER_NOTE, mentionAnnotations, NotesNotAllowedError, type MentionAnnotation } from "@/lib/buffer/notes";
 import { BufferApiError } from "@/lib/buffer/client";
-import { getTemplate, listTemplates, placeholdersIn } from "@/lib/buffer/templates";
+import { getTemplate, listTemplates, placeholdersIn, searchTemplates } from "@/lib/buffer/templates";
 import { createSnippet, deleteSnippet, listSnippets, SnippetsNotAllowedError, SnippetsNotEnabledError, updateSnippet } from "@/lib/buffer/snippets";
 import { channelSettings, listTeamMembers, postingState, postTextLimit } from "@/lib/buffer/workspace";
 import { createIdea, IDEA_SERVICES, listIdeaGroups, listIdeas, MAX_IDEA_TEXT, MAX_IDEA_TITLE } from "@/lib/buffer/ideas";
@@ -89,6 +89,9 @@ async function patchSnapshot(userId: string, change: (posts: Post[]) => Post[]):
 const asOf = (d: Date) => `\n(Buffer data as of ${d.toISOString().slice(0, 16).replace("T", " ")} UTC)`;
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
+
+/** Templates per list_post_templates answer: about 15 KB, under the 20 KB some clients keep of a tool result. */
+const TEMPLATES_PER_ANSWER = 40;
 
 const SERVER_INSTRUCTIONS = `Queue Pilot fills the user's Buffer queue with drafts written by you, from what they actually shipped.
 Source-based drafts must carry the snapshotId from read_material, get_transcript or add_web_page and evidence containing the exact claim, source quote and timestamp when available. For a user-requested source refresh, list_sources_to_check then report_source_version with actual fetched text; never send an outage as source text. Corrections are proposals only.
@@ -472,19 +475,25 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       description: "Lists the post templates the person can use: Buffer's curated public library, their organization's internal templates and their own private ones. Each has a title, a short description and placeholders such as {{feature}} to fill from the source. Read one with get_post_template. A template is a starting format; the playbook still decides what a draft may say.",
       inputSchema: z.object({
         visibility: z.enum(["public", "internal", "private"]).optional().describe("Only Buffer's library (public), the organization's (internal) or the person's own (private)."),
+        search: z.string().trim().min(1).max(100).optional().describe("Only templates whose title or description contains this text. Pass the same search with the cursor to continue."),
         organizationId: orgInput,
         cursor: cursorInput,
       }),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ visibility, organizationId, cursor }) => {
+    async ({ visibility, search, organizationId, cursor }) => {
       const b = await bufferFor(auth, userId);
       const org = pickOrg(b, organizationId);
       if (typeof org !== "string") return { ...text(`Not read: ${org.error}`), isError: true };
-      const r = await listTemplates(b.accessToken, org, { visibility, after: cursor ?? null });
-      if (!r.items.length) return text(r.more ? moreLine(r.more, r.cursor, "templates").join("\n") : "No templates found.");
-      return text([`${r.items.length} template${r.items.length === 1 ? "" : "s"}${r.more ? " (partial list)" : ""}:`, ...r.items.map((t) => {
-        const holes = placeholdersIn(t.body);
+      // One Buffer page of 40 per answer (or, searching, pages until 40 matches), so an answer stays small enough for
+      // clients that cut long tool results. The cursor marks the end of what was read, so nothing is skipped.
+      const opts = { visibility, after: cursor ?? null, pageSize: TEMPLATES_PER_ANSWER };
+      const r = search ? await searchTemplates(b.accessToken, org, search, { ...opts, maxPages: 5, limit: TEMPLATES_PER_ANSWER }) : await listTemplates(b.accessToken, org, { ...opts, maxPages: 1 });
+      const looked = "scanned" in r ? ` (looked at ${r.scanned} template${r.scanned === 1 ? "" : "s"}${r.more ? " so far" : ""})` : "";
+      if (!r.items.length) return text([search ? `No template matches "${search}"${looked}.` : "No templates found.", ...moreLine(r.more, r.cursor, "templates")].join("\n"));
+      return text([`${r.items.length} template${r.items.length === 1 ? "" : "s"}${search ? ` matching "${search}"` : ""}${r.more ? " (partial list)" : ""}${looked}:`, ...r.items.map((t) => {
+        // Short names only ({{the piece: an article...}} -> "the piece"); get_post_template has the full text.
+        const holes = [...new Set(placeholdersIn(t.body).map((h) => h.split(":")[0].trim()))];
         return `- ${t.emoji} ${t.title} (${t.visibility}) · template id ${t.id}${t.description ? ` · ${t.description}` : ""}${holes.length ? ` · fills: ${holes.join(", ")}` : ""}`;
       }), ...moreLine(r.more, r.cursor, "templates")].join("\n"));
     },

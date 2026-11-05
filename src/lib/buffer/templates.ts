@@ -36,23 +36,57 @@ const PAGE = 50;
 /** Four pages per read keeps a tool answer readable; the caller continues with the cursor. */
 const MAX_PAGES = 4;
 
+type ListOpts = { visibility?: TemplateVisibility; after?: string | null; pageSize?: number; maxPages?: number };
+
+/** Reads one page of templates after a cursor. */
+const templatePage = (token: string, organizationId: string, opts: ListOpts, run: Run) => async (after: string | null) => {
+  const data = await run<{ postTemplates: Connection<BufferTemplate> }>(token,
+    `query PostTemplates($input: PostTemplatesInput!, $first: Int, $after: String) { postTemplates(input: $input, first: $first, after: $after) { edges { node { ${TEMPLATE_FIELDS} } } pageInfo { hasNextPage endCursor } } }`,
+    { input: { organizationId, ...(opts.visibility ? { filter: { visibility: opts.visibility } } : {}) }, first: opts.pageSize ?? PAGE, after });
+  return pageOf(data.postTemplates);
+};
+
 /**
  * The templates the person can see in one organization: Buffer's public ones, the organization's internal ones and
  * their own private ones. Buffer pins that scope to the person; a filter can only narrow it. Reads up to a page budget
- * and says when more remain.
+ * and says when more remain. The cursor always marks the end of the last page returned, so continuing skips nothing.
  *
  * @param token - The person's Buffer access token
  * @param organizationId - The organization whose internal templates to include
- * @param opts - Optional visibility filter and a cursor to continue from
+ * @param opts - Optional visibility filter, a cursor to continue from, and the page size and budget
  * @returns The templates read, whether more exist, and the cursor to continue
  */
-export async function listTemplates(token: string, organizationId: string, opts: { visibility?: TemplateVisibility; after?: string | null } = {}, run: Run = bufferQuery): Promise<Paged<BufferTemplate>> {
-  return readPages(async (after) => {
-    const data = await run<{ postTemplates: Connection<BufferTemplate> }>(token,
-      `query PostTemplates($input: PostTemplatesInput!, $first: Int, $after: String) { postTemplates(input: $input, first: $first, after: $after) { edges { node { ${TEMPLATE_FIELDS} } } pageInfo { hasNextPage endCursor } } }`,
-      { input: { organizationId, ...(opts.visibility ? { filter: { visibility: opts.visibility } } : {}) }, first: PAGE, after });
-    return pageOf(data.postTemplates);
-  }, MAX_PAGES, opts.after ?? null);
+export async function listTemplates(token: string, organizationId: string, opts: ListOpts = {}, run: Run = bufferQuery): Promise<Paged<BufferTemplate>> {
+  return readPages(templatePage(token, organizationId, opts, run), opts.maxPages ?? MAX_PAGES, opts.after ?? null);
+}
+
+/**
+ * Templates whose title or description contains `search` (any case), read page by page until `limit` matches or the
+ * page budget. Every match on the pages read is returned, and the cursor marks the end of the last page read, so
+ * continuing the same search never skips a template.
+ *
+ * @param token - The person's Buffer access token
+ * @param organizationId - The organization whose internal templates to include
+ * @param search - Text to look for in titles and descriptions
+ * @param opts - Visibility filter, cursor, page size, page budget, and how many matches are enough
+ * @returns The matches, whether Buffer has more templates to search, the cursor, and how many templates were looked at
+ */
+export async function searchTemplates(token: string, organizationId: string, search: string, opts: ListOpts & { limit?: number } = {}, run: Run = bufferQuery): Promise<Paged<BufferTemplate> & { scanned: number }> {
+  const want = search.toLowerCase();
+  const fetchPage = templatePage(token, organizationId, opts, run);
+  const items: BufferTemplate[] = [];
+  let cursor = opts.after ?? null;
+  let scanned = 0;
+  for (let i = 0; i < (opts.maxPages ?? MAX_PAGES); i++) {
+    const page = await fetchPage(cursor);
+    scanned += page.nodes.length;
+    items.push(...page.nodes.filter((t) => `${t.title} ${t.description}`.toLowerCase().includes(want)));
+    if (!page.hasNextPage) return { items, more: false, cursor: null, scanned };
+    if (!page.endCursor || page.endCursor === cursor) return { items, more: true, cursor: null, scanned };
+    cursor = page.endCursor;
+    if (items.length >= (opts.limit ?? Infinity)) break;
+  }
+  return { items, more: true, cursor, scanned };
 }
 
 /**

@@ -192,3 +192,33 @@ export function withSavedDrafts(snapshot: Snapshot, slots: { channelId: string, 
   const known = new Set(snapshot.data.posts.map((p) => p.id));
   return { ...snapshot, data: { ...snapshot.data, posts: [...snapshot.data.posts, ...added.filter((p) => !known.has(p.id))] } };
 }
+
+/**
+ * The snapshot with these posts added, or replaced where the id is already there: posts Buffer just confirmed creating,
+ * shown at once instead of after the next read. Everything else, including fetchedAt, is unchanged.
+ */
+export function withPosts(snapshot: Snapshot, posts: Post[]): Snapshot {
+  const ids = new Set(posts.map((p) => p.id));
+  return { ...snapshot, data: { ...snapshot.data, posts: [...snapshot.data.posts.filter((p) => !ids.has(p.id)), ...posts] } };
+}
+
+/** The snapshot without these posts: posts Buffer just confirmed deleting. Everything else is unchanged. */
+export function withoutPosts(snapshot: Snapshot, ids: string[]): Snapshot {
+  const gone = new Set(ids);
+  return { ...snapshot, data: { ...snapshot.data, posts: snapshot.data.posts.filter((p) => !gone.has(p.id)) } };
+}
+
+/**
+ * Applies a change Buffer just confirmed to the saved copy. A refresh of the copy that started before the write is
+ * waited for first, so its older read cannot be saved over this change afterwards. (A refresh running on another
+ * server instance is not visible here; the next read after it corrects the copy.)
+ *
+ * @param userId - The person
+ * @param store - Where the copy is saved
+ * @param change - The confirmed change
+ */
+export async function patchAfterWrite(userId: string, store: SnapshotStore, change: (s: Snapshot) => Snapshot): Promise<void> {
+  await inFlight.get(userId)?.catch(() => null);
+  const latest = await store.get(userId);
+  if (latest) await store.save(userId, change(latest));
+}
