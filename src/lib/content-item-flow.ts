@@ -28,14 +28,21 @@ const STATUSES = new Set<string>(["draft", "error", "needs_approval", "scheduled
 export type ItemBuffer = { token: string; organizationIds: string[]; channels: Channel[]; posts: { id: string; channelId: string }[] };
 
 /** One answer: the text an assistant reads, whether it is a failure, and fields a screen can use. */
+/** GraphQL error codes that mean the request was rejected before anything ran: bad input, validation, permission. */
+const REFUSAL_CODES = new Set(["BAD_USER_INPUT", "GRAPHQL_VALIDATION_FAILED", "GRAPHQL_PARSE_FAILED", "FORBIDDEN", "UNAUTHENTICATED", "INSUFFICIENT_SCOPE"]);
+/** Error text that names a rejected input ("Invalid correlationId", "text is required"). */
+const REFUSAL_TEXT = /\binvalid\b|\bis required\b|\bmust be\b/i;
+
 /**
- * Whether an error means Buffer answered and refused (GraphQL errors with no data, or a 4xx other than the rate limit),
- * as opposed to an answer that never arrived or a server error, where the write may have happened.
+ * Whether an error certainly means Buffer rejected the request before writing anything: a known input, validation
+ * or permission refusal (by GraphQL code or error text), or HTTP 400, 403, 404 or 422. Anything else, including
+ * internal GraphQL errors, timeouts (408), rate limits and lost answers, may have followed a write, so it is not a
+ * refusal: the caller retries with the same requestId, which Buffer answers with the same draft if one was made.
  */
 export function refusedByBuffer(e: unknown): boolean {
   if (!(e instanceof BufferApiError)) return false;
-  if (e.status === 200) return e.message !== "Buffer API returned no data";
-  return e.status >= 400 && e.status < 500 && e.status !== 429;
+  if (e.status === 200) return (e.code !== undefined && REFUSAL_CODES.has(e.code)) || (e.code === undefined && REFUSAL_TEXT.test(e.message));
+  return [400, 403, 404, 422].includes(e.status);
 }
 
 export type FlowAnswer = { text: string; isError: boolean; item?: ContentItemView; refused?: { channelId: string; reason: string }[]; created?: number; recorded?: number };

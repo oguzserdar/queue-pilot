@@ -597,6 +597,21 @@ describe("connector voice writes", () => {
       expect(itemsFake.items.size).toBe(0)
     })
 
+    it("keeps unknown Buffer errors and timeouts as unclear, so the same requestId is retried", async () => {
+      const { refusedByBuffer } = await import("@/lib/content-item-flow")
+      expect(refusedByBuffer(new BufferApiError("Internal server error", 200, "INTERNAL_SERVER_ERROR"))).toBe(false)
+      expect(refusedByBuffer(new BufferApiError("Something went wrong", 200))).toBe(false)
+      expect(refusedByBuffer(new BufferApiError("Buffer API returned 408", 408))).toBe(false)
+      expect(refusedByBuffer(new BufferApiError("Buffer API returned 503", 503))).toBe(false)
+      expect(refusedByBuffer(new BufferApiError("Bad input", 200, "BAD_USER_INPUT"))).toBe(true)
+      expect(refusedByBuffer(new BufferApiError("Buffer API returned 422", 422))).toBe(true)
+      itemsFake.createRefusal = "Internal server error"
+      const id = crypto.randomUUID()
+      const r = answer(await saveDraft(undefined, id))
+      expect(r).toContain(`Retry with requestId "${id}"`)
+      expect(r).not.toContain("pass a new random UUID")
+    })
+
     it("turns a draft into one checked draft per account with each version's own evidence, and never schedules", async () => {
       itemsFake.extraChannels = [second]
       rules.set("person-a", [{ id: "stock", kind: "replace", from: "broth", to: "stock", channels: "all", level: "block", text: "Say stock." }])
