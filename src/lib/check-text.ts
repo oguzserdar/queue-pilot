@@ -41,7 +41,7 @@ export async function checkText(userId: string, text: string, network: string, c
   const limit: { max: number | null; from: "buffer" | "built-in" } = !channelLimit ? { max: builtIn, from: "built-in" }
     : forOrdinarySave && builtIn !== null && builtIn < channelLimit ? { max: builtIn, from: "built-in" }
     : { max: channelLimit, from: "buffer" };
-  if (limit.max && countFor(network, text) > limit.max) return { kind: "checked", status: "refused", reason: `Over ${limit.from === "buffer" ? "this account's" : `${network}'s`} ${limit.max} character limit.`, channelId: channelId ?? null, scope: channelId ? "account" : "network-only", verdicts: [], playbookRevision: revision, limit };
+  if (limit.max && countFor(network, text) > limit.max) return { kind: "checked", status: "refused", reason: limit.from === "buffer" ? `Over this account's ${limit.max} character limit.` : channelLimit && channelLimit > limit.max ? `Over Queue Pilot's current save limit of ${limit.max} characters for ${network}. Buffer allows this account ${channelLimit}, but drafts saved into open slots are still checked at ${limit.max}.` : `Over ${network}'s ${limit.max} character limit.`, channelId: channelId ?? null, scope: channelId ? "account" : "network-only", verdicts: [], playbookRevision: revision, limit };
   const eligible = snap?.data.channels.filter(c => c.service === network && (!channelId || c.id === channelId)) ?? [];
   if ((channelId && eligible.length !== 1) || eligible.length > 1 || (!eligible.length && allRules.some(r => r.accountIds?.length || r.inheritance || r.overrides?.accounts)))
     return { kind: "needs_channel", message: "Choose one exact channelId from list_channels so the correct account rules are checked." };

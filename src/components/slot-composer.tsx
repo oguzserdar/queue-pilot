@@ -6,6 +6,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveSlotDraft, writeSlotDraft } from "@/app/(app)/actions";
 import { countFor, limitFor } from "@/lib/char-limits";
+import { placeholdersIn } from "@/lib/placeholders";
+import { ComposerLibrary } from "./composer-library";
 import { Button } from "@/registry/components/button/button";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Textarea } from "@/registry/components/textarea/textarea";
@@ -33,6 +35,13 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
   const limit = slot?.service ? limitFor(slot.service) : null;
   const used = slot?.service ? countFor(slot.service, text) : text.length;
   const over = limit !== null && used > limit;
+  // A template's {{placeholders}} must be filled before the draft can be saved.
+  const unfilled = placeholdersIn(text);
+  /** Puts a template or a saved hashtag set into the post: into an empty post as it is, otherwise after what is written. */
+  const insert = (piece: string) => {
+    setProblem(null);
+    setText((t) => (!t.trim() ? piece : `${t.replace(/\s+$/, "")}\n\n${piece}`));
+  };
 
   const reset = () => { setText(""); setProblem(null); setConfirmDiscard(false); };
   const close = () => { reset(); onClose(); };
@@ -43,7 +52,7 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
     onClose(r.title ? `${done} ${r.title}` : done);
   };
   const save = () => {
-    if (!canSave || busy || !text.trim() || over) return;
+    if (!canSave || busy || !text.trim() || over || unfilled.length) return;
     setDoing("save");
     start(async () => finish(await saveSlotDraft(slot!.id!, text), "Draft saved."));
   };
@@ -67,6 +76,7 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
               </>
             ) : (
               <>
+                {slot.id && <ComposerLibrary slotId={slot.id} onInsert={insert} />}
                 <Textarea
                   label="Post"
                   autoFocus
@@ -80,9 +90,10 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
                   {limit !== null && <span className={`tnum ${over ? styles.over : ""}`} aria-live="polite">{used.toLocaleString("en-GB")} / {limit.toLocaleString("en-GB")}</span>}
                 </div>
                 {over && <p className={styles.problem} role="alert">Too long for this channel by {(used - limit!).toLocaleString("en-GB")} characters.</p>}
+                {unfilled.length > 0 && <p className={styles.problem} role="status">Fill in {unfilled.map((n) => `{{${n}}}`).join(", ")} before saving.</p>}
                 {problem && <p className={styles.problem} role="alert">{problem}</p>}
                 <div className={styles.composerActions}>
-                  <Button variant="primary" disabled={busy || !text.trim() || over} onClick={save}>
+                  <Button variant="primary" disabled={busy || !text.trim() || over || unfilled.length > 0} onClick={save}>
                     {busy && doing === "save" ? "Saving…" : "Save draft"}
                   </Button>
                   <Button variant="secondary" disabled={busy} onClick={() => { setDoing("write"); start(async () => {

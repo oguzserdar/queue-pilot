@@ -1,5 +1,7 @@
 "use server";
 
+import { placeholdersIn } from "@/lib/placeholders";
+
 import { revalidatePath } from "next/cache";
 import { BufferRateLimitedError } from "@/lib/buffer/client";
 import { bufferForWriting, forceRefreshCurrentUser, freshBufferForCurrentUser, signedInUserId } from "@/lib/current-user";
@@ -522,6 +524,8 @@ export async function saveSlotDraft(slotId: string, text: string): Promise<Sourc
   { const l = await overLimit("bufferWrite"); if (l) return tooMany(l); }
   if (typeof slotId !== "string" || !parseSlotId(slotId)) return { ok: false, message: "That time is not one of your slots." };
   if (typeof text !== "string" || !text.trim() || text.length > 25_000) return { ok: false, message: "Write the post first." };
+  const unfilled = placeholdersIn(text);
+  if (unfilled.length) return { ok: false, message: `Fill in ${unfilled.map((n) => `{{${n}}}`).join(", ")} before saving.` };
   try {
     const b = await bufferForWriting();
     if (!b) return { ok: false, message: "Sign in with Buffer first." };

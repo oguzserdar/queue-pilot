@@ -623,7 +623,10 @@ describe("connector voice writes", () => {
         // Buffer allows more than the built-in table: before the ordinary save, the stricter built-in limit still applies.
         libFake.maxLength = 25_000
         const long = "x".repeat(3100)
-        expect(JSON.parse(answer(await call("check_draft", { text: long, network: "linkedin", channelId: "ch" })))).toMatchObject({ status: "refused", limit: { max: 3000, from: "built-in" } })
+        const strict = JSON.parse(answer(await call("check_draft", { text: long, network: "linkedin", channelId: "ch" })))
+        expect(strict).toMatchObject({ status: "refused", limit: { max: 3000, from: "built-in" } })
+        expect(strict.reason).toContain("Queue Pilot's current save limit of 3000")
+        expect(strict.reason).toContain("Buffer allows this account 25000")
       } finally {
         libFake.maxLength = 3000
       }
