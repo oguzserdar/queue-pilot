@@ -135,7 +135,7 @@ describe("content item results", () => {
     const { run } = fake([{ contentItems: { edges: [{ node: draftItem }, { node: postsItem }], pageInfo: { hasNextPage: false, endCursor: null } } }]);
     const r = await listContentItems("t", "org", {}, run);
     expect(r.items.map((i) => i.body.kind)).toEqual(["draft", "posts"]);
-    expect(r.items[0].body).toEqual({ kind: "draft", text: "Soup night.", aiAssisted: true });
+    expect(r.items[0].body).toEqual({ kind: "draft", text: "Soup night.", aiAssisted: true, mediaCount: 0 });
   });
 
   it("marks a new channel-less draft as written with AI and passes the idempotency id", async () => {

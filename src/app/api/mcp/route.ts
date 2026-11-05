@@ -675,8 +675,10 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       const current = (await listTags(b.accessToken, org)).find((t) => t.name === tag);
       if (!current) return { ...text("Not changed: no tag with that exact name. Read list_tags."), isError: true };
       if (current.isLocked) return { ...text("Not changed: that tag is locked by the plan's tag limit."), isError: true };
+      // Kept before the update, so the answer names the tag as it was even if the tag object changes underneath.
+      const before = current.name;
       const r = await updateTag(b.accessToken, current.id, name?.trim() ?? current.name, color ?? current.color);
-      if (r.ok) return text(`Tag "${current.name}" is now "${r.value.name}" (${r.value.color}).`);
+      if (r.ok) return text(`Tag "${before}" is now "${r.value.name}" (${r.value.color}).`);
       return { ...text(`Not changed: ${r.kind === "duplicate" ? "a tag with that exact name exists" : r.message}.`), isError: true };
     },
   );

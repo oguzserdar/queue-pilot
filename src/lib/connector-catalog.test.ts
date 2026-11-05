@@ -8,8 +8,11 @@ import { CONNECTOR_CATALOG } from "./connector-catalog";
 
 describe("connector catalog", () => {
   it("places every registered tool in exactly one group, and names no tool that doesn't exist", () => {
-    const source = readFileSync(join(__dirname, "../app/api/mcp/route.ts"), "utf8") + readFileSync(join(__dirname, "mcp-controls.ts"), "utf8");
+    // Every module that registers connector tools; mcp-content-items.ts holds the content-item tools.
+    const source = ["../app/api/mcp/route.ts", "mcp-controls.ts", "mcp-content-items.ts"].map((f) => readFileSync(join(__dirname, f), "utf8")).join("\n");
     const registered = [...source.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((m) => m[1]).sort();
+    // Control: the content-item module is really scanned.
+    expect(registered).toContain("promote_to_draft_posts");
     expect(registered.length).toBeGreaterThan(30);
     const listed = CONNECTOR_CATALOG.flatMap((g) => g.items.flatMap((i) => i.tools));
     expect(new Set(listed).size).toBe(listed.length);

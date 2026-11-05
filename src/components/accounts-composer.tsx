@@ -4,7 +4,7 @@
  * "New post" for several accounts, laid out the way schedulers lay it out: choose accounts above one main text, then a
  * tab per account that follows the main text until it is customized for that account. Each tab counts characters the
  * way Buffer counts them for that network, against that account's own limit. One Save button keeps the post in Buffer
- * and saves one draft per account, each checked against that account's rules; nothing is scheduled.
+ * and saves one draft per account, each checked against that account's rules.
  */
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -106,7 +106,7 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !busy) close(); }}>
       {open && (
-        <DialogContent className={weekStyles.dialog} title="New post" description="Write it once, pick accounts, adjust each one. Saved as one Buffer draft per account; nothing is scheduled.">
+        <DialogContent className={weekStyles.dialog} title="New post" description="Write it once, pick accounts, adjust each one. Saves one Buffer draft per account.">
           <div className={weekStyles.composer}>
             {load.status === "loading" && <p className={styles.muted} role="status">Loading your accounts…</p>}
             {load.status === "failed" && <p className={weekStyles.problem} role="alert">{load.message}</p>}

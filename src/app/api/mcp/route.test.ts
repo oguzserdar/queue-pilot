@@ -521,14 +521,14 @@ describe("connector voice writes", () => {
         { channelId: "ch", text: "Intro. Closing evidence. Long form for LinkedIn.", snapshotId: "saved-podcast", evidence: [{ claim: "Intro.", quote: "Intro." }] },
         { channelId: "ch2", text: "Closing evidence. Short for X.", snapshotId: "saved-podcast", evidence: [{ claim: "Closing evidence.", quote: "Closing evidence." }] },
       ]
-      const brothy = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [versions[0], { ...versions[1], text: "Closing evidence. Broth for X." }] })
+      const brothy = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [versions[0], { ...versions[1], text: "Closing evidence. Made with broth, for X." }] })
       expect(JSON.parse(answer(brothy))).toMatchObject({ status: "refused", created: false })
       expect(itemsFake.promotes).toBe(0)
       const stale = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "An older draft", versions })
       expect(answer(stale)).toContain("changed in Buffer since it was reviewed")
       expect(itemsFake.promotes).toBe(0)
       const ok = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions }))
-      expect(ok).toContain("Created 2 Buffer drafts, none scheduled")
+      expect(ok).toContain("Buffer has 2 drafts from this promotion; Queue Pilot recorded 2 as its own. None are scheduled.")
       expect(posts.filter((p) => p.status !== "draft")).toEqual([])
       const mine = written.get("person-a") ?? []
       expect(mine.map((w) => w.text).sort()).toEqual(versions.map((v) => v.text).sort())
@@ -543,7 +543,7 @@ describe("connector voice writes", () => {
         itemsFake.promote = mode
         const v = [{ channelId: "ch", text: "Soup night on LinkedIn." }]
         const first = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))
-        expect(first, mode).toContain("The drafts were created anyway; Queue Pilot recorded 1 as its own")
+        expect(first, mode).toContain("The drafts were created anyway. Buffer has 1 draft from this promotion; Queue Pilot recorded 1 as its own.")
         const recorded = structuredClone(written.get("person-a"))
         expect(recorded?.map((w) => w.text)).toEqual(["Soup night on LinkedIn."])
         expect(attemptStore.store.rows.get("person-a|ci-1")?.recordedAt).toBeInstanceOf(Date)
@@ -723,7 +723,7 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(55)
+    expect(tools).toHaveLength(73)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
@@ -925,9 +925,12 @@ describe("connector controls", () => {
     // An X post with a long link: the link counts as 23, so 250 letters plus the link fit in 280.
     const xPost = `${"a".repeat(250)} https://example.com/${"p".repeat(300)}`
     expect(JSON.parse(answer(await call("check_draft", { text: xPost, network: "twitter" }))).status).not.toBe("refused")
-    // Instagram counts each line break twice: 2190 characters with 10 line breaks are over 2196.
-    const ig = `${"a".repeat(2180)}${"\n".repeat(10)}`
+    // Instagram counts each line break twice: 2180 letters with 10 line breaks inside count 2200, over 2196.
+    const ig = `${"a".repeat(1090)}${"\n".repeat(10)}${"a".repeat(1090)}`
     expect(JSON.parse(answer(await call("check_draft", { text: ig, network: "instagram" })))).toMatchObject({ status: "refused" })
+    // check_draft trims its input, so line breaks at the very end are not counted and the same letters fit.
+    const trailing = `${"a".repeat(2180)}${"\n".repeat(10)}`
+    expect(JSON.parse(answer(await call("check_draft", { text: trailing, network: "instagram" }))).status).not.toBe("refused")
   });
   it("returns a normal refusal for overlong text but keeps invalid tool inputs as errors", async () => {
     const overlong = await call("check_draft", { text: "x".repeat(281), network: "twitter" });
