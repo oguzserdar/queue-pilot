@@ -85,3 +85,40 @@ export async function setDraftTags(token: string, postId: string, tagIds: string
     { input: { id: postId, text: post.text ?? "", tagIds, saveToDraft: true } });
   return data.editPost.__typename === "PostActionSuccess" ? { ok: true } : { ok: false, message: data.editPost.message ?? "Buffer did not change the tags." };
 }
+
+/**
+ * Renames or recolors a tag. Buffer replaces both name and color, so the current value of the unchanged one goes with
+ * it. Buffer refuses a locked tag, a duplicate name, and a caller who is not an organization administrator.
+ *
+ * Why: lets an assistant keep the organization's tags tidy for the person (for example, merging spelling variants by
+ * renaming), as a second interface on Buffer's tag API.
+ *
+ * @param token - The person's Buffer access token
+ * @param id - The tag
+ * @param name - The new (or unchanged) name, 1 to MAX_TAG_NAME characters
+ * @param color - The new (or unchanged) six-digit hex color
+ * @returns The tag as it now stands, or Buffer's refusal
+ */
+export async function updateTag(token: string, id: string, name: string, color: string, run: Run = bufferQuery): Promise<TagWriteResult<BufferTag>> {
+  const data = await run<{ updateTag: { __typename: string; tag?: BufferTag; message?: string } }>(token,
+    "mutation UpdateTag($input: UpdateTagInput!) { updateTag(input: $input) { __typename ... on TagActionSuccess { tag { id name color isLocked } } ... on MutationError { message } } }",
+    { input: { id, tag: { name, color } } });
+  const r = data.updateTag;
+  return r.__typename === "TagActionSuccess" && r.tag ? { ok: true, value: r.tag } : refusal(r.__typename, r.message);
+}
+
+/**
+ * Deletes a tag. Buffer removes it from every post, idea and content item carrying it, which are otherwise untouched.
+ * Only an organization administrator may delete.
+ *
+ * @param token - The person's Buffer access token
+ * @param id - The tag
+ * @returns The deleted id, or Buffer's refusal
+ */
+export async function deleteTag(token: string, id: string, run: Run = bufferQuery): Promise<TagWriteResult<string>> {
+  const data = await run<{ deleteTag: { __typename: string; id?: string; message?: string } }>(token,
+    "mutation DeleteTag($input: DeleteTagInput!) { deleteTag(input: $input) { __typename ... on DeleteTagActionSuccess { id } ... on MutationError { message } } }",
+    { input: { id } });
+  const r = data.deleteTag;
+  return r.__typename === "DeleteTagActionSuccess" && r.id ? { ok: true, value: r.id } : refusal(r.__typename, r.message);
+}

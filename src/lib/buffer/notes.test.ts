@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bufferReference, documentedFields } from "./reference.test-support";
 import { BufferApiError } from "./client";
-import { createPostNote, deletePostNote, listPostNotes, NotesNotAllowedError, updatePostNote } from "./notes";
+import { createPostNote, deletePostNote, listPostNotes, NotesNotAllowedError, updatePostNote, mentionAnnotations } from "./notes";
 
 const REFERENCE = await bufferReference();
 const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
@@ -89,5 +89,22 @@ describe("Buffer Notes", () => {
     expect(await updatePostNote("t", "n1", "new", run)).toEqual({ ok: true });
     expect(await updatePostNote("t", "n1", "new", run)).toEqual({ ok: false, message: "Too long" });
     expect(await deletePostNote("t", "n1", run)).toEqual({ ok: true });
+  });
+});
+
+describe("note mentions", () => {
+  it("point at each @Name span with end-exclusive offsets and the member's URN, using only documented annotation fields", async () => {
+    const ref = await bufferReference();
+    const r = mentionAnnotations("Thanks @Sara and @bo@x.com", [{ name: "Sara", email: "s@x.com", urn: "urn:buffer:account:a1" }, { name: null, email: "bo@x.com", urn: "urn:buffer:account:b2" }]);
+    expect(r).toEqual({ ok: true, annotations: [
+      { type: "mention", content: "@Sara", text: "@Sara", displayValue: "Sara", serviceEntityId: "urn:buffer:account:a1", indices: [7, 12] },
+      { type: "mention", content: "@bo@x.com", text: "@bo@x.com", displayValue: "bo@x.com", serviceEntityId: "urn:buffer:account:b2", indices: [17, 26] },
+    ] });
+    if (r.ok) for (const k of Object.keys(r.annotations[0])) expect(documentedFields(ref, "AnnotationInput").has(k), k).toBe(true);
+    expect(documentedFields(ref, "CreateCollaborationNoteInput").has("annotations")).toBe(true);
+  });
+
+  it("names every teammate missing from the text", () => {
+    expect(mentionAnnotations("Hi", [{ name: "Sara", email: "s@x.com", urn: "u" }])).toEqual({ ok: false, missing: ["@Sara"] });
   });
 });

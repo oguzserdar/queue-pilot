@@ -5,7 +5,7 @@
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bufferReference, documentedFields } from "./reference.test-support";
-import { createTag, listTags, setDraftTags } from "./tags";
+import { createTag, deleteTag, listTags, setDraftTags, updateTag } from "./tags";
 
 const REFERENCE = await bufferReference();
 const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
@@ -80,5 +80,28 @@ describe("Buffer tags", () => {
     expect(await createTag("t", "org", "Soups", undefined, run)).toMatchObject({ ok: false, kind: "limit" });
     expect(await createTag("t", "org", "x".repeat(101), undefined, run)).toMatchObject({ ok: false, kind: "invalid" });
     expect(await setDraftTags("t", "p1", ["nope"], run)).toEqual({ ok: false, message: "Unknown tag" });
+  });
+});
+
+describe("tag rename and delete", () => {
+  it("send only documented input fields and select only documented result fields", async () => {
+    const { run, calls } = fake([
+      { updateTag: { __typename: "TagActionSuccess", tag: tag("t1") } },
+      { deleteTag: { __typename: "DeleteTagActionSuccess", id: "t1" } },
+    ]);
+    expect(await updateTag("t", "t1", "Soups", "#8F2457", run)).toEqual({ ok: true, value: tag("t1") });
+    expect(await deleteTag("t", "t1", run)).toEqual({ ok: true, value: "t1" });
+    expect(Object.keys(calls[0].variables.input as object).filter((k) => !fieldsOf("UpdateTagInput").has(k))).toEqual([]);
+    expect(Object.keys((calls[0].variables.input as { tag: object }).tag).filter((k) => !fieldsOf("TagToUpdateInput").has(k))).toEqual([]);
+    expect(Object.keys(calls[1].variables.input as object).filter((k) => !fieldsOf("DeleteTagInput").has(k))).toEqual([]);
+    expect(fieldsOf("DeleteTagActionSuccess").has("id")).toBe(true);
+    // Buffer asks new operations to select MutationError, not the error types it is removing.
+    for (const c of calls) expect(c.query).not.toMatch(/NotFoundError|UnauthorizedError|UnexpectedError|RestProxyError/);
+  });
+
+  it("report Buffer's refusal kind", async () => {
+    const { run } = fake([{ updateTag: { __typename: "DuplicateError", message: "Duplicate" } }, { deleteTag: { __typename: "InvalidInputError", message: "Bad id" } }]);
+    expect(await updateTag("t", "t1", "Soups", "#8F2457", run)).toMatchObject({ ok: false, kind: "duplicate" });
+    expect(await deleteTag("t", "t1", run)).toMatchObject({ ok: false, kind: "invalid", message: "Bad id" });
   });
 });

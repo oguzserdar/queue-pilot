@@ -88,10 +88,10 @@ export type CreateNoteResult = { ok: true; note: BufferNote } | { ok: false; kin
  * @returns The saved note, or Buffer's refusal
  * @throws NotesNotAllowedError when the token lacks notes:write
  */
-export async function createPostNote(token: string, postId: string, text: string, run: Run = bufferQuery): Promise<CreateNoteResult> {
+export async function createPostNote(token: string, postId: string, text: string, run: Run = bufferQuery, annotations: MentionAnnotation[] = []): Promise<CreateNoteResult> {
   const data = await notesRequest<{ createCollaborationNote: { __typename: string; edge?: { node: RawNote }; message?: string } }>(run, token,
     `mutation CreateNote($input: CreateCollaborationNoteInput!) { createCollaborationNote(input: $input) { __typename ... on CreateCollaborationNoteSuccess { edge { node { ${NOTE_FIELDS} } } } ... on MutationError { message } } }`,
-    { input: { subject: { postId }, text, annotations: [] } });
+    { input: { subject: { postId }, text, annotations } });
   const r = data.createCollaborationNote;
   if (r.__typename === "CreateCollaborationNoteSuccess" && r.edge) return { ok: true, note: toNote(r.edge.node) };
   const kind = r.__typename === "CollaborationNoteThreadClosedError" ? "closed" : r.__typename === "LimitReachedError" ? "limit" : r.__typename === "InvalidInputError" ? "invalid" : "other";
@@ -122,4 +122,29 @@ export async function deletePostNote(token: string, noteId: string, run: Run = b
     { input: { noteId } });
   const r = data.deleteCollaborationNote;
   return r.__typename === "DeleteCollaborationNoteSuccess" ? { ok: true } : { ok: false, message: r.message ?? "Buffer did not delete the note." };
+}
+
+/** One @mention in a note, as Buffer's AnnotationInput takes it. */
+export type MentionAnnotation = { type: "mention"; content: string; text: string; displayValue: string; serviceEntityId: string; indices: [number, number] };
+
+/**
+ * Builds the @mention annotations for a note. Each teammate must already appear in the text as "@" plus their name
+ * (or email when they set no name); the offsets point at that span, end exclusive. Buffer documents the fields but no
+ * worked example, so the shape follows the reference (type, urn as serviceEntityId, indices) and is proven live.
+ *
+ * @param text - The note text
+ * @param members - The teammates to mention, from selectableTeamMembers
+ * @returns The annotations, or the names missing from the text
+ */
+export function mentionAnnotations(text: string, members: { name: string | null; email: string; urn: string }[]): { ok: true; annotations: MentionAnnotation[] } | { ok: false; missing: string[] } {
+  const annotations: MentionAnnotation[] = [];
+  const missing: string[] = [];
+  for (const m of members) {
+    const display = m.name?.trim() || m.email;
+    const span = `@${display}`;
+    const at = text.indexOf(span);
+    if (at < 0) { missing.push(span); continue; }
+    annotations.push({ type: "mention", content: span, text: span, displayValue: display, serviceEntityId: m.urn, indices: [at, at + span.length] });
+  }
+  return missing.length ? { ok: false, missing } : { ok: true, annotations };
 }
