@@ -72,7 +72,8 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
       const org = b.channels.find(c => c.id === channelId)?.organizationId;
       if (org) limit = (await textLimits(b.token, [org])).get(channelId);
     }
-    const c = await checkText(userId, text, network, channelId, limit);
+    // check_draft and fill come before the ordinary save, so the stricter limit applies.
+    const c = await checkText(userId, text, network, channelId, limit, true);
     if (c.kind !== "checked") return result(c.message, true);
     // A completed check can refuse the text. That is its verdict, not a failed tool call.
     const { kind: _k, playbookRevision: _r, ...rest } = c;

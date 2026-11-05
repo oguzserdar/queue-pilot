@@ -1,14 +1,18 @@
 /**
- * @fileoverview One playbook check of a piece of text, the same way saving checks it: the account's own character limit
- * from Buffer when known (else the network's built-in limit), then the person's rules for that network or exact
- * account, judged by meaning. Shared by check_draft, fill_post_template and the content-item promote, so no path can
- * check more loosely than another.
+ * @fileoverview One playbook check of a piece of text: its length, counted the way Buffer counts it for the network
+ * (weighted links, emoji, Instagram line breaks), then the person's rules for that network or exact account, judged
+ * by meaning. Shared by check_draft, fill_post_template and the content-item promote.
+ *
+ * Which limit applies depends on where the text will be saved. Promotion saves through Buffer directly, so it uses the
+ * account's own limit from Buffer. check_draft and fill_post_template come before the ordinary save (save_drafts,
+ * update_draft), which still uses the built-in table, so they use the stricter of the two: a check never passes text
+ * that save would refuse.
  */
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
 import { postgresRulesStore } from "./rules-store";
 import { judgeDrafts, rulesFor } from "./judge";
 import { judgeModelFor } from "./judge-model";
-import { limitFor } from "./char-limits";
+import { countFor, limitFor } from "./char-limits";
 import { playbookVersion } from "./playbook-version";
 import type { Verdict } from "./judge";
 
@@ -25,15 +29,19 @@ export type TextCheck =
  * @param text - The text to check
  * @param network - The network, such as linkedin
  * @param channelId - The exact account, required when account-level rules exist
- * @param channelLimit - The account's own post text limit from Buffer's channel configuration; without it the built-in
- *   table for the network is used
+ * @param channelLimit - The account's own post text limit from Buffer's channel configuration, when known
+ * @param forOrdinarySave - True when the text will go through save_drafts or update_draft: the stricter of the
+ *   account's limit and the built-in table applies
  * @returns The verdicts, or why no check could run
  */
-export async function checkText(userId: string, text: string, network: string, channelId?: string, channelLimit?: number | null): Promise<TextCheck> {
+export async function checkText(userId: string, text: string, network: string, channelId?: string, channelLimit?: number | null, forOrdinarySave = false): Promise<TextCheck> {
   const [snap, allRules] = await Promise.all([postgresSnapshotStore().get(userId), postgresRulesStore().list(userId)]);
   const revision = playbookVersion(allRules);
-  const limit = channelLimit ? { max: channelLimit, from: "buffer" as const } : { max: limitFor(network) ?? null, from: "built-in" as const };
-  if (limit.max && text.length > limit.max) return { kind: "checked", status: "refused", reason: `Over ${limit.from === "buffer" ? "this account's" : `${network}'s`} ${limit.max} character limit.`, channelId: channelId ?? null, scope: channelId ? "account" : "network-only", verdicts: [], playbookRevision: revision, limit };
+  const builtIn = limitFor(network);
+  const limit: { max: number | null; from: "buffer" | "built-in" } = !channelLimit ? { max: builtIn, from: "built-in" }
+    : forOrdinarySave && builtIn !== null && builtIn < channelLimit ? { max: builtIn, from: "built-in" }
+    : { max: channelLimit, from: "buffer" };
+  if (limit.max && countFor(network, text) > limit.max) return { kind: "checked", status: "refused", reason: `Over ${limit.from === "buffer" ? "this account's" : `${network}'s`} ${limit.max} character limit.`, channelId: channelId ?? null, scope: channelId ? "account" : "network-only", verdicts: [], playbookRevision: revision, limit };
   const eligible = snap?.data.channels.filter(c => c.service === network && (!channelId || c.id === channelId)) ?? [];
   if ((channelId && eligible.length !== 1) || eligible.length > 1 || (!eligible.length && allRules.some(r => r.accountIds?.length || r.inheritance || r.overrides?.accounts)))
     return { kind: "needs_channel", message: "Choose one exact channelId from list_channels so the correct account rules are checked." };

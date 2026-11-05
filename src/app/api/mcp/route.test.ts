@@ -620,6 +620,10 @@ describe("connector voice writes", () => {
         expect(itemsFake.promotes).toBe(0)
         const checked = JSON.parse(answer(await call("check_draft", { text: "This version is longer than twenty.", network: "linkedin", channelId: "ch" })))
         expect(checked).toMatchObject({ status: "refused", limit: { max: 20, from: "buffer" } })
+        // Buffer allows more than the built-in table: before the ordinary save, the stricter built-in limit still applies.
+        libFake.maxLength = 25_000
+        const long = "x".repeat(3100)
+        expect(JSON.parse(answer(await call("check_draft", { text: long, network: "linkedin", channelId: "ch" })))).toMatchObject({ status: "refused", limit: { max: 3000, from: "built-in" } })
       } finally {
         libFake.maxLength = 3000
       }
@@ -913,6 +917,14 @@ describe("connector controls", () => {
     } finally {
       libFake.snippets = []; libFake.snippetPage = 100
     }
+  });
+  it("counts length the way Buffer counts it for the network, not raw characters", async () => {
+    // An X post with a long link: the link counts as 23, so 250 letters plus the link fit in 280.
+    const xPost = `${"a".repeat(250)} https://example.com/${"p".repeat(300)}`
+    expect(JSON.parse(answer(await call("check_draft", { text: xPost, network: "twitter" }))).status).not.toBe("refused")
+    // Instagram counts each line break twice: 2190 characters with 10 line breaks are over 2196.
+    const ig = `${"a".repeat(2180)}${"\n".repeat(10)}`
+    expect(JSON.parse(answer(await call("check_draft", { text: ig, network: "instagram" })))).toMatchObject({ status: "refused" })
   });
   it("returns a normal refusal for overlong text but keeps invalid tool inputs as errors", async () => {
     const overlong = await call("check_draft", { text: "x".repeat(281), network: "twitter" });
