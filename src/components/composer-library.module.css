@@ -1,7 +1,8 @@
 /* The composer's Templates and Hashtags buttons and their lists, drawn like the draft window's tag picker. */
 .bar { display: flex; flex-wrap: wrap; gap: 6px; }
 .tool { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text-secondary); font: inherit; font-size: var(--text-xs); cursor: pointer; transition: border-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
-.tool:hover { border-color: var(--border-strong); color: var(--foreground); }
+.tool:hover:not(:disabled) { border-color: var(--border-strong); color: var(--foreground); }
+.tool:disabled { cursor: default; opacity: .55; }
 .tool:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 1px; }
 
 .panel { display: grid; gap: 8px; width: 340px; max-width: calc(100vw - 32px); padding: 8px; }

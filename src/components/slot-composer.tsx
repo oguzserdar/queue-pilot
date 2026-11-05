@@ -39,6 +39,7 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
   const unfilled = placeholdersIn(text);
   /** Puts a template or a saved hashtag set into the post: into an empty post as it is, otherwise after what is written. */
   const insert = (piece: string) => {
+    if (busy) return;
     setProblem(null);
     setText((t) => (!t.trim() ? piece : `${t.replace(/\s+$/, "")}\n\n${piece}`));
   };
@@ -76,7 +77,7 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
               </>
             ) : (
               <>
-                {slot.id && <ComposerLibrary slotId={slot.id} onInsert={insert} />}
+                {slot.id && <ComposerLibrary slotId={slot.id} onInsert={insert} disabled={busy} />}
                 <Textarea
                   label="Post"
                   autoFocus

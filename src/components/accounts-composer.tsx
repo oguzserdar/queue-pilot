@@ -20,6 +20,11 @@ import { ComposerLibrary } from "./composer-library";
 import styles from "./accounts-composer.module.css";
 import weekStyles from "./week-view.module.css";
 
+/** Puts a template or a saved hashtag set into text: into empty text as it is, otherwise after what is written. */
+export function insertInto(text: string, piece: string): string {
+  return !text.trim() ? piece : `${text.replace(/\s+$/, "")}\n\n${piece}`;
+}
+
 type Load = { status: "loading" } | { status: "done"; accounts: ComposerAccount[] } | { status: "failed"; message: string };
 
 /** The composer dialog; `preview` supplies accounts and saves nothing (the preview page only). */
@@ -68,7 +73,9 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
     if (tab === id) setTab("main");
   };
   const insert = (piece: string) => {
-    const into = (t: string) => (!t.trim() ? piece : `${t.replace(/\s+$/, "")}\n\n${piece}`);
+    // Nothing changes the text while a save is running: the save sends what was on screen when it started.
+    if (busy) return;
+    const into = (t: string) => insertInto(t, piece);
     if (tab !== "main" && custom[tab] !== undefined) setCustom((c) => ({ ...c, [tab]: into(c[tab]) }));
     else setMain(into);
   };
@@ -133,7 +140,7 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
 
                 {tab === "main" || !picked.some((a) => a.id === tab) ? (
                   <>
-                    {picked[0] && <ComposerLibrary slotId={picked[0].id} onInsert={insert} />}
+                    {picked[0] && <ComposerLibrary slotId={picked[0].id} onInsert={insert} disabled={busy} />}
                     <Textarea label="Main text" autoFocus value={main} rows={6} disabled={busy} onChange={(e) => { setMain(e.target.value); setProblem(null); }} />
                     <p className={styles.muted}>
                       {picked.length === 0 ? "Pick at least one account above." : `${picked.length - Object.keys(custom).filter((id) => chosen.includes(id)).length} of ${picked.length} account${picked.length === 1 ? "" : "s"} use this text.`}
@@ -151,14 +158,14 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
                             <p className={styles.muted}>{a.name} uses the main text.</p>
                             <blockquote className={styles.preview}>{main || <span className={styles.muted}>Nothing written yet.</span>}</blockquote>
                             <div className={weekStyles.composerFoot}><span>{a.limitFrom === "buffer" ? `${a.name}'s limit from Buffer` : `${a.service} limit`}</span>{counter(a)}</div>
-                            <Button variant="secondary" size="sm" onClick={() => setCustom((c) => ({ ...c, [a.id]: main }))}>Change it for {a.name}</Button>
+                            <Button variant="secondary" size="sm" disabled={busy} onClick={() => setCustom((c) => ({ ...c, [a.id]: main }))}>Change it for {a.name}</Button>
                           </>
                         ) : (
                           <>
-                            <ComposerLibrary slotId={a.id} onInsert={insert} />
+                            <ComposerLibrary slotId={a.id} onInsert={insert} disabled={busy} />
                             <Textarea label={`Text for ${a.name}`} autoFocus value={own} rows={6} disabled={busy} onChange={(e) => { setCustom((c) => ({ ...c, [a.id]: e.target.value })); setProblem(null); setRefused(({ [a.id]: _gone, ...rest }) => rest); }} />
                             <div className={weekStyles.composerFoot}><span>{a.limitFrom === "buffer" ? `${a.name}'s limit from Buffer` : `${a.service} limit`}</span>{counter(a)}</div>
-                            <Button variant="ghost" size="sm" onClick={() => setCustom(({ [a.id]: _gone, ...rest }) => rest)}>Use the main text again</Button>
+                            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setCustom(({ [a.id]: _gone, ...rest }) => rest)}>Use the main text again</Button>
                           </>
                         )}
                         {usage[a.id]?.over && <p className={weekStyles.problem} role="alert">Too long for {a.name} by {((usage[a.id]?.used ?? 0) - (a.limit ?? 0)).toLocaleString("en-GB")} characters.</p>}

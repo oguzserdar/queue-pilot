@@ -15,7 +15,7 @@ import styles from "./composer-library.module.css";
 type Load<T> = { status: "idle" } | { status: "loading" } | { status: "done"; items: T[]; more: boolean; cursor: string | null; loadingMore?: boolean; moreError?: string } | { status: "failed"; message: string };
 
 /** Templates and Hashtags for one slot; `onInsert` receives the text to put into the post. */
-export function ComposerLibrary({ slotId, onInsert }: { slotId: string; onInsert: (text: string, kind: "template" | "hashtags") => void }) {
+export function ComposerLibrary({ slotId, onInsert, disabled = false }: { slotId: string; onInsert: (text: string, kind: "template" | "hashtags") => void; disabled?: boolean }) {
   const [templates, setTemplates] = useState<Load<ComposerTemplate>>({ status: "idle" });
   const [snippets, setSnippets] = useState<Load<ComposerSnippet>>({ status: "idle" });
   const [openList, setOpenList] = useState<"templates" | "hashtags" | null>(null);
@@ -69,7 +69,7 @@ export function ComposerLibrary({ slotId, onInsert }: { slotId: string; onInsert
   const yours = shownTemplates.filter((t) => t.mine);
   const library = shownTemplates.filter((t) => !t.mine);
 
-  const pick = (text: string, kind: "template" | "hashtags") => { onInsert(text, kind); setOpenList(null); };
+  const pick = (text: string, kind: "template" | "hashtags") => { if (!disabled) onInsert(text, kind); setOpenList(null); };
   const opener = (list: "templates" | "hashtags") => (open: boolean) => {
     setOpenList(open ? list : null);
     if (!open) return;
@@ -81,7 +81,7 @@ export function ComposerLibrary({ slotId, onInsert }: { slotId: string; onInsert
     <div className={styles.bar}>
       <Popover open={openList === "templates"} onOpenChange={opener("templates")}>
         <PopoverTrigger asChild>
-          <button type="button" className={styles.tool}><LayoutTemplate size={14} strokeWidth={1.8} aria-hidden="true" />Templates</button>
+          <button type="button" className={styles.tool} disabled={disabled}><LayoutTemplate size={14} strokeWidth={1.8} aria-hidden="true" />Templates</button>
         </PopoverTrigger>
         <PopoverContent className={styles.panel} onOpenAutoFocus={(e) => { e.preventDefault(); search.current?.focus(); }}>
           <input ref={search} className={styles.search} placeholder="Search templates" aria-label="Search templates" value={query} maxLength={100} onChange={(e) => setQuery(e.target.value)} />
@@ -119,7 +119,7 @@ export function ComposerLibrary({ slotId, onInsert }: { slotId: string; onInsert
 
       <Popover open={openList === "hashtags"} onOpenChange={opener("hashtags")}>
         <PopoverTrigger asChild>
-          <button type="button" className={styles.tool}><Hash size={14} strokeWidth={1.8} aria-hidden="true" />Hashtags</button>
+          <button type="button" className={styles.tool} disabled={disabled}><Hash size={14} strokeWidth={1.8} aria-hidden="true" />Hashtags</button>
         </PopoverTrigger>
         <PopoverContent className={styles.panel} onOpenAutoFocus={(e) => { e.preventDefault(); search.current?.focus(); }}>
           <input ref={search} className={styles.search} placeholder="Search saved hashtags" aria-label="Search saved hashtags" value={query} maxLength={100} onChange={(e) => setQuery(e.target.value)} />
