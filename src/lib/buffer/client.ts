@@ -5,6 +5,8 @@
  * On HTTP 429 a short Retry-After gets one retry; a long one (the daily window) fails at once with the reset time,
  * so a page never stalls waiting for a window that will not reopen in time.
  */
+import { beforeRequest, recordWindows } from "./budget";
+
 export const API_URL = "https://api.buffer.com";
 
 export class BufferApiError extends Error {
@@ -78,12 +80,14 @@ export async function bufferQuery<T>(token: string, query: string, variables?: R
   const now = opts.now ?? Date.now;
 
   for (let attempt = 0; attempt < 2; attempt++) {
+    beforeRequest(token, now());
     const res = await doFetch(API_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ query, variables }),
     });
     const windows = parseRateLimit(res.headers.get("ratelimit"));
+    recordWindows(token, windows, now());
     if (windows.length) opts.onRateLimit?.(windows);
     if (res.status === 429) {
       const waitMs = retryAfterMs(res.headers.get("retry-after"), now());

@@ -38,7 +38,8 @@ import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
 import { repairDraftEvidence } from "@/lib/repair-draft-evidence";
 import { wroteIds } from "@/lib/written-store";
 import { createPostNote, listPostNotes, MAX_NOTE as MAX_BUFFER_NOTE, mentionAnnotations, NotesNotAllowedError, type MentionAnnotation } from "@/lib/buffer/notes";
-import { BufferApiError } from "@/lib/buffer/client";
+import { BufferApiError, BufferRateLimitedError } from "@/lib/buffer/client";
+import { BufferAllowanceLowError, latestWindows, withBudget } from "@/lib/buffer/budget";
 import { getTemplate, listTemplates, placeholdersIn, searchTemplates } from "@/lib/buffer/templates";
 import { createSnippet, deleteSnippet, listSnippets, SnippetsNotAllowedError, SnippetsNotEnabledError, updateSnippet } from "@/lib/buffer/snippets";
 import { channelSettings, listTeamMembers, postingState, postTextLimit } from "@/lib/buffer/workspace";
@@ -146,9 +147,11 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
           const l = await limit(kind, userId);
           if (!l.ok) return { ...text(`Too many requests just now. Try again in ${Math.max(1, Math.ceil(l.resetSeconds / 60))} min.`), isError: true };
         }
-        return await handler(...args);
+        // Counts this call's Buffer requests and stops it before Buffer when the allowance is down to the reserve.
+        return (await withBudget(name, async () => handler(...args))).result;
       } catch (e) {
         console.error(JSON.stringify({ event: "qp-tool-failed", tool: name, message: e instanceof Error ? e.message : String(e) }));
+        if (e instanceof BufferAllowanceLowError || e instanceof BufferRateLimitedError) return { ...text(e.message), isError: true };
         if (name === "remove_voice_example") return { ...text("Could not remove that example just now. Try again in a minute."), isError: true }
         const controls = ["get_transcript", "list_sources_to_check", "report_source_version", "add_rule", "remove_rule", "read_rule", "check_draft", "fill_post_template", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage", "share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes", "propose_review_changes", "get_effective_rules", "set_rule_override", "set_rule_inheritance", "list_ai_models", "set_ai_model"];
         if (controls.includes(name) && (e instanceof AiCapError || e instanceof TooManyRulesError)) return { ...text(e.message), isError: true };
@@ -748,7 +751,10 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     },
     async () => {
       const b = await bufferFor(auth, userId);
-      const quota = b.rateLimit.length ? `Buffer requests left: ${b.rateLimit.map((w) => remainingOf(w.policy, w.remaining)).join(" · ")}, as of ${b.fetchedAt.toISOString().slice(0, 16).replace("T", " ")} UTC.` : "Buffer did not report its request allowance on the last sync.";
+      // The newest reading from any Buffer call in this process beats the one saved with the last sync.
+      const fresh = latestWindows(b.accessToken);
+      const reading = fresh && fresh.at > b.fetchedAt.getTime() ? { windows: fresh.windows, at: new Date(fresh.at) } : { windows: b.rateLimit, at: b.fetchedAt };
+      const quota = reading.windows.length ? `Buffer requests left: ${reading.windows.map((w) => remainingOf(w.policy, w.remaining)).join(" · ")}, as of ${reading.at.toISOString().slice(0, 16).replace("T", " ")} UTC.` : "Buffer did not report its request allowance on the last sync.";
       const usable = b.channels.filter((c) => !c.isDisconnected && c.organizationId);
       if (!usable.length) return text([quota, "No connected channels to check posting limits for."].join("\n"));
       const { limits } = await postingLimits(b.accessToken, usable.map((c) => ({ id: c.id, organizationId: c.organizationId! })), new Date());

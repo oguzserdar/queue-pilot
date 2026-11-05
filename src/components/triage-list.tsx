@@ -119,7 +119,7 @@ export function TriageList({ items, live, onRemaining }: { items: TriageItem[]; 
                     );
                     // Long drafts and reasons stay one line in the row; the whole of each opens on hover or focus.
                     return item.full ? (
-                      <HoverCard content={<div className={styles.peek}><p className={styles.peekText}>{item.full}</p>{item.why && <p className={styles.peekWhy}>{item.why}</p>}</div>}>
+                      <HoverCard className={styles.peekCard} content={<div className={styles.peek}><p className={styles.peekText}>{item.full}</p>{item.why && <p className={styles.peekWhy}>{item.why}</p>}</div>}>
                         {text}
                       </HoverCard>
                     ) : text;

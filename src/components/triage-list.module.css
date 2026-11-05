@@ -34,6 +34,8 @@
 .row[data-leaving] { height: 0 !important; opacity: 0; padding-block: 0; overflow: hidden; border-top-color: transparent; }
 @media (prefers-reduced-motion: reduce) { .row { transition: none; } }
 /* The hover card: the whole post, then why it is in this group. */
-.peek { display: grid; gap: var(--space-2); max-width: 28rem; font-size: var(--text-sm); line-height: var(--leading-body); }
-.peekText { margin: 0; white-space: pre-wrap; }
+/* The card sizes to the reading width; the text never runs past its edge, and a long link breaks inside it. */
+.peekCard { width: 28rem; max-width: min(28rem, var(--radix-popover-content-available-width, calc(100vw - 24px))); }
+.peek { display: grid; min-width: 0; gap: var(--space-2); font-size: var(--text-sm); line-height: var(--leading-body); }
+.peekText { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .peekWhy { margin: 0; color: var(--text-secondary); }
