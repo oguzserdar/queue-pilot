@@ -20,8 +20,15 @@ Buffer's API supports writing posts, ideas, notes and tags, subject to the conne
 | Save an idea | `createIdea` | `save_idea` | Ideas only. Posts and schedules nothing | [src/lib/buffer/ideas.test.ts](../src/lib/buffer/ideas.test.ts) |
 | Create a tag | `createTag` | `create_tag` | The person's own organization only | [src/lib/buffer/tags.test.ts](../src/lib/buffer/tags.test.ts) |
 | Tag a draft | `editPost` with `tagIds` | `tag_draft` | Only drafts this app wrote, only while still a draft, only the organization's own tag ids. Sends the post's current text with the tags, since Buffer refuses an edit without text | [src/lib/buffer/tags.test.ts](../src/lib/buffer/tags.test.ts), [src/app/(app)/tag-actions.test.ts](../src/app/%28app%29/tag-actions.test.ts) |
+| Mention a teammate in a note | `createCollaborationNote` with mention annotations | `add_draft_note` (`mention`) | Only teammates `selectableTeamMembers` offers for that post's channel, and only where the note already names them as @Name; Buffer checks each mention again. New in v0.7, live check pending | [src/lib/buffer/notes.test.ts](../src/lib/buffer/notes.test.ts) |
+| Save or replace a hashtag set | `createSnippet`, `updateSnippet` | `save_snippet` | The person's own organization. Needs `snippets:write`; an older connection gets a reconnect message. New in v0.7, live check pending | [src/lib/buffer/library.test.ts](../src/lib/buffer/library.test.ts), [src/app/api/mcp/route.test.ts](../src/app/api/mcp/route.test.ts) |
+| Delete a hashtag set | `deleteSnippet` | `delete_snippet` | Asks first, since every teammate loses it. New in v0.7, live check pending | [src/app/api/mcp/route.test.ts](../src/app/api/mcp/route.test.ts) |
+| Rename or delete a tag | `updateTag`, `deleteTag` | `rename_tag`, `delete_tag` | Exact name from the organization's tags; locked tags are not renamed; delete asks first. Buffer allows only organization administrators. New in v0.7, live check pending | [src/lib/buffer/tags.test.ts](../src/lib/buffer/tags.test.ts) |
+| Write once before choosing accounts | `createContentItemDraft`, `updateContentItemDraft` | `save_channel_less_draft` | A client request id makes a retry return the same draft. Replacing text needs the text last read, so an edit in Buffer is refused, not overwritten. Drafts with media are left alone. New in v0.7, live check pending | [src/lib/buffer/content-items.test.ts](../src/lib/buffer/content-items.test.ts) |
+| One draft per account | `promoteContentItemDraftToPosts` | `promote_to_draft_posts` | Every post `saveToDraft: true`. Each version checked against that account's own limit (from Buffer's `configuration`) and rules, with its source evidence, before anything is created. Claimed in a table first, so a recovery after an unclear answer records only posts this app asked for. New in v0.7, live check pending | [src/lib/promotion-attempts-postgres.test.ts](../src/lib/promotion-attempts-postgres.test.ts), [src/app/api/mcp/route.test.ts](../src/app/api/mcp/route.test.ts) |
+| Maintain content items | `updateContentItem`, `deleteContentItem`, `addPostToContentItem`, `removePostFromContentItem` | `update_content_item`, `delete_content_item`, `link_post_to_content_item`, `unlink_post_from_content_item` | Only items in the person's own organizations; delete asks first and reports what a read-back shows after any error. New in v0.7, live check pending | [src/app/api/mcp/route.test.ts](../src/app/api/mcp/route.test.ts) |
 
-The connector has no publish-now or arbitrary GraphQL tool. Its draft edit, delete, tag and note-write tools are restricted to drafts Queue Pilot wrote. Scheduling follows the person’s off, ask or direct setting; direct mode does not require another confirmation in chat.
+The connector has no publish-now or arbitrary GraphQL tool. Its draft edit, delete, tag and note-write tools are restricted to drafts Queue Pilot wrote. The organization tools (tags, hashtag sets, content items) work only inside the person's own Buffer organizations, and the ones that delete something everyone shares ask first. Scheduling follows the person’s off, ask or direct setting; direct mode does not require another confirmation in chat.
 
 ## Six rules worth copying
 
@@ -46,8 +53,11 @@ Buffer runs its own MCP server at `mcp.buffer.com` ([guide](https://developers.b
 | Posts | Create posts; edit/delete where permitted by Buffer. `create_post` can publish immediately | Draft creation; scheduling follows off, ask or direct setting |
 | Ideas | Read and save | Read and save |
 | Notes | `get_post` lists notes; the guide does not establish support for the new Collaboration Notes writes | Read and add Collaboration Notes; the app UI also edits and deletes them |
-| Tags | No named tool listed in the current guide | Create and tag drafts |
-| Templates, metrics | Yes | No (metrics are closed to OAuth apps) |
+| Tags | No named tool listed in the current guide | Create, rename, delete, and tag drafts |
+| Templates | Yes (list, read, create, update, delete) | Read, fill from a source and check against the playbook; no template writes |
+| Hashtag sets (snippets) | No named tool listed in the current guide | Read, save, replace and delete |
+| Write once, several accounts | Not described in the current guide | Channel-less drafts promoted into one checked draft per account |
+| Metrics | Yes | No (metrics are closed to OAuth apps) |
 | Everything else | Two generic tools "reach the rest of the GraphQL API"; their names aren't published | Not reachable |
 | Scope | "Covers your whole account… no per-organization scoping" | The person's own drafts, organization-scoped tags |
 
