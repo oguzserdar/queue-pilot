@@ -117,7 +117,7 @@ const tagsFake = { tags: [] as { id: string; name: string; color: string; isLock
 // Buffer content items in the fake, keyed by id; promote can succeed, refuse, or fail after creating the drafts.
 const itemsFake = { items: new Map<string, any>(), extraChannels: [] as Channel[], promote: "ok" as "ok" | "refuse" | "failAfter" | "throwAfter", promotes: 0, dropCreate: false, readFails: false, deleteThrows: false, reads: 0, attachOnRead: 0 }
 // Buffer's template library, snippets, teammates and channel configuration in the fake.
-const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, maxLength: 3000, snippetsAllowed: true, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
+const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, maxLength: 3000, snippetsAllowed: true, snippetsEntitled: true, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
 const ideasFake = { groups: [{ id: "g1", name: "Next week", isLocked: false }], ideas: [] as Record<string, unknown>[], dropCreate: false }
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
@@ -237,6 +237,7 @@ const buffer = fakeBuffer((call) => {
   if (query.includes("postTemplate(")) return { postTemplate: variables.input.id === "tpl-0" ? { id: "tpl-0", title: "Release 0", description: "A release note", emoji: "🚀", body: "Shipped {{feature}}. {{link}}", visibility: "public", organizationId: "org", updatedAt: "2026-11-01T00:00:00Z" } : null }
   if (query.includes("snippets(") || query.includes("Snippet(")) {
     if (!libFake.snippetsAllowed) return new BufferApiError("Forbidden", 200, "INSUFFICIENT_SCOPE")
+    if (!libFake.snippetsEntitled) return new BufferApiError("Organization does not have required entitlements", 200)
     if (query.includes("createSnippet(")) { const sn = { id: `sn-${libFake.snippets.length + 1}`, name: variables.input.name, text: variables.input.text }; libFake.snippets.push(sn); return { createSnippet: { __typename: "CreateSnippetSuccess", snippet: sn } } }
     if (query.includes("updateSnippet(")) { const sn = libFake.snippets.find((x) => x.id === variables.input.id); if (!sn) return { updateSnippet: { __typename: "VoidMutationError", message: "Snippet not found" } }; Object.assign(sn, { name: variables.input.name, text: variables.input.text }); return { updateSnippet: { __typename: "UpdateSnippetSuccess", snippet: sn } } }
     if (query.includes("deleteSnippet(")) { libFake.snippets = libFake.snippets.filter((x) => x.id !== variables.input.id); return { deleteSnippet: { __typename: "DeleteSnippetSuccess", id: variables.input.id } } }
@@ -438,6 +439,18 @@ describe("connector voice writes", () => {
       expect(buffer.calls.find((c) => c.query.includes("snippets("))?.variables.input).toEqual({ organizationId: "org-2" })
     } finally {
       libFake.orgs = ["org"]
+    }
+  });
+  it("says Buffer has not enabled hashtag sets, without advising a reconnect, when the organization lacks them", async () => {
+    libFake.snippetsEntitled = false
+    try {
+      for (const r of [await call("list_snippets"), await call("save_snippet", { name: "Launch", hashtags: "#ship" })]) {
+        expect(r.isError).toBe(true)
+        expect(answer(r)).toContain("Buffer has not enabled saved hashtag sets for this account")
+        expect(answer(r)).not.toContain("Sign in with Buffer again")
+      }
+    } finally {
+      libFake.snippetsEntitled = true
     }
   });
   it("tells the assistant to reconnect when the connection has no snippets permission, and keeps a partial template list resumable", async () => {

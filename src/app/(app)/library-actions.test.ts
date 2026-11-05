@@ -67,4 +67,9 @@ describe("composer hashtags", () => {
     expect(await readComposerSnippets(slot)).toEqual({ ok: false, message: "To use your saved hashtags here, sign out and sign in with Buffer again to allow it." })
     expect(await readComposerSnippets(slot, "x".repeat(600))).toMatchObject({ ok: false })
   })
+
+  it("says Buffer has not enabled hashtag sets instead of claiming Buffer did not answer", async () => {
+    buffer.answer = () => new BufferApiError("Organization does not have required entitlements", 200)
+    expect(await readComposerSnippets(slot)).toEqual({ ok: false, message: "Buffer has not enabled saved hashtag sets for this account, so Queue Pilot cannot read or save them. Everything else keeps working." })
+  })
 })

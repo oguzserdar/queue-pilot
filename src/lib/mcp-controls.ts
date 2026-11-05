@@ -31,7 +31,7 @@ import { fixesForRule, shareDrafts } from "./review-flow";
 import { fillTemplate, getTemplate } from "./buffer/templates";
 import { checkText } from "./check-text";
 import { textLimits } from "./buffer/workspace";
-import { listSnippets, SnippetsNotAllowedError, type BufferSnippet } from "./buffer/snippets";
+import { listSnippets, SnippetsNotAllowedError, SnippetsNotEnabledError, type BufferSnippet } from "./buffer/snippets";
 
 const result = (value: unknown, isError = false) => ({ content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }], ...(isError ? { isError: true } : {}) });
 const read = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
@@ -159,7 +159,7 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
         if (!found) return result("No snippet with that id. Read list_snippets.", true);
         text = `${text}\n\n${found.text.trim()}`;
       } catch (e) {
-        if (e instanceof SnippetsNotAllowedError) return result(e.message, true);
+        if (e instanceof SnippetsNotAllowedError || e instanceof SnippetsNotEnabledError) return result(e.message, true);
         throw e;
       }
     }

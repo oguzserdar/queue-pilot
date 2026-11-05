@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { bufferReference, documentedFields } from "./reference.test-support";
 import { fillTemplate, getTemplate, listTemplates, placeholdersIn } from "./templates";
-import { listSnippets, SnippetsNotAllowedError } from "./snippets";
+import { createSnippet, listSnippets, SNIPPETS_NOT_ENABLED, SnippetsNotAllowedError, SnippetsNotEnabledError } from "./snippets";
 import { BufferApiError } from "./client";
 import { readPages } from "./paging";
 import { channelSettings, listTeamMembers, postingState, postTextLimit, type ChannelSettings } from "./workspace";
@@ -178,6 +178,18 @@ describe("snippet permission", () => {
     const other = fake([]);
     (other.run as unknown as { mockImplementationOnce: (f: () => never) => void }).mockImplementationOnce(() => { throw new BufferApiError("Buffer API returned 500", 500); });
     await expect(listSnippets("t", "org", null, other.run)).rejects.not.toBeInstanceOf(SnippetsNotAllowedError);
+  });
+
+  it("tells a feature Buffer has not enabled apart from a missing permission, on reads and writes", async () => {
+    // The exact refusal seen live on 5 Nov 2026 after a sign-in that granted snippets:read and snippets:write.
+    const read = fake([]);
+    (read.run as unknown as { mockImplementationOnce: (f: () => never) => void }).mockImplementationOnce(() => { throw new BufferApiError("Organization does not have required entitlements", 200); });
+    const e = await listSnippets("t", "org", null, read.run).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(SnippetsNotEnabledError);
+    expect(e).not.toBeInstanceOf(SnippetsNotAllowedError);
+    expect((e as Error).message).not.toMatch(/sign in|plan|upgrade/i);
+    const write = fake([{ createSnippet: { __typename: "MutationError", message: "Organization does not have required entitlements" } }]);
+    expect(await createSnippet("t", "org", "Launch", "#ship", write.run)).toEqual({ ok: false, message: SNIPPETS_NOT_ENABLED });
   });
 });
 

@@ -6,7 +6,7 @@
  * text in the composer, and the draft still goes through the playbook check when it is saved.
  */
 import { BufferApiError } from "@/lib/buffer/client";
-import { listSnippets, SnippetsNotAllowedError } from "@/lib/buffer/snippets";
+import { listSnippets, SnippetsNotAllowedError, SnippetsNotEnabledError } from "@/lib/buffer/snippets";
 import { listTemplates } from "@/lib/buffer/templates";
 import { bufferForReading } from "@/lib/current-user";
 import { parseSlotId } from "@/lib/open-slots";
@@ -68,6 +68,7 @@ export async function readComposerSnippets(slotId: string, cursor: string | null
     return { ok: true, snippets: r.items.map((x) => ({ id: x.id, name: x.name, text: x.text })), more: r.more, cursor: r.cursor };
   } catch (e) {
     if (e instanceof SnippetsNotAllowedError) return { ok: false, message: "To use your saved hashtags here, sign out and sign in with Buffer again to allow it." };
+    if (e instanceof SnippetsNotEnabledError) return { ok: false, message: e.message };
     return failed(e, "qp-read-snippets-failed");
   }
 }

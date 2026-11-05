@@ -40,7 +40,7 @@ import { wroteIds } from "@/lib/written-store";
 import { createPostNote, listPostNotes, MAX_NOTE as MAX_BUFFER_NOTE, mentionAnnotations, NotesNotAllowedError, type MentionAnnotation } from "@/lib/buffer/notes";
 import { BufferApiError } from "@/lib/buffer/client";
 import { getTemplate, listTemplates, placeholdersIn } from "@/lib/buffer/templates";
-import { createSnippet, deleteSnippet, listSnippets, SnippetsNotAllowedError, updateSnippet } from "@/lib/buffer/snippets";
+import { createSnippet, deleteSnippet, listSnippets, SnippetsNotAllowedError, SnippetsNotEnabledError, updateSnippet } from "@/lib/buffer/snippets";
 import { channelSettings, listTeamMembers, postingState, postTextLimit } from "@/lib/buffer/workspace";
 import { createIdea, IDEA_SERVICES, listIdeaGroups, listIdeas, MAX_IDEA_TEXT, MAX_IDEA_TITLE } from "@/lib/buffer/ideas";
 import { createTag, deleteTag, listTags, MAX_TAG_NAME, setDraftTags, updateTag } from "@/lib/buffer/tags";
@@ -524,7 +524,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         if (!r.items.length && !r.more) return text("No snippets yet.");
         return text([`${r.items.length} snippet${r.items.length === 1 ? "" : "s"}${r.more ? " (partial list)" : ""}:`, ...r.items.map((s) => `- ${s.name}: ${s.text} · snippet id ${s.id}`), ...moreLine(r.more, r.cursor, "snippets")].join("\n"));
       } catch (e) {
-        if (e instanceof SnippetsNotAllowedError) return { ...text(e.message), isError: true };
+        if (e instanceof SnippetsNotAllowedError || e instanceof SnippetsNotEnabledError) return { ...text(e.message), isError: true };
         throw e;
       }
     },
@@ -552,7 +552,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         if (r.ok) return text(`Snippet "${r.value.name}" ${snippetId ? "updated" : "saved"}: ${r.value.text} (snippet id ${r.value.id}).`);
         return { ...text(`Not saved: ${r.message}`), isError: true };
       } catch (e) {
-        if (e instanceof SnippetsNotAllowedError) return { ...text(e.message), isError: true };
+        if (e instanceof SnippetsNotAllowedError || e instanceof SnippetsNotEnabledError) return { ...text(e.message), isError: true };
         throw e;
       }
     },
@@ -574,7 +574,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         const r = await deleteSnippet(b.accessToken, org, snippetId);
         return r.ok ? text(`Snippet ${r.value} deleted.`) : { ...text(`Not deleted: ${r.message}`), isError: true };
       } catch (e) {
-        if (e instanceof SnippetsNotAllowedError) return { ...text(e.message), isError: true };
+        if (e instanceof SnippetsNotAllowedError || e instanceof SnippetsNotEnabledError) return { ...text(e.message), isError: true };
         throw e;
       }
     },

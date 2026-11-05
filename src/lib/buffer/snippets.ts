@@ -30,12 +30,29 @@ export class SnippetsNotAllowedError extends Error {
   }
 }
 
-/** Runs one snippets request, turning a missing permission into SnippetsNotAllowedError. */
+/**
+ * Buffer itself has not enabled saved hashtag sets for the organization ("Organization does not have required
+ * entitlements"). Signing in again does not change that, so this is kept apart from SnippetsNotAllowedError.
+ */
+export class SnippetsNotEnabledError extends Error {
+  constructor() {
+    super(SNIPPETS_NOT_ENABLED);
+    this.name = "SnippetsNotEnabledError";
+  }
+}
+
+/** What to say when Buffer has not enabled saved hashtag sets for the organization. Names no plan; Buffer did not. */
+export const SNIPPETS_NOT_ENABLED = "Buffer has not enabled saved hashtag sets for this account, so Queue Pilot cannot read or save them. Everything else keeps working.";
+
+const NOT_ENTITLED = /required entitlements?|not entitled/i;
+
+/** Runs one snippets request, telling a missing permission apart from a feature Buffer has not enabled. */
 async function guarded<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (e) {
     if (e instanceof BufferApiError && (e.code === "INSUFFICIENT_SCOPE" || /insufficient.?scope|snippets:(read|write)/i.test(e.message))) throw new SnippetsNotAllowedError();
+    if (e instanceof BufferApiError && NOT_ENTITLED.test(e.message)) throw new SnippetsNotEnabledError();
     throw e;
   }
 }
@@ -63,7 +80,7 @@ export type SnippetWriteResult<T> = { ok: true; value: T } | { ok: false; messag
 
 type Payload<K extends string, V> = { [key in K]: { __typename: string; message?: string } & V };
 
-const refused = (message?: string): SnippetWriteResult<never> => ({ ok: false, message: message ?? "Buffer did not save the snippet." });
+const refused = (message?: string): SnippetWriteResult<never> => ({ ok: false, message: message && NOT_ENTITLED.test(message) ? SNIPPETS_NOT_ENABLED : message ?? "Buffer did not save the snippet." });
 
 /**
  * Saves a new hashtag set in the organization. Everyone in the organization can insert it into posts.
