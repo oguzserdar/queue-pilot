@@ -20,6 +20,35 @@ describe("groupBySource", () => {
     expect(groups[0].quotes.map((q) => q.claim)).toEqual(["First.", "Second."]);
   });
 
+  it("orders quotes by where their claims sit in the post, not by the order they were saved", () => {
+    const draftText = "Drafts now carry sources. Each quote links its moment. Rechecks use the saved copy.";
+    const [g] = groupBySource([
+      card({ draftText, claim: "Rechecks use the saved copy." }),
+      card({ draftText, claim: "Drafts now carry sources." }),
+      card({ draftText, claim: "each quote  links its moment." }),
+    ]);
+    expect(g.quotes.map((q) => q.claim)).toEqual(["Drafts now carry sources.", "each quote  links its moment.", "Rechecks use the saved copy."]);
+  });
+
+  it("puts a claim the post no longer contains last, keeping saved order among such claims", () => {
+    const draftText = "First line. Second line.";
+    const [g] = groupBySource([
+      card({ draftText, claim: "Gone A." }),
+      card({ draftText, claim: "Second line." }),
+      card({ draftText, claim: "Gone B." }),
+    ]);
+    expect(g.quotes.map((q) => q.claim)).toEqual(["Second line.", "Gone A.", "Gone B."]);
+  });
+
+  it("lists sources in the order the post first uses them", () => {
+    const draftText = "From the video. From the release.";
+    const groups = groupBySource([
+      card({ draftText, claim: "From the release.", sourceKey: "release" }),
+      card({ draftText, claim: "From the video.", sourceKey: "video" }),
+    ]);
+    expect(groups.map((g) => g.key)).toEqual(["video", "release"]);
+  });
+
   it("keeps different sources apart, even with the same title", () => {
     const groups = groupBySource([card({ sourceKey: "a" }), card({ sourceKey: "b" })]);
     expect(groups).toHaveLength(2);
