@@ -256,6 +256,14 @@ describe("connector voice writes", () => {
       const added = await call("add_draft_note", { postId: "mine", text: "Quote checked against issue 41." })
       expect(added.isError).not.toBe(true)
       expect(notesFake.notes.at(-1)).toMatchObject({ postId: "mine", node: { text: "Quote checked against issue 41." } })
+      // Approved since: Queue Pilot wrote it, but it is scheduled now, so the AI may not touch it.
+      posts = [{ ...draft("mine"), status: "scheduled" }, draft("theirs")]
+      const before = notesFake.notes.length
+      const scheduled = await call("add_draft_note", { postId: "mine", text: "Late note" })
+      expect(scheduled.isError).toBe(true)
+      expect(answer(scheduled)).toContain("no longer a draft")
+      expect(notesFake.notes).toHaveLength(before)
+      posts = [draft("mine"), draft("theirs")]
       notesFake.dropCreate = true
       const dropped = await call("add_draft_note", { postId: "mine", text: "Again" })
       expect(dropped.isError).toBe(true)

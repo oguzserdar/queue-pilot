@@ -329,6 +329,10 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       const post = b.posts.find((p) => p.id === postId);
       if (!post) return { ...text("Not added: no such post in the user's queue. Use a post id from show_next_week."), isError: true };
       if (!(await wroteIds(userId, postId)).has(postId)) return { ...text("Not added: notes can be added only to drafts this app wrote."), isError: true };
+      // The saved copy may be up to 30 seconds old, so ask Buffer now, as edits and tags do: an approved post is left alone.
+      const [now] = await readPostsNow(b.accessToken, [postId]);
+      if (!now) return { ...text("Not added: this post is no longer in Buffer."), isError: true };
+      if (now.status !== "draft") return { ...text("Not added: this post is no longer a draft (it was approved, scheduled or sent), so this app leaves it alone. The person can add a note in Buffer."), isError: true };
       try {
         const r = await createPostNote(b.accessToken, postId, note);
         if (r.ok) return text("Note added to the draft in Buffer, visible there to everyone with access to this channel. The draft itself is unchanged.");
