@@ -730,6 +730,25 @@ describe("connector voice writes", () => {
     expect(tools.find((t: { name: string }) => t.name === "save_my_voice_note").inputSchema.properties.note.maxLength).toBe(MAX_NOTE)
   })
 
+  it("declares honest MCP hints on every one of the 73 tools as clients receive them", async () => {
+    const tools = (await rpc("tools/list", {})).result.tools as { name: string; title?: string; description?: string; annotations?: Record<string, unknown> }[]
+    // Control: the answer includes tools from all three registration modules.
+    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["show_next_week", "check_draft", "promote_to_draft_posts"]))
+    for (const t of tools) {
+      expect(typeof t.title === "string" && t.title.length > 0, `${t.name} title`).toBe(true)
+      expect(typeof t.description === "string" && t.description.length > 0, `${t.name} description`).toBe(true)
+      for (const h of ["readOnlyHint", "destructiveHint", "openWorldHint"]) expect(typeof t.annotations?.[h], `${t.name} ${h}`).toBe("boolean")
+    }
+    // Every Buffer write, including the content-item writes, is marked as reaching outside and not read-only.
+    const bufferWrites = ["save_drafts", "update_draft", "delete_draft", "approve_drafts", "add_draft_note", "save_idea", "create_tag", "tag_draft", "save_snippet", "delete_snippet", "rename_tag", "delete_tag",
+      "save_channel_less_draft", "promote_to_draft_posts", "update_content_item", "delete_content_item", "link_post_to_content_item", "unlink_post_from_content_item"]
+    for (const name of bufferWrites) {
+      const t = tools.find((x) => x.name === name)
+      expect(t?.annotations, name).toMatchObject({ readOnlyHint: false, openWorldHint: true })
+    }
+    for (const name of ["delete_draft", "delete_snippet", "delete_tag", "delete_content_item"]) expect(tools.find((x) => x.name === name)?.annotations, name).toMatchObject({ destructiveHint: true })
+  })
+
   it("saves, reads and clears notes only for the token's person", async () => {
     expect(answer(await call("save_my_voice_note", { note: "Short and plain", userId: "person-b" }))).toContain("saved")
     expect(answer(await call("get_my_voice"))).toContain("Short and plain")

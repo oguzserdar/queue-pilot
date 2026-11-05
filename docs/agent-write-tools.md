@@ -32,7 +32,7 @@ The connector has no publish-now or arbitrary GraphQL tool. Its draft edit, dele
 
 ## Six rules worth copying
 
-**1. One named tool per job, no generic "run any mutation" tool.** Named tools make each action and its restrictions easier to describe and test. A generic tool can enforce permissions too; the server checks matter whichever tool design you choose. All tools: [src/app/api/mcp/route.ts](../src/app/api/mcp/route.ts).
+**1. One named tool per job, no generic "run any mutation" tool.** Named tools make each action and its restrictions easier to describe and test. A generic tool can enforce permissions too; the server checks matter whichever tool design you choose. All tools: [src/app/api/mcp/route.ts](../src/app/api/mcp/route.ts) (the entry point), [src/lib/mcp-controls.ts](../src/lib/mcp-controls.ts) and [src/lib/mcp-content-items.ts](../src/lib/mcp-content-items.ts).
 
 **2. Know which drafts are yours.** Buffer's `via` field doesn't tell you which app owns a draft (drafts Queue Pilot created came back as `buffer`). Queue Pilot keeps its own record of what it wrote, per person, and every draft edit, delete, note write and tag write checks it first: `wroteIds` in [src/lib/written-store.ts](../src/lib/written-store.ts).
 
@@ -42,7 +42,7 @@ The connector has no publish-now or arbitrary GraphQL tool. Its draft edit, dele
 
 **5. Keep note text separate from permission to act.** Queue Pilot tells the assistant to treat notes as source material, not authorization. The Notes operations themselves do not schedule, edit or delete posts. That does not guarantee that note text cannot influence an assistant’s later tool calls. Those calls still need their own server-side checks ([src/lib/buffer/notes.ts](../src/lib/buffer/notes.ts), [src/app/api/mcp/route.ts](../src/app/api/mcp/route.ts)).
 
-**6. Say honestly what each tool does.** Every tool declares MCP's `readOnlyHint`, `destructiveHint` and `openWorldHint`, and every tool that writes to Buffer says `openWorldHint: true`, so a client can treat it with more care. A test keeps that true: [src/app/api/mcp/tool-definitions.test.ts](../src/app/api/mcp/tool-definitions.test.ts).
+**6. Say honestly what each tool does.** Every tool declares MCP's `readOnlyHint`, `destructiveHint` and `openWorldHint`, and every tool that writes to Buffer says `openWorldHint: true`, so a client can treat it with more care. A test checks it on the tool list exactly as a client receives it, all 73 tools: [src/app/api/mcp/route.test.ts](../src/app/api/mcp/route.test.ts) ("declares honest MCP hints on every one of the 73 tools").
 
 ## When Buffer's own MCP server is the better fit
 
