@@ -100,5 +100,3 @@ export async function saveForAccounts(input: { requestId: string; text: string; 
 function plain(text: string): string {
   return text.split("\n")[0].replace(/ Read get_content_item[^.]*\./, "").replace(/content item id \S+/g, "").trim();
 }
-
-
