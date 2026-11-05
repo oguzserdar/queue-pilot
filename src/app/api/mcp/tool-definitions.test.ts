@@ -17,7 +17,7 @@ describe("MCP tool definitions", () => {
   it("finds every tool (control)", () => {
     expect(tools.map((t) => t.name)).toContain("save_drafts");
     expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["save_my_voice_note", "add_voice_example", "add_material"]))
-    expect(tools.length).toBe(29)
+    expect(tools.length).toBe(38)
   });
 
   it.each(tools)("$name sets the three hints, a title and a description", ({ config }) => {
@@ -29,7 +29,7 @@ describe("MCP tool definitions", () => {
 
   // MCP: "If true, this tool may interact with an 'open world' of external entities." Every tool that writes to the
   // person's Buffer reaches outside Queue Pilot, so it says so; a client may treat these with more care.
-  const BUFFER_WRITES = ["save_drafts", "update_draft", "delete_draft", "approve_drafts", "add_draft_note", "save_idea", "create_tag", "tag_draft"];
+  const BUFFER_WRITES = ["save_drafts", "update_draft", "delete_draft", "approve_drafts", "add_draft_note", "save_idea", "create_tag", "tag_draft", "save_snippet", "delete_snippet", "rename_tag", "delete_tag"];
   it.each(BUFFER_WRITES)("%s writes to Buffer and is marked open-world and not read-only", (name) => {
     const tool = tools.find((t) => t.name === name);
     expect(tool, name).toBeDefined();

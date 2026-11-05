@@ -28,6 +28,9 @@ import { applySuggestion, ruleSuggestions } from "./rule-suggestions";
 import { limit } from "./rate-limit";
 import { postgresReviewStore, MAX_SHARED_DRAFTS } from "./review-store";
 import { fixesForRule, shareDrafts } from "./review-flow";
+import { fillTemplate, getTemplate } from "./buffer/templates";
+import { checkText } from "./check-text";
+import { listSnippets, SnippetsNotAllowedError, type BufferSnippet } from "./buffer/snippets";
 
 const result = (value: unknown, isError = false) => ({ content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }], ...(isError ? { isError: true } : {}) });
 const read = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
@@ -36,9 +39,38 @@ const remove = { ...write, destructiveHint: true, idempotentHint: true };
 const network = z.string().refine(n => Object.hasOwn(NETWORKS, n), "Pick a supported network.");
 const idSchema = z.object({ id: z.string().min(1).max(200) });
 const suggestionSchema = z.object({ token: z.string().min(1).max(60_000).describe("Exact token returned by list_rule_suggestions; do not edit it.") });
-type BufferReader = (force?: boolean) => Promise<WriteBuffer & { fetchedAt: Date }>;
+type BufferReader = (force?: boolean) => Promise<WriteBuffer & { fetchedAt: Date; organizationIds?: string[] }>;
+
+/**
+ * Finds one snippet by id across organizations, following every page. "unread" means Buffer stopped giving cursors
+ * before the end, so a missing id is not proof it does not exist.
+ */
+async function findSnippet(token: string, orgs: string[], id: string): Promise<BufferSnippet | null | "unread"> {
+  let unread = false;
+  for (const org of orgs) {
+    let after: string | null = null;
+    for (let batch = 0; batch < 10; batch++) {
+      const r = await listSnippets(token, org, after);
+      const hit = r.items.find(sn => sn.id === id);
+      if (hit) return hit;
+      if (!r.more) break;
+      if (!r.cursor || batch === 9) { unread = true; break; }
+      after = r.cursor;
+    }
+  }
+  return unread ? "unread" : null;
+}
 
 export function registerControls(server: McpServer, userId: string, buffer: BufferReader, origin = "") {
+  /** The shared playbook check, as a tool answer; `extra` adds fields (such as the filled text) to the answer. */
+  async function checkAnswer(text: string, network: string, channelId?: string, extra: Record<string, unknown> = {}) {
+    const c = await checkText(userId, text, network, channelId);
+    if (c.kind !== "checked") return result(c.message, true);
+    // A completed check can refuse the text. That is its verdict, not a failed tool call.
+    const { kind: _k, playbookRevision: _r, ...rest } = c;
+    return result({ ...extra, ...rest, saved: false });
+  }
+
   server.registerTool("add_rule", {
     title: "Add a playbook rule",
     description: "Add a rule the user requests. Use guidance for their own words, banned for a phrase, replace for a word swap, or ends_with for a required ending. block refuses failing drafts; warn saves and flags them. Return the rule ID. Read get_playbook first to avoid duplicates. Every rule is judged by meaning, including guidance.",
@@ -92,26 +124,39 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     title: "Check a draft without saving",
     description: "Check text against the current playbook by meaning, with the same AI allowance and judging used when saving. Does not save, schedule or publish. Report refused, flagged, uncertain or passed exactly; then fix and check again. A later save checks again.",
     inputSchema: z.object({ text: z.string().trim().min(1).max(5000), network, channelId: z.string().min(1).max(200).optional() }), annotations: read,
-  }, async ({ text, network, channelId }) => {
-    const max = limitFor(network);
-    if (max && text.length > max) return result({ status: "refused", reason: `Over ${network}'s ${max} character limit.`, saved: false });
-    const [snap, allRules] = await Promise.all([postgresSnapshotStore().get(userId), postgresRulesStore().list(userId)]);
-    const eligible = snap?.data.channels.filter(c => c.service === network && (!channelId || c.id === channelId)) ?? [];
-    if ((channelId && eligible.length !== 1) || eligible.length > 1 || (!eligible.length && allRules.some(r => r.accountIds?.length || r.inheritance || r.overrides?.accounts))) return result("Choose one exact channelId from list_channels so the correct account rules are checked.", true);
-    channelId = eligible[0]?.id;
-    const rules = rulesFor(allRules, network, channelId);
-    if (!rules.length) return result({ status: "not_checked", reason: "No rules apply to this network.", saved: false });
-    const jm = await judgeModelFor(userId);
-    if (!jm) return result("AI checking is unavailable. Check built-in AI or your own key in Settings.", true);
-    try {
-      const verdicts = (await judgeDrafts(jm.judges, [{ slotId: "try", text, network, channelId }], rules)).get("try") ?? [];
-      const blocked = verdicts.some(v => v.level === "block" && v.verdict === "fail");
-      const incomplete = verdicts.length !== rules.length;
-      const status = blocked ? "refused" : incomplete || verdicts.some(v => v.verdict === "unsure" || v.unavailable) ? "uncertain" : verdicts.some(v => v.verdict === "fail") ? "flagged" : "passed";
-      // A completed check can refuse the text. That is its verdict, not a failed tool call.
-      return result({ status, channelId: channelId ?? null, scope: channelId ? "account" : "network-only", saved: false, verdicts, judgedWith: jm.source });
-    } catch (e) { await jm.giveBack(); throw e; }
-    finally { await jm.settle(); }
+  }, async ({ text, network, channelId }) => checkAnswer(text, network, channelId));
+  server.registerTool("fill_post_template", {
+    title: "Fill a Buffer template and check it",
+    description: "Fills a Buffer post template's placeholders with text taken from the source the person chose, optionally adds one of their saved hashtag sets, then checks the result against the playbook exactly as check_draft does. Does not save, schedule or publish. If a placeholder has no value, nothing is checked and no AI action is spent: fill it and call again. The playbook outranks the template.",
+    inputSchema: z.object({
+      templateId: z.string().min(1).max(200).describe("From list_post_templates."),
+      values: z.record(z.string().max(200), z.string().max(2000)).describe("Placeholder name to the text for it, taken from the source."),
+      network,
+      channelId: z.string().min(1).max(200).optional(),
+      snippetId: z.string().min(1).max(200).optional().describe("A hashtag set from list_snippets to add at the end, only where the playbook allows hashtags."),
+    }), annotations: { ...read, openWorldHint: true },
+  }, async ({ templateId, values, network, channelId, snippetId }) => {
+    const b = await buffer();
+    const template = await getTemplate(b.token, templateId);
+    if (!template) return result("No template with that id, or the person cannot see it.", true);
+    const filled = fillTemplate(template.body, values);
+    if (filled.missing.length) return result({ status: "needs_values", missing: filled.missing, text: filled.text, saved: false });
+    let text = filled.text.trim();
+    if (snippetId) {
+      const orgs = b.organizationIds ?? [];
+      try {
+        const found = await findSnippet(b.token, orgs, snippetId);
+        if (found === "unread") return result("Could not read every snippet to find that one. Read list_snippets and try again.", true);
+        if (!found) return result("No snippet with that id. Read list_snippets.", true);
+        text = `${text}\n\n${found.text.trim()}`;
+      } catch (e) {
+        if (e instanceof SnippetsNotAllowedError) return result(e.message, true);
+        throw e;
+      }
+    }
+    const l = await limit("ai", userId);
+    if (!l.ok) return result("Too many AI requests just now. Try again in a minute.", true);
+    return checkAnswer(text, network, channelId, { text, template: template.title });
   });
   server.registerTool("list_rule_suggestions", {
     title: "Find rules in my edits and posts",

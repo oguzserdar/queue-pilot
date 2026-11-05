@@ -47,6 +47,12 @@ const limits = vi.hoisted(() => ({ blocked: "" }));
 vi.mock("@/lib/rate-limit", () => ({ limit: async (kind: string) => ({ ok: kind !== limits.blocked }), limitHeaders: () => ({}) }))
 vi.mock("@/lib/buffer-token", () => ({ bufferAccessToken: async (_auth: unknown, userId: string) => userId }))
 vi.mock("@/lib/buffer/snapshot-store", () => ({ postgresSnapshotStore: () => snapshots }))
+const attemptStore = vi.hoisted(() => ({ rows: new Map<string, { fingerprint: string; recordedAt: Date | null }>() }))
+vi.mock("@/lib/promotion-attempts", async (original) => ({ ...await original<typeof import("@/lib/promotion-attempts")>(), postgresPromotionAttempts: () => ({
+  start: async (u: string, c: string, fingerprint: string) => { attemptStore.rows.set(`${u}|${c}`, { fingerprint, recordedAt: null }) },
+  get: async (u: string, c: string) => attemptStore.rows.get(`${u}|${c}`) ?? null,
+  markRecorded: async (u: string, c: string) => { const r = attemptStore.rows.get(`${u}|${c}`); if (r) r.recordedAt = new Date() },
+}) }))
 vi.mock("@/lib/voice-store", async (original) => ({ ...await original<typeof import("@/lib/voice-store")>(), postgresVoiceStore: () => voices }))
 vi.mock("@/lib/sources-store", async (original) => ({ ...await original<typeof import("@/lib/sources-store")>(), postgresSourceStore: () => sources }))
 vi.mock("@/lib/material-store", async (original) => ({ ...await original<typeof import("@/lib/material-store")>(), postgresMaterialStore: () => material }))
@@ -103,19 +109,68 @@ const ruleStore = {
 }
 let posts: Post[] = []
 // Buffer collaboration Notes in the fake: what exists, whether the token has the Notes permission, and a dropped create.
-const notesFake = { notes: [] as { postId: string; node: Record<string, unknown> }[], allowed: true, dropCreate: false }
+const notesFake = { notes: [] as { postId: string; node: Record<string, unknown> }[], allowed: true, dropCreate: false, annotations: [] as unknown[] }
 // The Buffer ideas board in the fake: its columns, its ideas, and a dropped create.
 // Buffer tags in the fake.
 const tagsFake = { tags: [] as { id: string; name: string; color: string; isLocked: boolean }[] }
+// Buffer content items in the fake, keyed by id; promote can succeed, refuse, or fail after creating the drafts.
+const itemsFake = { items: new Map<string, any>(), extraChannels: [] as Channel[], promote: "ok" as "ok" | "refuse" | "failAfter" | "throwAfter", promotes: 0, dropCreate: false, readFails: false, deleteThrows: false }
+// Buffer's template library, snippets, teammates and channel configuration in the fake.
+const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, snippetsAllowed: true, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
 const ideasFake = { groups: [{ id: "g1", name: "Next week", isLocked: false }], ideas: [] as Record<string, unknown>[], dropCreate: false }
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
 const judge = deciding((ids, state) => Object.fromEntries(ids.map((id) => [id, { type: "choice", choice: state.includes("broth") ? "fail" : "pass" }])))
 const buffer = fakeBuffer((call) => {
   const { query, variables } = call
-  if (query.includes("{ account")) return { account: { email: "a@example.com", timezone: "UTC", organizations: [{ id: "org" }] } }
-  if (query.includes("channels(input")) return { channels: [channel] }
+  if (query.includes("{ account")) return { account: { email: "a@example.com", timezone: "UTC", organizations: libFake.orgs.map((id) => ({ id })) } }
+  if (query.includes("channels(input")) return { channels: [channel, ...itemsFake.extraChannels] }
   if (query.includes("posts(input")) return { posts: { edges: structuredClone(posts).map((node) => ({ node })), pageInfo: { hasNextPage: false } } }
+  // Buffer content items in the fake: checked before the createContentItem save path, whose name is a prefix.
+  if (query.includes("contentItems(")) return { contentItems: { edges: [...itemsFake.items.values()].map((node) => ({ node: structuredClone(node) })), pageInfo: { hasNextPage: false, endCursor: null } } }
+  if (query.includes("contentItem(input")) {
+    if (itemsFake.readFails) return new TypeError("fetch failed")
+    const it = itemsFake.items.get(variables.input.id)
+    if (!it) return new BufferApiError("Content item not found", 200)
+    return { contentItem: structuredClone(it) }
+  }
+  if (query.includes("createContentItemDraft(")) {
+    const existing = [...itemsFake.items.values()].find((i) => i.correlationId === variables.input.correlationId)
+    if (existing) return { createContentItemDraft: { __typename: "CreateContentItemDraftSuccess", contentItem: structuredClone(existing) } }
+    const it = { id: `ci-${itemsFake.items.size + 1}`, correlationId: variables.input.correlationId, organizationId: variables.input.organizationId, title: variables.input.title ?? null, targetDate: variables.input.targetDate ?? null, createdAt: "2026-11-05T00:00:00Z", allowedActions: ["updateContentItem", "deleteContentItem"], tags: [], body: { __typename: "DraftContent", text: variables.input.draft.text, aiAssisted: variables.input.draft.aiAssisted, assets: [] } }
+    itemsFake.items.set(it.id, it)
+    if (itemsFake.dropCreate) { itemsFake.dropCreate = false; return new TypeError("fetch failed") }
+    return { createContentItemDraft: { __typename: "CreateContentItemDraftSuccess", contentItem: structuredClone(it) } }
+  }
+  if (query.includes("updateContentItemDraft(")) {
+    const it = itemsFake.items.get(variables.input.id)!
+    it.body = { __typename: "DraftContent", text: variables.input.draft.text, aiAssisted: true, assets: [] }
+    return { updateContentItemDraft: { __typename: "UpdateContentItemDraftSuccess", contentItem: structuredClone(it) } }
+  }
+  if (query.includes("promoteContentItemDraftToPosts(")) {
+    itemsFake.promotes++
+    const it = itemsFake.items.get(variables.input.id)!
+    if (itemsFake.promote === "refuse") return { promoteContentItemDraftToPosts: { __typename: "PromoteContentItemDraftToPostsFailure", message: "Invalid", errors: [{ __typename: "PostInvalidInputError", message: "Bad", channelId: "ch" }] } }
+    const made: Post[] = variables.input.posts.map((p: { channelId: string; text: string; saveToDraft: boolean; needsApproval: boolean; mode: string }) => {
+      expect(p).toMatchObject({ saveToDraft: true, needsApproval: false })
+      return { id: `post-${++serial}`, channelId: p.channelId, text: p.text, dueAt: null, status: "draft", via: "api", sentAt: null, externalLink: null, error: null } as Post
+    })
+    posts.push(...made)
+    it.body = { __typename: "PostContent", posts: made.map((m) => ({ id: m.id, channelId: m.channelId, status: "draft", text: m.text, dueAt: null })) }
+    if (itemsFake.promote === "failAfter") return { promoteContentItemDraftToPosts: { __typename: "PromoteContentItemDraftToPostsFailure", message: "Post processing failed", errors: [] } }
+    if (itemsFake.promote === "throwAfter") return new TypeError("fetch failed")
+    return { promoteContentItemDraftToPosts: { __typename: "PromoteContentItemDraftToPostsSuccess", contentItem: structuredClone(it) } }
+  }
+  if (query.includes("updateContentItem(")) {
+    const it = itemsFake.items.get(variables.input.id)!
+    if ("title" in variables.input) it.title = variables.input.title
+    return { updateContentItem: { __typename: "UpdateContentItemSuccess", contentItem: structuredClone(it) } }
+  }
+  if (query.includes("deleteContentItem(")) {
+    itemsFake.items.delete(variables.input.id)
+    if (itemsFake.deleteThrows) { itemsFake.readFails = true; return new TypeError("fetch failed") }
+    return { deleteContentItem: { __typename: "EmptySuccess", _empty: "" } }
+  }
   if (query.includes("createContentItem")) {
     const added: Post[] = variables.input.posts.map((p: { text: string, dueAt: string, saveToDraft: boolean }) => {
       expect(p.saveToDraft).toBe(true)
@@ -139,6 +194,7 @@ const buffer = fakeBuffer((call) => {
     if (!notesFake.allowed) return new BufferApiError("Forbidden", 200, "INSUFFICIENT_SCOPE")
     if (query.includes("createCollaborationNote")) {
       if (notesFake.dropCreate) return new TypeError("fetch failed")
+      notesFake.annotations.push(variables.input.annotations)
       const node = { id: `note-${notesFake.notes.length + 1}`, text: variables.input.text, authorId: "me", author: { id: "me", name: "Me" }, allowedActions: ["updateNote", "deleteNote"], createdAt: "2026-11-04T09:00:00Z", updatedAt: "2026-11-04T09:00:00Z" }
       notesFake.notes.push({ postId: variables.input.subject.postId, node })
       return { createCollaborationNote: { __typename: "CreateCollaborationNoteSuccess", edge: { node } } }
@@ -146,6 +202,14 @@ const buffer = fakeBuffer((call) => {
     return { collaborationNotes: { edges: notesFake.notes.filter((n) => n.postId === variables.input.subject.postId).map((n) => ({ node: n.node })), pageInfo: { hasNextPage: false, endCursor: null } } }
   }
   if (query.includes("tagsV2(")) return { tagsV2: { edges: tagsFake.tags.map((node) => ({ node })), pageInfo: { hasNextPage: false, endCursor: null } } }
+  if (query.includes("updateTag(")) {
+    const t = tagsFake.tags.find((x) => x.id === variables.input.id)
+    if (!t) return { updateTag: { __typename: "InvalidInputError", message: "No such tag" } }
+    if (tagsFake.tags.some((x) => x.name === variables.input.tag.name && x.id !== t.id)) return { updateTag: { __typename: "DuplicateError", message: "Duplicate" } }
+    Object.assign(t, variables.input.tag)
+    return { updateTag: { __typename: "TagActionSuccess", tag: t } }
+  }
+  if (query.includes("deleteTag(")) { tagsFake.tags = tagsFake.tags.filter((x) => x.id !== variables.input.id); return { deleteTag: { __typename: "DeleteTagActionSuccess", id: variables.input.id } } }
   if (query.includes("createTag(")) {
     const { name, color } = variables.input.tag
     if (tagsFake.tags.some((t) => t.name === name)) return { createTag: { __typename: "DuplicateError", message: "Duplicate" } }
@@ -162,6 +226,25 @@ const buffer = fakeBuffer((call) => {
     ideasFake.ideas.push(node)
     return { createIdea: { __typename: "Idea", id: node.id } }
   }
+  if (query.includes("postTemplates(")) {
+    const i = variables.after ? Number(String(variables.after).slice(1)) : 0
+    const last = i + 1 >= libFake.templatePages
+    return { postTemplates: { edges: [{ node: { id: `tpl-${i}`, title: `Release ${i}`, description: "A release note", emoji: "🚀", body: "Shipped {{feature}}. {{link}}", visibility: "public", organizationId: variables.input.organizationId, updatedAt: "2026-11-01T00:00:00Z" } }], pageInfo: { hasNextPage: !last, endCursor: last ? null : `c${i + 1}` } } }
+  }
+  if (query.includes("postTemplate(")) return { postTemplate: variables.input.id === "tpl-0" ? { id: "tpl-0", title: "Release 0", description: "A release note", emoji: "🚀", body: "Shipped {{feature}}. {{link}}", visibility: "public", organizationId: "org", updatedAt: "2026-11-01T00:00:00Z" } : null }
+  if (query.includes("snippets(") || query.includes("Snippet(")) {
+    if (!libFake.snippetsAllowed) return new BufferApiError("Forbidden", 200, "INSUFFICIENT_SCOPE")
+    if (query.includes("createSnippet(")) { const sn = { id: `sn-${libFake.snippets.length + 1}`, name: variables.input.name, text: variables.input.text }; libFake.snippets.push(sn); return { createSnippet: { __typename: "CreateSnippetSuccess", snippet: sn } } }
+    if (query.includes("updateSnippet(")) { const sn = libFake.snippets.find((x) => x.id === variables.input.id); if (!sn) return { updateSnippet: { __typename: "VoidMutationError", message: "Snippet not found" } }; Object.assign(sn, { name: variables.input.name, text: variables.input.text }); return { updateSnippet: { __typename: "UpdateSnippetSuccess", snippet: sn } } }
+    if (query.includes("deleteSnippet(")) { libFake.snippets = libFake.snippets.filter((x) => x.id !== variables.input.id); return { deleteSnippet: { __typename: "DeleteSnippetSuccess", id: variables.input.id } } }
+    // Pages of libFake.snippetPage items, so a snippet can sit on a later page.
+    const start = variables.after ? Number(String(variables.after).slice(2)) : 0
+    const size = libFake.snippetPage
+    const end = Math.min(start + size, libFake.snippets.length)
+    return { snippets: { edges: libFake.snippets.slice(start, end).map((node) => ({ node })), pageInfo: { hasNextPage: end < libFake.snippets.length, endCursor: end < libFake.snippets.length ? `sc${end}` : null } } }
+  }
+  if (query.includes("selectableTeamMembers(")) return { selectableTeamMembers: { edges: [{ node: { id: "acc-1", name: "Sara", email: "sara@example.com", avatar: "", isLocked: false, urn: "urn:buffer:account:acc-1" } }], pageInfo: { hasNextPage: false, endCursor: null } } }
+  if (query.includes("configuration(")) return { configuration: { channels: [{ channelId: channel.id, service: "linkedin", channelType: "profile", authorizationStatus: libFake.authorization, content: [{ configurationContentTypes: ["post"], rules: libFake.noLimit ? [] : [{ __typename: "LengthRule", property: "text", maxLength: 3000 }] }] }] } }
   throw new Error("Unexpected Buffer query")
 })
 
@@ -318,6 +401,244 @@ describe("connector voice writes", () => {
       expect(posts.find((p) => p.id === "queued")).toMatchObject({ status: "scheduled" })
     } finally {
       tagsFake.tags = []
+    }
+  });
+  it("reads templates, snippets, teammates and channel settings only inside the person's own organizations and channels", async () => {
+    const bufferCalls = () => buffer.calls.map((c) => c.query)
+    try {
+      const foreign = await call("list_post_templates", { organizationId: "someone-elses-org" })
+      expect(foreign.isError).toBe(true)
+      expect(answer(foreign)).toContain("Choose one organizationId: org")
+      const foreignChannel = await call("list_team_members", { channelId: "not-mine" })
+      expect(foreignChannel.isError).toBe(true)
+      for (const name of ["save_snippet", "delete_snippet", "list_snippets", "get_channel_settings"]) {
+        const r = await call(name, { organizationId: "someone-elses-org", name: "x", hashtags: "#x", snippetId: "sn-1" })
+        expect(r.isError, name).toBe(true)
+      }
+      expect(bufferCalls().filter((q) => /postTemplates\(|selectableTeamMembers\(|snippets\(|Snippet\(|configuration\(/.test(q))).toEqual([])
+      const one = answer(await call("get_post_template", { templateId: "tpl-0" }))
+      expect(one).toContain("<template_body>")
+      expect(one).toContain("Placeholders to fill: feature, link")
+      expect((await call("get_post_template", { templateId: "nope" })).isError).toBe(true)
+      expect(answer(await call("list_team_members", { channelId: channel.id }))).toContain("Sara · sara@example.com · account id acc-1")
+    } finally {
+      libFake.snippets = []
+    }
+  });
+  it("makes the assistant choose when the person has more than one organization", async () => {
+    libFake.orgs = ["org", "org-2"]
+    try {
+      const r = await call("list_snippets")
+      expect(r.isError).toBe(true)
+      expect(answer(r)).toContain("Choose one organizationId: org, org-2")
+      expect((await call("list_snippets", { organizationId: "org-2" })).isError).not.toBe(true)
+      expect(buffer.calls.find((c) => c.query.includes("snippets("))?.variables.input).toEqual({ organizationId: "org-2" })
+    } finally {
+      libFake.orgs = ["org"]
+    }
+  });
+  it("tells the assistant to reconnect when the connection has no snippets permission, and keeps a partial template list resumable", async () => {
+    libFake.snippetsAllowed = false
+    libFake.templatePages = 6
+    try {
+      const noScope = await call("list_snippets")
+      expect(noScope.isError).toBe(true)
+      expect(answer(noScope)).toContain("Sign in with Buffer again")
+      expect(answer(await call("save_snippet", { name: "Launch", hashtags: "#ship" }))).toContain("Sign in with Buffer again")
+      const first = answer(await call("list_post_templates"))
+      expect(first).toContain("4 templates (partial list)")
+      expect(first).toContain('cursor "c4"')
+      const rest = answer(await call("list_post_templates", { cursor: "c4" }))
+      expect(rest).toContain("2 templates:")
+      expect(rest).not.toContain("cursor")
+    } finally {
+      libFake.snippetsAllowed = true; libFake.templatePages = 1
+    }
+  });
+  it("saves, replaces and deletes a snippet, and reads them back", async () => {
+    try {
+      expect(answer(await call("list_snippets"))).toContain("No snippets yet")
+      expect(answer(await call("save_snippet", { name: "Launch", hashtags: "#ship #buildinpublic" }))).toContain('Snippet "Launch" saved: #ship #buildinpublic (snippet id sn-1)')
+      expect(answer(await call("save_snippet", { name: "Launch", hashtags: "#ship", snippetId: "sn-1" }))).toContain("updated")
+      expect(answer(await call("list_snippets"))).toContain("- Launch: #ship · snippet id sn-1")
+      expect(answer(await call("save_snippet", { name: "X", hashtags: "#x", snippetId: "sn-404" }))).toContain("Not saved: Snippet not found")
+      expect(answer(await call("delete_snippet", { snippetId: "sn-1" }))).toContain("deleted")
+      expect(libFake.snippets).toEqual([])
+    } finally {
+      libFake.snippets = []
+    }
+  });
+  it("says posting is ok only when Buffer reports it, and never calls another feature's failure a posting failure", async () => {
+    try {
+      expect(answer(await call("get_channel_settings"))).toContain("post text up to 3000 characters · posting: ok")
+      libFake.noLimit = true
+      expect(answer(await call("get_channel_settings"))).toContain("text limit not reported · posting: ok")
+      libFake.noLimit = false
+      libFake.authorization = []
+      expect(answer(await call("get_channel_settings"))).toContain("posting: not reported by Buffer")
+      libFake.authorization = [{ feature: "comment", status: "notEnoughRights", reason: "Role too low" }]
+      const other = answer(await call("get_channel_settings"))
+      expect(other).toContain("posting: not reported by Buffer")
+      expect(other).toContain("other features unavailable: comment: notEnoughRights (Role too low)")
+      libFake.authorization = [{ feature: "posting", status: "needsRefresh", reason: null }]
+      expect(answer(await call("get_channel_settings"))).toContain("posting: needsRefresh")
+    } finally {
+      libFake.authorization = [{ feature: "posting", status: "ok", reason: null }]
+    }
+  });
+  describe("content items: write once, choose accounts later", () => {
+    const second: Channel = { ...channel, id: "ch2", name: "Second", service: "twitter" }
+    const reset = () => { itemsFake.items.clear(); itemsFake.extraChannels = []; itemsFake.promote = "ok"; itemsFake.promotes = 0; itemsFake.dropCreate = false; itemsFake.readFails = false; itemsFake.deleteThrows = false; attemptStore.rows.clear() }
+    afterEach(reset)
+    const saveDraft = async (text = "Soup night: three soups from issue 41.", requestId: string = crypto.randomUUID()) => call("save_channel_less_draft", { text, title: "Issue 41", requestId })
+
+    it("saves one channel-less draft even when an unclear save is retried with the same requestId, and refuses a stale replace", async () => {
+      expect(answer(await call("save_channel_less_draft", { text: "No id" }))).toContain("Pass requestId")
+      expect(itemsFake.items.size).toBe(0)
+      const id = crypto.randomUUID()
+      itemsFake.dropCreate = true
+      expect(answer(await saveDraft(undefined, id))).toContain(`Retry with requestId "${id}"`)
+      expect(answer(await saveDraft(undefined, id))).toContain("content item id ci-1")
+      expect(itemsFake.items.size).toBe(1)
+      const stale = await call("save_channel_less_draft", { contentItemId: "ci-1", text: "New", expectedText: "Something older" })
+      expect(stale.isError).toBe(true)
+      expect(answer(stale)).toContain("changed in Buffer since it was read")
+      expect(itemsFake.items.get("ci-1").body.text).toBe("Soup night: three soups from issue 41.")
+      expect((await call("save_channel_less_draft", { contentItemId: "ci-1", text: "New" })).isError).toBe(true)
+      expect(answer(await call("save_channel_less_draft", { contentItemId: "ci-1", text: "Soup night!", expectedText: "Soup night: three soups from issue 41." }))).toContain("Draft text replaced")
+    })
+
+    it("turns a draft into one checked draft per account with each version's own evidence, and never schedules", async () => {
+      itemsFake.extraChannels = [second]
+      rules.set("person-a", [{ id: "stock", kind: "replace", from: "broth", to: "stock", channels: "all", level: "block", text: "Say stock." }])
+      await saveDraft()
+      const { recordEvidence } = await import("@/lib/source-store")
+      vi.mocked(recordEvidence).mockClear()
+      const versions = [
+        { channelId: "ch", text: "Intro. Closing evidence. Long form for LinkedIn.", snapshotId: "saved-podcast", evidence: [{ claim: "Intro.", quote: "Intro." }] },
+        { channelId: "ch2", text: "Closing evidence. Short for X.", snapshotId: "saved-podcast", evidence: [{ claim: "Closing evidence.", quote: "Closing evidence." }] },
+      ]
+      const brothy = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [versions[0], { ...versions[1], text: "Closing evidence. Broth for X." }] })
+      expect(JSON.parse(answer(brothy))).toMatchObject({ status: "refused", created: false })
+      expect(itemsFake.promotes).toBe(0)
+      const stale = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "An older draft", versions })
+      expect(answer(stale)).toContain("changed in Buffer since it was reviewed")
+      expect(itemsFake.promotes).toBe(0)
+      const ok = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions }))
+      expect(ok).toContain("Created 2 Buffer drafts, none scheduled")
+      expect(posts.filter((p) => p.status !== "draft")).toEqual([])
+      const mine = written.get("person-a") ?? []
+      expect(mine.map((w) => w.text).sort()).toEqual(versions.map((v) => v.text).sort())
+      expect(mine.every((w) => Array.isArray(w.verdicts) && w.playbookRevision)).toBe(true)
+      expect(vi.mocked(recordEvidence).mock.calls.map((c) => [c[2], c[4]])).toEqual(versions.map((v) => [v.text, v.evidence]))
+    })
+
+    it("records the drafts after an unclear promote, whether Buffer returns a failure or the answer is lost, and a retry never promotes twice", async () => {
+      for (const mode of ["failAfter", "throwAfter"] as const) {
+        reset(); written.clear(); posts = []
+        await saveDraft()
+        itemsFake.promote = mode
+        const v = [{ channelId: "ch", text: "Soup night on LinkedIn." }]
+        const first = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))
+        expect(first, mode).toContain("The drafts were created anyway; Queue Pilot recorded 1 as its own")
+        expect((written.get("person-a") ?? []).map((w) => w.text)).toEqual(["Soup night on LinkedIn."])
+        written.clear()
+        const retry = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))
+        expect(retry).toContain("Already turned into drafts; Queue Pilot recorded 1")
+        expect(itemsFake.promotes).toBe(1)
+        expect(written.get("person-a")?.[0]).toMatchObject({ text: "Soup night on LinkedIn.", verdicts: null })
+        // A third call records nothing again and does not touch the saved record.
+        expect(answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))).toContain("Already turned into drafts and recorded")
+        expect(written.get("person-a")).toHaveLength(1)
+      }
+      reset(); posts = []
+      await saveDraft()
+      itemsFake.promote = "refuse"
+      const refused = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [{ channelId: "ch", text: "Soup night." }] })
+      expect(refused.isError).toBe(true)
+      expect(answer(refused)).toContain("still a channel-less draft; nothing was created")
+    })
+
+    it("never adopts posts it did not create, and leaves drafts with media alone", async () => {
+      await saveDraft()
+      // Posts made in Buffer (or by another app) with the same account and text: no attempt by Queue Pilot exists.
+      itemsFake.items.get("ci-1").body = { __typename: "PostContent", posts: [{ id: "elsewhere", channelId: "ch", status: "draft", text: "Soup night on LinkedIn.", dueAt: null }] }
+      const adopt = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [{ channelId: "ch", text: "Soup night on LinkedIn." }] })
+      expect(adopt.isError).toBe(true)
+      expect(answer(adopt)).toContain("did not create")
+      expect(written.get("person-a") ?? []).toEqual([])
+      // An attempt for different versions does not count either.
+      attemptStore.rows.set("person-a|ci-1", { fingerprint: "something-else", recordedAt: null })
+      expect((await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "x", versions: [{ channelId: "ch", text: "Soup night on LinkedIn." }] })).isError).toBe(true)
+      expect(written.get("person-a") ?? []).toEqual([])
+      await saveDraft("With a photo")
+      itemsFake.items.get("ci-2").body.assets = [{ type: "image" }]
+      expect(answer(await call("save_channel_less_draft", { contentItemId: "ci-2", text: "New", expectedText: "With a photo" }))).toContain("images or video attached")
+      expect(answer(await call("promote_to_draft_posts", { contentItemId: "ci-2", expectedDraftText: "With a photo", versions: [{ channelId: "ch", text: "With a photo" }] }))).toContain("images or video attached")
+      expect(itemsFake.items.get("ci-2").body).toMatchObject({ text: "With a photo", assets: [{ type: "image" }] })
+      expect(itemsFake.promotes).toBe(0)
+    })
+
+    it("never takes a failed read for a missing or deleted item", async () => {
+      await saveDraft()
+      itemsFake.readFails = true
+      const read = await call("get_content_item", { contentItemId: "ci-1" })
+      expect(read.isError).toBe(true)
+      expect(answer(read)).not.toContain("No content item with that id")
+      itemsFake.readFails = false
+      itemsFake.deleteThrows = true
+      const del = await call("delete_content_item", { contentItemId: "ci-1" })
+      expect(del.isError).toBe(true)
+      expect(answer(del)).toContain("whether it was deleted is unknown")
+      expect(answer(del)).not.toContain("delete took effect")
+    })
+
+    it("refuses another person's items, accounts and sources before writing, and renames, re-dates or deletes only on request", async () => {
+      await saveDraft()
+      const theirs = { ...itemsFake.items.get("ci-1"), id: "ci-x", organizationId: "someone-elses-org" }
+      itemsFake.items.set("ci-x", theirs)
+      expect(answer(await call("get_content_item", { contentItemId: "ci-x" }))).toContain("No content item with that id")
+      expect((await call("delete_content_item", { contentItemId: "ci-x" })).isError).toBe(true)
+      expect(itemsFake.items.has("ci-x")).toBe(true)
+      expect(answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [{ channelId: "not-mine", text: "x" }] }))).toContain("Not the person's accounts")
+      expect(answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [{ channelId: "ch", text: "x", snapshotId: "saved-podcast" }] }, "person-b"))).toContain("not in this account")
+      expect(itemsFake.promotes).toBe(0)
+      expect(answer(await call("update_content_item", { contentItemId: "ci-1", title: "Soup week" }))).toContain('"Soup week"')
+      expect((await call("update_content_item", { contentItemId: "ci-1" })).isError).toBe(true)
+      expect(answer(await call("list_content_items"))).toContain("Channel-less draft (written with AI)")
+      expect(answer(await call("delete_content_item", { contentItemId: "ci-1" }))).toContain("deleted")
+      expect(itemsFake.items.has("ci-1")).toBe(false)
+    })
+  })
+  it("renames, recolors and deletes tags by exact name, refusing locked tags and duplicates", async () => {
+    tagsFake.tags = [{ id: "t1", name: "Soups", color: "#8F2457", isLocked: false }, { id: "t2", name: "Stews", color: "#111111", isLocked: false }, { id: "t3", name: "Old", color: "#222222", isLocked: true }]
+    try {
+      expect((await call("rename_tag", { tag: "Soups" })).isError).toBe(true)
+      expect(answer(await call("rename_tag", { tag: "soups", name: "Soup" }))).toContain("no tag with that exact name")
+      expect(answer(await call("rename_tag", { tag: "Old", name: "New" }))).toContain("locked")
+      expect(answer(await call("rename_tag", { tag: "Soups", name: "Stews" }))).toContain("exact name exists")
+      expect(answer(await call("rename_tag", { tag: "Soups", name: "Soup week" }))).toContain('Tag "Soups" is now "Soup week" (#8F2457)')
+      expect(answer(await call("rename_tag", { tag: "Stews", color: "#00AA00" }))).toContain('"Stews" (#00AA00)')
+      expect(answer(await call("delete_tag", { tag: "Old" }))).toContain('Tag "Old" deleted')
+      expect(tagsFake.tags.map((t) => t.name)).toEqual(["Soup week", "Stews"])
+      expect((await call("delete_tag", { tag: "Old" })).isError).toBe(true)
+    } finally {
+      tagsFake.tags = []
+    }
+  });
+  it("mentions only teammates who can read notes on the post's channel, and only where the note names them", async () => {
+    const draft: Post = { id: "mine", channelId: channel.id, text: "Draft", dueAt: "2026-11-09T09:00:00Z", status: "draft", via: "api", sentAt: null, externalLink: null, error: null } as Post
+    posts = [draft]
+    written.set("person-a", [{ postId: "mine" } as Written])
+    try {
+      expect(answer(await call("add_draft_note", { postId: "mine", text: "Please check this", mention: ["acc-1"] }))).toContain("write each mention into the note first: @Sara")
+      expect(answer(await call("add_draft_note", { postId: "mine", text: "@Sara please check", mention: ["acc-9"] }))).toContain("cannot be mentioned on this channel: acc-9")
+      expect(notesFake.notes).toHaveLength(0)
+      expect((await call("add_draft_note", { postId: "mine", text: "Thanks @Sara, checked.", mention: ["acc-1"] })).isError).not.toBe(true)
+      expect(notesFake.annotations.at(-1)).toEqual([{ type: "mention", content: "@Sara", text: "@Sara", displayValue: "Sara", serviceEntityId: "urn:buffer:account:acc-1", indices: [7, 12] }])
+      expect(buffer.calls.find((c) => c.query.includes("selectableTeamMembers("))?.variables.input.scope).toEqual({ channelId: channel.id })
+    } finally {
+      notesFake.notes = []; notesFake.annotations = []
     }
   });
   it("reports each channel's daily posting limit and Buffer's request allowance", async () => {
@@ -514,6 +835,29 @@ describe("connector controls", () => {
     expect(posts).toHaveLength(0);
     expect(buffer.calls).toHaveLength(0);
     expect(JSON.parse(answer(await call("check_draft", { text: "Use stock", network: "linkedin" }, "person-b"))).status).toBe("not_checked");
+  });
+  it("fills a template from the source, spends nothing while a placeholder is empty, and checks the result with the playbook", async () => {
+    rules.set("person-a", [{ id: "stock", kind: "replace", from: "broth", to: "stock", channels: "all", level: "block", text: "Say stock." }]);
+    libFake.snippets = [{ id: "sn-1", name: "Soup", text: "#soup" }]
+    try {
+      const half = JSON.parse(answer(await call("fill_post_template", { templateId: "tpl-0", values: { feature: "broth packs" }, network: "linkedin" })))
+      expect(half).toMatchObject({ status: "needs_values", missing: ["link"], saved: false })
+      expect(aiCalls.settle).not.toHaveBeenCalled()
+      const refused = JSON.parse(answer(await call("fill_post_template", { templateId: "tpl-0", values: { feature: "broth packs", link: "https://x.example/41" }, network: "linkedin" })))
+      expect(refused).toMatchObject({ status: "refused", saved: false, text: "Shipped broth packs. https://x.example/41", template: "Release 0" })
+      const passed = JSON.parse(answer(await call("fill_post_template", { templateId: "tpl-0", values: { feature: "stock packs", link: "https://x.example/41" }, network: "linkedin", snippetId: "sn-1" })))
+      expect(passed).toMatchObject({ status: "passed", text: "Shipped stock packs. https://x.example/41\n\n#soup" })
+      expect((await call("fill_post_template", { templateId: "nope", values: {}, network: "linkedin" })).isError).toBe(true)
+      // A snippet the person found on a later page is still found, never called missing.
+      // 450 sets at 100 a page: one read takes 300, so set 420 sits beyond the first batch.
+      libFake.snippets = Array.from({ length: 450 }, (_, i) => ({ id: `sn-${i + 1}`, name: `Set ${i + 1}`, text: `#tag${i + 1}` }))
+      const later = JSON.parse(answer(await call("fill_post_template", { templateId: "tpl-0", values: { feature: "stock packs", link: "https://x.example/41" }, network: "linkedin", snippetId: "sn-420" })))
+      expect(later).toMatchObject({ status: "passed", text: "Shipped stock packs. https://x.example/41\n\n#tag420" })
+      expect(posts).toHaveLength(0)
+      expect(buffer.calls.some((c) => /createContentItem|createPost|editPost/.test(c.query))).toBe(false)
+    } finally {
+      libFake.snippets = []; libFake.snippetPage = 100
+    }
   });
   it("returns a normal refusal for overlong text but keeps invalid tool inputs as errors", async () => {
     const overlong = await call("check_draft", { text: "x".repeat(281), network: "twitter" });
