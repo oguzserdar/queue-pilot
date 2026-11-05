@@ -46,6 +46,7 @@ export function ConsentCard({ client, clientId = "", redirectUri = "", user, sco
         </div>
         <p className={styles.note}>It schedules a post only when you ask it to, and by default only after you say yes in the chat. Change that in Settings.</p>
         {children}
+        <p className={styles.clientNote}><a href="/privacy" target="_blank" rel="noopener noreferrer">Queue Pilot privacy notice</a></p>
       </section>
     </main>
   );

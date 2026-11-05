@@ -40,9 +40,11 @@ describe("copy rules", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("never names a domain we do not own yet", () => {
+  it("keeps the hosted domain out of self-hostable app copy except its privacy notice", () => {
     const root = join(__dirname, "..");
-    const offenders = files(root).filter((f) => /getqueuepilot\.com/i.test(readFileSync(f, "utf8"))).map((f) => f.slice(root.length + 1));
+    // The domain is now live. The hosted service's privacy notice must identify its scope;
+    // connection URLs elsewhere still come from the deployment's own origin.
+    const offenders = files(root).filter((f) => f !== join(root, "app/privacy/page.tsx") && /getqueuepilot\.com/i.test(readFileSync(f, "utf8"))).map((f) => f.slice(root.length + 1));
     expect(offenders).toEqual([]);
   });
 });

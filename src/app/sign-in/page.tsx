@@ -36,6 +36,7 @@ export default function SignInPage() {
         {busy ? "Opening Buffer…" : "Sign in with Buffer"}
       </button>
       <p className={styles.small}>Built on the Buffer API. Queue Pilot is not made by Buffer.</p>
+      <p className={styles.small}><a href="/privacy">Privacy: what Queue Pilot stores and shares</a></p>
     </main>
   );
 }

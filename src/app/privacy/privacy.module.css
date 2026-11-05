@@ -1,0 +1,14 @@
+.page { width: min(100%, 760px); margin-inline: auto; padding: 48px 24px 72px; display: flex; flex-direction: column; gap: 32px; }
+.brand { align-self: flex-start; font-size: var(--text-lg); font-weight: 700; text-decoration: none; }
+.brand span { color: var(--qp-crimson); }
+.header { display: grid; gap: 16px; }
+.header h1 { font-size: var(--text-3xl); }
+.date { color: var(--text-muted); font-size: var(--text-xs); }
+.page section { display: grid; gap: 12px; }
+.page h2 { font-size: var(--text-xl); }
+.page p, .page li { line-height: 1.7; }
+.page ul { margin: 0; padding-left: 24px; display: grid; gap: 12px; }
+.page a:not(.brand) { text-underline-offset: 3px; }
+.page a:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 4px; }
+.back { align-self: flex-start; color: var(--qp-crimson); }
+@media (max-width: 480px) { .page { padding: 28px 20px 48px; gap: 28px; } }
