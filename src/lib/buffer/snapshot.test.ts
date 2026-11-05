@@ -182,6 +182,8 @@ describe("patchAfterWrite", () => {
 
   it("waits for a read that started before the write, so that older read cannot overwrite the change", async () => {
     const store = memorySnapshotStore();
+    // An older copy exists, as it always does once the person has used the app.
+    await refreshSnapshot("u1", "tok", { store, query: fakeBuffer().query, now: () => new Date(NOW.getTime() - MIN_REFRESH_MS - 1) });
     let release!: () => void;
     const gate = new Promise<void>((r) => { release = r; });
     const slow = fakeBuffer();

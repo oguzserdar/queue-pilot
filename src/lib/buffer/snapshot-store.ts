@@ -26,10 +26,27 @@ export function postgresSnapshotStore(): SnapshotStore {
       return won.length === 1;
     },
     async save(userId, snapshot) {
-      await db()
+      // Kept out when a confirmed write was patched in after this read started, on whichever server instance.
+      const saved = await db()
         .insert(bufferSnapshot)
         .values({ userId, data: snapshot.data, rateLimit: snapshot.rateLimit, fetchedAt: snapshot.fetchedAt })
-        .onConflictDoUpdate({ target: bufferSnapshot.userId, set: { data: snapshot.data, rateLimit: snapshot.rateLimit, fetchedAt: snapshot.fetchedAt } });
+        .onConflictDoUpdate({
+          target: bufferSnapshot.userId,
+          set: { data: snapshot.data, rateLimit: snapshot.rateLimit, fetchedAt: snapshot.fetchedAt },
+          setWhere: or(isNull(bufferSnapshot.patchedAt), lte(bufferSnapshot.patchedAt, snapshot.fetchedAt)),
+        })
+        .returning({ userId: bufferSnapshot.userId });
+      return saved.length === 1;
+    },
+    async patch(userId, change, at) {
+      // The row lock makes concurrent patches take turns, so none is lost.
+      return db().transaction(async (tx) => {
+        const [row] = await tx.select().from(bufferSnapshot).where(eq(bufferSnapshot.userId, userId)).for("update");
+        if (!row?.data || !row.fetchedAt) return false;
+        const next = change({ data: row.data as Snapshot["data"], rateLimit: row.rateLimit as Snapshot["rateLimit"], fetchedAt: row.fetchedAt });
+        await tx.update(bufferSnapshot).set({ data: next.data, patchedAt: at }).where(eq(bufferSnapshot.userId, userId));
+        return true;
+      });
     },
     async release(userId) {
       await db().update(bufferSnapshot).set({ refreshingUntil: null }).where(eq(bufferSnapshot.userId, userId));

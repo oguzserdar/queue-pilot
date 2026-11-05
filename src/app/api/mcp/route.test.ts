@@ -514,13 +514,22 @@ describe("connector voice writes", () => {
       // its cursor continues the same search from the next page.
       const many = answer(await call("list_post_templates", { search: "release" }))
       const firstIds = [...many.matchAll(/template id (tpl-\d+)/g)].map((m) => m[1])
-      expect(firstIds.length).toBeGreaterThanOrEqual(40)
+      // Never more than 40 in one answer, and well under 20 KB.
+      expect(firstIds).toHaveLength(40)
+      expect(new TextEncoder().encode(many).length).toBeLessThan(20_000)
       const next = many.match(/cursor "([^"]+)"/)?.[1]
       expect(next).toBeDefined()
       const rest = answer(await call("list_post_templates", { search: "release", cursor: next }))
       const restIds = [...rest.matchAll(/template id (tpl-\d+)/g)].map((m) => m[1])
       expect(new Set([...firstIds, ...restIds]).size).toBe(firstIds.length + restIds.length)
       expect(Number(restIds[0].slice(4))).toBe(Number(firstIds.at(-1)!.slice(4)) + 1)
+      // The 39-then-40 case: templates 120-159 hold 39 matches (150 is "Holiday hours"), so the next request asks
+      // Buffer for exactly one more template, and the cursor resumes right after it.
+      const partial = answer(await call("list_post_templates", { search: "release", cursor: "o120" }))
+      const partialIds = [...partial.matchAll(/template id (tpl-\d+)/g)].map((m) => m[1])
+      expect(partialIds).toHaveLength(40)
+      expect(partialIds.at(-1)).toBe("tpl-160")
+      expect(partial).toContain('cursor "o161"')
     } finally {
       libFake.templateCount = 0
     }

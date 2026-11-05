@@ -77,9 +77,7 @@ async function bufferFor(auth: Auth, userId: string, opts: { force?: boolean } =
 /** Applies a change Buffer just accepted to the saved copy, so the next read shows it without another Buffer call. */
 async function patchSnapshot(userId: string, change: (posts: Post[]) => Post[]): Promise<void> {
   try {
-    const store = postgresSnapshotStore();
-    const latest = await store.get(userId);
-    if (latest) await store.save(userId, { ...latest, data: { ...latest.data, posts: change(latest.data.posts) } });
+    await postgresSnapshotStore().patch(userId, (s) => ({ ...s, data: { ...s.data, posts: change(s.data.posts) } }), new Date());
   } catch (e) {
     console.warn(JSON.stringify({ event: "qp-snapshot-patch-failed", message: e instanceof Error ? e.message : String(e) }));
   }

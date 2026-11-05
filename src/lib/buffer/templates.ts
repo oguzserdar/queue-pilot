@@ -62,8 +62,9 @@ export async function listTemplates(token: string, organizationId: string, opts:
 
 /**
  * Templates whose title or description contains `search` (any case), read page by page until `limit` matches or the
- * page budget. Every match on the pages read is returned, and the cursor marks the end of the last page read, so
- * continuing the same search never skips a template.
+ * page budget. Each page asks for no more templates than there is room for, so the answer never exceeds `limit`; every
+ * match on the pages read is returned, and the cursor marks the end of the last page read, so continuing the same
+ * search never skips a template.
  *
  * @param token - The person's Buffer access token
  * @param organizationId - The organization whose internal templates to include
@@ -73,18 +74,19 @@ export async function listTemplates(token: string, organizationId: string, opts:
  */
 export async function searchTemplates(token: string, organizationId: string, search: string, opts: ListOpts & { limit?: number } = {}, run: Run = bufferQuery): Promise<Paged<BufferTemplate> & { scanned: number }> {
   const want = search.toLowerCase();
-  const fetchPage = templatePage(token, organizationId, opts, run);
+  const size = opts.pageSize ?? PAGE;
+  const limit = opts.limit ?? Infinity;
   const items: BufferTemplate[] = [];
   let cursor = opts.after ?? null;
   let scanned = 0;
   for (let i = 0; i < (opts.maxPages ?? MAX_PAGES); i++) {
-    const page = await fetchPage(cursor);
+    const page = await templatePage(token, organizationId, { ...opts, pageSize: Math.min(size, limit - items.length) }, run)(cursor);
     scanned += page.nodes.length;
     items.push(...page.nodes.filter((t) => `${t.title} ${t.description}`.toLowerCase().includes(want)));
     if (!page.hasNextPage) return { items, more: false, cursor: null, scanned };
     if (!page.endCursor || page.endCursor === cursor) return { items, more: true, cursor: null, scanned };
     cursor = page.endCursor;
-    if (items.length >= (opts.limit ?? Infinity)) break;
+    if (items.length >= limit) break;
   }
   return { items, more: true, cursor, scanned };
 }

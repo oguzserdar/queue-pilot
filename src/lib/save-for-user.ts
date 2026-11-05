@@ -155,9 +155,7 @@ export async function saveDraftsForUser(
       return slot ? [{ ...slot, postId: x.postId, text: x.text }] : []
     })
     try {
-      const store = postgresSnapshotStore();
-      const latest = await store.get(userId);
-      if (latest) await store.save(userId, withSavedDrafts(latest, filled));
+      await postgresSnapshotStore().patch(userId, (s) => withSavedDrafts(s, filled), new Date());
     } catch (e) {
       warn("qp-snapshot-mark-drafts-failed")(e);
     }

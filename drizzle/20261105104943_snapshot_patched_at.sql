@@ -1,0 +1,1 @@
+ALTER TABLE "buffer_snapshot" ADD COLUMN "patched_at" timestamp with time zone;

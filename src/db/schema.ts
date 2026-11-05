@@ -27,6 +27,8 @@ export const bufferSnapshot = pgTable("buffer_snapshot", {
   rateLimit: jsonb("rate_limit").notNull().default([]),
   fetchedAt: timestamp("fetched_at", { withTimezone: true }),
   refreshingUntil: timestamp("refreshing_until", { withTimezone: true }),
+  /** When a write Buffer confirmed was last applied to this copy; a refresh that started earlier must not overwrite it. */
+  patchedAt: timestamp("patched_at", { withTimezone: true }),
 });
 
 /** Feeds a user drafts from (newsletter, blog, YouTube, GitHub releases). */

@@ -183,6 +183,13 @@
       "when": 1793867830013,
       "tag": "20261105083710_promotion_attempt",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793875783458,
+      "tag": "20261105104943_snapshot_patched_at",
+      "breakpoints": true
     }
   ]
 }

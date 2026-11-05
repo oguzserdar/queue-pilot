@@ -52,7 +52,16 @@ export type SnapshotStore = {
   get(userId: string): Promise<Snapshot | null>;
   /** Claims the refresh for this user until `until`; false when another refresh holds an unexpired claim. */
   claim(userId: string, now: Date, until: Date): Promise<boolean>;
-  save(userId: string, snapshot: Snapshot): Promise<void>;
+  /**
+   * Saves a copy read from Buffer, unless a confirmed write was applied after that read started (snapshot.fetchedAt):
+   * then the patched copy is kept and this returns false.
+   */
+  save(userId: string, snapshot: Snapshot): Promise<boolean>;
+  /**
+   * Applies a change Buffer just confirmed to the saved copy, atomically (two patches never lose one), and marks the
+   * copy patched at `at` so an older read cannot be saved over it. False when there is no copy yet.
+   */
+  patch(userId: string, change: (s: Snapshot) => Snapshot, at: Date): Promise<boolean>;
   release(userId: string): Promise<void>;
 };
 
@@ -120,8 +129,9 @@ function start(userId: string, token: string, deps: Deps, opts: { force?: boolea
     }
     try {
       const fresh = await fetchFromBuffer(token, now, deps.query ?? bufferQuery);
-      await deps.store.save(userId, fresh);
-      return fresh;
+      // A write confirmed while this read ran is in the saved copy and this read may predate it: keep that copy.
+      if (await deps.store.save(userId, fresh)) return fresh;
+      return (await deps.store.get(userId)) ?? fresh;
     } finally {
       await deps.store.release(userId);
     }
@@ -143,9 +153,9 @@ async function awaitOtherInstance(userId: string, now: Date, deps: Deps): Promis
   throw new SnapshotBusyError();
 }
 
-/** An in-memory store with the same claim rules as Postgres, for tests. */
+/** An in-memory store with the same claim and patch rules as Postgres, for tests. */
 export function memorySnapshotStore(): SnapshotStore {
-  const rows = new Map<string, { snapshot: Snapshot | null; claimedUntil: number }>();
+  const rows = new Map<string, { snapshot: Snapshot | null; claimedUntil: number; patchedAt?: number }>();
   return {
     async get(userId) { return rows.get(userId)?.snapshot ?? null; },
     async claim(userId, now, until) {
@@ -156,7 +166,15 @@ export function memorySnapshotStore(): SnapshotStore {
     },
     async save(userId, snapshot) {
       const row = rows.get(userId) ?? { snapshot: null, claimedUntil: 0 };
+      if (row.patchedAt !== undefined && row.patchedAt > snapshot.fetchedAt.getTime()) return false;
       rows.set(userId, { ...row, snapshot });
+      return true;
+    },
+    async patch(userId, change, at) {
+      const row = rows.get(userId);
+      if (!row?.snapshot) return false;
+      rows.set(userId, { ...row, snapshot: change(row.snapshot), patchedAt: at.getTime() });
+      return true;
     },
     async release(userId) {
       const row = rows.get(userId);
@@ -209,16 +227,13 @@ export function withoutPosts(snapshot: Snapshot, ids: string[]): Snapshot {
 }
 
 /**
- * Applies a change Buffer just confirmed to the saved copy. A refresh of the copy that started before the write is
- * waited for first, so its older read cannot be saved over this change afterwards. (A refresh running on another
- * server instance is not visible here; the next read after it corrects the copy.)
+ * Applies a change Buffer just confirmed to the saved copy through the store's atomic patch: concurrent patches all
+ * survive, and a refresh that started before this write (on any server instance) cannot save its older read over it.
  *
  * @param userId - The person
  * @param store - Where the copy is saved
  * @param change - The confirmed change
  */
 export async function patchAfterWrite(userId: string, store: SnapshotStore, change: (s: Snapshot) => Snapshot): Promise<void> {
-  await inFlight.get(userId)?.catch(() => null);
-  const latest = await store.get(userId);
-  if (latest) await store.save(userId, change(latest));
+  await store.patch(userId, change, new Date());
 }

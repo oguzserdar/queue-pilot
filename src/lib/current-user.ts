@@ -143,8 +143,7 @@ export async function freshBufferForCurrentUser(): Promise<{ userId: string; tok
     channels: snap.data.channels,
     // Buffer confirmed these as scheduled; record that in the saved copy so the screens show it at once.
     markScheduled: async (ids) => {
-      const latest = await store.get(userId);
-      if (latest && ids.length) await store.save(userId, withScheduled(latest, ids));
+      if (ids.length) await store.patch(userId, (s) => withScheduled(s, ids), new Date());
     },
   };
 }
