@@ -1,6 +1,6 @@
 # Queue Pilot as one self-contained image: `docker compose up`, Coolify, Railway, Render or any host that runs a
 # container. Migrations run on start (MIGRATE_ON_START), then the Next.js standalone server listens on 3000.
-FROM node:24-alpine3.24 AS base
+FROM node:26-alpine3.24 AS base
 RUN corepack enable
 WORKDIR /app
 
@@ -22,7 +22,7 @@ RUN npm install --omit=dev --no-save --no-package-lock --prefix /migrator \
   "pg@$(node -p "require('./package.json').dependencies.pg")" \
   "drizzle-orm@$(node -p "require('./package.json').dependencies['drizzle-orm']")"
 
-FROM node:24-alpine3.24 AS runner
+FROM node:26-alpine3.24 AS runner
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 MIGRATE_ON_START=1 PORT=3000 HOSTNAME=0.0.0.0
 # The app runs with node alone. npm and corepack ship in the base image with their own dependencies, and every
