@@ -415,3 +415,20 @@ export const sourceJob = pgTable("qp_source_job", {
   value: jsonb("value").$type<{ jobId?: string }>().notNull().default({}),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 }, t => [primaryKey({ columns: [t.userId, t.key] })]);
+
+/**
+ * A promotion of a Buffer channel-less draft that Queue Pilot started: written before the promote request, so a
+ * recovery after an unclear answer adopts only posts this app asked Buffer to create, never another app's.
+ * fingerprint hashes the versions (account + text); recordedAt is set once the drafts are recorded as QP's own.
+ */
+export const promotionAttempt = pgTable(
+  "qp_promotion_attempt",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    contentItemId: text("content_item_id").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.contentItemId] })],
+);

@@ -176,6 +176,13 @@
       "when": 1793761392880,
       "tag": "20261104030312_ai_app_label",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793867418819,
+      "tag": "20261105083018_promotion_attempt",
+      "breakpoints": true
     }
   ]
 }
