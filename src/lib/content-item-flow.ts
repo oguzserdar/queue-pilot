@@ -28,6 +28,16 @@ const STATUSES = new Set<string>(["draft", "error", "needs_approval", "scheduled
 export type ItemBuffer = { token: string; organizationIds: string[]; channels: Channel[]; posts: { id: string; channelId: string }[] };
 
 /** One answer: the text an assistant reads, whether it is a failure, and fields a screen can use. */
+/**
+ * Whether an error means Buffer answered and refused (GraphQL errors with no data, or a 4xx other than the rate limit),
+ * as opposed to an answer that never arrived or a server error, where the write may have happened.
+ */
+export function refusedByBuffer(e: unknown): boolean {
+  if (!(e instanceof BufferApiError)) return false;
+  if (e.status === 200) return e.message !== "Buffer API returned no data";
+  return e.status >= 400 && e.status < 500 && e.status !== 429;
+}
+
 export type FlowAnswer = { text: string; isError: boolean; item?: ContentItemView; refused?: { channelId: string; reason: string }[]; created?: number; recorded?: number };
 
 /** One version of the draft for one account. */
@@ -145,6 +155,9 @@ export function contentItemFlow(userId: string) {
       return r.ok ? result(`Draft saved in Buffer without an account. Nothing was scheduled.\n${describe(r.value, nameOf(b))}`, false, { item: r.value }) : result(`Not saved: ${failure(r)}`, true);
     } catch (e) {
       if (e instanceof BufferApiError && e.status === 401) throw e;
+      console.error(JSON.stringify({ event: "qp-channel-less-save-failed", status: e instanceof BufferApiError ? e.status : null, code: e instanceof BufferApiError ? e.code ?? null : null, message: e instanceof Error ? e.message : String(e) }));
+      // Buffer answered with an error (GraphQL errors, or a 4xx other than the rate limit): a refusal, not an unknown.
+      if (refusedByBuffer(e)) return result(`Not saved: Buffer refused it (${(e as Error).message}). If Buffer says the requestId is already used or invalid, pass a new random UUID.`, true);
       return result(`Buffer did not answer clearly, so the draft may or may not be saved. Retry with requestId "${correlationId}": Buffer then returns the same draft instead of making a second.`, true);
     }
   }

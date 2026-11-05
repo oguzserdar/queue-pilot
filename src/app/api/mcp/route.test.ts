@@ -116,7 +116,7 @@ const notesFake = { notes: [] as { postId: string; node: Record<string, unknown>
 // Buffer tags in the fake.
 const tagsFake = { tags: [] as { id: string; name: string; color: string; isLocked: boolean }[] }
 // Buffer content items in the fake, keyed by id; promote can succeed, refuse, or fail after creating the drafts.
-const itemsFake = { items: new Map<string, any>(), extraChannels: [] as Channel[], promote: "ok" as "ok" | "refuse" | "failAfter" | "throwAfter", promotes: 0, dropCreate: false, readFails: false, deleteThrows: false, reads: 0, attachOnRead: 0 }
+const itemsFake = { items: new Map<string, any>(), extraChannels: [] as Channel[], promote: "ok" as "ok" | "refuse" | "failAfter" | "throwAfter", promotes: 0, dropCreate: false, createRefusal: "", readFails: false, deleteThrows: false, reads: 0, attachOnRead: 0 }
 // Buffer's template library, snippets, teammates and channel configuration in the fake.
 const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, maxLength: 3000, snippetsAllowed: true, snippetsEntitled: true, templateCount: 0, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
 const ideasFake = { groups: [{ id: "g1", name: "Next week", isLocked: false }], ideas: [] as Record<string, unknown>[], dropCreate: false }
@@ -139,6 +139,7 @@ const buffer = fakeBuffer((call) => {
     return { contentItem: structuredClone(it) }
   }
   if (query.includes("createContentItemDraft(")) {
+    if (itemsFake.createRefusal) return new BufferApiError(itemsFake.createRefusal, 200)
     const existing = [...itemsFake.items.values()].find((i) => i.correlationId === variables.input.correlationId)
     if (existing) return { createContentItemDraft: { __typename: "CreateContentItemDraftSuccess", contentItem: structuredClone(existing) } }
     const it = { id: `ci-${itemsFake.items.size + 1}`, correlationId: variables.input.correlationId, organizationId: variables.input.organizationId, title: variables.input.title ?? null, targetDate: variables.input.targetDate ?? null, createdAt: "2026-11-05T00:00:00Z", allowedActions: ["updateContentItem", "deleteContentItem"], tags: [], body: { __typename: "DraftContent", text: variables.input.draft.text, aiAssisted: variables.input.draft.aiAssisted, assets: [] } }
@@ -567,7 +568,7 @@ describe("connector voice writes", () => {
   });
   describe("content items: write once, choose accounts later", () => {
     const second: Channel = { ...channel, id: "ch2", name: "Second", service: "twitter" }
-    const reset = () => { itemsFake.items.clear(); itemsFake.extraChannels = []; itemsFake.promote = "ok"; itemsFake.promotes = 0; itemsFake.dropCreate = false; itemsFake.readFails = false; itemsFake.deleteThrows = false; itemsFake.reads = 0; itemsFake.attachOnRead = 0; attemptStore.store.rows.clear() }
+    const reset = () => { itemsFake.items.clear(); itemsFake.extraChannels = []; itemsFake.promote = "ok"; itemsFake.promotes = 0; itemsFake.dropCreate = false; itemsFake.createRefusal = ""; itemsFake.readFails = false; itemsFake.deleteThrows = false; itemsFake.reads = 0; itemsFake.attachOnRead = 0; attemptStore.store.rows.clear() }
     afterEach(reset)
     const saveDraft = async (text = "Soup night: three soups from issue 41.", requestId: string = crypto.randomUUID()) => call("save_channel_less_draft", { text, title: "Issue 41", requestId })
 
@@ -585,6 +586,15 @@ describe("connector voice writes", () => {
       expect(itemsFake.items.get("ci-1").body.text).toBe("Soup night: three soups from issue 41.")
       expect((await call("save_channel_less_draft", { contentItemId: "ci-1", text: "New" })).isError).toBe(true)
       expect(answer(await call("save_channel_less_draft", { contentItemId: "ci-1", text: "Soup night!", expectedText: "Soup night: three soups from issue 41." }))).toContain("Draft text replaced")
+    })
+
+    it("reports Buffer's refusal of a save as a refusal, not as an unclear answer", async () => {
+      itemsFake.createRefusal = "Invalid correlationId"
+      const r = await saveDraft()
+      expect(r.isError).toBe(true)
+      expect(answer(r)).toContain("Not saved: Buffer refused it (Invalid correlationId)")
+      expect(answer(r)).not.toContain("may or may not")
+      expect(itemsFake.items.size).toBe(0)
     })
 
     it("turns a draft into one checked draft per account with each version's own evidence, and never schedules", async () => {
