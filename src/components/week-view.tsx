@@ -1,9 +1,10 @@
 "use client";
 
-import { EvidenceDetail } from "./source-evidence";
+import { DraftSources } from "./source-evidence";
 import type { EvidenceCard } from "@/lib/source-presentation";
 import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, CircleCheck, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { DropdownMenu } from "@/registry/components/dropdown-menu/dropdown-menu";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -323,19 +324,20 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         >
         <div className={styles.panel}>
           <div className={styles.panelMain}>
-          {/* The text and its Edit button sit together; editing turns this same spot into the editor. */}
+          {/* The post first, with Edit beside it; editing turns this same spot into the editor. */}
           {editing === null && (
             <>
+              <div className={styles.postHead}>
+                <h3 className={styles.h3}>Post</h3>
+                {current.ours !== false && !approved.has(current.id) && (
+                  <Button variant="secondary" size="sm" onClick={() => { setEditing(current.text); setConfirmDelete(false); setNote(null); }}><Pencil size={14} strokeWidth={1.75} aria-hidden="true" />Edit</Button>
+                )}
+              </div>
               <p className={styles.postText}>{current.text}</p>
               {live && <DraftTags key={`tags-${current.id}`} postId={current.id} preview={tagsPreview?.[current.id]} />}
               {live && current.createdAt && <p className={styles.muted}>{createdLine(current.createdAt, current.createdBy ?? null)}</p>}
-              {evidence.filter(e => e.postId === current.id).map((card, i) => <EvidenceDetail key={i} card={card} />)}
-              {current.ours !== false && !approved.has(current.id) && (
-                <div><Button variant="secondary" size="sm" onClick={() => { setEditing(current.text); setConfirmDelete(false); setNote(null); }}>Edit text</Button></div>
-              )}
             </>
           )}
-          {/* Edit in place: the text itself becomes the editor, where the eye already is. */}
           {editing !== null && (
             <div className={styles.editInPlace}>
               <Textarea label="Draft text" autoFocus value={editing} onChange={(e) => setEditing(e.target.value)} rows={6} />
@@ -356,90 +358,105 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </div>
             </div>
           )}
-          <div className={styles.sourceBox}>
-            <div>
-              <strong>{current.source ? `${current.source.foundBy}: ${current.source.label}` : "Saved in Buffer as a draft"}</strong>
-              <p className={styles.muted}>{current.source?.detail}</p>
-            </div>
-          </div>
-          </div>
-          <div className={styles.panelSide}>
           {(() => {
-            const v = verdicts[current.id];
-            if (v === undefined) return null;
-            return (
-              <div className={styles.checks}>
-                <h3 className={styles.h3}>Your playbook</h3>
-                {v === null ? (
-                  <p className={styles.muted}>{checkNotes[current.id] ?? "No current playbook check is available for this draft."}</p>
-                ) : (
-                  v.map((r) => (
-                    <div key={r.ruleId} className={styles.check}>
-                      <Badge tone={RESULT_TONE[r.verdict]} size="sm">{RESULT_LABEL[r.verdict]}</Badge>
-                      <span>{r.rule}{r.quote ? ` Found "${r.quote}".` : ""}{r.verdict !== "pass" && r.reason ? ` ${r.reason}` : ""}</span>
-                    </div>
-                  ))
-                )}
-                {!live && <p className={styles.muted}>Example verdicts.</p>}
-                <a className={styles.rulesLink} href="/playbook">Open your playbook</a>
+            const cards = evidence.filter(e => e.postId === current.id);
+            if (cards.length) return <DraftSources cards={cards} live={live} />;
+            return current.source && (
+              <div className={styles.sourceBox}>
+                <div>
+                  <strong>{`${current.source.foundBy}: ${current.source.label}`}</strong>
+                  <p className={styles.muted}>{current.source.detail}</p>
+                </div>
               </div>
             );
           })()}
-          {live && rules.length > 0 && (() => {
-            const network = channels.find(c => c.id === current.channel)?.service ?? "";
-            const lines = rulesForAccount(rules, network, current.channel);
-            const on = lines.filter(l => l.applies).length;
-            return lines.length > 0 && <details className={styles.checks}>
-              <summary className={styles.h3}>{`${on} rule${on === 1 ? "" : "s"} for this account`}</summary>
-              <p className={styles.muted}>Your current settings. The check below shows how this draft did when it was last checked.</p>
-              <ul className={styles.ruleLines}>
-                {lines.map(l => <li key={l.rule.id} data-off={!l.applies}>
-                  <span className={styles.ruleText}>{l.rule.text}</span>
-                  <span className={styles.ruleWhy}>{l.from} · {l.why}</span>
-                </li>)}
-              </ul>
-            </details>;
-          })()}
-          {live && <DraftNotes key={current.id} postId={current.id} preview={notesPreview?.[current.id]} />}
-          <div className={styles.checks}>
-            <h3 className={styles.h3}>Before it goes out</h3>
+          </div>
+          <div className={styles.panelSide}>
+          <section className={styles.checks} aria-labelledby="draft-checks">
+            <h3 id="draft-checks" className={styles.h3}>Checks</h3>
+            {(() => {
+              const v = verdicts[current.id];
+              if (v === undefined) return null;
+              if (v === null) return <p className={styles.muted}>{checkNotes[current.id] ?? "No current playbook check is available for this draft."}</p>;
+              const passed = v.filter(r => r.verdict === "pass");
+              const problems = v.filter(r => r.verdict !== "pass");
+              const row = (r: (typeof v)[number]) => (
+                <div key={r.ruleId} className={styles.check}>
+                  <Badge tone={RESULT_TONE[r.verdict]} size="sm">{RESULT_LABEL[r.verdict]}</Badge>
+                  <span>{r.rule}{r.quote ? ` Found "${r.quote}".` : ""}{r.verdict !== "pass" && r.reason ? ` ${r.reason}` : ""}</span>
+                </div>
+              );
+              return <>
+                {/* A rule the draft breaks always shows in full; the ones it follows fold into one line. */}
+                {problems.map(row)}
+                {v.length === 0 && <p className={styles.muted}>No playbook rules yet. <a className={styles.rulesLink} href="/playbook">Open your playbook</a></p>}
+                {passed.length > 0 && (
+                  <details className={styles.ruleSummary}>
+                    <summary><CircleCheck size={16} strokeWidth={1.75} aria-hidden="true" className={styles.passIcon} /><span>{`${passed.length} playbook rule${passed.length === 1 ? "" : "s"} ${problems.length ? "followed" : "passed"}`}</span><span className={styles.viewRules}>View rules</span></summary>
+                    {passed.map(row)}
+                    <a className={styles.rulesLink} href="/playbook">Open your playbook</a>
+                  </details>
+                )}
+                {!live && <p className={styles.muted}>Example verdicts.</p>}
+              </>;
+            })()}
             {current.checks?.map((c) => (
               <div key={c.label} className={styles.check}>
                 <Badge tone={c.tone} size="sm">{c.tone === "success" ? "OK" : c.tone === "warning" ? "Check" : "Will fail"}</Badge>
                 <span>{c.label}</span>
               </div>
             ))}
+            {live && rules.length > 0 && (() => {
+              const network = channels.find(c => c.id === current.channel)?.service ?? "";
+              const lines = rulesForAccount(rules, network, current.channel);
+              const on = lines.filter(l => l.applies).length;
+              return lines.length > 0 && <details className={styles.ruleSummary}>
+                <summary><span>{`${on} rule${on === 1 ? "" : "s"} set for this account`}</span><span className={styles.viewRules}>View</span></summary>
+                <p className={styles.muted}>Your current settings. The check above shows how this draft did when it was last checked.</p>
+                <ul className={styles.ruleLines}>
+                  {lines.map(l => <li key={l.rule.id} data-off={!l.applies}>
+                    <span className={styles.ruleText}>{l.rule.text}</span>
+                    <span className={styles.ruleWhy}>{l.from} · {l.why}</span>
+                  </li>)}
+                </ul>
+              </details>;
+            })()}
+          </section>
+          {live && <DraftNotes key={current.id} postId={current.id} preview={notesPreview?.[current.id]} />}
           </div>
-          <div className={styles.actions}>
-            <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
-              {approved.has(current.id) ? "Approved" : "Approve this post"}
-            </Button>
-            {current.ours !== false && !approved.has(current.id) && (
-              <>
-                {live && (verdicts[current.id] === null || needsCheck(current.id)) && <Button variant="secondary" disabled={busy} onClick={() => run(() => recheckMyDrafts([current.id]).then((r) => (r.ok ? { ok: true as const } : r)), "Checked against your playbook.")}>Check again</Button>}
-                <Button variant="ghost" onClick={() => { setConfirmDelete(true); setEditing(null); setNote(null); }}>Delete draft</Button>
-              </>
-            )}
-          </div>
-          {needsCheck(current.id) && !approved.has(current.id) && <p id="approve-playbook" className={styles.muted}>{readiness[current.id]?.reason}</p>}
-          {worstTone(current) === "danger" && !needsCheck(current.id) && !approved.has(current.id) && (
-            <p id="approve-off" className={styles.muted}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
-          )}
-          {current.ours === false && <p id="approve-foreign" className={styles.muted}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>}
-          {confirmDelete && (
-            <div className={styles.editor}>
-              <p className={styles.muted}>Delete this draft from Buffer? The time becomes empty again.</p>
+        </div>
+        {/* The decision stays in view: a fixed bar at the bottom of the window, as Buffer keeps a post's actions in one row. */}
+        <div className={styles.footer}>
+          {confirmDelete ? (
+            <>
+              <p className={styles.footNote}>Delete this draft from Buffer? The time becomes empty again.</p>
               <div className={styles.actions}>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep it</Button>
                 <Button variant="danger" size="sm" disabled={busy} onClick={() => run(async () => {
                   if (!live) { setGone((s) => new Set(s).add(current.id)); return { ok: true as const }; }
                   return deleteMyDraft(current.id);
                 }, live ? "Draft deleted from Buffer. Its time is empty again." : "Removed on this example page only.", true)}>{busy ? "Deleting…" : "Delete draft"}</Button>
-                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep it</Button>
               </div>
-            </div>
+            </>
+          ) : (
+            <>
+              {note ? <p className={styles.footNote} role={note.ok ? "status" : "alert"}>{note.text}</p>
+                : current.ours === false ? <p id="approve-foreign" className={styles.footNote}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>
+                : approved.has(current.id) ? <p className={styles.footNote}>Scheduled in Buffer.</p>
+                : needsCheck(current.id) ? <p id="approve-playbook" className={styles.footNote}>{readiness[current.id]?.reason}</p>
+                : worstTone(current) === "danger" ? <p id="approve-off" className={styles.footNote}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
+                : <p className={styles.footNote}>Saved as a draft in Buffer.</p>}
+              <div className={styles.actions}>
+                {current.ours !== false && !approved.has(current.id) && live && (verdicts[current.id] === null || needsCheck(current.id)) && <Button variant="secondary" disabled={busy} onClick={() => run(() => recheckMyDrafts([current.id]).then((r) => (r.ok ? { ok: true as const } : r)), "Checked against your playbook.")}>Check again</Button>}
+                {current.ours !== false && !approved.has(current.id) && (
+                  <DropdownMenu label="More" icon={<MoreHorizontal size={16} strokeWidth={1.75} />} items={[{ label: "Delete draft", destructive: true, icon: <Trash2 size={15} strokeWidth={1.75} />, onSelect: () => { setConfirmDelete(true); setEditing(null); setNote(null); } }]} />
+                )}
+                <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
+                  {approved.has(current.id) ? "Approved" : "Approve & schedule"}
+                </Button>
+              </div>
+            </>
           )}
-          {note && <p className={styles.muted} role={note.ok ? "status" : "alert"}>{note.text}</p>}
-          </div>
         </div>
         </DialogContent>
         )}

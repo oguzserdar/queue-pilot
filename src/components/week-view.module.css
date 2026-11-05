@@ -50,7 +50,7 @@
 .dialog { --dialog-width: 1080px; }
 .panel { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-4) var(--space-8); }
 /* Two columns that stack what they hold: the post on the left, rules, checks and actions on the right. */
-.panelMain, .panelSide { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.panelMain, .panelSide { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 @media (max-width: 700px) { .panel { display: flex; flex-direction: column; } }
 .postText { font-size: var(--text-lg); line-height: 1.5; max-width: 60ch; }
 .sourceBox { display: flex; gap: var(--space-3); padding: 10px 12px; border-radius: 8px; background: var(--surface-muted); color: var(--text-secondary); }
@@ -139,3 +139,18 @@
 .shareHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .shareCount { font-size: var(--text-sm); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .shareNote { margin: 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.5; }
+
+/* The draft window: post first with Edit beside it, checks folded to one line, and a bar at the bottom that stays in view. */
+.postHead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.postHead .h3 { margin: 0; }
+.postHead :global(svg) { margin-right: 4px; vertical-align: -2px; }
+.ruleSummary > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); }
+.ruleSummary > summary::-webkit-details-marker { display: none; }
+.ruleSummary > summary:focus-visible { outline: 2px solid var(--qp-crimson); outline-offset: 3px; border-radius: 4px; }
+.ruleSummary[open] > summary { margin-bottom: 10px; }
+.ruleSummary { display: flex; flex-direction: column; gap: 10px; }
+.passIcon { color: var(--success, #2f7d4f); flex: none; }
+.viewRules { margin-left: auto; color: var(--qp-crimson); font-size: var(--text-xs); }
+.footer { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin: var(--space-6) calc(-1 * var(--space-6)) calc(-1 * var(--space-6)); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border); background: var(--surface-raised); }
+.footNote { color: var(--text-muted); font-size: var(--text-xs); margin: 0; max-width: 52ch; }
+.footer .actions { margin-left: auto; align-items: center; }
