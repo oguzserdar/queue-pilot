@@ -3,7 +3,7 @@
 import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
 import Link from "next/link";
 
-import { SignInButton } from "./sign-in-button";
+import { SignInButton, SignInNotice } from "./sign-in-button";
 
 import { MotionConfig } from "motion/react";
 import { usePathname } from "next/navigation";
@@ -129,7 +129,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
           {account ? <SyncBanner /> : (
             <div className={styles.demo}>Example account: Mark writes Weeknight Dinners, a cooking newsletter. Sign in with Buffer to see your own queue.</div>
           )}
-          <main className={styles.main}>{children}</main>
+          <main className={styles.main}><SignInNotice />{children}</main>
         </div>
     </div>
     </MaybeSync>

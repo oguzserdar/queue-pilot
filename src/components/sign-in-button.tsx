@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/registry/components/button/button";
+import { Alert } from "@/registry/components/alert/alert";
+import { signInProblem, withoutSignInError, type SignInProblem } from "@/lib/sign-in-errors";
 
 /**
  * Goes straight to Buffer's sign-in in one click and comes back to the page it was pressed on (or `returnTo`).
@@ -21,7 +23,8 @@ export function SignInButton({ children = "Sign in with Buffer", returnTo, class
   const start = async () => {
     setBusy(true);
     setProblem(null);
-    const back = new URL(returnTo ?? `${window.location.pathname}${window.location.search}`, window.location.origin);
+    // An old ?error= from a failed attempt must not ride along and greet the person after this one succeeds.
+    const back = withoutSignInError(new URL(returnTo ?? `${window.location.pathname}${window.location.search}`, window.location.origin));
     try {
       const { error } = await authClient.signIn.social({ provider: "buffer", callbackURL: back.toString() });
       if (error) {
@@ -40,4 +43,21 @@ export function SignInButton({ children = "Sign in with Buffer", returnTo, class
       {problem && <span role="alert">{problem}</span>}
     </>
   );
+}
+
+/**
+ * Shows why a Buffer sign-in failed when the page was reached with ?error=<code>, then removes the error from the
+ * address so a refresh or a later sign-in does not show it again. Renders nothing otherwise.
+ */
+export function SignInNotice() {
+  const [problem, setProblem] = useState<SignInProblem | null>(null);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const found = signInProblem(url.searchParams.get("error"));
+    if (!found) return;
+    setProblem(found);
+    window.history.replaceState(window.history.state, "", withoutSignInError(url).toString());
+  }, []);
+  if (!problem) return null;
+  return <Alert tone="danger" title={problem.title} style={{ marginBottom: 24 }} onDismiss={() => setProblem(null)}>{problem.text}</Alert>;
 }
