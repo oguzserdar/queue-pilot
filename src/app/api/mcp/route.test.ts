@@ -740,7 +740,7 @@ describe("connector voice writes", () => {
       for (const h of ["readOnlyHint", "destructiveHint", "openWorldHint"]) expect(typeof t.annotations?.[h], `${t.name} ${h}`).toBe("boolean")
     }
     // Every Buffer write, including the content-item writes, is marked as reaching outside and not read-only.
-    const bufferWrites = ["save_drafts", "update_draft", "delete_draft", "approve_drafts", "add_draft_note", "save_idea", "create_tag", "tag_draft", "save_snippet", "delete_snippet", "rename_tag", "delete_tag",
+    const bufferWrites = ["save_drafts", "write_my_week", "update_draft", "delete_draft", "approve_drafts", "add_draft_note", "save_idea", "create_tag", "tag_draft", "save_snippet", "delete_snippet", "rename_tag", "delete_tag",
       "save_channel_less_draft", "promote_to_draft_posts", "update_content_item", "delete_content_item", "link_post_to_content_item", "unlink_post_from_content_item"]
     for (const name of bufferWrites) {
       const t = tools.find((x) => x.name === name)
