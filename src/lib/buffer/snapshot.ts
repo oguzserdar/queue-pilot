@@ -166,14 +166,14 @@ export function memorySnapshotStore(): SnapshotStore {
     },
     async save(userId, snapshot) {
       const row = rows.get(userId) ?? { snapshot: null, claimedUntil: 0 };
-      if (row.patchedAt !== undefined && row.patchedAt > snapshot.fetchedAt.getTime()) return false;
+      if (row.patchedAt !== undefined && row.patchedAt >= snapshot.fetchedAt.getTime()) return false;
       rows.set(userId, { ...row, snapshot });
       return true;
     },
     async patch(userId, change, at) {
       const row = rows.get(userId);
       if (!row?.snapshot) return false;
-      rows.set(userId, { ...row, snapshot: change(row.snapshot), patchedAt: at.getTime() });
+      rows.set(userId, { ...row, snapshot: change(row.snapshot), patchedAt: Math.max(row.patchedAt ?? 0, at.getTime()) });
       return true;
     },
     async release(userId) {

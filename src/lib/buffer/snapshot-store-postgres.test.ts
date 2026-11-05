@@ -56,6 +56,19 @@ describe("Buffer snapshot store on real Postgres", () => {
     expect(ids(await one.get("a"))).toEqual(["p1", "x1", "x2"]);
   });
 
+  it("never moves the patch mark backwards, and rejects a read that started in the same instant as a write", async () => {
+    const s = postgresSnapshotStore();
+    await s.save("a", copy(["p1"], at(20_000)));
+    // Two patches finish in reverse order of their times: the later time stays the mark.
+    await s.patch("a", (x) => withPosts(x, [post("r2")]), at(22_000));
+    await s.patch("a", (x) => withPosts(x, [post("r1")]), at(21_000));
+    expect(await s.save("a", copy(["p1"], at(21_500)))).toBe(false);
+    // Same instant as the latest write: may predate it, so it is not saved.
+    expect(await s.save("a", copy(["p1"], at(22_000)))).toBe(false);
+    expect(ids(await s.get("a"))).toEqual(["p1", "r1", "r2"]);
+    expect(await s.save("a", copy(["p1", "r1", "r2", "p9"], at(22_001)))).toBe(true);
+  });
+
   it("does nothing and says so when there is no copy yet", async () => {
     expect(await postgresSnapshotStore().patch("nobody", (s) => s, t0)).toBe(false);
   });
