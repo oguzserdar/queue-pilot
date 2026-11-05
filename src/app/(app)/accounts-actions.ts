@@ -85,7 +85,7 @@ export async function saveForAccounts(input: { requestId: string; text: string; 
     }
     const promoted = await flow.promote(b, { contentItemId: item.id, expectedDraftText: text.trim(), versions: versions.map((v) => ({ channelId: v.channelId, text: v.text.trim() })) });
     revalidatePath("/", "layout");
-    if (promoted.refused?.length) return { ok: false, message: "Nothing was saved yet. Fix these accounts:", refused: promoted.refused };
+    if (promoted.refused?.length) return { ok: false, message: "No account drafts were created. Fix these versions:", refused: promoted.refused };
     if (promoted.isError) return { ok: false, message: plain(promoted.text) };
     const n = promoted.created ?? versions.length;
     return { ok: true, saved: n, message: `Saved ${n} draft${n === 1 ? "" : "s"} in Buffer. Nothing was scheduled.` };

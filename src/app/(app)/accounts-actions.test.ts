@@ -87,7 +87,7 @@ describe("saveForAccounts", () => {
       { id: "x2", name: "Mark", service: "twitter", organizationId: "org", isDisconnected: false },
     ] } as never)
     flow.promote.mockResolvedValueOnce({ text: "{}", isError: false, refused: [{ channelId: "x2", reason: "Say stock (it says broth)" }] })
-    expect(await saveForAccounts({ ...ok, versions: [{ channelId: "x", text: "Soup." }, { channelId: "x2", text: "Broth." }] })).toEqual({ ok: false, message: "Nothing was saved yet. Fix these accounts:", refused: [{ channelId: "x2", reason: "Say stock (it says broth)" }] })
+    expect(await saveForAccounts({ ...ok, versions: [{ channelId: "x", text: "Soup." }, { channelId: "x2", text: "Broth." }] })).toEqual({ ok: false, message: "No account drafts were created. Fix these versions:", refused: [{ channelId: "x2", reason: "Say stock (it says broth)" }] })
   })
 
   it("asks to press Save again when Buffer's answer is unclear", async () => {
