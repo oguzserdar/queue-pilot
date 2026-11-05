@@ -194,8 +194,29 @@
     {
       "idx": 27,
       "version": "7",
+      "when": 1793908272240,
+      "tag": "20261105195112_ai_app_choice",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
       "when": 1793915673495,
       "tag": "20261105215433_buffer_allowance",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793916993681,
+      "tag": "20261105221633_clear_unnamed_app_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793917006064,
+      "tag": "20261105221646_drop_ai_app_choice",
       "breakpoints": true
     }
   ]

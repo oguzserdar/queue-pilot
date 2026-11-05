@@ -25,6 +25,10 @@ function groupByApp(apps: ApprovedApp[]) {
   return [...groups.entries()].sort((x, y) => latest(y[1]) - latest(x[1]));
 }
 
+/** The mark for a connection: the brand its registration verified, else its first letter. */
+const mark = (a: ApprovedApp, fallback: string, size: number) =>
+  a.brand ? <AiMark name={a.brand} size={size} /> : <span className={styles.tile} aria-hidden="true">{fallback.slice(0, 1)}</span>;
+
 /** What a person needs to recognise a connection when reporting it or comparing two. */
 function details(a: ApprovedApp) {
   return [a.label ?? a.name, `Registered as ${a.name}`, `Returns to ${a.returnsTo.join(", ") || "an unknown place"}`, `Approved ${day(a.approvedAt)}`, a.lastUsedAt ? `Last used ${new Date(a.lastUsedAt).toISOString()}` : "Not used yet", `${a.calls} calls`].join("\n");
@@ -59,43 +63,49 @@ export function AiApps({ apps, now = Date.now() }: { apps: ApprovedApp[] | null;
     if (!r.ok) throw new Error(r.message);
   };
 
+  const row = (a: ApprovedApp, withMark: boolean) => (
+    <div key={a.consentId} className={styles.row} data-unused={a.unused || undefined}>
+      {withMark ? mark(a, a.label ?? a.name, 20) : null}
+      <div className={styles.who}>
+        <InlineEdit variant="body" className={styles.name} value={a.label ?? ""} placeholder={a.name} label={`Name for this ${a.name} connection`} onSave={(next) => rename(a, next)} validate={(v) => (v.trim().length > MAX_LABEL ? `Keep it under ${MAX_LABEL} characters.` : null)} />
+        <span className={styles.meta}>
+          <span className={a.unused ? styles.stopped : undefined}>{a.unused ? "Stopped, unused" : a.lastUsedAt ? <><span className={styles.dot} aria-hidden="true" />Used {sinceText(a.lastUsedAt, now)}</> : "Not used yet"}</span>
+          {a.returnsTo.length ? <span> · {a.returnsTo.join(" · ")}</span> : null}
+        </span>
+        {a.label && a.label.trim() !== a.name ? <span className={styles.note}>Registered as {a.name}.</span> : null}
+      </div>
+      <div className={styles.actions}>
+        {confirming === a.consentId ? (
+          <>
+            <Button variant="danger" size="sm" disabled={pending} onClick={() => disconnect(a)}>{pending ? "Disconnecting…" : "Disconnect"}</Button>
+            <Button variant="ghost" size="sm" disabled={pending} onClick={() => setConfirming(null)}>Cancel</Button>
+          </>
+        ) : (
+          <DropdownMenu label="Manage" items={[
+            { label: "Copy details", onSelect: () => { void navigator.clipboard.writeText(details(a)).then(() => toast({ type: "success", title: "Details copied." })); } },
+            { label: "Disconnect", destructive: true, separatorBefore: true, onSelect: () => setConfirming(a.consentId) },
+          ]} />
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className={styles.wrap}>
       <div className={styles.list}>
-        {groupByApp(apps).map(([app, list]) => (
-          <section key={app} className={styles.group} aria-label={app}>
-            <header className={styles.groupHead}>
-              <strong className={styles.app}>{list[0].brand ? <AiMark name={list[0].brand} size={18} /> : <span className={styles.tile} aria-hidden="true">{app.slice(0, 1)}</span>}{app}</strong>
-              <span className={styles.muted}>{list.length === 1 ? "1 connection" : `${list.length} connections`}</span>
-            </header>
-            {list.map((a) => (
-              <div key={a.consentId} className={styles.row} data-unused={a.unused || undefined}>
-                <div className={styles.who}>
-                  <InlineEdit variant="body" className={styles.name} value={a.label ?? ""} placeholder={a.name} label={`Name for this ${a.name} connection`} onSave={(next) => rename(a, next)} validate={(v) => (v.trim().length > MAX_LABEL ? `Keep it under ${MAX_LABEL} characters.` : null)} />
-                  {a.label && <span className={styles.note}>Registered as {a.name}.</span>}
-                </div>
-                <span className={styles.fact}>{a.returnsTo.join(" · ") || "Unknown"}</span>
-                <span className={styles.fact}>Approved {day(a.approvedAt)}</span>
-                <span className={a.unused ? styles.stopped : a.lastUsedAt ? styles.live : styles.fact}>
-                  {a.unused ? "Stopped, unused" : a.lastUsedAt ? <><span className={styles.dot} aria-hidden="true" />Used {sinceText(a.lastUsedAt, now)}</> : "Not used yet"}
-                </span>
-                <div className={styles.actions}>
-                  {confirming === a.consentId ? (
-                    <>
-                      <Button variant="danger" size="sm" disabled={pending} onClick={() => disconnect(a)}>{pending ? "Disconnecting…" : "Disconnect"}</Button>
-                      <Button variant="ghost" size="sm" disabled={pending} onClick={() => setConfirming(null)}>Cancel</Button>
-                    </>
-                  ) : (
-                    <DropdownMenu label="Manage" items={[
-                      { label: "Copy details", onSelect: () => { void navigator.clipboard.writeText(details(a)).then(() => toast({ type: "success", title: "Details copied." })); } },
-                      { label: "Disconnect", destructive: true, separatorBefore: true, onSelect: () => setConfirming(a.consentId) },
-                    ]} />
-                  )}
-                </div>
-              </div>
-            ))}
-          </section>
-        ))}
+        {groupByApp(apps).map(([app, list]) => {
+          // One connection: one row, the app's mark on it. Several: a heading keeps them together.
+          const rows = list.map((a) => row(a, list.length === 1));
+          return list.length === 1 ? <section key={app} className={styles.group} aria-label={app}>{rows}</section> : (
+            <section key={app} className={styles.group} aria-label={app}>
+              <header className={styles.groupHead}>
+                <strong className={styles.app}>{mark(list[0], app, 18)}{app}</strong>
+                <span className={styles.muted}>{list.length} connections</span>
+              </header>
+              {rows}
+            </section>
+          );
+        })}
       </div>
       <div className={styles.foot}>
         <span className={styles.muted}>{unused ? `${unused === 1 ? "1 connection" : `${unused} connections`} stopped after ${UNUSED_DAYS} days without use.` : `A connection unused for ${UNUSED_DAYS} days stops working. Click a name to rename it.`}</span>
