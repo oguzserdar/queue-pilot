@@ -12,6 +12,7 @@ import { Check } from "lucide-react";
 import { readComposerAccounts, saveForAccounts, type ComposerAccount } from "@/app/(app)/accounts-actions";
 import { countFor } from "@/lib/char-limits";
 import { placeholdersIn } from "@/lib/placeholders";
+import { NETWORKS } from "@/lib/rules";
 import { Button } from "@/registry/components/button/button";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Textarea } from "@/registry/components/textarea/textarea";
@@ -143,7 +144,7 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
                     {picked[0] && <ComposerLibrary key={picked[0].id} slotId={picked[0].id} onInsert={insert} disabled={busy} />}
                     <Textarea label="Main text" autoFocus value={main} rows={6} disabled={busy} onChange={(e) => { setMain(e.target.value); setProblem(null); }} />
                     <p className={styles.muted}>
-                      {picked.length === 0 ? "Pick at least one account above." : `${picked.length - Object.keys(custom).filter((id) => chosen.includes(id)).length} of ${picked.length} account${picked.length === 1 ? "" : "s"} use this text.`}
+                      {picked.length === 0 ? "Pick at least one account above." : (() => { const using = picked.length - Object.keys(custom).filter((id) => chosen.includes(id)).length; return `${using} of ${picked.length} account${picked.length === 1 ? "" : "s"} ${using === 1 ? "uses" : "use"} this text.`; })()}
                       {picked.filter((a) => usage[a.id]?.over && custom[a.id] === undefined).map((a) => ` Too long for ${a.name}.`).join("")}
                     </p>
                   </>
@@ -157,14 +158,14 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
                           <>
                             <p className={styles.muted}>{a.name} uses the main text.</p>
                             <blockquote className={styles.preview}>{main || <span className={styles.muted}>Nothing written yet.</span>}</blockquote>
-                            <div className={weekStyles.composerFoot}><span>{a.limitFrom === "buffer" ? `${a.name}'s limit from Buffer` : `${a.service} limit`}</span>{counter(a)}</div>
+                            <div className={weekStyles.composerFoot}><span>{a.limitFrom === "buffer" ? `${a.name}'s limit from Buffer` : `${NETWORKS[a.service] ?? a.service} limit`}</span>{counter(a)}</div>
                             <Button variant="secondary" size="sm" disabled={busy} onClick={() => setCustom((c) => ({ ...c, [a.id]: main }))}>Change it for {a.name}</Button>
                           </>
                         ) : (
                           <>
                             <ComposerLibrary key={a.id} slotId={a.id} onInsert={insert} disabled={busy} />
                             <Textarea label={`Text for ${a.name}`} autoFocus value={own} rows={6} disabled={busy} onChange={(e) => { setCustom((c) => ({ ...c, [a.id]: e.target.value })); setProblem(null); setRefused(({ [a.id]: _gone, ...rest }) => rest); }} />
-                            <div className={weekStyles.composerFoot}><span>{a.limitFrom === "buffer" ? `${a.name}'s limit from Buffer` : `${a.service} limit`}</span>{counter(a)}</div>
+                            <div className={weekStyles.composerFoot}><span>{a.limitFrom === "buffer" ? `${a.name}'s limit from Buffer` : `${NETWORKS[a.service] ?? a.service} limit`}</span>{counter(a)}</div>
                             <Button variant="ghost" size="sm" disabled={busy} onClick={() => setCustom(({ [a.id]: _gone, ...rest }) => rest)}>Use the main text again</Button>
                           </>
                         )}
