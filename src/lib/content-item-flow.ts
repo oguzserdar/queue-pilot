@@ -30,8 +30,12 @@ export type ItemBuffer = { token: string; organizationIds: string[]; channels: C
 /** One answer: the text an assistant reads, whether it is a failure, and fields a screen can use. */
 /** GraphQL error codes that mean the request was rejected before anything ran: bad input, validation, permission. */
 const REFUSAL_CODES = new Set(["BAD_USER_INPUT", "GRAPHQL_VALIDATION_FAILED", "GRAPHQL_PARSE_FAILED", "FORBIDDEN", "UNAUTHENTICATED", "INSUFFICIENT_SCOPE"]);
-/** Error text that names a rejected input ("Invalid correlationId", "text is required"). */
-const REFUSAL_TEXT = /\binvalid\b|\bis required\b|\bmust be\b/i;
+/**
+ * Uncoded error text that names one of this save's own fields as rejected ("Invalid correlationId", "text is
+ * required"). Generic text such as "Invalid response from upstream" does not match, so it stays an unclear answer.
+ */
+const FIELDS = "correlationId|organizationId|text|title|targetDate|draft";
+const REFUSAL_TEXT = new RegExp(`\\binvalid (${FIELDS})\\b|\\b(${FIELDS}) (is required|must be|is invalid)\\b`, "i");
 
 /**
  * Whether an error certainly means Buffer rejected the request before writing anything: a known input, validation
