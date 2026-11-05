@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+// The shared allowance lives in Postgres (budget.test.ts covers it); these tests are about the HTTP client alone.
+vi.mock("./budget", () => ({ reserveRequest: async () => "ticket", releaseRequest: async () => {} }));
 import { BufferApiError, BufferRateLimitedError, bufferQuery, parseRateLimit } from "./client";
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>

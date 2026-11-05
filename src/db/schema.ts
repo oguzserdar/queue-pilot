@@ -237,6 +237,34 @@ export const settingsAudit = pgTable("qp_settings_audit", {
 });
 
 /**
+ * Queue Pilot's Buffer allowance as Buffer last reported it, one row per window ("100-in-15min" and so on). Buffer
+ * counts every request of this app's client together, for all people, so the row is shared by every server instance.
+ * A reading only lowers `remaining` within a window; it rises only once `resetAt` has passed.
+ */
+export const bufferAllowance = pgTable("qp_buffer_allowance", {
+  policy: text("policy").primaryKey(),
+  remaining: integer("remaining").notNull(),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Buffer requests on their way out: reserved before sending, removed when Buffer answers. A reservation left behind by
+ * a crashed request stops counting at `expiresAt`.
+ */
+export const bufferReservation = pgTable(
+  "qp_buffer_reservation",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    /** When the request was reserved: only a request started after a window reset may raise that window. */
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("qp_buffer_reservation_expires_idx").on(t.expiresAt)],
+);
+
+/**
  * Request counters for Queue Pilot's own surfaces (src/lib/rate-limit.ts): one row per key, action and fixed window,
  * so every server instance shares one count. Better Auth's /api/auth limits use its own rate_limit table.
  */

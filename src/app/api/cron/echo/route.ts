@@ -8,6 +8,7 @@ import { timingSafeEqual } from "node:crypto";
 import { getAuth } from "@/lib/auth";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { refreshSnapshot } from "@/lib/buffer/snapshot";
+import { withBudget } from "@/lib/buffer/budget";
 import { bufferAccessToken } from "@/lib/buffer-token";
 import { botTokensFromEnv, echoForUser } from "@/lib/echo-run";
 import { pruneRequestCounts } from "@/lib/rate-limit";
@@ -38,7 +39,9 @@ export async function GET(req: Request) {
   for (const userId of await store.usersWithDestinations()) {
     if (Date.now() - started > BUDGET_MS) { stoppedEarly = true; break; }
     try {
-      const snap = await refreshSnapshot(userId, await bufferAccessToken(auth, userId), { store: snapshots });
+      // Background work keeps the same reserve as assistants, so it never spends what the person's own app needs.
+      const token = await bufferAccessToken(auth, userId);
+      const { result: snap } = await withBudget("cron-echo", userId, () => refreshSnapshot(userId, token, { store: snapshots }));
       if (!snap) continue;
       const out = await echoForUser(userId, snap.data.posts, { store, tokens });
       users++;

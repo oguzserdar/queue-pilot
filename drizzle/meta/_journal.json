@@ -190,6 +190,13 @@
       "when": 1793875783458,
       "tag": "20261105104943_snapshot_patched_at",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793915673495,
+      "tag": "20261105215433_buffer_allowance",
+      "breakpoints": true
     }
   ]
 }

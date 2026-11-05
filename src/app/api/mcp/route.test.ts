@@ -6,6 +6,7 @@ vi.mock("@/lib/source-check", () => ({ listSourcesToCheck: (...a: unknown[]) => 
 vi.mock("@/lib/transcript-for-user", () => ({ transcriptForUser: (...a: unknown[]) => sourceCalls.transcript(...a as []) }));
 vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }, metadata: unknown = {}) => { sourceCalls.captured.push([data, metadata]); return { id: "snapshot-test", ...data, metadata }; }, sourceById: async (user: string, id: string) => ["saved-podcast", "long-podcast"].includes(id) ? (user === "person-a" ? { id, sourceKey: "yt:abcdefghijk", uri: "https://youtube.com/watch?v=abcdefghijk", text: id === "long-podcast" ? "Whole transcript. ".repeat(5000) + "Closing evidence." : "Intro. Closing evidence.", metadata: { kind: "transcript", truncated: false, segments: [{ text: "Intro.", seconds: 0 }, { text: "Closing evidence.", seconds: 7190 }] } } : null) : ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), replaceDraftEvidence: (...a: unknown[]) => sourceCalls.repair(...a as []), sourceHoldsForPosts: async () => new Map() }));
 vi.mock("@/lib/source-presentation", () => ({ sourceCards: vi.fn(async () => []) }));
+import { BUFFER_ONLY_NOTE } from "@/lib/buffer-routing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Channel, Post } from "@/lib/buffer/queries"
 import type { Written } from "@/lib/written-store"
@@ -841,6 +842,15 @@ describe("connector voice writes", () => {
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
     expect(tools.find((t: { name: string }) => t.name === "save_my_voice_note").inputSchema.properties.note.maxLength).toBe(MAX_NOTE)
+  })
+
+  it("marks only plain-Buffer tools as routable through Buffer's own connector, never QP's checked drafting", async () => {
+    const tools = (await rpc("tools/list", {})).result.tools as { name: string; description?: string }[]
+    const noted = tools.filter((t) => t.description?.endsWith(BUFFER_ONLY_NOTE)).map((t) => t.name).sort()
+    expect(noted).toEqual(["create_tag", "delete_content_item", "delete_snippet", "delete_tag", "get_channel_settings", "get_content_item", "get_post_template", "link_post_to_content_item", "list_buffer_ideas", "list_content_items", "list_post_templates", "list_snippets", "list_tags", "list_team_members", "rename_tag", "save_idea", "save_snippet", "unlink_post_from_content_item", "update_content_item"])
+    for (const core of ["save_drafts", "update_draft", "check_draft", "fill_post_template", "save_channel_less_draft", "promote_to_draft_posts", "add_draft_note", "tag_draft", "get_playbook", "get_my_voice", "read_material"]) {
+      expect(tools.find((t) => t.name === core)?.description, core).not.toContain("official connector")
+    }
   })
 
   it("declares honest MCP hints on every one of the 73 tools as clients receive them", async () => {
