@@ -544,15 +544,13 @@ describe("connector voice writes", () => {
         const v = [{ channelId: "ch", text: "Soup night on LinkedIn." }]
         const first = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))
         expect(first, mode).toContain("The drafts were created anyway; Queue Pilot recorded 1 as its own")
-        expect((written.get("person-a") ?? []).map((w) => w.text)).toEqual(["Soup night on LinkedIn."])
-        written.clear()
-        const retry = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))
-        expect(retry).toContain("Already turned into drafts; Queue Pilot recorded 1")
-        expect(itemsFake.promotes).toBe(1)
-        expect(written.get("person-a")?.[0]).toMatchObject({ text: "Soup night on LinkedIn.", verdicts: null })
-        // A third call records nothing again and does not touch the saved record.
+        const recorded = structuredClone(written.get("person-a"))
+        expect(recorded?.map((w) => w.text)).toEqual(["Soup night on LinkedIn."])
+        expect(attemptStore.store.rows.get("person-a|ci-1")?.recordedAt).toBeInstanceOf(Date)
+        // The recovery finished, so a retry is a no-op: no second promote, the saved record untouched.
         expect(answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))).toContain("Already turned into drafts and recorded")
-        expect(written.get("person-a")).toHaveLength(1)
+        expect(itemsFake.promotes).toBe(1)
+        expect(written.get("person-a")).toEqual(recorded)
       }
       reset(); posts = []
       await saveDraft()
