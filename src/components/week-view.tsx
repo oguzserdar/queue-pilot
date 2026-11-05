@@ -18,6 +18,7 @@ import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
 import { rulesForAccount } from "@/lib/rule-explain";
 import type { Readiness } from "@/lib/draft-readiness";
+import { approveOffNote } from "@/lib/approve-off-note";
 import type { Rule } from "@/lib/rules";
 import type { Verdict } from "@/lib/judge";
 import { EXAMPLE_VERDICTS } from "@/lib/example-verdicts";
@@ -377,7 +378,8 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             {(() => {
               const v = verdicts[current.id];
               if (v === undefined) return null;
-              if (v === null) return <p className={styles.muted}>{checkNotes[current.id] ?? "No current playbook check is available for this draft."}</p>;
+              // A live draft already carries this as a Check row below; saying it here too repeated it.
+              if (v === null) return live && current.status === "draft" ? null : <p className={styles.muted}>{checkNotes[current.id] ?? "No current playbook check is available for this draft."}</p>;
               const passed = v.filter(r => r.verdict === "pass");
               const problems = v.filter(r => r.verdict !== "pass");
               const row = (r: (typeof v)[number]) => (
@@ -400,7 +402,8 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
                 {!live && <p className={styles.muted}>Example verdicts.</p>}
               </>;
             })()}
-            {current.checks?.map((c) => (
+            {/* A broken rule already shows above as its own failed row, so its readiness row would say the same thing twice. */}
+            {current.checks?.filter((c) => !(readiness[current.id]?.state === "breaks" && c.label === readiness[current.id]?.reason && verdicts[current.id]?.some((r) => r.verdict === "fail"))).map((c) => (
               <div key={c.label} className={styles.check}>
                 <Badge tone={c.tone} size="sm">{c.tone === "success" ? "OK" : c.tone === "warning" ? "Check" : "Will fail"}</Badge>
                 <span>{c.label}</span>
@@ -443,7 +446,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               {note ? <p className={styles.footNote} role={note.ok ? "status" : "alert"}>{note.text}</p>
                 : current.ours === false ? <p id="approve-foreign" className={styles.footNote}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>
                 : approved.has(current.id) ? <p className={styles.footNote}>Scheduled in Buffer.</p>
-                : needsCheck(current.id) ? <p id="approve-playbook" className={styles.footNote}>{readiness[current.id]?.reason}</p>
+                : needsCheck(current.id) ? <p id="approve-playbook" className={styles.footNote}>{approveOffNote(readiness[current.id])}</p>
                 : worstTone(current) === "danger" ? <p id="approve-off" className={styles.footNote}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
                 : <p className={styles.footNote}>Saved as a draft in Buffer.</p>}
               <div className={styles.actions}>
