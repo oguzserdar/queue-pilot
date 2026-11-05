@@ -119,3 +119,20 @@ export function postTextLimit(settings: ChannelSettings): number | null {
   const rule = entry?.rules.find((r): r is Extract<ContentRule, { kind: "length" }> => r.kind === "length" && r.property === "text");
   return rule?.maxLength ?? null;
 }
+
+/**
+ * Each account's post text limit, read from Buffer's channel configuration. A failed read gives an empty map, so the
+ * caller falls back to the built-in table instead of failing the check.
+ *
+ * @param token - The person's Buffer access token
+ * @param organizationIds - The organizations to read
+ * @returns Channel id to its post text limit, for channels where Buffer states one
+ */
+export async function textLimits(token: string, organizationIds: string[], run: Run = bufferQuery): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  for (const org of new Set(organizationIds)) {
+    const settings = await channelSettings(token, org, run).catch(() => []);
+    for (const c of settings) { const cap = postTextLimit(c); if (cap) out.set(c.channelId, cap); }
+  }
+  return out;
+}

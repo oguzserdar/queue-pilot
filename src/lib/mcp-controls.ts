@@ -30,6 +30,7 @@ import { postgresReviewStore, MAX_SHARED_DRAFTS } from "./review-store";
 import { fixesForRule, shareDrafts } from "./review-flow";
 import { fillTemplate, getTemplate } from "./buffer/templates";
 import { checkText } from "./check-text";
+import { textLimits } from "./buffer/workspace";
 import { listSnippets, SnippetsNotAllowedError, type BufferSnippet } from "./buffer/snippets";
 
 const result = (value: unknown, isError = false) => ({ content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }], ...(isError ? { isError: true } : {}) });
@@ -64,7 +65,14 @@ async function findSnippet(token: string, orgs: string[], id: string): Promise<B
 export function registerControls(server: McpServer, userId: string, buffer: BufferReader, origin = "") {
   /** The shared playbook check, as a tool answer; `extra` adds fields (such as the filled text) to the answer. */
   async function checkAnswer(text: string, network: string, channelId?: string, extra: Record<string, unknown> = {}) {
-    const c = await checkText(userId, text, network, channelId);
+    // With an exact account, its own limit comes from Buffer's channel configuration.
+    let limit: number | undefined;
+    if (channelId) {
+      const b = await buffer();
+      const org = b.channels.find(c => c.id === channelId)?.organizationId;
+      if (org) limit = (await textLimits(b.token, [org])).get(channelId);
+    }
+    const c = await checkText(userId, text, network, channelId, limit);
     if (c.kind !== "checked") return result(c.message, true);
     // A completed check can refuse the text. That is its verdict, not a failed tool call.
     const { kind: _k, playbookRevision: _r, ...rest } = c;

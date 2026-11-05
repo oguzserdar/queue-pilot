@@ -117,7 +117,7 @@ const tagsFake = { tags: [] as { id: string; name: string; color: string; isLock
 // Buffer content items in the fake, keyed by id; promote can succeed, refuse, or fail after creating the drafts.
 const itemsFake = { items: new Map<string, any>(), extraChannels: [] as Channel[], promote: "ok" as "ok" | "refuse" | "failAfter" | "throwAfter", promotes: 0, dropCreate: false, readFails: false, deleteThrows: false, reads: 0, attachOnRead: 0 }
 // Buffer's template library, snippets, teammates and channel configuration in the fake.
-const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, snippetsAllowed: true, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
+const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, maxLength: 3000, snippetsAllowed: true, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
 const ideasFake = { groups: [{ id: "g1", name: "Next week", isLocked: false }], ideas: [] as Record<string, unknown>[], dropCreate: false }
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
@@ -247,7 +247,7 @@ const buffer = fakeBuffer((call) => {
     return { snippets: { edges: libFake.snippets.slice(start, end).map((node) => ({ node })), pageInfo: { hasNextPage: end < libFake.snippets.length, endCursor: end < libFake.snippets.length ? `sc${end}` : null } } }
   }
   if (query.includes("selectableTeamMembers(")) return { selectableTeamMembers: { edges: [{ node: { id: "acc-1", name: "Sara", email: "sara@example.com", avatar: "", isLocked: false, urn: "urn:buffer:account:acc-1" } }], pageInfo: { hasNextPage: false, endCursor: null } } }
-  if (query.includes("configuration(")) return { configuration: { channels: [{ channelId: channel.id, service: "linkedin", channelType: "profile", authorizationStatus: libFake.authorization, content: [{ configurationContentTypes: ["post"], rules: libFake.noLimit ? [] : [{ __typename: "LengthRule", property: "text", maxLength: 3000 }] }] }] } }
+  if (query.includes("configuration(")) return { configuration: { channels: [{ channelId: channel.id, service: "linkedin", channelType: "profile", authorizationStatus: libFake.authorization, content: [{ configurationContentTypes: ["post"], rules: libFake.noLimit ? [] : [{ __typename: "LengthRule", property: "text", maxLength: libFake.maxLength }] }] }] } }
   throw new Error("Unexpected Buffer query")
 })
 
@@ -608,6 +608,21 @@ describe("connector voice writes", () => {
       expect(answer(r)).toContain("images or video attached")
       expect(itemsFake.promotes).toBe(0)
       expect(itemsFake.items.get("ci-1").body.assets).toEqual([{ type: "image" }])
+    })
+
+    it("checks each version against the account's own text limit from Buffer, not a fixed table", async () => {
+      await saveDraft()
+      libFake.maxLength = 20
+      try {
+        const r = JSON.parse(answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [{ channelId: "ch", text: "This version is longer than twenty." }] })))
+        expect(r).toMatchObject({ status: "refused", created: false })
+        expect(r.refused[0]).toContain("this account's 20 character limit")
+        expect(itemsFake.promotes).toBe(0)
+        const checked = JSON.parse(answer(await call("check_draft", { text: "This version is longer than twenty.", network: "linkedin", channelId: "ch" })))
+        expect(checked).toMatchObject({ status: "refused", limit: { max: 20, from: "buffer" } })
+      } finally {
+        libFake.maxLength = 3000
+      }
     })
 
     it("refuses a second promotion with different versions while the first is pending", async () => {

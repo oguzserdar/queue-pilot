@@ -16,6 +16,7 @@ import {
   removePostFromContentItem, updateChannelLessDraft, updateContentItem, type ContentItemView, type ItemWriteResult,
 } from "./buffer/content-items";
 import { checkText, type TextCheck } from "./check-text";
+import { textLimits } from "./buffer/workspace";
 import { BufferApiError } from "./buffer/client";
 import { evidenceInput, evidenceProblem, type EvidenceInput } from "./source-evidence";
 import { recordEvidence, sourceById } from "./source-store";
@@ -221,9 +222,11 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
     if (!same(item.body.text, expectedDraftText)) return result(`Not promoted: the draft changed in Buffer since it was reviewed. Current text:\n<draft_text>${item.body.text}</draft_text>`, true);
     const l = await limit("ai", userId);
     if (!l.ok) return result("Too many AI requests just now. Try again in a minute.", true);
+    // Each account's own text limit from Buffer; the built-in table only where Buffer states none.
+    const limits = await textLimits(b.token, [item.organizationId]);
     const checks: Extract<TextCheck, { kind: "checked" }>[] = [];
     for (const [i, v] of versions.entries()) {
-      const c = await checkText(userId, v.text, channels[i]!.service, v.channelId);
+      const c = await checkText(userId, v.text, channels[i]!.service, v.channelId, limits.get(v.channelId));
       if (c.kind !== "checked") return result(c.message, true);
       checks.push(c);
     }
