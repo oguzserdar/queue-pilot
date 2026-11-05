@@ -9,13 +9,25 @@ vi.mock("@/app/(app)/library-actions", () => ({ readComposerTemplates: vi.fn(), 
 vi.mock("@/app/(app)/accounts-actions", () => ({ readComposerAccounts: vi.fn(), saveForAccounts: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
-const { insertInto } = await import("./accounts-composer");
+const { insertInto, unfilledFor } = await import("./accounts-composer");
 const { ComposerLibrary } = await import("./composer-library");
 
 describe("insertInto", () => {
   it("fills empty text and appends after a blank line otherwise", () => {
     expect(insertInto("  ", "#soup")).toBe("#soup");
     expect(insertInto("Soup night.\n\n", "#soup")).toBe("Soup night.\n\n#soup");
+  });
+});
+
+describe("unfilledFor", () => {
+  it("ignores placeholders in main text that every chosen account has replaced", () => {
+    expect(unfilledFor(["x"], "Shipped {{feature}}.", { x: "Shipped the week view." })).toEqual([]);
+  });
+  it("counts main-text placeholders when a chosen account still uses the main text", () => {
+    expect(unfilledFor(["x", "li"], "Shipped {{feature}}.", { x: "Shipped the week view." })).toEqual(["feature"]);
+  });
+  it("counts placeholders in an account's own version", () => {
+    expect(unfilledFor(["x"], "Done.", { x: "Read {{link}}" })).toEqual(["link"]);
   });
 });
 

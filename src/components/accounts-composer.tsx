@@ -26,6 +26,14 @@ export function insertInto(text: string, piece: string): string {
   return !text.trim() ? piece : `${text.replace(/\s+$/, "")}\n\n${piece}`;
 }
 
+/**
+ * The placeholders still unfilled in the text each chosen account will post: its own version, or the main text when
+ * it has none. Main text that no chosen account uses does not block saving.
+ */
+export function unfilledFor(chosen: string[], main: string, custom: Record<string, string>): string[] {
+  return [...new Set(chosen.flatMap((id) => placeholdersIn(custom[id] ?? main)))];
+}
+
 type Load = { status: "loading" } | { status: "done"; accounts: ComposerAccount[] } | { status: "failed"; message: string };
 
 /** The composer dialog; `preview` supplies accounts and saves nothing (the preview page only). */
@@ -63,7 +71,7 @@ export function AccountsComposer({ open, onClose, preview }: { open: boolean; on
     return [a.id, { used, over: a.limit !== null && used > a.limit }];
   })), [picked, main, custom]); // eslint-disable-line react-hooks/exhaustive-deps
   const overAny = picked.some((a) => usage[a.id]?.over);
-  const unfilled = [...new Set(picked.flatMap((a) => placeholdersIn(textFor(a.id))).concat(placeholdersIn(main)))];
+  const unfilled = unfilledFor(picked.map((a) => a.id), main, custom);
   const canSave = picked.length > 0 && main.trim() !== "" && !overAny && unfilled.length === 0 && !busy;
 
   const reset = () => { setChosen([]); setMain(""); setCustom({}); setTab("main"); setProblem(null); setRefused({}); };
