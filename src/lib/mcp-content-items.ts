@@ -98,8 +98,10 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
       await postgresWrittenStore().record(userId, [{ postId: post.id, network: networks[i], text: post.text, verdicts: checks?.[i]?.verdicts ?? null, playbookRevision: checks?.[i]?.playbookRevision ?? null }]);
       recorded++;
     }
-    return { recorded, missing, notes };
+    // Complete only when every version's draft is recorded; evidence failures and non-drafts keep recovery pending.
+    return { created: versions.length - missing.length, recorded, missing, notes, complete: recorded === versions.length };
   };
+  const counts = (d: { created: number; recorded: number }) => `Buffer has ${d.created} draft${d.created === 1 ? "" : "s"} from this promotion; Queue Pilot recorded ${d.recorded} as its own.`;
   const nameOf = (b: ItemBuffer) => (id: string) => b.channels.find((c) => c.id === id)?.name ?? id;
   const orgInput = z.string().max(200).optional().describe("Only when the person has more than one Buffer organization.");
   const itemId = z.string().min(1).max(200).describe("A content item id from list_content_items.");
@@ -212,8 +214,8 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
       if (attempt.recordedAt) return result(`Already turned into drafts and recorded.\n${describe(item, nameOf(b))}`);
       const done = await reconcile(item, versions, channels.map((c) => c!.service), null);
       if (done.missing.length) return result(`That item has posts, but not for every version given (${done.missing.join(", ")}). Read get_content_item.`, true);
-      await attempts.markRecorded(userId, item.id);
-      return result([`Already turned into drafts; Queue Pilot recorded ${done.recorded} of them as its own. They need a fresh check before approving.`, ...done.notes, describe(item, nameOf(b))].join("\n"));
+      if (done.complete) await attempts.markRecorded(userId, item.id, attempt.token);
+      return result([`Already turned into drafts. ${counts(done)} They need a fresh check before approving.`, ...done.notes, ...(done.complete ? [] : ["Call again with the same versions to finish recording."]), describe(item, nameOf(b))].join("\n"), !done.complete);
     }
     if (item.body.mediaCount) return media;
     if (!same(item.body.text, expectedDraftText)) return result(`Not promoted: the draft changed in Buffer since it was reviewed. Current text:\n<draft_text>${item.body.text}</draft_text>`, true);
@@ -231,9 +233,12 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
     // so an edit landing between this read and the promote itself cannot be detected.
     const fresh = await readBack(b, item.id);
     if (fresh === "unknown") return result("Not promoted: the draft could not be read again after the checks. Try again in a minute.", true);
+    if (fresh && fresh.body.kind === "draft" && fresh.body.mediaCount) return media;
     if (!fresh || fresh.body.kind !== "draft" || !same(fresh.body.text, expectedDraftText)) return result("Not promoted: the draft changed in Buffer while the versions were checked. Read get_content_item and review again.", true);
-    // Written before the request, so a recovery can prove this app asked for these posts.
-    await attempts.start(userId, item.id, fingerprint);
+    // Claimed before the request, so a recovery can prove this app asked for these posts and no overlapping call with
+    // different versions can take the item over.
+    const token = await attempts.claim(userId, item.id, fingerprint);
+    if (!token) return result("Another promotion of this item with different versions is still in progress. Read get_content_item in a minute.", true);
     let outcome: ItemWriteResult<ContentItemView> | { thrown: string };
     try {
       outcome = await promoteToDraftPosts(b.token, item.id, versions);
@@ -243,9 +248,9 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
     }
     if ("ok" in outcome && outcome.ok) {
       const done = await reconcile(outcome.value, versions, channels.map((c) => c!.service), checks);
-      if (!done.missing.length) await attempts.markRecorded(userId, item.id);
+      if (done.complete) await attempts.markRecorded(userId, item.id, token);
       const flagged = checks.flatMap((c, i) => c.status === "flagged" || c.status === "uncertain" ? [`${channels[i]!.name}: ${c.status}`] : []);
-      return result([`Created ${done.recorded} Buffer draft${done.recorded === 1 ? "" : "s"}, none scheduled.${flagged.length ? ` Flagged: ${flagged.join("; ")}.` : ""}`, ...evidenceNotes, ...done.notes, describe(outcome.value, nameOf(b))].join("\n"));
+      return result([`${counts(done)} None are scheduled.${flagged.length ? ` Flagged: ${flagged.join("; ")}.` : ""}`, ...evidenceNotes, ...done.notes, ...(done.complete ? [] : ["Call again with the same versions to finish recording."]), describe(outcome.value, nameOf(b))].join("\n"), !done.complete);
     }
     // Buffer: a failure can arrive after the promotion took effect. Read the real state and repair QP's records.
     const why = "thrown" in outcome ? `Buffer did not answer clearly (${outcome.thrown}).` : `Buffer reported a problem: ${failure(outcome)}`;
@@ -253,8 +258,8 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
     if (now === "unknown") return result(`${why}\nThe item could not be read back, so whether the drafts exist is unknown. Read get_content_item, then call again with the same versions: Queue Pilot records its own drafts instead of promoting twice.`, true);
     if (now?.body.kind === "posts") {
       const done = await reconcile(now, versions, channels.map((c) => c!.service), checks);
-      if (!done.missing.length) await attempts.markRecorded(userId, item.id);
-      return result([`${why}\nThe drafts were created anyway; Queue Pilot recorded ${done.recorded} as its own. None are scheduled.`, ...done.notes, describe(now, nameOf(b))].join("\n"));
+      if (done.complete) await attempts.markRecorded(userId, item.id, token);
+      return result([`${why}\nThe drafts were created anyway. ${counts(done)} None are scheduled.`, ...done.notes, ...(done.complete ? [] : ["Call again with the same versions to finish recording."]), describe(now, nameOf(b))].join("\n"), !done.complete);
     }
     return result(`${why}\n${now ? "The item is still a channel-less draft; nothing was created." : "The item could not be read back. Read get_content_item before trying again."}`, true);
   });

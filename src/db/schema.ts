@@ -419,7 +419,8 @@ export const sourceJob = pgTable("qp_source_job", {
 /**
  * A promotion of a Buffer channel-less draft that Queue Pilot started: written before the promote request, so a
  * recovery after an unclear answer adopts only posts this app asked Buffer to create, never another app's.
- * fingerprint hashes the versions (account + text); recordedAt is set once the drafts are recorded as QP's own.
+ * fingerprint hashes the versions (account, text, slot time, source and evidence); token is the starting call's claim;
+ * recordedAt is set once every draft is recorded as QP's own.
  */
 export const promotionAttempt = pgTable(
   "qp_promotion_attempt",
@@ -427,6 +428,8 @@ export const promotionAttempt = pgTable(
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     contentItemId: text("content_item_id").notNull(),
     fingerprint: text("fingerprint").notNull(),
+    /** The claim of the call that started this attempt; only that call may complete it. */
+    token: text("token").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     recordedAt: timestamp("recorded_at", { withTimezone: true }),
   },

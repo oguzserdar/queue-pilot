@@ -1,5 +1,5 @@
 {
-  "id": "2a6bc4a0-6f9e-4e7c-abe7-210629a470e8",
+  "id": "4dc200e0-2e62-4448-b2e5-04fa8de18bff",
   "prevId": "aa794d26-2ac8-4091-9789-72fefee8f6b1",
   "version": "7",
   "dialect": "postgresql",
@@ -1007,6 +1007,12 @@
         },
         "fingerprint": {
           "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
           "type": "text",
           "primaryKey": false,
           "notNull": true

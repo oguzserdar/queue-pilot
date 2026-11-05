@@ -47,12 +47,13 @@ const limits = vi.hoisted(() => ({ blocked: "" }));
 vi.mock("@/lib/rate-limit", () => ({ limit: async (kind: string) => ({ ok: kind !== limits.blocked }), limitHeaders: () => ({}) }))
 vi.mock("@/lib/buffer-token", () => ({ bufferAccessToken: async (_auth: unknown, userId: string) => userId }))
 vi.mock("@/lib/buffer/snapshot-store", () => ({ postgresSnapshotStore: () => snapshots }))
-const attemptStore = vi.hoisted(() => ({ rows: new Map<string, { fingerprint: string; recordedAt: Date | null }>() }))
-vi.mock("@/lib/promotion-attempts", async (original) => ({ ...await original<typeof import("@/lib/promotion-attempts")>(), postgresPromotionAttempts: () => ({
-  start: async (u: string, c: string, fingerprint: string) => { attemptStore.rows.set(`${u}|${c}`, { fingerprint, recordedAt: null }) },
-  get: async (u: string, c: string) => attemptStore.rows.get(`${u}|${c}`) ?? null,
-  markRecorded: async (u: string, c: string) => { const r = attemptStore.rows.get(`${u}|${c}`); if (r) r.recordedAt = new Date() },
-}) }))
+// The real in-memory attempt store, with the same claim and completion rules as Postgres.
+const attemptStore = vi.hoisted(() => ({ store: null as unknown as ReturnType<typeof import("@/lib/promotion-attempts").memoryPromotionAttempts> }))
+vi.mock("@/lib/promotion-attempts", async (original) => {
+  const real = await original<typeof import("@/lib/promotion-attempts")>()
+  attemptStore.store = real.memoryPromotionAttempts()
+  return { ...real, postgresPromotionAttempts: () => attemptStore.store }
+})
 vi.mock("@/lib/voice-store", async (original) => ({ ...await original<typeof import("@/lib/voice-store")>(), postgresVoiceStore: () => voices }))
 vi.mock("@/lib/sources-store", async (original) => ({ ...await original<typeof import("@/lib/sources-store")>(), postgresSourceStore: () => sources }))
 vi.mock("@/lib/material-store", async (original) => ({ ...await original<typeof import("@/lib/material-store")>(), postgresMaterialStore: () => material }))
@@ -114,7 +115,7 @@ const notesFake = { notes: [] as { postId: string; node: Record<string, unknown>
 // Buffer tags in the fake.
 const tagsFake = { tags: [] as { id: string; name: string; color: string; isLocked: boolean }[] }
 // Buffer content items in the fake, keyed by id; promote can succeed, refuse, or fail after creating the drafts.
-const itemsFake = { items: new Map<string, any>(), extraChannels: [] as Channel[], promote: "ok" as "ok" | "refuse" | "failAfter" | "throwAfter", promotes: 0, dropCreate: false, readFails: false, deleteThrows: false }
+const itemsFake = { items: new Map<string, any>(), extraChannels: [] as Channel[], promote: "ok" as "ok" | "refuse" | "failAfter" | "throwAfter", promotes: 0, dropCreate: false, readFails: false, deleteThrows: false, reads: 0, attachOnRead: 0 }
 // Buffer's template library, snippets, teammates and channel configuration in the fake.
 const libFake = { orgs: ["org"], templatePages: 1, snippetPage: 100, noLimit: false, snippetsAllowed: true, snippets: [] as { id: string; name: string; text: string }[], authorization: [{ feature: "posting", status: "ok", reason: null }] as { feature: string; status: string; reason: string | null }[] }
 const ideasFake = { groups: [{ id: "g1", name: "Next week", isLocked: false }], ideas: [] as Record<string, unknown>[], dropCreate: false }
@@ -131,6 +132,8 @@ const buffer = fakeBuffer((call) => {
   if (query.includes("contentItem(input")) {
     if (itemsFake.readFails) return new TypeError("fetch failed")
     const it = itemsFake.items.get(variables.input.id)
+    // Someone attaches an image in Buffer between two reads, leaving the text unchanged.
+    if (it && ++itemsFake.reads === itemsFake.attachOnRead) it.body.assets = [{ type: "image" }]
     if (!it) return new BufferApiError("Content item not found", 200)
     return { contentItem: structuredClone(it) }
   }
@@ -488,7 +491,7 @@ describe("connector voice writes", () => {
   });
   describe("content items: write once, choose accounts later", () => {
     const second: Channel = { ...channel, id: "ch2", name: "Second", service: "twitter" }
-    const reset = () => { itemsFake.items.clear(); itemsFake.extraChannels = []; itemsFake.promote = "ok"; itemsFake.promotes = 0; itemsFake.dropCreate = false; itemsFake.readFails = false; itemsFake.deleteThrows = false; attemptStore.rows.clear() }
+    const reset = () => { itemsFake.items.clear(); itemsFake.extraChannels = []; itemsFake.promote = "ok"; itemsFake.promotes = 0; itemsFake.dropCreate = false; itemsFake.readFails = false; itemsFake.deleteThrows = false; itemsFake.reads = 0; itemsFake.attachOnRead = 0; attemptStore.store.rows.clear() }
     afterEach(reset)
     const saveDraft = async (text = "Soup night: three soups from issue 41.", requestId: string = crypto.randomUUID()) => call("save_channel_less_draft", { text, title: "Issue 41", requestId })
 
@@ -568,7 +571,7 @@ describe("connector voice writes", () => {
       expect(answer(adopt)).toContain("did not create")
       expect(written.get("person-a") ?? []).toEqual([])
       // An attempt for different versions does not count either.
-      attemptStore.rows.set("person-a|ci-1", { fingerprint: "something-else", recordedAt: null })
+      attemptStore.store.rows.set("person-a|ci-1", { fingerprint: "something-else", token: "t", recordedAt: null, startedAt: new Date() })
       expect((await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "x", versions: [{ channelId: "ch", text: "Soup night on LinkedIn." }] })).isError).toBe(true)
       expect(written.get("person-a") ?? []).toEqual([])
       await saveDraft("With a photo")
@@ -576,6 +579,45 @@ describe("connector voice writes", () => {
       expect(answer(await call("save_channel_less_draft", { contentItemId: "ci-2", text: "New", expectedText: "With a photo" }))).toContain("images or video attached")
       expect(answer(await call("promote_to_draft_posts", { contentItemId: "ci-2", expectedDraftText: "With a photo", versions: [{ channelId: "ch", text: "With a photo" }] }))).toContain("images or video attached")
       expect(itemsFake.items.get("ci-2").body).toMatchObject({ text: "With a photo", assets: [{ type: "image" }] })
+      expect(itemsFake.promotes).toBe(0)
+    })
+
+    it("keeps recovery open until every draft is recorded with its evidence, then records nothing again", async () => {
+      await saveDraft()
+      const { recordEvidence } = await import("@/lib/source-store")
+      vi.mocked(recordEvidence).mockClear().mockRejectedValueOnce(new Error("db down"))
+      const v = [{ channelId: "ch", text: "Intro. Closing evidence.", snapshotId: "saved-podcast", evidence: [{ claim: "Intro.", quote: "Intro." }] }]
+      const first = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v })
+      expect(first.isError).toBe(true)
+      expect(answer(first)).toContain("Buffer has 1 draft from this promotion; Queue Pilot recorded 0 as its own")
+      expect(written.get("person-a") ?? []).toEqual([])
+      expect(attemptStore.store.rows.get("person-a|ci-1")?.recordedAt).toBeNull()
+      const repair = answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))
+      expect(repair).toContain("Queue Pilot recorded 1 as its own")
+      expect(written.get("person-a")).toHaveLength(1)
+      expect(attemptStore.store.rows.get("person-a|ci-1")?.recordedAt).toBeInstanceOf(Date)
+      const evidenceCalls = vi.mocked(recordEvidence).mock.calls.length
+      expect(answer(await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: v }))).toContain("Already turned into drafts and recorded")
+      expect(vi.mocked(recordEvidence).mock.calls.length).toBe(evidenceCalls)
+      expect(itemsFake.promotes).toBe(1)
+    })
+
+    it("stops a promotion when an image was attached in Buffer while the versions were being checked", async () => {
+      await saveDraft()
+      itemsFake.reads = 0
+      itemsFake.attachOnRead = 2
+      const r = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [{ channelId: "ch", text: "Soup night." }] })
+      expect(answer(r)).toContain("images or video attached")
+      expect(itemsFake.promotes).toBe(0)
+      expect(itemsFake.items.get("ci-1").body.assets).toEqual([{ type: "image" }])
+    })
+
+    it("refuses a second promotion with different versions while the first is pending", async () => {
+      await saveDraft()
+      attemptStore.store.rows.set("person-a|ci-1", { fingerprint: "another-call", token: "t", recordedAt: null, startedAt: new Date() })
+      const r = await call("promote_to_draft_posts", { contentItemId: "ci-1", expectedDraftText: "Soup night: three soups from issue 41.", versions: [{ channelId: "ch", text: "Soup night." }] })
+      expect(r.isError).toBe(true)
+      expect(answer(r)).toContain("still in progress")
       expect(itemsFake.promotes).toBe(0)
     })
 
