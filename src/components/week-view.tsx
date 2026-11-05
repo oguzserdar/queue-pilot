@@ -23,6 +23,7 @@ import type { Rule } from "@/lib/rules";
 import type { Verdict } from "@/lib/judge";
 import { EXAMPLE_VERDICTS } from "@/lib/example-verdicts";
 import { WriteWeekButton } from "./write-week-button";
+import { AccountsComposer } from "./accounts-composer";
 import { DraftNotes } from "./draft-notes";
 import { DraftTags } from "./draft-tags";
 import type { DraftTag } from "@/app/(app)/tag-actions";
@@ -91,6 +92,8 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
   const [selected, setSelected] = useState<string | undefined>();
   // The draft stays selected while the dialog closes, so its content can animate out and focus can return to the draft that opened it.
   const [dialogOpen, setDialogOpen] = useState(false);
+  // "New post": one post written once for several accounts, saved as a Buffer draft per account.
+  const [newPostOpen, setNewPostOpen] = useState(false);
   const opener = useRef<HTMLButtonElement | null>(null);
   const current = posts.find((p) => p.id === selected);
   const open = countOpenSlots({ ...week, posts });
@@ -226,6 +229,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </PopoverContent>
             </Popover>
           )}
+          {live && channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => setNewPostOpen(true)}>New post</Button>}
           {live && open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions />}
           {live && drafts.length > 0 && <ShareReviewButton openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
@@ -313,6 +317,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
       </div>
       )}
 
+      <AccountsComposer open={newPostOpen} onClose={(saved) => { setNewPostOpen(false); if (saved) toast({ type: "success", title: saved }); }} />
       {/* A draft opens in a dialog over the week, the way a calendar opens an event; closing it returns focus to the draft. */}
       <SlotComposer slot={composing} live={live} onClose={(saved) => { setComposing(null); if (saved) toast({ type: "success", title: saved }); }} />
       <Dialog open={dialogOpen && current !== undefined} onOpenChange={setDialogOpen}>

@@ -1,6 +1,7 @@
 import type { Verdict } from "@/lib/judge";
 import { channels as exampleChannels } from "@/lib/example-channels";
 import { notFound } from "next/navigation";
+import { ComposerPreview } from "./composer-preview";
 import { AppShell, type ShellAccount } from "@/components/app-shell";
 import { BriefingView } from "@/components/briefing-view";
 import { VoiceView } from "@/components/voice-view";
@@ -20,7 +21,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const asked = params.screen;
   const channelCount = params.channels === "1" ? 1 : params.channels === "2" ? 2 : 4;
   const shellChannels = exampleChannels.slice(0, channelCount).map(c => ({ ...c, name: c.handle }));
-  const screen = asked === "voice" || asked === "settings" || asked === "week" || asked === "playbook" || asked === "needs" ? asked : "ideas";
+  const screen = asked === "voice" || asked === "settings" || asked === "week" || asked === "playbook" || asked === "needs" || asked === "composer" ? asked : "ideas";
+  if (screen === "composer") {
+    const shell: ShellAccount = { email: "mark@weeknightdinners.example", channels: shellChannels, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Mark Evans", image: null };
+    return <AppShell account={shell} signInOpen><ComposerPreview /></AppShell>;
+  }
   if (screen === "needs") {
     // Example rows, not live: approving folds the row away without calling Buffer.
     const at = (i: number, title: string, time: string, account: string): TriageItem => ({ id: `approve-${i}`, kind: "approve", title, detail: `${time} · ${account}`, href: "/week", action: "Approve", postId: `p${i}`, run: "approve" });

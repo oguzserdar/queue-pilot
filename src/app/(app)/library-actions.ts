@@ -19,13 +19,17 @@ type Result<T> = ({ ok: true } & T) | { ok: false; message: string };
 
 const FAILED = "Buffer did not answer. Try again in a minute.";
 
-/** The organization that owns the slot's channel, for the signed-in person only. */
+/**
+ * The organization that owns the channel being written for, for the signed-in person only. Takes a slot id (one empty
+ * time) or, from the several-accounts composer, a channel id.
+ */
 async function slotOrg(slotId: unknown): Promise<{ ok: true; token: string; org: string } | { ok: false; message: string }> {
-  const slot = typeof slotId === "string" && slotId.length <= 300 ? parseSlotId(slotId) : null;
-  if (!slot) return { ok: false, message: "That time is not one of your slots." };
+  if (typeof slotId !== "string" || !slotId || slotId.length > 300) return { ok: false, message: "That time is not one of your slots." };
+  const channelId = slotId.includes("@") ? parseSlotId(slotId)?.channelId : slotId;
+  if (!channelId) return { ok: false, message: "That time is not one of your slots." };
   const b = await bufferForReading();
   if (!b) return { ok: false, message: "Sign in with Buffer first." };
-  const org = b.channels.find((c) => c.id === slot.channelId)?.organizationId;
+  const org = b.channels.find((c) => c.id === channelId)?.organizationId;
   if (!org) return { ok: false, message: "Refresh Queue Pilot once so it knows this channel's organization." };
   return { ok: true, token: b.token, org };
 }

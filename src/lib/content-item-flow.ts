@@ -24,7 +24,7 @@ import type { Channel } from "./buffer/queries";
 export type ItemBuffer = { token: string; organizationIds: string[]; channels: Channel[]; posts: { id: string; channelId: string }[] };
 
 /** One answer: the text an assistant reads, whether it is a failure, and fields a screen can use. */
-export type FlowAnswer = { text: string; isError: boolean; item?: ContentItemView; refused?: string[]; created?: number; recorded?: number };
+export type FlowAnswer = { text: string; isError: boolean; item?: ContentItemView; refused?: { channelId: string; reason: string }[]; created?: number; recorded?: number };
 
 /** One version of the draft for one account. */
 export type Version = { channelId: string; text: string; dueAt?: string; snapshotId?: string; evidence?: EvidenceInput[] };
@@ -172,8 +172,9 @@ export function contentItemFlow(userId: string) {
       if (c.kind !== "checked") return result(c.message, true);
       checks.push(c);
     }
-    const refusedAt = checks.flatMap((c, i) => c.status === "refused" ? [`- ${channels[i]!.name}: ${c.reason ?? c.verdicts.filter((v) => v.level === "block" && v.verdict === "fail").map((v) => `${v.rule}${v.reason ? ` (${v.reason})` : ""}`).join("; ")}`] : []);
-    if (refusedAt.length) return result({ status: "refused", created: false, message: "Nothing was created. Fix these versions and call again:", refused: refusedAt }, false, { refused: refusedAt });
+    const refusedBy = checks.flatMap((c, i) => c.status === "refused" ? [{ channelId: versions[i].channelId, name: channels[i]!.name, reason: c.reason ?? c.verdicts.filter((v) => v.level === "block" && v.verdict === "fail").map((v) => `${v.rule}${v.reason ? ` (${v.reason})` : ""}`).join("; ") }] : []);
+    const refusedAt = refusedBy.map((r) => `- ${r.name}: ${r.reason}`);
+    if (refusedAt.length) return result({ status: "refused", created: false, message: "Nothing was created. Fix these versions and call again:", refused: refusedAt }, false, { refused: refusedBy.map(({ channelId, reason }) => ({ channelId, reason })) });
     // The checks took time: re-read so a newer Buffer edit is refused, not discarded. Buffer offers no compare-and-set,
     // so an edit landing between this read and the promote itself cannot be detected.
     const fresh = await readBack(b, item.id);
