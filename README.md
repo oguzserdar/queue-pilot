@@ -69,10 +69,11 @@ Then ask, for example: *"Fill my empty Buffer times next week from my newsletter
 - **Learn your voice and use your material.** Save a style note and writing examples with `save_my_voice_note` and `add_voice_example`, add feeds with `add_source`, or keep research with `add_material`.
 - **Follow your playbook.** Read, add or remove rules when you ask, and try a draft against them with `check_draft` before saving it.
 - **Write your week.** Read the open slots, run Queue Pilot's writer with `write_my_week` for up to ten drafts, then read the drafts and their checks with `list_my_drafts`. It can also edit or delete drafts Queue Pilot wrote.
+- **Use more of Buffer.** Start from Buffer's post templates (`list_post_templates`, `fill_post_template`), write a post once and save a checked draft for each account (`save_channel_less_draft`, `promote_to_draft_posts`), read and add Notes with teammate mentions, create, rename and apply tags, save ideas, and read saved hashtag sets where Buffer enables them for your account. The same templates, hashtags and per-account versions are in the app's New post composer.
 
 Give your AI the skills for the steps to follow once connected: the setup line on the Connect page installs all five, or add the [plugin](plugin/skills) in Claude Code. The [Fill my week skill](plugin/skills/queue-pilot-fill-week/SKILL.md) is the one to start with.
 
-The connector schedules only drafts Queue Pilot wrote, only when you ask, and asks you first unless you change that in Settings. Account settings, AI keys and app access stay with you. It cannot change posts Queue Pilot did not write.
+The connector schedules only drafts Queue Pilot wrote, only when you ask, and asks you first unless you change that in Settings. It edits or deletes a single draft only when Queue Pilot wrote it. Organization tools work only inside your own Buffer organizations, and the ones that remove something your team shares (a tag, a hashtag set, or a content item with every post in it) ask you first. Account settings, AI keys and app access stay with you.
 
 ## Your AI key, or ours
 
@@ -89,7 +90,7 @@ When Buffer sends a post, Queue Pilot can copy it to your Telegram channel and y
 ![How Queue Pilot uses Buffer's API: screens and AI apps read one saved copy of your queue, it refreshes when old, re-reads before writing, and new posts are saved as drafts](docs/media/diagram-api.png)
 
 - **Drafts first.** Queue Pilot never schedules or publishes on its own. Only your Approve schedules.
-- **Only its own drafts.** It approves, edits or deletes a draft only when it wrote that draft.
+- **Only its own drafts.** It approves, edits or deletes a single draft only when it wrote that draft. Deleting a whole content item, which you confirm first, removes the posts in it.
 - **One saved copy per person.** Channels, posting times and posts from 7 days back to 14 days ahead. Screens and the connector read the copy, so browsing costs no requests.
 - **Polling, not webhooks.** Buffer has no webhooks, so the copy refreshes when it is older than 5 minutes, from the Refresh button, and once a day.
 - **Within Buffer's limits.** Each app gets 500 requests a day plus 25 for every person who signs in ([API limits](https://developers.buffer.com/guides/api-limits)). A whole first session costs 21:
