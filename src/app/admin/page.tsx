@@ -10,6 +10,7 @@ import { adminAccess, signedInEmail } from "@/lib/current-user";
 import { hasDatabase, postgresSettingsStore, recentSettingChanges } from "@/lib/db";
 import { describeSettings, GROUPS, memoryStore, SETTINGS, type GroupId, type SettingKey } from "@/lib/settings";
 import { claimAdmin, clearAdminSetting, saveAdminSetting } from "./actions";
+import { ShadowedNotice } from "./shadowed-notice";
 import { hasAdmin } from "@/lib/admin-role";
 import { postgresAllowanceStore, utcDay } from "@/lib/ai-allowance";
 import { AiUsage } from "@/components/ai-usage";
@@ -98,6 +99,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
         <a className={styles.back} href="/">Back to Queue Pilot</a>
       </header>
       {!hasDatabase() ? <p className={styles.error} role="alert">{NOTES.db}</p> : null}
+      <ShadowedNotice keys={rows.filter((r) => r.shadowsEnv).map((r) => r.key)} />
       <UrlTabs initial={openTab} first={groups[0]}>
         <TabsList aria-label="Settings sections">
           {groups.map((g) => <TabsTrigger key={g} value={g}>{GROUPS[g].title}</TabsTrigger>)}

@@ -106,6 +106,31 @@ export async function resolveSetting(store: SettingsStore, key: SettingKey, mast
   return fallback !== null ? { value: fallback, source: "default" } : null;
 }
 
+/**
+ * Settings whose value saved in /admin hides a value set in the server's environment. Before v0.8 the environment
+ * won, so an old saved row can quietly replace a newer key or a lower cost ceiling set on the server.
+ *
+ * @param store - Where saved values live
+ * @param env - The server's environment
+ * @returns The setting keys, in registry order
+ */
+export async function shadowedSettings(store: SettingsStore, env: Record<string, string | undefined> = process.env): Promise<SettingKey[]> {
+  const keys = Object.keys(SETTINGS) as SettingKey[];
+  const hidden = await Promise.all(keys.map(async (key) => envValue(key, env) !== null && (await store.get(key)) !== null));
+  return keys.filter((_, i) => hidden[i]);
+}
+
+/**
+ * Logs, once, which settings have a saved value hiding the server's environment value. Names only, never values.
+ *
+ * @param store - Where saved values live
+ * @param env - The server's environment
+ */
+export async function logShadowedSettings(store: SettingsStore, env: Record<string, string | undefined> = process.env): Promise<void> {
+  const keys = await shadowedSettings(store, env);
+  if (keys.length) console.warn(JSON.stringify({ event: "qp-setting-shadows-env", settings: keys, env: keys.map((k) => SETTINGS[k].env) }));
+}
+
 /** Saves a setting from /admin after parsing it by its type; throws with the reason when it cannot be saved. */
 export async function saveSetting(store: SettingsStore, key: SettingKey, input: string, masterKeyHex: string): Promise<void> {
   const parsed = parseSetting(key, input);
@@ -143,6 +168,8 @@ export async function describeSettings(store: SettingsStore, masterKeyHex: strin
         env: def.env as string,
         source,
         display: source ? shown(values[source]) : null,
+        /** True when the value saved here hides one set in the server's environment. */
+        shadowsEnv: values.saved !== null && values.environment !== null,
         /** Every source in the order they are tried, with the one in use marked; a value set lower down is shown as ignored. */
         layers: ORDER.map((k) => ({ source: k, display: shown(values[k]), inUse: k === source })),
       };

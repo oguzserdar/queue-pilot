@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { clearSetting, describeSettings, GROUPS, isSecret, memoryStore, parseSetting, resolveSetting, saveSetting, SETTINGS } from "./settings";
+import { describe, expect, it, vi } from "vitest";
+import { clearSetting, describeSettings, GROUPS, isSecret, logShadowedSettings, memoryStore, parseSetting, resolveSetting, saveSetting, SETTINGS, shadowedSettings } from "./settings";
 
 const KEY = "c".repeat(64);
 
@@ -119,5 +119,36 @@ describe("typed settings", () => {
       expect(GROUPS, key).toHaveProperty(def.group);
       expect(def.help.length, key).toBeGreaterThan(10);
     }
+  });
+});
+
+describe("saved values that hide the server's environment", () => {
+  it("finds every saved value that hides a set environment value", async () => {
+    const store = memoryStore();
+    await saveSetting(store, "fallback_ai_key", "sk-ant-api03-oldoldoldold", KEY);
+    await saveSetting(store, "ai_cap_per_person", "50", KEY);
+    await saveSetting(store, "exa_api_key", "exa-saved-value", KEY);
+    const env = { FALLBACK_AI_KEY: "sk-ant-api03-newnewnewnew", AI_CAP_PER_PERSON: "5", BUFFER_CLIENT_ID: "env-only" };
+    expect(await shadowedSettings(store, env)).toEqual(["fallback_ai_key", "ai_cap_per_person"]);
+    expect(await shadowedSettings(memoryStore(), env)).toEqual([]);
+    const rows = await describeSettings(store, KEY, env);
+    expect(rows.filter((r) => r.shadowsEnv).map((r) => r.key)).toEqual(["fallback_ai_key", "ai_cap_per_person"]);
+  });
+
+  it("logs the setting keys once at startup, never their values", async () => {
+    const store = memoryStore();
+    await saveSetting(store, "fallback_ai_key", "sk-ant-api03-oldoldoldold", KEY);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await logShadowedSettings(store, { FALLBACK_AI_KEY: "sk-ant-api03-newnewnewnew" });
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0][0]);
+      expect(JSON.parse(line)).toEqual({ event: "qp-setting-shadows-env", settings: ["fallback_ai_key"], env: ["FALLBACK_AI_KEY"] });
+      expect(line).not.toContain("oldold");
+      expect(line).not.toContain("newnew");
+      warn.mockClear();
+      await logShadowedSettings(memoryStore(), { FALLBACK_AI_KEY: "sk-ant-api03-newnewnewnew" });
+      expect(warn).not.toHaveBeenCalled();
+    } finally { warn.mockRestore(); }
   });
 });
