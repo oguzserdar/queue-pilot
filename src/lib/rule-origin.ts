@@ -5,11 +5,53 @@
  * (`addedBy`), and the approver on a written draft. A rule with no record has no origin: never guess one.
  */
 
+import { appWords, capAppName, type ConnectedApp } from "./app-identity";
+
+/**
+ * Who approved a draft: the person with the app's own button, or a connected AI app with whether its name was proven.
+ * Stored tagged, so no app name can read as the in-app button.
+ */
+export type Approver = { via: "app" } | { via: "ai"; app: string; verified: boolean };
+
 /** The approver Queue Pilot records when the person presses Approve in the app. Browser-safe: no database import here. */
-export const APPROVED_IN_APP = "queue-pilot";
+export const APPROVED_IN_APP: Approver = Object.freeze({ via: "app" as const });
+
+/** How rows written before approvers were tagged stored the in-app button. Read only, never written. */
+const LEGACY_IN_APP = "queue-pilot";
 
 /** Who added a rule by hand: the person in the app, or a connected AI app by name. Set only by the server. */
-export type AddedBy = "you" | { app: string };
+export type AddedBy = "you" | { app: string; verified?: boolean };
+
+/**
+ * The approver record for a connected AI app.
+ *
+ * @param app - The app's shown name and whether its address proved it
+ * @returns A tagged approver with the name capped
+ */
+export function approverFor(app: ConnectedApp): Approver {
+  return { via: "ai", app: capAppName(app.name), verified: app.verified };
+}
+
+/**
+ * The text kept in the approver column.
+ *
+ * @param approver - Who approved
+ * @returns JSON of the tagged value
+ */
+export function serializeApprover(approver: Approver): string {
+  return JSON.stringify(approver.via === "app" ? { via: "app" } : { via: "ai", app: capAppName(approver.app), verified: approver.verified });
+}
+
+/** Reads a stored approver: the tagged JSON form, or an older bare string. */
+function parseApprover(stored: string): Approver | string {
+  if (!stored.startsWith("{")) return stored;
+  try {
+    const v = JSON.parse(stored) as Record<string, unknown>;
+    if (v.via === "app") return APPROVED_IN_APP;
+    if (v.via === "ai" && typeof v.app === "string") return { via: "ai", app: v.app, verified: v.verified === true };
+  } catch { /* Not a tagged value: an older bare name. */ }
+  return stored;
+}
 
 const day = (iso: unknown) => {
   const t = typeof iso === "string" ? Date.parse(iso) : NaN;
@@ -39,17 +81,23 @@ export function ruleOrigin(rule: { learnedFrom?: unknown; addedBy?: AddedBy }): 
   }
   if (Array.isArray(e) && e.length) return "Your rewrites";
   if (rule.addedBy === "you") return "Added by you";
-  if (rule.addedBy && typeof rule.addedBy === "object" && typeof rule.addedBy.app === "string") return `Added by your AI (${rule.addedBy.app})`;
+  if (rule.addedBy && typeof rule.addedBy === "object" && typeof rule.addedBy.app === "string") {
+    return rule.addedBy.verified === false ? `Added by ${appWords({ name: rule.addedBy.app, verified: false })}` : `Added by your AI (${rule.addedBy.app})`;
+  }
   return null;
 }
 
 /**
  * Who approved a draft for scheduling, in words.
  *
- * @param approvedBy - The recorded approver: APPROVED_IN_APP or an AI app's name
- * @returns "Approved by you in Queue Pilot" or "Approved through Claude", or null when not approved here
+ * @param approvedBy - The recorded approver: a tagged Approver, its stored JSON, or an older bare string
+ *   ("queue-pilot" for the in-app button, else an AI app's name)
+ * @returns "Approved by you in Queue Pilot", "Approved through Claude" or "Approved through an unverified app named
+ *   "x"", or null when not approved here
  */
-export function approverLine(approvedBy: string | null | undefined): string | null {
+export function approverLine(approvedBy: Approver | string | null | undefined): string | null {
   if (!approvedBy) return null;
-  return approvedBy === APPROVED_IN_APP ? "Approved by you in Queue Pilot" : `Approved through ${approvedBy}`;
+  const a = typeof approvedBy === "string" ? parseApprover(approvedBy) : approvedBy;
+  if (typeof a === "string") return a === LEGACY_IN_APP ? "Approved by you in Queue Pilot" : `Approved through ${a}`;
+  return a.via === "app" ? "Approved by you in Queue Pilot" : `Approved through ${appWords({ name: a.app, verified: a.verified })}`;
 }

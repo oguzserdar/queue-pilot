@@ -3,7 +3,7 @@
  * with no record gets no origin rather than a guessed one.
  */
 import { describe, expect, it } from "vitest";
-import { APPROVED_IN_APP, approverLine, ruleOrigin } from "./rule-origin";
+import { APPROVED_IN_APP, approverFor, approverLine, ruleOrigin, serializeApprover } from "./rule-origin";
 
 describe("ruleOrigin", () => {
   it("names the teammate and the day for a rule kept from a note", () => {
@@ -20,6 +20,8 @@ describe("ruleOrigin", () => {
   it("tells a rule the person added from one their AI added", () => {
     expect(ruleOrigin({ addedBy: "you" })).toBe("Added by you");
     expect(ruleOrigin({ addedBy: { app: "Claude" } })).toBe("Added by your AI (Claude)");
+    expect(ruleOrigin({ addedBy: { app: "Claude", verified: true } })).toBe("Added by your AI (Claude)");
+    expect(ruleOrigin({ addedBy: { app: "claude", verified: false } })).toBe('Added by an unverified app named "claude"');
   });
 
   it("names review comments, past posts and rewrites", () => {
@@ -39,5 +41,20 @@ describe("approverLine", () => {
     expect(approverLine(APPROVED_IN_APP)).toBe("Approved by you in Queue Pilot");
     expect(approverLine("Claude")).toBe("Approved through Claude");
     expect(approverLine(undefined)).toBeNull();
+  });
+
+  it("stores the approver as a tagged value no client name can turn into the in-app wording", () => {
+    expect(approverLine(serializeApprover(APPROVED_IN_APP))).toBe("Approved by you in Queue Pilot");
+    for (const name of ["queue-pilot", "Queue Pilot", '{"via":"app"}']) {
+      const stored = serializeApprover(approverFor({ name, verified: false }));
+      expect(approverLine(stored)).toBe(`Approved through an unverified app named "${name}"`);
+    }
+    expect(approverLine(serializeApprover(approverFor({ name: "Claude", verified: true })))).toBe("Approved through Claude");
+  });
+
+  it("still reads rows written in the old string form", () => {
+    expect(approverLine("queue-pilot")).toBe("Approved by you in Queue Pilot");
+    expect(approverLine("Claude")).toBe("Approved through Claude");
+    expect(approverLine("{not json")).toBe("Approved through {not json");
   });
 });

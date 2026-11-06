@@ -13,7 +13,9 @@ const testDb = drizzle(pg, { schema: { ...(await import("../db/schema")), ...(aw
 vi.mock("../db", () => ({ db: () => testDb, schema: {} }));
 
 const { recordAction, recentSecurityEvents, ACTION_EVENTS } = await import("./security-events");
-const { recordAppConnected } = await import("./ai-access");
+const { recordAppConnected, connectedApp } = await import("./ai-access");
+const { showSecurityEvent } = await import("./security-event-words");
+const { approverLine, approverFor } = await import("./rule-origin");
 
 beforeAll(async () => {
   await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
@@ -52,5 +54,36 @@ describe("recorded actions on real Postgres", () => {
     await recordAppConnected("b", "https://claude.ai/oauth/mcp-oauth-client-metadata");
     const connected = (await recentSecurityEvents("b")).find((e) => e.event === "app_connected");
     expect(connected?.detail).toEqual({ by: "Claude", via: "ai" });
+  });
+
+  it.each(["claude", " CLAUDE ", "queue-pilot", "Queue Pilot"])("records a self-named app %j as unverified everywhere", async (name) => {
+    const id = `dcr-${encodeURIComponent(name)}`;
+    await pg.query(`insert into oauth_client (id, client_id, name, redirect_uris) values ($1, $1, $2, '{https://attacker.example/cb}')`, [id, name]);
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values ($1, $2, 'a', '{openid}', now(), now())`, [`k-${id}`, id]);
+    const app = await connectedApp(id);
+    expect(app).toEqual({ name: name.trim(), verified: false });
+    await recordAppConnected("a", id);
+    const [connected] = await recentSecurityEvents("a", 1);
+    expect(showSecurityEvent(connected).what).toBe(`Connected an unverified app named "${name.trim()}"`);
+    await recordAction("a", "draft_deleted", { via: "ai", app: app.name, verified: app.verified }, { ids: ["p1"] });
+    const [deleted] = await recentSecurityEvents("a", 1);
+    expect(showSecurityEvent(deleted).where).toBe(`By an unverified app named "${name.trim()}"`);
+    expect(approverLine(approverFor(app))).toBe(`Approved through an unverified app named "${name.trim()}"`);
+  });
+
+  it("keeps the brand for a client proven by its registered address", async () => {
+    expect(await connectedApp("https://claude.ai/oauth/mcp-oauth-client-metadata")).toEqual({ name: "Claude", verified: true });
+    await pg.query(`insert into oauth_client (id, client_id, name, redirect_uris) values ('dcr-real', 'dcr-real', 'ChatGPT', '{https://chatgpt.com/connector_platform_oauth_redirect}')`);
+    const app = await connectedApp("dcr-real");
+    expect(app).toEqual({ name: "ChatGPT", verified: true });
+    expect(approverLine(approverFor(app))).toBe("Approved through ChatGPT");
+  });
+
+  it("caps a long self-declared name", async () => {
+    await pg.query(`insert into oauth_client (id, client_id, name, redirect_uris) values ('dcr-long', 'dcr-long', $1, '{https://attacker.example/cb}')`, ["x".repeat(500)]);
+    const app = await connectedApp("dcr-long");
+    expect(app.verified).toBe(false);
+    expect(Array.from(app.name)).toHaveLength(60);
+    expect(app.name.endsWith("…")).toBe(true);
   });
 });

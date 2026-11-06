@@ -27,7 +27,7 @@ export function ConsentCard({ client, clientId = "", redirectUri = "", user, sco
           <img className={styles.appTile} src="/icon-192.png" alt="" width={56} height={56} />
         </div>
         {/* Only a name proven by the app's registered address is shown as a name; any other is the app's own claim. */}
-        <h1 id="consent-title" className={styles.title}>{brand ? <strong>{brand}</strong> : <>Unverified app: {client}</>} wants to connect to Queue Pilot</h1>
+        <h1 id="consent-title" className={styles.title}>{brand ? <strong>{brand}</strong> : <>Unverified app: <bdi>{client}</bdi></>} wants to connect to Queue Pilot</h1>
         {brand ? null : <p className={styles.clientNote}>Queue Pilot cannot confirm who made this app: the name is the one it gave itself. Allow it only if you started connecting it just now.</p>}
         <p className={styles.clientNote}>{destination}</p>
         {brand === "Cursor" ? <p className={styles.clientNote}>Connecting from Grok Bot? It registers this connection as Cursor.</p> : null}

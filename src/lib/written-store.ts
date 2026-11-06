@@ -6,10 +6,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { written } from "../db/schema";
 import type { Verdict } from "./judge";
+import { serializeApprover, type Approver } from "./rule-origin";
 
 /**
  * verdicts: the playbook check the draft was saved with; null when it was saved unchecked. approvedBy: who approved it
- * for scheduling ("queue-pilot" for the person in the app, else the AI app's name), absent until approved.
+ * for scheduling, as stored: a tagged Approver in JSON, or an older bare string ("queue-pilot" or an app's name). Read it
+ * with approverLine. Absent until approved.
  */
 export type Written = { postId: string; network: string; text: string; verdicts?: Verdict[] | null; playbookRevision?: string | null; approvedBy?: string; approvedAt?: string };
 
@@ -20,7 +22,7 @@ export type WrittenStore = {
   /** The recorded drafts among these post ids. */
   get(userId: string, postIds: string[]): Promise<Written[]>;
   /** Records who approved these drafts; only drafts Queue Pilot recorded writing for this person change. */
-  markApproved(userId: string, postIds: string[], by: string): Promise<void>;
+  markApproved(userId: string, postIds: string[], by: Approver): Promise<void>;
 };
 
 /** Written drafts in Postgres through Drizzle; every statement is scoped to the user id. */
@@ -40,7 +42,7 @@ export function postgresWrittenStore(): WrittenStore {
     },
     async markApproved(userId, postIds, by) {
       if (!postIds.length) return;
-      await db().update(written).set({ approvedBy: by.slice(0, 200), approvedAt: sql`now()` }).where(and(eq(written.userId, userId), inArray(written.postId, postIds)));
+      await db().update(written).set({ approvedBy: serializeApprover(by), approvedAt: sql`now()` }).where(and(eq(written.userId, userId), inArray(written.postId, postIds)));
     },
   };
 }

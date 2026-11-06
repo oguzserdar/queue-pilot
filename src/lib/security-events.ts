@@ -9,6 +9,7 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "../db";
 import { securityEvent } from "../db/schema";
+import { capAppName } from "./app-identity";
 
 /** Actions that change what goes out or remove something, recorded with who did them. */
 export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted"] as const;
@@ -28,7 +29,7 @@ export type SecurityEvent = {
 export const IN_APP = "Queue Pilot";
 
 /** Who took an action: a connected AI app by name, or the person in Queue Pilot itself. */
-export type Actor = { via: "ai"; app: string } | { via: "app" };
+export type Actor = { via: "ai"; app: string; verified?: boolean } | { via: "app" };
 
 /** At most this many ids are kept on one event, so a large batch cannot bloat the record. */
 const MAX_IDS = 25;
@@ -63,8 +64,10 @@ export async function recordSecurityEvent(
 export async function recordAction(userId: string, event: ActionEventKind, by: Actor, facts: { ids?: string[]; name?: string } = {}): Promise<void> {
   const ids = facts.ids ?? [];
   const detail: Record<string, string> = {
-    by: by.via === "ai" ? by.app.trim().slice(0, 100) || "An AI app" : IN_APP,
+    by: by.via === "ai" ? capAppName(by.app) || "An AI app" : IN_APP,
     via: by.via,
+    // An app whose address did not prove its name: Settings words it as "an unverified app named …".
+    ...(by.via === "ai" && by.verified === false ? { verified: "false" } : {}),
     ...(ids.length ? { count: String(ids.length), ids: ids.slice(0, MAX_IDS).join(",") } : {}),
     ...(facts.name ? { name: facts.name.slice(0, 100) } : {}),
   };

@@ -31,7 +31,9 @@ import { materialInput, postgresMaterialStore } from "@/lib/material-store"
 import { AiCapError } from "@/lib/judge-model";
 import { TooManyRulesError, postgresRulesStore } from "@/lib/rules-store";
 import { ruleScope } from "@/lib/rules";
-import { approvalState, connectedAppName, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
+import { approvalState, connectedApp, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
+import type { ConnectedApp } from "@/lib/app-identity";
+import { approverFor } from "@/lib/rule-origin";
 import { recordAction, type Actor } from "@/lib/security-events";
 import { clientIp } from "@/lib/client-ip";
 import { limit, limitHeaders, type Action, type Limited } from "@/lib/rate-limit";
@@ -166,14 +168,14 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
 
   // The connected app's name, looked up once: Security activity names it for deletes and approvals, and the approval
   // and rule records say which app approved a draft or added a rule.
-  let appNameLookup: Promise<string> | null = null;
-  const appName = () => (appNameLookup ??= connectedAppName(clientId).catch(() => "An AI app"));
-  const byApp = async (): Promise<Actor> => ({ via: "ai", app: await appName() });
+  let appLookup: Promise<ConnectedApp> | null = null;
+  const app = () => (appLookup ??= connectedApp(clientId).catch(() => ({ name: "An AI app", verified: false })));
+  const byApp = async (): Promise<Actor> => { const a = await app(); return { via: "ai", app: a.name, verified: a.verified }; };
 
   registerControls(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { ...b, userId, token: b.accessToken };
-  }, websiteUrl, appName);
+  }, websiteUrl, app);
   registerContentItemTools(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { token: b.accessToken, organizationIds: b.organizationIds, channels: b.channels, posts: b.posts };
@@ -820,7 +822,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       // A yes that scheduled nothing can be tried again; one that scheduled anything is spent.
       if (claim && res.approved.length === 0 && !res.uncertain?.length) await releaseApproval(userId, claim.nonce);
       const done = new Set(res.approved);
-      if (done.size) await recordApprover(userId, res.approved, await appName());
+      if (done.size) await recordApprover(userId, res.approved, approverFor(await app()));
       if (done.size) await patchSnapshot(userId, (posts) => posts.map((p) => (done.has(p.id) ? { ...p, status: "scheduled" as const } : p)));
       if (done.size) await recordAction(userId, "drafts_approved", await byApp(), { ids: res.approved });
       const answer = text([`${res.approved.length} scheduled in Buffer, ${res.refused.length} not.`, ...res.refused.map((r) => `Not scheduled: ${r.id} · ${r.reason}`)].join("\n"));

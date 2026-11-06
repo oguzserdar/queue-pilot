@@ -18,7 +18,7 @@ describe("consent card", () => {
 
   it("labels a self-declared name as unverified and never bolds it", () => {
     const html = card("Claude", "dyn-123", "https://evil.example/callback");
-    expect(html).toContain("Unverified app: Claude wants to connect");
+    expect(html).toContain("Unverified app: <bdi>Claude</bdi> wants to connect");
     expect(html).not.toContain("<strong>Claude</strong>");
     expect(html).toContain("cannot confirm who made this app");
   });

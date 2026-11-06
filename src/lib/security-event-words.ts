@@ -2,6 +2,7 @@
  * @fileoverview Plain words for each security event, as the Security tab in Settings shows them: what happened,
  * who or where it came from, and when (in UTC, so the page never shifts between renders).
  */
+import { appWords } from "./app-identity";
 import { deviceName } from "./device-name";
 import type { SecurityEvent } from "./security-events";
 
@@ -18,7 +19,7 @@ function what(e: SecurityEvent): string {
     case "sign_in": return "Signed in";
     case "app_revoked": return `Removed ${d.app ?? "an AI app"}`;
     case "account_deleted": return "Account deleted";
-    case "app_connected": return `Connected ${d.app ?? d.by ?? "an AI app"}`;
+    case "app_connected": return d.app ?? d.by ? `Connected ${appWords({ name: (d.app ?? d.by)!, verified: d.verified !== "false" })}` : "Connected an AI app";
     case "drafts_approved": return `Scheduled ${plural(count, "draft")}`;
     case "draft_deleted": return "Deleted a draft";
     case "content_item_deleted": return "Deleted a post kept before choosing accounts";
@@ -30,7 +31,10 @@ function what(e: SecurityEvent): string {
 /** Who did it for actions, or the browser and address for a sign-in. */
 function where(e: SecurityEvent): string | null {
   const by = e.detail?.by;
-  if (e.event !== "app_connected" && by) return e.detail?.via === "app" ? "You, in Queue Pilot" : `By ${by}, a connected AI app`;
+  if (e.event !== "app_connected" && by) {
+    if (e.detail?.via === "app") return "You, in Queue Pilot";
+    return e.detail?.verified === "false" ? `By ${appWords({ name: by, verified: false })}` : `By ${by}, a connected AI app`;
+  }
   return [e.userAgent ? deviceName(e.userAgent) : null, e.ip].filter(Boolean).join(", ") || null;
 }
 

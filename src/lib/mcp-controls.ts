@@ -10,6 +10,7 @@ import { setInheritance, setRuleOverride } from "./rule-routing-store";
 import { feedbackForComment } from "./feedback-flow";
 import { feedbackForNote, teamNotes } from "./note-feedback";
 import { approverLine, ruleOrigin } from "./rule-origin";
+import type { ConnectedApp } from "./app-identity";
 import { NETWORKS, parseNewRule } from "./rules";
 import { judgeDrafts, rulesFor } from "./judge";
 import { judgeModelFor, allowanceFor } from "./judge-model";
@@ -64,7 +65,7 @@ async function findSnippet(token: string, orgs: string[], id: string): Promise<B
   return unread ? "unread" : null;
 }
 
-export function registerControls(server: McpServer, userId: string, buffer: BufferReader, origin = "", appName: () => Promise<string> = async () => "An AI app") {
+export function registerControls(server: McpServer, userId: string, buffer: BufferReader, origin = "", app: () => Promise<ConnectedApp> = async () => ({ name: "An AI app", verified: false })) {
   /** The shared playbook check, as a tool answer; `extra` adds fields (such as the filled text) to the answer. */
   async function checkAnswer(text: string, network: string, channelId?: string, extra: Record<string, unknown> = {}) {
     // With an exact account, its own limit comes from Buffer's channel configuration.
@@ -95,7 +96,8 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
       const jm = l.ok ? await judgeModelFor(userId).catch(() => null) : null;
       if (jm) { try { rule = await structureRule(jm.judges.explainer, rule); } finally { await jm.settle(); } }
     }
-    const id = await postgresRulesStore().add(userId, { ...rule, addedBy: { app: await appName() } });
+    const by = await app();
+    const id = await postgresRulesStore().add(userId, { ...rule, addedBy: { app: by.name, verified: by.verified } });
     return result({ id, ...rule });
   });
 

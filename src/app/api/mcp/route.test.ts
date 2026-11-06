@@ -44,7 +44,7 @@ vi.mock("@better-auth/mcp", () => ({
   },
 }))
 const approval = vi.hoisted(() => ({ state: { state: "approved" } as { state: "approved" } | { state: "unused"; consentId: string } | { state: "none" }, revoke: vi.fn(async (..._a: unknown[]) => true) }));
-vi.mock("@/lib/ai-access", () => ({ approvalState: async () => approval.state, revokeApp: approval.revoke, UNUSED_DAYS: 30, recordAppUse: async () => {}, approvedApps: async () => [{ name: "ChatGPT", lastUsedAt: "2026-10-29T12:00:00Z" }], connectedAppName: async () => "ChatGPT" }))
+vi.mock("@/lib/ai-access", () => ({ approvalState: async () => approval.state, revokeApp: approval.revoke, UNUSED_DAYS: 30, recordAppUse: async () => {}, approvedApps: async () => [{ name: "ChatGPT", lastUsedAt: "2026-10-29T12:00:00Z" }], connectedApp: async () => ({ name: "ChatGPT", verified: true }) }))
 // Security activity: each consequential action, with who did it, kept in memory.
 const actionLog = vi.hoisted(() => [] as { userId: string; kind: string; by: unknown; facts: unknown }[])
 vi.mock("@/lib/security-events", () => ({ recordAction: async (userId: string, kind: string, by: unknown, facts: unknown) => { actionLog.push({ userId, kind, by, facts }) } }))

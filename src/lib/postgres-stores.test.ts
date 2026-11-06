@@ -250,6 +250,9 @@ describe("AI app access on real Postgres", () => {
     expect(await consentClientLabel("https://chatgpt.com.evil.test/oauth/codex/client.json")).toBe("chatgpt.com.evil.test");
     expect(await consentClientLabel("unknown-opaque-id")).toBe("An AI app");
     expect(await consentClientLabel("javascript:alert(1)")).toBe("An AI app");
+    await pg.query("insert into oauth_client (id, client_id, name, redirect_uris) values ('consent-long', 'long-name-client', $1, '{https://x.example/cb}')", [`${"A".repeat(200)} trailing`]);
+    const long = await consentClientLabel("long-name-client");
+    expect(long).toBe(`${"A".repeat(59)}…`);
   });
   it("lists a user's approved apps and revoke removes the approval and that app's tokens for that user only", async () => {
     const now = "2026-11-03T12:00:00Z";

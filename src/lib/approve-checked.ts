@@ -9,6 +9,7 @@ import { sourceHoldsForPosts } from "./source-store";
 import { approvable } from "./draft-readiness";
 import { postgresRulesStore } from "./rules-store";
 import { postgresWrittenStore } from "./written-store";
+import type { Approver } from "./rule-origin";
 
 type Query = typeof bufferQuery;
 
@@ -31,9 +32,9 @@ export async function approveChecked(userId: string, token: string, ids: string[
  * Records who approved the drafts that were scheduled, for the draft window's "why this post exists". A failed write
  * is logged and never undoes the scheduling.
  *
- * @param by - APPROVED_IN_APP for the person in the app, else the AI app's name
+ * @param by - APPROVED_IN_APP for the person in the app, else approverFor(the connected app)
  */
-export async function recordApprover(userId: string, approved: string[], by: string): Promise<void> {
+export async function recordApprover(userId: string, approved: string[], by: Approver): Promise<void> {
   if (!approved.length) return;
   try { await postgresWrittenStore().markApproved(userId, approved, by); }
   catch (e) { console.error(JSON.stringify({ event: "qp-approver-save-failed", message: e instanceof Error ? e.message : String(e) })); }

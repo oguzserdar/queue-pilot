@@ -9,9 +9,9 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken, user } from "../db/auth-schema";
 import { aiAppLabel, aiAppUse, securityEvent } from "../db/schema";
-import { approvedClientBrand, returnPlaces } from "./consent-identity";
+import { approvedClientBrand, consentIdentity, returnPlaces } from "./consent-identity";
 import { MAX_LABEL, UNUSED_DAYS } from "./ai-app-limits";
-import { aiBrand } from "./ai-brand";
+import { capAppName, type ConnectedApp } from "./app-identity";
 import { recordAction } from "./security-events";
 
 export { MAX_LABEL, UNUSED_DAYS };
@@ -48,7 +48,7 @@ export async function consentClientLabel(clientId: string): Promise<string> {
   if (metadataHost && ["claude.ai", "chatgpt.com", "grok.com"].includes(metadataHost)) return metadataHost;
   const [client] = await db().select({ name: oauthClient.name }).from(oauthClient)
     .where(eq(oauthClient.clientId, clientId)).limit(1);
-  if (client?.name?.trim()) return client.name.trim();
+  if (client?.name?.trim()) return capAppName(client.name);
   return metadataHost ?? "An AI app";
 }
 
@@ -65,7 +65,7 @@ export async function approvedApps(userId: string, now: Date = new Date()): Prom
   const cutoff = unusedSince(now);
   return rows.map((r) => ({
     consentId: r.consentId,
-    name: r.name?.trim() || "An AI app",
+    name: capAppName(r.name ?? "") || "An AI app",
     brand: approvedClientBrand(r.name ?? "", r.clientId, r.redirectUris ?? []),
     site: r.uri ?? null,
     approvedAt: r.createdAt.toISOString(),
@@ -146,15 +146,21 @@ export async function revokeApp(userId: string, consentId: string): Promise<bool
 }
 
 /**
- * The name an action by this connected app is recorded under in Security activity: its brand when the label names
- * one ("claude.ai" becomes "Claude"), else the label itself.
+ * Who an action by this connected app is recorded as. The brand ("claude.ai" becomes "Claude") is used only when the
+ * app's registered address or metadata host proves it, the same check the consent page makes. Any other name is the
+ * app's own claim and is kept unverified, capped in length.
  *
  * @param clientId - The AI app's OAuth client id
- * @returns A short display name
+ * @returns The shown name and whether it was proven
  */
-export async function connectedAppName(clientId: string): Promise<string> {
+export async function connectedApp(clientId: string): Promise<ConnectedApp> {
   const label = await consentClientLabel(clientId);
-  return aiBrand(label) ?? label;
+  const [client] = await db().select({ redirectUris: oauthClient.redirectUris }).from(oauthClient)
+    .where(eq(oauthClient.clientId, clientId)).limit(1);
+  const redirects = client?.redirectUris ?? [];
+  // With no registered callback (a metadata-document client), the metadata host alone can prove the brand.
+  const brand = redirects.length ? approvedClientBrand(label, clientId, redirects) : consentIdentity(label, clientId, "").brand;
+  return brand ? { name: brand, verified: true } : { name: capAppName(label), verified: false };
 }
 
 /**
@@ -169,7 +175,8 @@ export async function recordAppConnected(userId: string, clientId: string): Prom
     const [consent] = await db().select({ id: oauthConsent.id }).from(oauthConsent)
       .where(and(eq(oauthConsent.userId, userId), eq(oauthConsent.clientId, clientId))).limit(1);
     if (!consent) return;
-    await recordAction(userId, "app_connected", { via: "ai", app: await connectedAppName(clientId) });
+    const app = await connectedApp(clientId);
+    await recordAction(userId, "app_connected", { via: "ai", app: app.name, verified: app.verified });
   } catch (e) {
     console.error(JSON.stringify({ event: "qp-app-connected-record-failed", message: e instanceof Error ? e.message : String(e) }));
   }
