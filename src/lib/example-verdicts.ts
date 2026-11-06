@@ -11,15 +11,15 @@ const v = (id: string, verdict: Verdict["verdict"], quote: string, reason: strin
 /** By example draft id (demo-data.ts). */
 export const EXAMPLE_VERDICTS: Record<string, Verdict[]> = {
   d1: [
-    v("r1", "pass", "A new open-weights coding model finished 9 of 10", "The first line names the model and its score."),
+    v("r1", "pass", "Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59.", "The first line names the model and its score."),
     v("r2", "pass", "", "Says what changed, with no \"game-changer\"."),
-    v("r4", "pass", "open-weights", "Open-weights is the word the playbook asks for."),
+    v("r4", "pass", "", "No open-source, and no other word for it."),
   ],
   d2: [v("r3", "pass", "Full notes in the newsletter, link in bio.", "Ends with the line."), v("r4", "pass", "", "No open-source, and no other word for it.")],
   d3: [v("r4", "pass", "", "No open-source, and no other word for it.")],
   d4: [v("r4", "pass", "", "No open-source, and no other word for it.")],
   d5: [
-    v("r1", "unsure", "", "It names three questions, not one model; the rule may not fit a list post."),
+    v("r1", "unsure", "Claude Duet keeps working when you step away", "It names the app first, but the news has no number to lead with."),
     v("r2", "pass", "", "Says what changed, with no \"game-changer\"."),
     v("r4", "pass", "", "No open-source, and no other word for it."),
   ],

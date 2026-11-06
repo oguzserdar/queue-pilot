@@ -121,7 +121,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       {offer === "open" && (
         <section className={styles.offer} aria-labelledby="offer-title">
           <h2 id="offer-title" className={styles.h2}>You made the same fix twice</h2>
-          <p className={styles.diff}><del><span className="sr-only">Before: </span>This week felt like a turning point for coding agents.</del> <span className="sr-only">After: </span>Two of three agents finished my refactor.</p>
+          <p className={styles.diff}><del><span className="sr-only">Before: </span>This week felt like a turning point for coding agents.</del> <span className="sr-only">After: </span>Android Studio now lets you pick from over 40 coding agents.</p>
           <p className={styles.muted}>On Instagram you replaced a feeling with the result, on Tuesday and last Friday.</p>
           <p className={styles.proposed}>Keep as a rule: "{OFFERED.text}"</p>
           <div className={styles.actions}>

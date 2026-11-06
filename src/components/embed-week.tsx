@@ -18,7 +18,7 @@ export function EmbedWeek() {
     <section className={styles.widget} aria-labelledby="qp-embed-title">
       <header className={styles.head}>
         <div>
-          <h1 id="qp-embed-title" className={styles.title}>Next week, 26 Oct to 1 Nov</h1>
+          <h1 id="qp-embed-title" className={styles.title}>Next week, 2 Nov to 8 Nov</h1>
           <p className={styles.sub}>5 drafts in your open slots, each checked against your Buffer channels.</p>
         </div>
         <button type="button" className={styles.all} disabled={ready.length === 0} onClick={() => setApproved((s) => new Set([...s, ...ready.map((p) => p.id)]))}>

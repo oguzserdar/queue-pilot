@@ -40,8 +40,8 @@ export type Post = {
 
 export type Check = { tone: "success" | "warning" | "danger"; label: string };
 
-export const WEEK_LABEL = "Mon 26 Oct – Sun 1 Nov 2026";
-export const DAYS = ["Mon 26", "Tue 27", "Wed 28", "Thu 29", "Fri 30", "Sat 31", "Sun 1"];
+export const WEEK_LABEL = "Mon 2 Nov – Sun 8 Nov 2026";
+export const DAYS = ["Mon 2", "Tue 3", "Wed 4", "Thu 5", "Fri 6", "Sat 7", "Sun 8"];
 
 
 /** Posting slots from each channel's postingSchedule, as day index → times. */
@@ -52,33 +52,35 @@ export const slots: Record<ChannelId, Record<number, string[]>> = {
   x: { 0: ["9:00"], 3: ["9:00"] },
 };
 
-const issue41: Source = { kind: "newsletter", label: "This Week in AI 41: four releases, one refactor test", foundBy: "Your newsletter", detail: "Sent Sun 25 Oct, not posted yet" };
-const issue39: Source = { kind: "newsletter", label: "This Week in AI 39: three questions for any benchmark", foundBy: "Your newsletter", detail: "Sent Sun 11 Oct, posted once on LinkedIn" };
+// The news in these issues is real (Oct 2026); each draft's claims are quoted from the primary source in
+// example-week-extras.ts.
+const issue41: Source = { kind: "newsletter", label: "This Week in AI 41: Terra, Carbon, and 40 agents in Android Studio", foundBy: "Your newsletter", detail: "Sent Sun 1 Nov, not posted yet" };
+const issue40: Source = { kind: "newsletter", label: "This Week in AI 40: Claude Duet, Kimi K3.1 Pro, DeepSeek 1017", foundBy: "Your newsletter", detail: "Sent Sun 25 Oct, posted three times" };
 
 
 const draftsAndPosts: Post[] = [
-  { id: "p1", channel: "x", day: 0, time: "9:00", status: "scheduled", text: "Release week. Issue 40 was all about context windows." },
+  { id: "p1", channel: "x", day: 0, time: "9:00", status: "scheduled", text: "Issue 41 is out: GPT-6.1 Terra, Gemini 4 Carbon, and coding agents in Android Studio." },
   { id: "p2", channel: "instagram", day: 4, time: "10:00", status: "scheduled", text: "Sunday reading, part two." },
   {
     id: "d1", channel: "linkedin", day: 1, time: "12:00", status: "draft", source: issue41,
-    text: "A new open-weights coding model finished 9 of 10 refactor tasks in my test. Three more releases in This Week in AI 41.",
+    text: "Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59. For now only a subset of cyber defenders can use it. I want to see it on real repos before I switch. More in This Week in AI 41.",
   },
   {
     id: "d2", channel: "instagram", day: 1, time: "18:00", status: "draft", source: issue41,
     editedFrom: "This week felt like a turning point for coding agents. Full notes in the newsletter, link in bio.",
-    text: "Two of three agents finished my refactor. Full notes in the newsletter, link in bio.",
+    text: "Android Studio now lets you pick from over 40 coding agents. Full notes in the newsletter, link in bio.",
   },
   {
     id: "d3", channel: "bluesky", day: 2, time: "9:00", status: "draft", source: issue41,
-    text: "Four releases, three agent frameworks, one refactor test. This Week in AI 41 is out.",
+    text: "GPT-6.1 Terra, Gemini 4 Carbon, and over 40 coding agents in Android Studio. This Week in AI 41 is out.",
   },
   {
     id: "d4", channel: "x", day: 3, time: "9:00", status: "draft", source: issue41,
-    text: "I gave three agent frameworks the same refactor. Two finished, one looped for an hour. Details in This Week in AI 41.",
+    text: "GPT-6.1 Terra is OpenAI's new fast model for high-volume work and computer use. Does it hold up on a long agent run? That is my test for issue 42.",
   },
   {
-    id: "d5", channel: "linkedin", day: 3, time: "15:00", status: "draft", source: issue39,
-    text: "Three questions for any benchmark: who ran it, on which tasks, and against what baseline. From This Week in AI 39.",
+    id: "d5", channel: "linkedin", day: 3, time: "15:00", status: "draft", source: issue40,
+    text: "Claude Duet keeps working when you step away and checks with you before it acts. It is a research preview, in the Pro, Max and Ultra plans. From This Week in AI 40.",
   },
 ];
 
@@ -102,23 +104,23 @@ function realChecks(p: Post): Post {
 }
 
 // Buffer reports when and by whom each post was created; the live draft window shows it, so the example does too.
-const CREATED: Record<string, string> = { d1: "2026-10-25T18:20:00Z", d2: "2026-10-25T18:20:00Z", d3: "2026-10-25T18:21:00Z", d4: "2026-10-25T18:21:00Z", d5: "2026-10-23T09:05:00Z" };
+const CREATED: Record<string, string> = { d1: "2026-11-01T18:20:00Z", d2: "2026-11-01T18:20:00Z", d3: "2026-11-01T18:21:00Z", d4: "2026-11-01T18:21:00Z", d5: "2026-10-30T09:05:00Z" };
 export const posts: Post[] = draftsAndPosts.map(realChecks).map((p) => (CREATED[p.id] ? { ...p, createdAt: CREATED[p.id], createdBy: "Alex Rivera" } : p));
 
 /** Delivery watch: past slots and what happened, using the post error Buffer reports. */
 export const deliveries = [
-  { id: "w1", at: "2026-10-12T12:00:00Z", channel: "LinkedIn", title: "Posted: \"Three questions for any benchmark\"", tone: "success" as const },
-  { id: "w2", at: "2026-10-13T18:00:00Z", channel: "Instagram", title: "Posted: \"What a context window holds\"", tone: "success" as const },
+  { id: "w1", at: "2026-10-26T12:00:00Z", channel: "LinkedIn", title: "Posted: \"DeepSeek's 1017 update: shorter outputs, faster tasks\"", tone: "success" as const },
+  { id: "w2", at: "2026-10-27T18:00:00Z", channel: "Instagram", title: "Posted: \"Kimi K3.1 Pro reads a million tokens\"", tone: "success" as const },
   {
-    id: "w3", at: "2026-10-14T09:00:00Z", channel: "X", title: "Failed: \"Issue 39 is out\"", tone: "danger" as const,
+    id: "w3", at: "2026-10-28T09:00:00Z", channel: "X", title: "Failed: \"Issue 40 is out\"", tone: "danger" as const,
     error: { message: "The image could not be loaded from its link when it was time to post.", supportUrl: "https://support.buffer.com" },
   },
-  { id: "w4", at: "2026-10-15T12:00:00Z", channel: "LinkedIn", title: "Posted: \"Why I rerun every benchmark myself\"", tone: "success" as const },
+  { id: "w4", at: "2026-10-29T12:00:00Z", channel: "LinkedIn", title: "Posted: \"Kimi K3.1 Pro is open-weights, 3T-class\"", tone: "success" as const },
 ];
 
 
 /** The example week shown to visitors who are not signed in. */
-export const demoWeek: WeekModel = { label: WEEK_LABEL, days: DAYS, channels, slots, posts, timeZone: "America/Toronto", startsAt: "2026-10-26T04:00:00Z" };
+export const demoWeek: WeekModel = { label: WEEK_LABEL, days: DAYS, channels, slots, posts, timeZone: "America/Toronto", startsAt: "2026-11-02T05:00:00Z" };
 
 /** Example copy marks for the Delivery screen: the two sent posts also went to Telegram and Discord. */
 export const deliveryCopies = {

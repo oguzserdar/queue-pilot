@@ -11,9 +11,9 @@ import { MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT } from "@/lib/voice-limits"
 import styles from "./voice-view.module.css";
 
 const EXAMPLES = [
-  { id: "e1", channel: "LinkedIn", text: "Four releases this week. I ran the same refactor on each: one open-weights coding model finished 9 of 10 tasks, the rest stalled." },
-  { id: "e2", channel: "Instagram", text: "Three questions for any benchmark. Full notes in the newsletter, link in bio." },
-  { id: "e3", channel: "X", text: "Context windows: what they hold, what they drop, and my recall test. Issue 37 has the rest." },
+  { id: "e1", channel: "LinkedIn", text: "Kimi K3.1 Pro has a 1-million-token context window, and Moonshot calls it its most capable 3T-class open-weights model. Which open-weights model do you run day to day?" },
+  { id: "e2", channel: "Instagram", text: "Claude Duet keeps working when you step away. Full notes in the newsletter, link in bio." },
+  { id: "e3", channel: "X", text: "DeepSeek V4.1-Flash-1017: shorter outputs and faster task completion than the last version. Issue 40 has the rest." },
 ];
 
 /** Live mode: the person's picked example posts, their note, and recent sent posts to pick from. */

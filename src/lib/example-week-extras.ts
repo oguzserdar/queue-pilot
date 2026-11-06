@@ -11,29 +11,43 @@ import type { Rule } from "./rules";
 import type { WritingAvailability } from "./writing-availability";
 import { EXAMPLE_RULES } from "./example-playbook";
 
-const CHECKED = "2026-10-25T18:00:00Z";
-const issue41 = { snapshotId: "example-41", sourceKey: "feed:this-week-in-ai-41", title: "This Week in AI 41: four releases, one refactor test", uri: "https://thisweekinai.example/41" };
-const card = (postId: string, claim: string, quote: string): EvidenceCard => ({
-  postId, ...issue41, claim, quote, locator: null, lastCheckedAt: CHECKED,
+const CHECKED = "2026-11-01T18:00:00Z";
+/** Primary sources behind the example drafts: the company's own page for each piece of news, read 6 Nov 2026. */
+const SOURCES = {
+  carbon: { snapshotId: "example-carbon", sourceKey: "web:gemini-4-carbon", title: "Gemini 4 Carbon: our next frontier model", uri: "https://blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-carbon/" },
+  studio: { snapshotId: "example-studio", sourceKey: "web:android-studio-agents", title: "Your favorite agents are now integrated in Android Studio", uri: "https://developer.android.com/blog/posts/ai-agents-android-studio-integration" },
+  terra: { snapshotId: "example-terra", sourceKey: "web:gpt-6-1-terra", title: "GPT-6.1 Terra system card addendum", uri: "https://deploymentsafety.openai.com/gpt-6-1-terra" },
+  duet: { snapshotId: "example-duet", sourceKey: "web:claude-duet", title: "Introducing Claude Duet", uri: "https://claude.com/resources/articles/claude-duet" },
+};
+const card = (postId: string, source: keyof typeof SOURCES, claim: string, quote: string): EvidenceCard => ({
+  postId, ...SOURCES[source], claim, quote, locator: null, lastCheckedAt: CHECKED,
   needsCheck: false, changed: false, scheduled: false, editable: true, oldText: "", newText: "", draftText: "", why: "",
 });
 
-/** The quotes from issue 41 that each example draft's claims rest on. */
+const TERRA = "GPT-6.1 Terra is a fast, efficient model for high-volume professional work, with strong image analysis and computer use capabilities.";
+const AGENTS = "You can choose from over 40 coding agents";
+
+/** The quotes from each primary source that the example drafts' claims rest on, copied word for word. */
 export const exampleEvidence: EvidenceCard[] = [
-  card("d1", "A new open-weights coding model finished 9 of 10 refactor tasks in my test.", "The new open-weights coding model finished 9 of the 10 refactor tasks I gave it, the best score I saw this week."),
-  card("d1", "This Week in AI 41.", "This Week in AI, issue 41."),
-  card("d4", "I gave three agent frameworks the same refactor. Two finished, one looped for an hour.", "I tested three agent frameworks on the same refactor; two finished, one looped for an hour before I stopped it."),
+  card("d1", "carbon", "Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59.", "Carbon ranks #1 on the recently updated v5.0 of Artificial Analysis Intelligence Index at 59."),
+  card("d1", "carbon", "For now only a subset of cyber defenders can use it.", "Starting this week, we will make Carbon available to a subset of cyber defenders"),
+  card("d2", "studio", "Android Studio now lets you pick from over 40 coding agents.", AGENTS),
+  card("d3", "terra", "GPT-6.1 Terra", TERRA),
+  card("d3", "studio", "over 40 coding agents in Android Studio", AGENTS),
+  card("d4", "terra", "GPT-6.1 Terra is OpenAI's new fast model for high-volume work and computer use.", TERRA),
+  card("d5", "duet", "Claude Duet keeps working when you step away and checks with you before it acts.", "It comes to you with what needs your attention, completes tasks you ask of it, keeps working even when you step away, and checks with you before it acts on your behalf."),
+  card("d5", "duet", "It is a research preview, in the Pro, Max and Ultra plans.", "For this research preview, Claude Duet is included in Pro, Max, and Ultra plans and uses the same usage limits as the rest of Claude."),
 ];
 
 const noteOn: Record<string, DraftNote[]> = {
-  d1: [{ id: "n1", author: "Alex Rivera", avatar: null, createdAt: "2026-10-25T19:10:00Z", edited: false, text: "Swap in the results chart before this goes out.", canEdit: true, canDelete: true }],
+  d1: [{ id: "n1", author: "Alex Rivera", avatar: null, createdAt: "2026-11-01T19:10:00Z", edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true }],
 };
 /** Notes on each example draft, as Buffer would return them. */
 export const exampleNotes = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { notes: noteOn[id] ?? [], more: false, team: false }]));
 
 const TAGS: DraftTag[] = [{ id: "t1", name: "Releases", color: "#8F2457" }, { id: "t2", name: "Agents", color: "#2F6F4E" }, { id: "t3", name: "Newsletter", color: "#3B5BA5" }];
 /** Tags on each example draft, from Alex's three Buffer tags. */
-export const exampleTags = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { selected: id === "d1" || id === "d3" || id === "d4" ? [TAGS[0]] : [], all: TAGS, canEdit: true }]));
+export const exampleTags = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { selected: id === "d1" || id === "d3" || id === "d4" ? [TAGS[0]] : id === "d2" || id === "d5" ? [TAGS[1]] : [], all: TAGS, canEdit: true }]));
 
 /** Alex's playbook, which the draft window summarises per account. */
 export const exampleRules: Rule[] = EXAMPLE_RULES;
