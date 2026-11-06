@@ -16,6 +16,7 @@ import { addPostToContentItem, deleteContentItem, listContentItems, removePostFr
 import { BufferApiError } from "./buffer/client";
 import { evidenceInput } from "./source-evidence";
 import { contentItemFlow, describe, failure, type FlowAnswer, type ItemBuffer } from "./content-item-flow";
+import { recordAction, type Actor } from "./security-events";
 
 const result = (value: unknown, isError = false) => ({ content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }], ...(isError ? { isError: true } : {}) });
 const read = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
@@ -29,8 +30,9 @@ export type { ItemBuffer };
  * @param server - The connector
  * @param userId - The person
  * @param buffer - Reads the person's Buffer connection (force re-reads it)
+ * @param by - The connected app, as Security activity names it for a delete
  */
-export function registerContentItemTools(server: McpServer, userId: string, buffer: (force?: boolean) => Promise<ItemBuffer>) {
+export function registerContentItemTools(server: McpServer, userId: string, buffer: (force?: boolean) => Promise<ItemBuffer>, by: () => Promise<Actor>) {
   const flow = contentItemFlow(userId);
   const { pickOrg, ownItem, readBack, nameOf } = flow;
   const answer = (r: FlowAnswer) => result(r.text, r.isError);
@@ -120,18 +122,23 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
 
   server.registerTool("delete_content_item", {
     title: "Delete a content item",
-    description: "Deletes a content item, every post made from it, and the team notes on them, when the person asks. All or nothing: a post that is publishing or published blocks it. Name the item and its posts back to the person and get a clear yes first." + BUFFER_ONLY_NOTE,
+    description: "Deletes a content item, every post made from it, and the team notes on them, for the whole organization, when the person asks: every teammate loses it, including items a teammate made. All or nothing: a post that is publishing or published blocks it. Name the item and its posts back to the person and get a clear yes first." + BUFFER_ONLY_NOTE,
     inputSchema: z.object({ contentItemId: itemId }), annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
   }, async ({ contentItemId }) => {
     const b = await buffer(true);
     const item = await ownItem(b, contentItemId);
     if (!item) return notFound;
     if (!item.allowedActions.includes("deleteContentItem")) return result("Buffer does not let this connection delete that item.", true);
+    const postIds = item.body.kind === "posts" ? item.body.posts.map((p) => p.id) : [];
+    const deleted = async () => {
+      await flow.dropFromCopy(postIds);
+      await recordAction(userId, "content_item_deleted", await by(), { ids: [item.id, ...postIds] });
+    };
     let why: string;
     try {
       const r = await deleteContentItem(b.token, item.id);
       if (r.ok) {
-        await flow.dropFromCopy(item.body.kind === "posts" ? item.body.posts.map((p) => p.id) : []);
+        await deleted();
         return result("Content item deleted, with its posts and their notes.");
       }
       why = failure(r);
@@ -143,7 +150,7 @@ export function registerContentItemTools(server: McpServer, userId: string, buff
     const now = await readBack(b, item.id);
     if (now === "unknown") return result(`${why}\nThe item could not be read back, so whether it was deleted is unknown. Read get_content_item before trying again.`, true);
     if (now) return result(`Not deleted: ${why}`, true);
-    await flow.dropFromCopy(item.body.kind === "posts" ? item.body.posts.map((p) => p.id) : []);
+    await deleted();
     return result(`${why}\nBuffer no longer finds the item, so the delete took effect.`);
   });
 

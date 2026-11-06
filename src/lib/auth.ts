@@ -12,6 +12,8 @@ import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { AUTHORIZE_URL, SCOPES, TOKEN_URL } from "./buffer/oauth";
 import { bufferQuery } from "./buffer/client";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { createAuthMiddleware } from "better-auth/api";
+import { consentGranted } from "./consent-granted";
 import { db, schema } from "../db";
 import { hasDatabase } from "./db";
 import { readConfig } from "./env";
@@ -54,6 +56,15 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
           },
         },
       },
+    },
+    // Connecting an AI app is recorded under Security activity too, once Better Auth has accepted the Allow.
+    hooks: {
+      after: createAuthMiddleware(async (ctx) => {
+        const granted = consentGranted(ctx);
+        if (!granted) return;
+        const { recordAppConnected } = await import("./ai-access");
+        await recordAppConnected(granted.userId, granted.clientId);
+      }),
     },
     account: ACCOUNT_OPTIONS,
     // Buffer is the only way in: no passwords, no email sign-up.

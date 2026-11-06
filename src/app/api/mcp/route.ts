@@ -31,7 +31,8 @@ import { materialInput, postgresMaterialStore } from "@/lib/material-store"
 import { AiCapError } from "@/lib/judge-model";
 import { TooManyRulesError, postgresRulesStore } from "@/lib/rules-store";
 import { ruleScope } from "@/lib/rules";
-import { approvalState, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
+import { approvalState, connectedAppName, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
+import { recordAction, type Actor } from "@/lib/security-events";
 import { clientIp } from "@/lib/client-ip";
 import { limit, limitHeaders, type Action, type Limited } from "@/lib/rate-limit";
 import { toolErrorMessage } from "@/lib/tool-error";
@@ -163,6 +164,10 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       }
     }) as never)) as typeof server.registerTool;
 
+  // Who Security activity names for this connection's deletes and approvals; looked up once, on first use.
+  let appName: Promise<string> | null = null;
+  const byApp = async (): Promise<Actor> => ({ via: "ai", app: await (appName ??= connectedAppName(clientId).catch(() => "An AI app")) });
+
   registerControls(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { ...b, userId, token: b.accessToken };
@@ -170,7 +175,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
   registerContentItemTools(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { token: b.accessToken, organizationIds: b.organizationIds, channels: b.channels, posts: b.posts };
-  });
+  }, byApp);
 
   server.registerTool(
     "show_next_week",
@@ -311,6 +316,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       const r = await deleteDraft(b.accessToken, postId, b.posts, await wroteIds(userId, postId));
       if (!r.ok) return { ...text(`Not deleted: ${r.reason}`), isError: true };
       await patchSnapshot(userId, (posts) => posts.filter((p) => p.id !== postId));
+      await recordAction(userId, "draft_deleted", await byApp(), { ids: [postId] });
       return text("Draft deleted; its slot is empty again.");
     },
   );
@@ -584,7 +590,9 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       if (typeof org !== "string") return { ...text(`Not deleted: ${org.error}`), isError: true };
       try {
         const r = await deleteSnippet(b.accessToken, org, snippetId);
-        return r.ok ? text(`Snippet ${r.value} deleted.`) : { ...text(`Not deleted: ${r.message}`), isError: true };
+        if (!r.ok) return { ...text(`Not deleted: ${r.message}`), isError: true };
+        await recordAction(userId, "snippet_deleted", await byApp(), { ids: [snippetId] });
+        return text(`Snippet ${r.value} deleted.`);
       } catch (e) {
         if (e instanceof SnippetsNotAllowedError || e instanceof SnippetsNotEnabledError) return { ...text(e.message), isError: true };
         throw e;
@@ -713,7 +721,9 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       const current = (await listTags(b.accessToken, org)).find((t) => t.name === tag);
       if (!current) return { ...text("Not deleted: no tag with that exact name. Read list_tags."), isError: true };
       const r = await deleteTag(b.accessToken, current.id);
-      return r.ok ? text(`Tag "${current.name}" deleted and removed from everything that carried it.`) : { ...text(`Not deleted: ${r.message}.`), isError: true };
+      if (!r.ok) return { ...text(`Not deleted: ${r.message}.`), isError: true };
+      await recordAction(userId, "tag_deleted", await byApp(), { ids: [current.id], name: current.name });
+      return text(`Tag "${current.name}" deleted and removed from everything that carried it.`);
     },
   );
 
@@ -809,6 +819,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       if (claim && res.approved.length === 0 && !res.uncertain?.length) await releaseApproval(userId, claim.nonce);
       const done = new Set(res.approved);
       if (done.size) await patchSnapshot(userId, (posts) => posts.map((p) => (done.has(p.id) ? { ...p, status: "scheduled" as const } : p)));
+      if (done.size) await recordAction(userId, "drafts_approved", await byApp(), { ids: res.approved });
       const answer = text([`${res.approved.length} scheduled in Buffer, ${res.refused.length} not.`, ...res.refused.map((r) => `Not scheduled: ${r.id} · ${r.reason}`)].join("\n"));
       return res.approved.length === 0 ? { ...answer, isError: true } : answer;
     },
