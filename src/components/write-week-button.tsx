@@ -28,7 +28,7 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
       })}>
         {pending ? "Writing drafts… this takes up to a minute" : "Fill next week"}
       </Button>
-      <p className={styles.help}>Up to {count} drafts in the week shown, using {availability.source}. Saved as drafts in Buffer for your review.</p>
+      <p className={styles.help}>Up to {count} draft{count === 1 ? "" : "s"} in the week shown, using {availability.source}. Saved as drafts in Buffer for your review.</p>
       {result && <div className={styles.result}>
       {result && !result.ok && <Alert tone="danger" title="No drafts written">{result.message}</Alert>}
       {result && result.ok && (
