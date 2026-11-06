@@ -9,8 +9,9 @@ import { postgresAiKeyStore, providerOf } from "./ai-key-store";
 import { listModels } from "./ai-models";
 import { decisionModelFor, modelFor, type AiConfig } from "./ai-model";
 import type { Judges } from "./judge";
-import { hasDatabase, postgresSettingsStore } from "./db";
-import { resolveSetting } from "./settings";
+import { hasDatabase } from "./db";
+// Settings are read by the shared rule: a saved value that cannot be read is logged and the environment still applies.
+import { operatorSetting } from "./env";
 import { NO_DAILY_TOTAL, capMessage, postgresAllowanceStore, utcDay, type Caps } from "./ai-allowance";
 import { meter, priceFor } from "./ai-meter";
 import type { Experimental_DecisionModel as DecisionModel, LanguageModel } from "ai";
@@ -46,19 +47,19 @@ function recommendedFor(cfg: Omit<AiConfig, "model">): Promise<string | null> {
 }
 
 /** The caps from /admin, the environment or the registry's defaults (src/lib/settings.ts). */
-async function caps(master: string): Promise<Caps> {
+async function caps(): Promise<Caps> {
   const read = async (key: "ai_cap_per_person" | "ai_cap_total") => {
-    const v = await resolveSetting(postgresSettingsStore(), key, master).catch(() => null);
-    const n = v ? Number.parseInt(v.value, 10) : NaN;
+    const v = await operatorSetting(key);
+    const n = v ? Number.parseInt(v, 10) : NaN;
     return Number.isFinite(n) && n >= 0 ? n : null;
   };
   return { perPerson: (await read("ai_cap_per_person")) ?? 0, total: (await read("ai_cap_total")) ?? NO_DAILY_TOTAL };
 }
 
 /** The operator's total budget for the built-in key in millionths of a dollar; 0 when none is set (the key is off). */
-async function budgetMicros(master: string): Promise<number> {
-  const v = await resolveSetting(postgresSettingsStore(), "ai_budget_usd", master).catch(() => null);
-  const usd = v ? Number.parseFloat(v.value) : NaN;
+async function budgetMicros(): Promise<number> {
+  const v = await operatorSetting("ai_budget_usd");
+  const usd = v ? Number.parseFloat(v) : NaN;
   return Number.isFinite(usd) && usd > 0 ? Math.round(usd * 1_000_000) : 0;
 }
 
@@ -81,12 +82,12 @@ export async function aiFor(userId: string, now: Date = new Date(), opts: { ownK
     return null;
   }
   if (opts.ownKeyOnly) return null;
-  const fallback = await resolveSetting(postgresSettingsStore(), "fallback_ai_key", master).catch(() => null);
-  const provider = fallback ? providerOf(fallback.value) : null;
+  const fallback = await operatorSetting("fallback_ai_key");
+  const provider = fallback ? providerOf(fallback) : null;
   if (!fallback || !provider) return null;
-  const budget = await budgetMicros(master);
+  const budget = await budgetMicros();
   if (!budget) return null;
-  const model = await recommendedFor({ provider, key: fallback.value }).catch(() => null);
+  const model = await recommendedFor({ provider, key: fallback }).catch(() => null);
   if (!model) return null;
   const price = await priceFor(provider, model).catch(() => null);
   if (!price) {
@@ -95,11 +96,11 @@ export async function aiFor(userId: string, now: Date = new Date(), opts: { ownK
   }
   const store = postgresAllowanceStore();
   if ((await store.spentMicros()) >= budget) throw new AiCapError("This deployment's built-in AI is used up for now. Add your own key in Settings to keep going.");
-  const limits = await caps(master);
+  const limits = await caps();
   const day = utcDay(now);
   const taken = await store.take(userId, day, limits);
   if (taken !== "ok") throw new AiCapError(capMessage(taken, limits));
-  const cfg = { provider, key: fallback.value, model };
+  const cfg = { provider, key: fallback, model };
   const m = meter(price);
   let settled = false;
   return {
@@ -126,11 +127,11 @@ export async function judgeModelFor(userId: string, opts: { ownKeyOnly?: boolean
 export async function allowanceFor(userId: string, now: Date = new Date()): Promise<{ used: number; cap: number; budgetUsd: number; leftUsd: number; totalRemaining: number } | null> {
   const master = process.env.SETTINGS_KEY;
   if (!master || !hasDatabase()) return null;
-  const fallback = await resolveSetting(postgresSettingsStore(), "fallback_ai_key", master).catch(() => null);
-  if (!fallback || !providerOf(fallback.value)) return null;
-  const budget = await budgetMicros(master);
+  const fallback = await operatorSetting("fallback_ai_key");
+  if (!fallback || !providerOf(fallback)) return null;
+  const budget = await budgetMicros();
   if (!budget) return null;
   const store = postgresAllowanceStore();
-  const [limits, used, spent] = await Promise.all([caps(master), store.used(userId, utcDay(now)), store.spentMicros()]);
+  const [limits, used, spent] = await Promise.all([caps(), store.used(userId, utcDay(now)), store.spentMicros()]);
   return { used: used.mine, cap: limits.perPerson, budgetUsd: budget / 1_000_000, leftUsd: Math.max(0, budget - spent) / 1_000_000, totalRemaining: Math.max(0, limits.total - used.total) };
 }
