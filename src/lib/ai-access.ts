@@ -11,6 +11,8 @@ import { oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken, user } 
 import { aiAppLabel, aiAppUse, securityEvent } from "../db/schema";
 import { approvedClientBrand, returnPlaces } from "./consent-identity";
 import { MAX_LABEL, UNUSED_DAYS } from "./ai-app-limits";
+import { aiBrand } from "./ai-brand";
+import { recordAction } from "./security-events";
 
 export { MAX_LABEL, UNUSED_DAYS };
 
@@ -141,6 +143,36 @@ export async function revokeApp(userId: string, consentId: string): Promise<bool
     await tx.insert(securityEvent).values({ userId, event: "app_revoked", detail: { app: consent.name?.trim() || "An AI app" } });
     return true;
   });
+}
+
+/**
+ * The name an action by this connected app is recorded under in Security activity: its brand when the label names
+ * one ("claude.ai" becomes "Claude"), else the label itself.
+ *
+ * @param clientId - The AI app's OAuth client id
+ * @returns A short display name
+ */
+export async function connectedAppName(clientId: string): Promise<string> {
+  const label = await consentClientLabel(clientId);
+  return aiBrand(label) ?? label;
+}
+
+/**
+ * Records "Connected <app>" in Security activity once the person's approval for that app exists, so a refused or
+ * half-finished consent records nothing. Never throws.
+ *
+ * @param userId - The person who pressed Allow
+ * @param clientId - The AI app's OAuth client id from the signed consent request
+ */
+export async function recordAppConnected(userId: string, clientId: string): Promise<void> {
+  try {
+    const [consent] = await db().select({ id: oauthConsent.id }).from(oauthConsent)
+      .where(and(eq(oauthConsent.userId, userId), eq(oauthConsent.clientId, clientId))).limit(1);
+    if (!consent) return;
+    await recordAction(userId, "app_connected", { via: "ai", app: await connectedAppName(clientId) });
+  } catch (e) {
+    console.error(JSON.stringify({ event: "qp-app-connected-record-failed", message: e instanceof Error ? e.message : String(e) }));
+  }
 }
 
 /** Whether the connector may serve this app for this person right now. "unused" carries the approval to retire. */

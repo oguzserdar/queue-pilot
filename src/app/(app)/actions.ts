@@ -13,6 +13,7 @@ import { listModels, ModelListError } from "@/lib/ai-models";
 import { openSlots, parseSlotId } from "@/lib/open-slots";
 import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
 import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
+import { recordAction } from "@/lib/security-events";
 import { wroteIds } from "@/lib/written-store";
 import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
 import { listRecentSent, readPostsNow, type Post } from "@/lib/buffer/queries";
@@ -81,6 +82,7 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
     // Read from Buffer now and check the playbook: a draft with an out-of-date check or a broken blocking rule is refused.
     const { approved, refused } = await approveChecked(b.userId, b.token, ids, new Date(), undefined, undefined, b.channels);
     await b.markScheduled(approved);
+    if (approved.length) await recordAction(b.userId, "drafts_approved", { via: "app" }, { ids: approved });
     revalidatePath("/", "layout");
     return { ok: true, approved, refused };
   } catch (e) {
@@ -724,6 +726,7 @@ export async function deleteMyDraft(postId: string): Promise<SourceActionResult>
     const r = await deleteDraft(b.token, postId, b.posts, await wroteIds(b.userId, postId));
     if (!r.ok) return { ok: false, message: r.reason };
     await patchSavedQueue(b.userId, (posts) => posts.filter((p) => p.id !== postId));
+    await recordAction(b.userId, "draft_deleted", { via: "app" }, { ids: [postId] });
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {

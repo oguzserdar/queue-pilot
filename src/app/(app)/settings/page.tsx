@@ -6,17 +6,8 @@ import { maskSecret } from "@/lib/secrets";
 import { allowanceFor } from "@/lib/judge-model";
 import { resetTime } from "@/components/ai-usage";
 import { approvedAiApps, getCurrentUser, signedInDevices, signedInProfile, signedInUserId } from "@/lib/current-user";
-import { deviceName } from "@/lib/device-name";
-import { recentSecurityEvents, type SecurityEvent } from "@/lib/security-events";
-import type { ShownSecurityEvent } from "@/components/settings-view";
-
-/** Words for one security event, dated in UTC on the server so the page never shifts between renders. */
-function shown(e: SecurityEvent): ShownSecurityEvent {
-  const what = e.event === "sign_in" ? "Signed in" : e.event === "app_revoked" ? `Removed ${e.detail?.app ?? "an AI app"}` : "Account deleted";
-  const where = [e.userAgent ? deviceName(e.userAgent) : null, e.ip].filter(Boolean).join(", ") || null;
-  const when = new Date(e.createdAt).toLocaleString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + " UTC";
-  return { what, where, when };
-}
+import { recentSecurityEvents } from "@/lib/security-events";
+import { showSecurityEvent } from "@/lib/security-event-words";
 
 /** What the OpenRouter round trip came back with (src/app/api/openrouter/callback), in words. */
 const OPENROUTER_RESULT: Record<string, { ok: boolean; text: string }> = {
@@ -49,7 +40,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
         })
       : null,
     userId
-      ? recentSecurityEvents(userId).then((l) => l.map(shown)).catch((e) => {
+      ? recentSecurityEvents(userId).then((l) => l.map(showSecurityEvent)).catch((e) => {
           console.error(JSON.stringify({ event: "qp-security-read-failed", message: e instanceof Error ? e.message : String(e) }));
           return null;
         })

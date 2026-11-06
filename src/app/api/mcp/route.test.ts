@@ -44,7 +44,11 @@ vi.mock("@better-auth/mcp", () => ({
   },
 }))
 const approval = vi.hoisted(() => ({ state: { state: "approved" } as { state: "approved" } | { state: "unused"; consentId: string } | { state: "none" }, revoke: vi.fn(async (..._a: unknown[]) => true) }));
-vi.mock("@/lib/ai-access", () => ({ approvalState: async () => approval.state, revokeApp: approval.revoke, UNUSED_DAYS: 30, recordAppUse: async () => {}, approvedApps: async () => [{ name: "ChatGPT", lastUsedAt: "2026-10-29T12:00:00Z" }] }))
+vi.mock("@/lib/ai-access", () => ({ approvalState: async () => approval.state, revokeApp: approval.revoke, UNUSED_DAYS: 30, recordAppUse: async () => {}, approvedApps: async () => [{ name: "ChatGPT", lastUsedAt: "2026-10-29T12:00:00Z" }], connectedAppName: async () => "ChatGPT" }))
+// Security activity: each consequential action, with who did it, kept in memory.
+const actionLog = vi.hoisted(() => [] as { userId: string; kind: string; by: unknown; facts: unknown }[])
+vi.mock("@/lib/security-events", () => ({ recordAction: async (userId: string, kind: string, by: unknown, facts: unknown) => { actionLog.push({ userId, kind, by, facts }) } }))
+const lastAction = (kind: string) => actionLog.filter((a) => a.kind === kind).at(-1)
 const limits = vi.hoisted(() => ({ blocked: "" }));
 vi.mock("@/lib/rate-limit", () => ({ limit: async (kind: string) => ({ ok: kind !== limits.blocked }), limitHeaders: () => ({}) }))
 vi.mock("@/lib/buffer-token", () => ({ bufferAccessToken: async (_auth: unknown, userId: string) => userId }))
@@ -544,6 +548,7 @@ describe("connector voice writes", () => {
       expect(answer(await call("list_snippets"))).toContain("- Launch: #ship · snippet id sn-1")
       expect(answer(await call("save_snippet", { name: "X", hashtags: "#x", snippetId: "sn-404" }))).toContain("Not saved: Snippet not found")
       expect(answer(await call("delete_snippet", { snippetId: "sn-1" }))).toContain("deleted")
+      expect(lastAction("snippet_deleted")).toMatchObject({ by: { via: "ai", app: "ChatGPT" }, facts: { ids: ["sn-1"] } })
       expect(libFake.snippets).toEqual([])
     } finally {
       libFake.snippets = []
@@ -644,6 +649,7 @@ describe("connector voice writes", () => {
       expect(vi.mocked(recordEvidence).mock.calls.map((c) => [c[2], c[4]])).toEqual(versions.map((v) => [v.text, v.evidence]))
       // Deleting the item deletes its posts, and the next read no longer lists them.
       expect(answer(await call("delete_content_item", { contentItemId: "ci-1" }))).toContain("deleted")
+      expect(lastAction("content_item_deleted")).toMatchObject({ by: { via: "ai", app: "ChatGPT" }, facts: { ids: expect.arrayContaining(["ci-1"]) } })
       const after = answer(await call("list_my_drafts"))
       for (const v of versions) expect(after).not.toContain(v.text)
     })
@@ -796,6 +802,7 @@ describe("connector voice writes", () => {
       expect(answer(await call("rename_tag", { tag: "Soups", name: "Soup week" }))).toContain('Tag "Soups" is now "Soup week" (#8F2457)')
       expect(answer(await call("rename_tag", { tag: "Stews", color: "#00AA00" }))).toContain('"Stews" (#00AA00)')
       expect(answer(await call("delete_tag", { tag: "Old" }))).toContain('Tag "Old" deleted')
+      expect(lastAction("tag_deleted")).toMatchObject({ by: { via: "ai", app: "ChatGPT" }, facts: { name: "Old" } })
       expect(tagsFake.tags.map((t) => t.name)).toEqual(["Soup week", "Stews"])
       expect((await call("delete_tag", { tag: "Old" })).isError).toBe(true)
     } finally {
@@ -973,6 +980,7 @@ describe("connector draft chain", () => {
     expect((await call("update_draft", { postId, text: "CSV export includes archived rows." })).isError).not.toBe(true)
     expect(answer(await call("show_next_week"))).toContain("includes archived rows")
     expect((await call("delete_draft", { postId })).isError).not.toBe(true)
+    expect(lastAction("draft_deleted")).toMatchObject({ by: { via: "ai", app: "ChatGPT" }, facts: { ids: [postId] } })
     expect(answer(await call("show_next_week"))).not.toContain(`post id ${postId}`)
     expect(answer(await call("list_open_slots"))).toContain(slotId)
     expect(posts).toHaveLength(0)
@@ -1332,8 +1340,10 @@ describe("connector approve", () => {
     expect((await call("approve_drafts", { postIds: ["d1", "d2"], confirmToken: token })).isError).toBe(true)
     expect((await call("approve_drafts", { postIds: ["d1"], confirmToken: token }, "person-b")).isError).toBe(true)
     expect(perm.approve).not.toHaveBeenCalled()
+    expect(lastAction("drafts_approved")).toBeUndefined()
     expect(answer(await call("approve_drafts", { postIds: ["d1"], confirmToken: token }))).toContain("1 scheduled")
     expect(perm.approve).toHaveBeenCalledTimes(1)
+    expect(lastAction("drafts_approved")).toMatchObject({ userId: "person-a", by: { via: "ai", app: "ChatGPT" }, facts: { ids: ["d1"] } })
   })
   it("refuses an expired confirmation", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })

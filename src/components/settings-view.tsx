@@ -20,8 +20,9 @@ import { remainingOf } from "@/lib/rate-limit-text";
 /** The example account's last RateLimit reading, in the format Buffer sends (developers.buffer.com/guides/api-limits). */
 const EXAMPLE_RATE_LIMIT = [{ policy: "100-in-15min", remaining: 97 }, { policy: "250-in-24h", remaining: 212 }];
 
-/** One line of the security activity list, already worded and dated on the server. */
-export type ShownSecurityEvent = { what: string; where: string | null; when: string };
+import { showSecurityEvent, type ShownSecurityEvent } from "@/lib/security-event-words";
+import type { SecurityEvent } from "@/lib/security-events";
+export type { ShownSecurityEvent };
 
 /** Everything the signed-in Settings screen shows, read on the server. */
 export type SettingsAccount = {
@@ -36,7 +37,7 @@ export type SettingsAccount = {
   aiKey?: ShownAiKey;
   /** Today's use of Queue Pilot's built-in key; null when there is none or the person has their own key. */
   allowance?: { used: number; cap: number; budgetUsd: number; leftUsd: number; resetsAt: string } | null;
-  /** Recent sign-ins and revoked AI apps, newest first; null when they could not be read. */
+  /** Recent sign-ins, AI apps connected or removed, and drafts scheduled or deleted, newest first; null when they could not be read. */
   security?: ShownSecurityEvent[] | null;
   /** A result to show on arrival, e.g. after connecting OpenRouter. */
   notice?: { ok: boolean; text: string } | null;
@@ -65,7 +66,13 @@ const EXAMPLE_ACCOUNT: SettingsAccount = {
   aiKey: null,
   allowance: { used: 3, cap: 10, budgetUsd: 100, leftUsd: 96.4, resetsAt: "00:00" },
   devices: [{ id: "example-device", device: "Chrome on Mac", lastActive: "2026-10-28T08:00:00.000Z", current: true }],
-  security: [{ what: "Signed in", where: "Chrome on Mac", when: "2026-10-28T08:00:00.000Z" }],
+  // Worded by the same function as a signed-in person's activity, so the two lists cannot drift apart.
+  security: ([
+    { event: "drafts_approved", detail: { by: "Claude", via: "ai", count: "3", ids: "example-1,example-2,example-3" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:14:00.000Z" },
+    { event: "draft_deleted", detail: { by: "Queue Pilot", via: "app", count: "1", ids: "example-4" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:05:00.000Z" },
+    { event: "sign_in", detail: null, ip: null, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140.0 Safari/537.36", createdAt: "2026-10-28T08:00:00.000Z" },
+    { event: "app_connected", detail: { by: "Claude", via: "ai" }, ip: null, userAgent: null, createdAt: "2026-10-20T09:00:00.000Z" },
+  ] as SecurityEvent[]).map(showSecurityEvent),
   notice: null,
 };
 
@@ -163,10 +170,11 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
       </section>
       <section className={styles.block} aria-labelledby="security">
         <h2 id="security" className={styles.h2}>Security activity</h2>
+        <p className={styles.muted}>Sign-ins, AI apps connected or removed, and every draft scheduled or deleted, with who did it.</p>
         {account.security === null ? (
           <p className={styles.muted}>Security activity could not be read just now.</p>
         ) : !account.security?.length ? (
-          <p className={styles.muted}>No sign-ins recorded yet.</p>
+          <p className={styles.muted}>No activity recorded yet.</p>
         ) : (
           <ul className={styles.events}>
             {account.security.map((e, i) => (
