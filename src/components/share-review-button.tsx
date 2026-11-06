@@ -17,7 +17,7 @@ export type ShareableDraft = { id: string; label: string; when: string; text: st
  * Share for review: the person ticks the drafts to share and gets one link. Anyone with it can read and comment on
  * those drafts, nothing else. The link is turned off on the Reviews page.
  */
-export function ShareReviewButton({ drafts, openSignal = 0 }: { drafts: ShareableDraft[]; openSignal?: number }) {
+export function ShareReviewButton({ drafts, openSignal = 0, example = false }: { drafts: ShareableDraft[]; openSignal?: number; example?: boolean }) {
   const [days, setDays] = useState(7);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -30,6 +30,8 @@ export function ShareReviewButton({ drafts, openSignal = 0 }: { drafts: Shareabl
   useEffect(() => { if (openSignal) show(); }, [openSignal]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (id: string, on: boolean) => setPicked((s) => { const n = new Set(s); if (on && n.size < 30) n.add(id); else n.delete(id); return n; });
   const share = () => start(async () => {
+    // The example account has nothing to share; say so instead of making a link.
+    if (example) { setMessage("This is the example account. Sign in with Buffer to share your own drafts for review."); return; }
     const r = await shareForReview([...picked], days);
     if (r.ok) setUrl(`${window.location.origin}/r/${r.id}`); else setMessage(r.message);
   });

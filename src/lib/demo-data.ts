@@ -101,7 +101,9 @@ function realChecks(p: Post): Post {
   return { ...p, checks: out };
 }
 
-export const posts: Post[] = draftsAndPosts.map(realChecks);
+// Buffer reports when and by whom each post was created; the live draft window shows it, so the example does too.
+const CREATED: Record<string, string> = { d1: "2026-10-25T18:20:00Z", d2: "2026-10-25T18:20:00Z", d3: "2026-10-25T18:21:00Z", d4: "2026-10-25T18:21:00Z", d5: "2026-10-23T09:05:00Z" };
+export const posts: Post[] = draftsAndPosts.map(realChecks).map((p) => (CREATED[p.id] ? { ...p, createdAt: CREATED[p.id], createdBy: "Mark Evans" } : p));
 
 /** Delivery watch: past slots and what happened, using the post error Buffer reports. */
 export const deliveries = [
@@ -116,7 +118,7 @@ export const deliveries = [
 
 
 /** The example week shown to visitors who are not signed in. */
-export const demoWeek: WeekModel = { label: WEEK_LABEL, days: DAYS, channels, slots, posts };
+export const demoWeek: WeekModel = { label: WEEK_LABEL, days: DAYS, channels, slots, posts, timeZone: "America/Toronto", startsAt: "2026-10-26T04:00:00Z" };
 
 /** Example copy marks for the Delivery screen: the two sent posts also went to Telegram and Discord. */
 export const deliveryCopies = {

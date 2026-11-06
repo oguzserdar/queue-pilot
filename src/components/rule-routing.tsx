@@ -18,7 +18,12 @@ type Level = "shared" | "network" | "account";
  * Rules for each account: pick an account (or every account on a network), see its rules grouped by where they come
  * from, switch one off or back on here, or stop using a whole level after seeing exactly which rules that changes.
  */
-export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd }: { rules: Rule[]; accounts: RuleAccount[]; inheritance: Inheritance; onDelete: (r: Rule) => void; onAdd: () => void }) {
+const EXAMPLE_NOTE = "This is the example account. Sign in with Buffer to change where your own rules apply.";
+
+export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd, example = false }: { rules: Rule[]; accounts: RuleAccount[]; inheritance: Inheritance; onDelete: (r: Rule) => void; onAdd: () => void; example?: boolean }) {
+  // The example shows the same controls and says what they would do instead of saving.
+  const setOverride: typeof changeRuleOverride = async (...a) => (example ? { ok: false, message: EXAMPLE_NOTE } : changeRuleOverride(...a));
+  const setInheritance: typeof changeInheritance = async (...a) => (example ? { ok: false, message: EXAMPLE_NOTE } : changeInheritance(...a));
   const networks = [...new Set(accounts.map(a => a.service))];
   const [target, setTarget] = useState(accounts[0] ? `account:${accounts[0].id}` : "");
   const [pending, start] = useTransition();
@@ -86,13 +91,13 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd }: {
         </div>
         <div className={styles.ruleActions}>
           {canChange && override === undefined && d.applies && <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
-            const res = await changeRuleOverride(r.id, { level, id }, false).catch(() => null);
+            const res = await setOverride(r.id, { level, id }, false).catch(() => null);
             if (!res?.ok) { setMessage({ ok: false, text: res?.message ?? "That didn't save. Try again." }); return; }
             setMessage(null);
-            toast({ type: "success", title: `Turned off for ${where}`, description: r.text, duration: 8000, action: { label: "Undo", onClick: () => void changeRuleOverride(r.id, { level, id }, null) } });
+            toast({ type: "success", title: `Turned off for ${where}`, description: r.text, duration: 8000, action: { label: "Undo", onClick: () => void setOverride(r.id, { level, id }, null) } });
           })}>Turn off here</Button>}
-          {canChange && override === undefined && !d.applies && level === "account" && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => changeRuleOverride(r.id, { level, id }, true), `Turned on for ${where}.`)}>Turn on here</Button>}
-          {canChange && override !== undefined && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => changeRuleOverride(r.id, { level, id }, null), "Back to the inherited setting.")}>Reset</Button>}
+          {canChange && override === undefined && !d.applies && level === "account" && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => setOverride(r.id, { level, id }, true), `Turned on for ${where}.`)}>Turn on here</Button>}
+          {canChange && override !== undefined && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => setOverride(r.id, { level, id }, null), "Back to the inherited setting.")}>Reset</Button>}
           {(all || origin(r) === "account") && <ConfirmButton label="Delete" ariaLabel={`Delete rule: ${r.text}`} question="Delete this rule?" confirmLabel="Delete rule" onConfirm={() => onDelete(r)} />}
         </div>
       </li>
@@ -118,7 +123,7 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd }: {
           {affected.length > 0 && <ul className={styles.changeList}>{affected.map(r => <li key={r.id}><Badge tone={decide(r, proposed).applies ? "success" : "warning"} size="sm">{decide(r, proposed).applies ? "Comes back" : "Stops"}</Badge> {r.text}</li>)}</ul>}
           <p className={styles.help}>Any rules you switched off here stay saved, and come back if you turn this on again.</p>
           <div className={styles.row}>
-            <Button size="sm" disabled={pending} onClick={() => save(async () => { const r = await changeInheritance({ level, id }, next.shared, next.network); if (r.ok) setPreview(null); return r; }, "Saved.")}>Confirm</Button>
+            <Button size="sm" disabled={pending} onClick={() => save(async () => { const r = await setInheritance({ level, id }, next.shared, next.network); if (r.ok) setPreview(null); return r; }, "Saved.")}>Confirm</Button>
             <Button variant="ghost" size="sm" disabled={pending} onClick={() => setPreview(null)}>Cancel</Button>
           </div>
         </div>

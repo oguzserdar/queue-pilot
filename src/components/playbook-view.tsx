@@ -111,7 +111,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
             ? "No rules yet. Queue Pilot checks each draft against your rules before saving it in Buffer, so the first ones come from what you already posted."
             : live && !shown.length
             ? "No rules yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike."
-            : live && accounts.length ? "Pick an account to see what applies there. What you changed for it comes first." : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix he made more than once."}`}
+            : accounts.length ? "Pick an account to see what applies there. What you changed for it comes first." : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix he made more than once."}`}
         </p>
       </header>
 
@@ -133,13 +133,13 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the dish.</p>}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
-      {live && accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} onDelete={(r) => remove(r.id)} onAdd={focusAdd} />}
-      {networks.length > 1 && shown.length > 0 && !(live && accounts.length) && (
+      {accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} onDelete={(r) => remove(r.id)} onAdd={focusAdd} example={!live} />}
+      {networks.length > 1 && shown.length > 0 && !accounts.length && (
         <p className={styles.muted} aria-label="Rules by network">
           {networks.map((n) => `${NETWORKS[n] ?? n}: ${shown.filter((r) => appliesTo(r, n)).length} rule${shown.filter((r) => appliesTo(r, n)).length === 1 ? "" : "s"}`).join(" · ")}
         </p>
       )}
-      {!(live && accounts.length > 0) && groups(shown, accounts).map(([name, rs]) => (
+      {!accounts.length && groups(shown, accounts).map(([name, rs]) => (
         <section key={name} className={styles.block} aria-label={`${name} rules`}>
           <h2 className={styles.h2}>{name}</h2>
           <ul className={styles.rows}>

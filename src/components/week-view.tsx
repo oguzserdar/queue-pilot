@@ -229,9 +229,9 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </PopoverContent>
             </Popover>
           )}
-          {live && channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => setNewPostOpen(true)}>New post</Button>}
-          {live && open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions />}
-          {live && drafts.length > 0 && <ShareReviewButton openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
+          {channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
+          {open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions example={!live} />}
+          {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (
               <>
@@ -340,8 +340,8 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
                 )}
               </div>
               <p className={styles.postText}>{current.text}</p>
-              {live && <DraftTags key={`tags-${current.id}`} postId={current.id} preview={tagsPreview?.[current.id]} />}
-              {live && current.createdAt && <p className={styles.muted}>{createdLine(current.createdAt, current.createdBy ?? null)}</p>}
+              {(live || tagsPreview?.[current.id]) && <DraftTags key={`tags-${current.id}`} postId={current.id} preview={tagsPreview?.[current.id]} />}
+              {current.createdAt && <p className={styles.muted}>{createdLine(current.createdAt, current.createdBy ?? null)}</p>}
             </>
           )}
           {editing !== null && (
@@ -414,7 +414,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
                 <span>{c.label}</span>
               </div>
             ))}
-            {live && rules.length > 0 && (() => {
+            {rules.length > 0 && (() => {
               const network = channels.find(c => c.id === current.channel)?.service ?? "";
               const lines = rulesForAccount(rules, network, current.channel);
               const on = lines.filter(l => l.applies).length;
@@ -430,7 +430,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               </details>;
             })()}
           </section>
-          {live && <DraftNotes key={current.id} postId={current.id} preview={notesPreview?.[current.id]} />}
+          {(live || notesPreview?.[current.id]) && <DraftNotes key={current.id} postId={current.id} preview={notesPreview?.[current.id]} />}
           </div>
         </div>
         {/* The decision stays in view: a fixed bar at the bottom of the window, as Buffer keeps a post's actions in one row. */}

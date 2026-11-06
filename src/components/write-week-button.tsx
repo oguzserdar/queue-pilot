@@ -12,7 +12,7 @@ import styles from "./write-week-button.module.css";
  * Fill the displayed week using either the person's key or the available built-in allowance.
  * The result says what was saved, what the playbook refused, and why.
  */
-export function WriteWeekButton({ availability, count, inlineActions = false }: { availability: WritingAvailability; count: number; inlineActions?: boolean }) {
+export function WriteWeekButton({ availability, count, inlineActions = false, example = false }: { availability: WritingAvailability; count: number; inlineActions?: boolean; example?: boolean }) {
   const [result, setResult] = useState<WriteWeekActionResult | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
@@ -21,7 +21,7 @@ export function WriteWeekButton({ availability, count, inlineActions = false }: 
   if (!count) return <p>No known empty times to fill. Sync with Buffer to check the week.</p>;
   return (
     <div className={inlineActions ? styles.inline : styles.group}>
-      <Button variant="secondary" size="lg" disabled={pending} onClick={() => start(async () => {
+      <Button variant="secondary" size="lg" disabled={pending} onClick={() => example ? setResult({ ok: false, message: "This is the example account. Sign in with Buffer and Queue Pilot fills your own empty times." }) : start(async () => {
         const r = await writeMyWeek();
         setResult(r);
         if (r.ok) router.refresh();
