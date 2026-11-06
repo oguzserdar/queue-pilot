@@ -11,6 +11,7 @@ import { approverLine } from "@/lib/rule-origin";
 import { postsBetween } from "@/lib/posts-between";
 import { nextWeekRange, weekFromBuffer } from "@/lib/week-from-buffer";
 import { postgresWrittenStore } from "@/lib/written-store";
+import { readOr } from "@/lib/read-or";
 import { signedInUserId } from "@/lib/current-user";
 import { writingAvailabilityFor } from "@/lib/writing-availability";
 import { openSlots } from "@/lib/open-slots";
@@ -31,8 +32,8 @@ export default async function Page() {
   const userId = await signedInUserId();
   // The playbook verdicts each draft was saved with; a draft Queue Pilot did not write has none.
   const draftIds = week.posts.filter((p) => p.status === "draft").map((p) => p.id);
-  const written = userId ? await postgresWrittenStore().get(userId, draftIds).catch(() => []) : [];
-  const rules = userId ? await postgresRulesStore().list(userId).catch(() => null) : null;
+  const written = userId ? await readOr(postgresWrittenStore().get(userId, draftIds), [], "week-written") : [];
+  const rules = userId ? await readOr(postgresRulesStore().list(userId), null, "week-rules") : null;
   const revision = rules ? playbookVersion(rules) : null;
   const checkNotes = Object.fromEntries(written.map(w => [w.postId,
     week.posts.find(p => p.id === w.postId)?.text !== w.text ? "This draft changed since its last check. Check it again before relying on that result." :
@@ -46,7 +47,7 @@ export default async function Page() {
   }));
   const evidence = userId ? await sourceCards(userId, user.posts, user.channels) : [];
   // Who approved each of Queue Pilot's posts that left draft: the person in the app, or which AI app.
-  const approved = userId ? await postgresWrittenStore().get(userId, week.posts.filter((p) => p.status !== "draft").map((p) => p.id)).catch(() => []) : [];
+  const approved = userId ? await readOr(postgresWrittenStore().get(userId, week.posts.filter((p) => p.status !== "draft").map((p) => p.id)), [], "week-approvers") : [];
   const approvals = Object.fromEntries(approved.flatMap((w) => { const line = approverLine(w.approvedBy); return line ? [[w.postId, line]] : []; }));
   const blocks = sourceHoldsFromCards(evidence);
   for (const [id, reason] of blocks) readiness[id] = { state: "check", reason };
