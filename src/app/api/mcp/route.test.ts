@@ -215,10 +215,12 @@ const buffer = fakeBuffer((call) => {
       if (notesFake.dropCreate) return new TypeError("fetch failed")
       notesFake.annotations.push(variables.input.annotations)
       const node = { id: `note-${notesFake.notes.length + 1}`, text: variables.input.text, authorId: "me", author: { id: "me", name: "Me" }, allowedActions: ["updateNote", "deleteNote"], createdAt: "2026-11-04T09:00:00Z", updatedAt: "2026-11-04T09:00:00Z" }
-      notesFake.notes.push({ postId: variables.input.subject.postId, node })
+      // A channel-less draft's own thread is keyed "item:<id>" here.
+      notesFake.notes.push({ postId: variables.input.subject.postId ?? `item:${variables.input.subject.contentItemId}`, node })
       return { createCollaborationNote: { __typename: "CreateCollaborationNoteSuccess", edge: { node } } }
     }
-    return { collaborationNotes: { edges: notesFake.notes.filter((n) => n.postId === variables.input.subject.postId).map((n) => ({ node: n.node })), pageInfo: { hasNextPage: false, endCursor: null } } }
+    const key = variables.input.subject.postId ?? `item:${variables.input.subject.contentItemId}`
+    return { collaborationNotes: { edges: notesFake.notes.filter((n) => n.postId === key).map((n) => ({ node: n.node })), pageInfo: { hasNextPage: false, endCursor: null } } }
   }
   if (query.includes("tagsV2(")) return { tagsV2: { edges: tagsFake.tags.map((node) => ({ node })), pageInfo: { hasNextPage: false, endCursor: null } } }
   if (query.includes("updateTag(")) {
@@ -826,6 +828,27 @@ describe("connector voice writes", () => {
       expect(buffer.calls.find((c) => c.query.includes("selectableTeamMembers("))?.variables.input.scope).toEqual({ channelId: channel.id })
     } finally {
       notesFake.notes = []; notesFake.annotations = []
+    }
+  });
+  it("adds and reads notes on a channel-less draft's own thread, mentioning teammates of its organization", async () => {
+    const draft = { id: "ci-note", organizationId: "org", title: null, targetDate: null, createdAt: "2026-11-05T00:00:00Z", allowedActions: [], tags: [], body: { __typename: "DraftContent", text: "One draft", aiAssisted: true, assets: [] } }
+    itemsFake.items.set("ci-note", draft)
+    itemsFake.items.set("ci-posts", { ...draft, id: "ci-posts", body: { __typename: "PostContent", posts: [] } })
+    itemsFake.items.set("ci-other", { ...draft, id: "ci-other", organizationId: "someone-elses-org" })
+    try {
+      expect((await call("add_draft_note", { text: "x" })).isError).toBe(true)
+      expect((await call("add_draft_note", { postId: "mine", contentItemId: "ci-note", text: "x" })).isError).toBe(true)
+      expect(answer(await call("add_draft_note", { contentItemId: "ci-other", text: "x" }))).toContain("no content item with that id")
+      expect(answer(await call("add_draft_note", { contentItemId: "ci-posts", text: "x" }))).toContain("already posts")
+      expect(notesFake.notes).toHaveLength(0)
+      const added = await call("add_draft_note", { contentItemId: "ci-note", text: "@Sara can you check the date?", mention: ["acc-1"] })
+      expect(added.isError).not.toBe(true)
+      expect(notesFake.notes.at(-1)).toMatchObject({ postId: "item:ci-note", node: { text: "@Sara can you check the date?" } })
+      expect(notesFake.annotations.at(-1)).toEqual([{ type: "mention", content: "@Sara", text: "@Sara", displayValue: "Sara", serviceEntityId: "urn:buffer:account:acc-1", indices: [0, 5] }])
+      expect(buffer.calls.filter((c) => c.query.includes("selectableTeamMembers(")).at(-1)?.variables.input.scope).toEqual({ organizationId: "org" })
+      expect(answer(await call("list_draft_notes", { contentItemId: "ci-note" }))).toContain("@Sara can you check the date?")
+    } finally {
+      notesFake.notes = []; notesFake.annotations = []; itemsFake.items.delete("ci-note"); itemsFake.items.delete("ci-posts"); itemsFake.items.delete("ci-other")
     }
   });
   it("reports each channel's daily posting limit and Buffer's request allowance", async () => {

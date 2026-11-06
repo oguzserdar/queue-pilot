@@ -49,7 +49,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
     items: [
       { label: "Schedules drafts in Buffer", tools: ["approve_drafts"] },
       { label: "Deletes a draft it wrote", tools: ["delete_draft"] },
-      { label: "Adds a Buffer note to a draft it wrote", tools: ["add_draft_note"] },
+      { label: "Adds a Buffer note to a draft it wrote or a channel-less draft", tools: ["add_draft_note"] },
       { label: "Deletes a tag, a hashtag set or a post kept before choosing accounts (your whole team loses it)", tools: ["delete_tag", "delete_snippet", "delete_content_item"] },
     ],
   },
