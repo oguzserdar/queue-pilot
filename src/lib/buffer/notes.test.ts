@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bufferReference, documentedFields } from "./reference.test-support";
 import { BufferApiError } from "./client";
-import { createPostNote, deletePostNote, listPostNotes, NotesNotAllowedError, updatePostNote, mentionAnnotations } from "./notes";
+import { carryMentions, createPostNote, deletePostNote, listPostNotes, NOTE_FIELDS, NotesNotAllowedError, placeMentions, updatePostNote, mentionAnnotations } from "./notes";
 
 const REFERENCE = await bufferReference();
 const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
@@ -87,7 +87,7 @@ describe("Buffer Notes", () => {
       { deleteCollaborationNote: { __typename: "DeleteCollaborationNoteSuccess", noteId: "n1" } },
     ]);
     expect(await updatePostNote("t", "n1", "new", run)).toEqual({ ok: true });
-    expect(await updatePostNote("t", "n1", "new", run)).toEqual({ ok: false, message: "Too long" });
+    expect(await updatePostNote("t", "n1", "new", run)).toEqual({ ok: false, kind: "invalid", message: "Too long" });
     expect(await deletePostNote("t", "n1", run)).toEqual({ ok: true });
   });
 });
@@ -106,5 +106,58 @@ describe("note mentions", () => {
 
   it("names every teammate missing from the text", () => {
     expect(mentionAnnotations("Hi", [{ name: "Sara", email: "s@x.com", urn: "u" }])).toEqual({ ok: false, missing: ["@Sara"] });
+  });
+});
+
+describe("mentions on read, edit and channel-less drafts", () => {
+  const sam = "urn:buffer:account:sam";
+  const withMention = { ...node("n1"), text: "@Sam please check", annotations: [
+    { type: "mention", text: "@Sam", content: "@Sam", indices: [0, 4], displayValue: "Sam", serviceEntityId: sam },
+    { type: "url", text: "x", content: "x", indices: [0, 1], displayValue: null, serviceEntityId: null },
+  ] };
+
+  it("reads each note's mentions with documented annotation fields only", async () => {
+    const { run, calls } = fake([{ collaborationNotes: { edges: [{ node: withMention }], pageInfo: { hasNextPage: false, endCursor: null } } }]);
+    const r = await listPostNotes("t", "p1", 10, run);
+    expect(r.notes[0].mentions).toEqual([{ urn: sam, text: "@Sam", displayValue: "Sam", indices: [0, 4] }]);
+    expect(calls[0].query).toContain("annotations {");
+    const sub = /annotations \{([^}]*)\}/.exec(NOTE_FIELDS)?.[1].trim().split(/\s+/) ?? [];
+    expect(sub.length).toBeGreaterThan(0);
+    for (const f of sub) expect(fieldsOf("Annotation").has(f), f).toBe(true);
+    expect(fieldsOf("CollaborationNote").has("annotations")).toBe(true);
+  });
+
+  it("an edit sends the mentions it keeps; Buffer clears any it is not sent", async () => {
+    const { run, calls } = fake([{ updateCollaborationNote: { __typename: "UpdateCollaborationNoteSuccess" } }]);
+    const kept = carryMentions([{ urn: sam, text: "@Sam", displayValue: "Sam", indices: [0, 4] }], "Thanks! @Sam please check again");
+    await updatePostNote("t", "n1", "Thanks! @Sam please check again", run, kept);
+    expect(calls[0].variables).toEqual({ input: { noteId: "n1", text: "Thanks! @Sam please check again", annotations: [
+      { type: "mention", content: "@Sam", text: "@Sam", displayValue: "Sam", serviceEntityId: sam, indices: [8, 12] },
+    ] } });
+    expect(fieldsOf("UpdateCollaborationNoteInput").has("annotations")).toBe(true);
+  });
+
+  it("keeps a mention whose @Name is still there, drops one that was removed, and counts UTF-16 code units", () => {
+    const old = [{ urn: sam, text: "@Sam", displayValue: "Sam", indices: [0, 4] as [number, number] }, { urn: "urn:buffer:account:ana", text: "@Ana", displayValue: "Ana", indices: [9, 13] as [number, number] }];
+    expect(carryMentions(old, "🎉 @Sam done").map((a) => [a.serviceEntityId, a.indices])).toEqual([[sam, [3, 7]]]);
+    expect(carryMentions(old, "no names left")).toEqual([]);
+  });
+
+  it("never places a mention inside a longer name, and places a repeated name once per mention in order", () => {
+    expect(placeMentions("Ask @Samuel", [{ span: "@Sam", urn: sam, displayValue: "Sam" }])).toEqual({ annotations: [], missing: ["@Sam"] });
+    const two = placeMentions("@Sam and @Sam", [{ span: "@Sam", urn: sam, displayValue: "Sam" }, { span: "@Sam", urn: sam, displayValue: "Sam" }]);
+    expect(two.annotations.map((a) => a.indices)).toEqual([[0, 4], [9, 13]]);
+  });
+
+  it("reads and writes the notes of a channel-less draft by its content item id", async () => {
+    const { run, calls } = fake([
+      { collaborationNotes: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } },
+      { createCollaborationNote: { __typename: "CreateCollaborationNoteSuccess", edge: { node: node("n1") } } },
+    ]);
+    await listPostNotes("t", { contentItemId: "c1" }, 10, run);
+    await createPostNote("t", { contentItemId: "c1" }, "Looks good", run);
+    expect(calls[0].variables).toMatchObject({ input: { subject: { contentItemId: "c1" } } });
+    expect(calls[1].variables).toMatchObject({ input: { subject: { contentItemId: "c1" }, text: "Looks good" } });
+    expect(fieldsOf("CollaborationNoteSubjectInput").has("contentItemId")).toBe(true);
   });
 });

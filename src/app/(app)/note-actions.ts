@@ -6,14 +6,17 @@
  * A note is never touched unless its post is in this person's queue and the note sits on that post.
  */
 import { bufferForReading } from "@/lib/current-user";
-import { createPostNote, deletePostNote, listPostNotes, MAX_NOTE, NotesNotAllowedError, updatePostNote, type BufferNote } from "@/lib/buffer/notes";
+import { carryMentions, createPostNote, deletePostNote, listPostNotes, MAX_NOTE, NotesNotAllowedError, updatePostNote, type BufferNote } from "@/lib/buffer/notes";
 import { limit } from "@/lib/rate-limit";
 
+/** One @mention in a note: who, and the name written after the @. */
+export type DraftMention = { urn: string; name: string };
+
 /** One team note as the draft window shows it. */
-export type DraftNote = { id: string; author: string | null; avatar: string | null; createdAt: string; edited: boolean; text: string; canEdit: boolean; canDelete: boolean };
+export type DraftNote = { id: string; author: string | null; avatar: string | null; createdAt: string; edited: boolean; text: string; /** Who is @mentioned in the text; preview notes may leave it out. */ mentions?: DraftMention[]; canEdit: boolean; canDelete: boolean };
 type Result<T> = ({ ok: true } & T) | { ok: false; message: string };
 
-const toDraftNote = (n: BufferNote): DraftNote => ({ id: n.id, author: n.author, avatar: n.avatar, createdAt: n.createdAt, edited: n.updatedAt > n.createdAt, text: n.text, canEdit: n.allowedActions.includes("updateNote"), canDelete: n.allowedActions.includes("deleteNote") });
+const toDraftNote = (n: BufferNote): DraftNote => ({ id: n.id, author: n.author, avatar: n.avatar, createdAt: n.createdAt, edited: n.updatedAt > n.createdAt, text: n.text, mentions: n.mentions.map((m) => ({ urn: m.urn, name: m.displayValue })), canEdit: n.allowedActions.includes("updateNote"), canDelete: n.allowedActions.includes("deleteNote") });
 const FAILED = "Buffer did not answer. Try again in a minute.";
 
 /** The person's Buffer access for one post in their own queue, or why not. */
@@ -66,16 +69,19 @@ export async function addDraftNote(postId: string, text: string): Promise<Result
 }
 
 /** The note, if it sits on this post and Buffer lets this person do `action` with it. */
-async function ownNote(token: string, postId: string, noteId: unknown, action: "canEdit" | "canDelete"): Promise<{ ok: true } | { ok: false; message: string }> {
+async function ownNote(token: string, postId: string, noteId: unknown, action: "canEdit" | "canDelete"): Promise<{ ok: true; note: BufferNote } | { ok: false; message: string }> {
   if (typeof noteId !== "string" || !noteId || noteId.length > 200) return { ok: false, message: "No such note." };
   const { notes } = await listPostNotes(token, postId, 100);
   const note = notes.find((n) => n.id === noteId);
   if (!note) return { ok: false, message: "That note is no longer on this post." };
   if (!toDraftNote(note)[action]) return { ok: false, message: "Buffer does not let you change this note." };
-  return { ok: true };
+  return { ok: true, note };
 }
 
-/** Replaces the text of a note the person may edit. */
+/**
+ * Replaces the text of a note the person may edit. Buffer clears every mention an update does not send, so each saved
+ * mention whose @Name is still in the new text is sent again at its new place; one whose name was deleted is dropped.
+ */
 export async function editDraftNote(postId: string, noteId: string, text: string): Promise<Result<object>> {
   if (typeof text !== "string" || !text.trim()) return { ok: false, message: "Write the note first." };
   if (text.length > MAX_NOTE) return { ok: false, message: `Keep it under ${MAX_NOTE.toLocaleString("en-US")} characters.` };
@@ -86,7 +92,7 @@ export async function editDraftNote(postId: string, noteId: string, text: string
     if (!l.ok) return { ok: false, message: `Too many requests just now. Try again in ${l.resetSeconds} seconds.` };
     const own = await ownNote(p.token, postId, noteId, "canEdit");
     if (!own.ok) return own;
-    const r = await updatePostNote(p.token, noteId, text.trim());
+    const r = await updatePostNote(p.token, noteId, text.trim(), undefined, carryMentions(own.note.mentions, text.trim()));
     return r.ok ? { ok: true } : { ok: false, message: r.message };
   } catch (e) {
     return failure(e, "qp-edit-note-failed");

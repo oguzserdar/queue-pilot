@@ -43,8 +43,8 @@ describe("readDraftNotes", () => {
       ], pageInfo: { hasNextPage: false, endCursor: null } } }
     }
     expect(await readDraftNotes("mine")).toEqual({ ok: true, more: false, team: false, notes: [
-      { id: "n2", author: "Sara", avatar: null, createdAt: "2026-11-04T10:00:00Z", edited: false, text: "Use the new photo", canEdit: false, canDelete: false },
-      { id: "n1", author: null, avatar: null, createdAt: "2026-11-03T10:00:00Z", edited: false, text: "Older", canEdit: false, canDelete: false },
+      { id: "n2", author: "Sara", avatar: null, createdAt: "2026-11-04T10:00:00Z", edited: false, text: "Use the new photo", mentions: [], canEdit: false, canDelete: false },
+      { id: "n1", author: null, avatar: null, createdAt: "2026-11-03T10:00:00Z", edited: false, text: "Older", mentions: [], canEdit: false, canDelete: false },
     ] })
   })
 
@@ -99,5 +99,38 @@ describe("adding, editing and deleting notes from the draft window", () => {
     expect(await deleteDraftNote("mine", "mine-note")).toEqual({ ok: true })
     expect(await deleteDraftNote("theirs", "mine-note")).toEqual({ ok: false, message: "This post is not in your queue." })
     expect(mutations).toEqual(["update:mine-note", "delete:mine-note"])
+  })
+})
+
+describe("mentions survive an edit", () => {
+  const sam = "urn:buffer:account:sam"
+  const mentioned = { ...note("n1", ["updateNote"]), text: "@Sam check the chart", annotations: [{ type: "mention", text: "@Sam", indices: [0, 4], displayValue: "Sam", serviceEntityId: sam }] }
+  const updates = (): Record<string, unknown>[] => []
+
+  function answering(sent: Record<string, unknown>[]) {
+    buffer.answer = (q, v) => {
+      if (q.includes("collaborationNotes(")) return thread(mentioned as never)
+      sent.push(v.input as Record<string, unknown>)
+      return { updateCollaborationNote: { __typename: "UpdateCollaborationNoteSuccess" } }
+    }
+  }
+
+  it("reads each note's mentions so the window can keep them", async () => {
+    answering(updates())
+    expect(await readDraftNotes("mine")).toMatchObject({ ok: true, notes: [{ id: "n1", mentions: [{ urn: sam, name: "Sam" }] }] })
+  })
+
+  it("keeps a mention whose @Name is still in the edited text, at its new offsets", async () => {
+    const sent: Record<string, unknown>[] = []
+    answering(sent)
+    expect(await editDraftNote("mine", "n1", "Thanks, @Sam check the chart")).toEqual({ ok: true })
+    expect(sent[0].annotations).toEqual([{ type: "mention", content: "@Sam", text: "@Sam", displayValue: "Sam", serviceEntityId: sam, indices: [8, 12] }])
+  })
+
+  it("drops a mention whose @Name the edit removed", async () => {
+    const sent: Record<string, unknown>[] = []
+    answering(sent)
+    expect(await editDraftNote("mine", "n1", "Check the chart")).toEqual({ ok: true })
+    expect(sent[0].annotations).toEqual([])
   })
 })
