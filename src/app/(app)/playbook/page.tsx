@@ -3,6 +3,7 @@ import { readInheritance } from "@/lib/rule-routing-store";
 import { PlaybookView, type ShownRule } from "@/components/playbook-view";
 import { getCurrentUser, signedInUserId } from "@/lib/current-user";
 import { postgresRulesStore } from "@/lib/rules-store";
+import { ruleOrigin } from "@/lib/rule-origin";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ first?: string }> }) {
   const userId = await signedInUserId();
@@ -14,7 +15,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
   });
   if (!loaded) return <section><h1>Playbook unavailable</h1><p role="alert">Could not read the rules and their account settings. Refresh to try again.</p></section>;
   const [stored, inheritance] = loaded;
-  const rules: ShownRule[] = stored.map(({ fixes, ...r }) => ({ ...r, origin: fixes > 0 ? `From ${fixes} of your fixes` : "Added by you" }) as ShownRule);
+  // Where each rule came from, from its record; an older rule with no record says nothing rather than guess.
+  const rules: ShownRule[] = stored.map(({ fixes, ...r }) => ({ ...r, origin: ruleOrigin(r) ?? (fixes > 0 ? `From ${fixes} of your fixes` : undefined) }) as ShownRule);
   // Rules from the person's edits are proposed by a model that reads them by meaning (the finder on this page), never
   // by matching words, so the page offers nothing on its own.
   // The networks the person posts to, from the saved copy of their Buffer, so a shared rule can be switched off per network.

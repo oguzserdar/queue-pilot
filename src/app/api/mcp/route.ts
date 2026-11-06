@@ -50,7 +50,7 @@ import { createTag, deleteTag, listTags, MAX_TAG_NAME, setDraftTags, updateTag }
 import { postingLimits } from "@/lib/buffer/posting-limits";
 import { remainingOf } from "@/lib/rate-limit-text";
 import { MAX_APPROVE } from "@/lib/approve-drafts";
-import { approveChecked } from "@/lib/approve-checked";
+import { approveChecked, recordApprover } from "@/lib/approve-checked";
 import { approvePermission, claimApproval, releaseApproval, signApproval, verifyApproval } from "@/lib/agent-permission";
 import { readPostsNow, type Post } from "@/lib/buffer/queries";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
@@ -156,7 +156,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         console.error(JSON.stringify({ event: "qp-tool-failed", tool: name, message: e instanceof Error ? e.message : String(e) }));
         if (e instanceof BufferAllowanceLowError || e instanceof BufferAllowanceUnknownError || e instanceof BufferRateLimitedError) return { ...text(e.message), isError: true };
         if (name === "remove_voice_example") return { ...text("Could not remove that example just now. Try again in a minute."), isError: true }
-        const controls = ["get_transcript", "list_sources_to_check", "report_source_version", "add_rule", "remove_rule", "read_rule", "check_draft", "fill_post_template", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage", "share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes", "propose_review_changes", "get_effective_rules", "set_rule_override", "set_rule_inheritance", "list_ai_models", "set_ai_model"];
+        const controls = ["get_transcript", "list_sources_to_check", "report_source_version", "add_rule", "remove_rule", "read_rule", "check_draft", "fill_post_template", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage", "share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes", "propose_review_changes", "propose_note_changes", "get_effective_rules", "set_rule_override", "set_rule_inheritance", "list_ai_models", "set_ai_model"];
         if (controls.includes(name) && (e instanceof AiCapError || e instanceof TooManyRulesError)) return { ...text(e.message), isError: true };
         if (controls.includes(name)) return { ...text("Could not complete that action just now. Read the current state before retrying."), isError: true };
         const privateWrite = ["save_my_voice_note", "add_voice_example", "add_material"].includes(name)
@@ -164,14 +164,16 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       }
     }) as never)) as typeof server.registerTool;
 
-  // Who Security activity names for this connection's deletes and approvals; looked up once, on first use.
-  let appName: Promise<string> | null = null;
-  const byApp = async (): Promise<Actor> => ({ via: "ai", app: await (appName ??= connectedAppName(clientId).catch(() => "An AI app")) });
+  // The connected app's name, looked up once: Security activity names it for deletes and approvals, and the approval
+  // and rule records say which app approved a draft or added a rule.
+  let appNameLookup: Promise<string> | null = null;
+  const appName = () => (appNameLookup ??= connectedAppName(clientId).catch(() => "An AI app"));
+  const byApp = async (): Promise<Actor> => ({ via: "ai", app: await appName() });
 
   registerControls(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { ...b, userId, token: b.accessToken };
-  }, websiteUrl);
+  }, websiteUrl, appName);
   registerContentItemTools(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { token: b.accessToken, organizationIds: b.organizationIds, channels: b.channels, posts: b.posts };
@@ -818,6 +820,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       // A yes that scheduled nothing can be tried again; one that scheduled anything is spent.
       if (claim && res.approved.length === 0 && !res.uncertain?.length) await releaseApproval(userId, claim.nonce);
       const done = new Set(res.approved);
+      if (done.size) await recordApprover(userId, res.approved, await appName());
       if (done.size) await patchSnapshot(userId, (posts) => posts.map((p) => (done.has(p.id) ? { ...p, status: "scheduled" as const } : p)));
       if (done.size) await recordAction(userId, "drafts_approved", await byApp(), { ids: res.approved });
       const answer = text([`${res.approved.length} scheduled in Buffer, ${res.refused.length} not.`, ...res.refused.map((r) => `Not scheduled: ${r.id} · ${r.reason}`)].join("\n"));

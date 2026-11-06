@@ -17,6 +17,7 @@ import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
 import { rulesForAccount } from "@/lib/rule-explain";
+import { APPROVED_IN_APP, approverLine, ruleOrigin } from "@/lib/rule-origin";
 import type { Readiness } from "@/lib/draft-readiness";
 import { approveOffNote } from "@/lib/approve-off-note";
 import type { Rule } from "@/lib/rules";
@@ -52,7 +53,7 @@ const RESULT_TONE = { pass: "success", fail: "danger", unsure: "warning" } as co
  * `live` is true for a signed-in user: Approve schedules the drafts in Buffer. Example data only marks them on screen.
  * `verdicts` are the playbook verdicts each draft was saved with, by post id; null means it was saved unchecked.
  */
-export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview }: { week: WeekModel; notesPreview?: Record<string, { notes: DraftNote[]; more: boolean; team: boolean }>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
+export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {} }: { week: WeekModel; approvals?: Record<string, string>; notesPreview?: Record<string, { notes: DraftNote[]; more: boolean; team: boolean }>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
   const { label: WEEK_LABEL, days: DAYS, channels, slots } = week;
   /** A day gets a full column when any channel has a slot or a post on it. */
   const dayHasContent = (d: number) => channels.some((c) => slots[c.id]?.[d]?.length) || posts.some((p) => p.day === d);
@@ -88,6 +89,8 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
     ours: live ? Object.hasOwn(verdicts, p.id) : p.ours,
   }));
   const drafts = posts.filter((p) => p.status === "draft");
+  // Where each rule came from, from its record (or the example's own words); nothing when nothing was recorded.
+  const originOf = (ruleId: string) => { const r = rules.find((x) => x.id === ruleId); return r ? ruleOrigin(r) ?? (r as { origin?: string }).origin ?? null : null; };
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | undefined>();
   // The draft stays selected while the dialog closes, so its content can animate out and focus can return to the draft that opened it.
@@ -169,6 +172,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             <span className={styles.time}>{t}<span className={styles.state}><StateMark state={postState(p)} word /></span></span>
             <span className={styles.text}>{p.text}</span>
             {p.status === "error" && <span className={styles.reason}>{p.error?.message || "Buffer did not say why."} This time counts as open again.</span>}
+            {approvals[p.id] && <span className={styles.ruleWhy}>{approvals[p.id]}</span>}
           </div>
         );
         const citation = evidence.find(e => e.postId === p.id);
@@ -390,7 +394,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               const row = (r: (typeof v)[number]) => (
                 <div key={r.ruleId} className={styles.check}>
                   <Badge tone={RESULT_TONE[r.verdict]} size="sm">{RESULT_LABEL[r.verdict]}</Badge>
-                  <span>{r.rule}{r.quote ? ` Found "${r.quote}".` : ""}{r.verdict !== "pass" && r.reason ? ` ${r.reason}` : ""}</span>
+                  <span>{r.rule}{r.quote ? ` Found "${r.quote}".` : ""}{r.verdict !== "pass" && r.reason ? ` ${r.reason}` : ""}{originOf(r.ruleId) && <span className={styles.ruleWhy}>{` Came from: ${originOf(r.ruleId)}.`}</span>}</span>
                 </div>
               );
               return <>
@@ -424,7 +428,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
                 <ul className={styles.ruleLines}>
                   {lines.map(l => <li key={l.rule.id} data-off={!l.applies}>
                     <span className={styles.ruleText}>{l.rule.text}</span>
-                    <span className={styles.ruleWhy}>{l.from} · {l.why}</span>
+                    <span className={styles.ruleWhy}>{l.from} · {l.why}{originOf(l.rule.id) ? ` · ${originOf(l.rule.id)}` : ""}</span>
                   </li>)}
                 </ul>
               </details>;
@@ -450,7 +454,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             <>
               {note ? <p className={styles.footNote} role={note.ok ? "status" : "alert"}>{note.text}</p>
                 : current.ours === false ? <p id="approve-foreign" className={styles.footNote}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>
-                : approved.has(current.id) ? <p className={styles.footNote}>Scheduled in Buffer.</p>
+                : approved.has(current.id) ? <p className={styles.footNote}>{`Scheduled in Buffer. ${approverLine(APPROVED_IN_APP)}${live ? "" : " (example)"}.`}</p>
                 : needsCheck(current.id) ? <p id="approve-playbook" className={styles.footNote}>{approveOffNote(readiness[current.id])}</p>
                 : worstTone(current) === "danger" ? <p id="approve-off" className={styles.footNote}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
                 : <p className={styles.footNote}>Saved as a draft in Buffer.</p>}

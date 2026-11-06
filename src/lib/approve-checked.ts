@@ -26,3 +26,15 @@ export async function approveChecked(userId: string, token: string, ids: string[
   const res: ApproveResult = gate.allowed.length ? await approveDrafts(token, gate.allowed, posts, now, new Set(written.map((w) => w.postId)), q) : { approved: [], refused: [] };
   return { ...res, refused: [...[...unknown].map(id => ({ id, reason: "This account is not in the current connection. Refresh Buffer before approving." })), ...gate.refused, ...res.refused], posts };
 }
+
+/**
+ * Records who approved the drafts that were scheduled, for the draft window's "why this post exists". A failed write
+ * is logged and never undoes the scheduling.
+ *
+ * @param by - APPROVED_IN_APP for the person in the app, else the AI app's name
+ */
+export async function recordApprover(userId: string, approved: string[], by: string): Promise<void> {
+  if (!approved.length) return;
+  try { await postgresWrittenStore().markApproved(userId, approved, by); }
+  catch (e) { console.error(JSON.stringify({ event: "qp-approver-save-failed", message: e instanceof Error ? e.message : String(e) })); }
+}

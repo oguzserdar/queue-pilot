@@ -32,7 +32,8 @@ import { headers } from "next/headers";
 import { publicOrigin } from "@/lib/origin";
 import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
 import { type ApproveResult } from "@/lib/approve-drafts";
-import { approveChecked } from "@/lib/approve-checked";
+import { approveChecked, recordApprover } from "@/lib/approve-checked";
+import { APPROVED_IN_APP } from "@/lib/rule-origin";
 import { recheckDrafts } from "@/lib/save-for-user";
 import { postgresRulesStore, TooManyRulesError } from "@/lib/rules-store";
 import { NETWORKS, parseNewRule, type NewRule, ruleInput } from "@/lib/rules";
@@ -83,6 +84,7 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
     const { approved, refused } = await approveChecked(b.userId, b.token, ids, new Date(), undefined, undefined, b.channels);
     await b.markScheduled(approved);
     if (approved.length) await recordAction(b.userId, "drafts_approved", { via: "app" }, { ids: approved });
+    await recordApprover(b.userId, approved, APPROVED_IN_APP);
     revalidatePath("/", "layout");
     return { ok: true, approved, refused };
   } catch (e) {
@@ -360,7 +362,7 @@ export async function addRule(input: unknown): Promise<SourceActionResult> {
   if (typeof parsed === "string") return { ok: false, message: parsed };
   let id: string;
   try {
-    id = await postgresRulesStore().add(userId, await readingOrTyped(userId, parsed, (input as { reading?: unknown }).reading));
+    id = await postgresRulesStore().add(userId, { ...(await readingOrTyped(userId, parsed, (input as { reading?: unknown }).reading)), addedBy: "you" });
   } catch (e) {
     if (e instanceof TooManyRulesError) return { ok: false, message: e.message };
     console.error(JSON.stringify({ event: "qp-rule-add-failed", message: e instanceof Error ? e.message : String(e) }));

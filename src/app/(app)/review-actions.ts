@@ -64,6 +64,39 @@ export async function proposeCommentChanges(linkId: string, commentId: string, p
   const { feedbackForComment } = await import("@/lib/feedback-flow");
   return feedbackForComment(userId, linkId, commentId, postIds);
 }
+/** Teammates' Buffer notes on the person's open posts, with author, date, account and post. No AI is spent. */
+export async function findTeamNotes(): Promise<{ ok: true; notes: import("@/lib/note-feedback").TeamNote[] } | { ok: false; message: string }> {
+  const { bufferForReading } = await import("@/lib/current-user");
+  const b = await bufferForReading();
+  if (!b) return signedOut;
+  const { limit } = await import("@/lib/rate-limit");
+  const l = await limit("bufferWrite", b.userId);
+  if (!l.ok) return { ok: false, message: `Too many requests just now. Try again in ${l.resetSeconds} seconds.` };
+  try {
+    const { teamNotes } = await import("@/lib/note-feedback");
+    return { ok: true, notes: await teamNotes(b) };
+  } catch (e) {
+    const { NotesNotAllowedError } = await import("@/lib/buffer/notes");
+    if (e instanceof NotesNotAllowedError) return { ok: false, message: e.message };
+    console.error(JSON.stringify({ event: "qp-team-notes-failed", message: e instanceof Error ? e.message : String(e) }));
+    return { ok: false, message: "Buffer did not answer. Try again in a minute." };
+  }
+}
+
+/** One teammate's note, read from Buffer again, proposes changes to Queue Pilot's drafts on that note's account. */
+export async function proposeNoteChanges(noteKey: string) {
+  const userId = await signedInUserId();
+  if (!userId) return signedOut;
+  const { limit } = await import("@/lib/rate-limit");
+  const l = await limit("bufferWrite", userId);
+  if (!l.ok) return { ok: false as const, message: `Too many requests just now. Try again in ${l.resetSeconds} seconds.` };
+  const { freshBufferForCurrentUser } = await import("@/lib/current-user");
+  const b = await freshBufferForCurrentUser();
+  if (!b) return signedOut;
+  const { feedbackForNote } = await import("@/lib/note-feedback");
+  return feedbackForNote(b.userId, async () => b, noteKey);
+}
+
 export async function keepReviewPreference(token: string, scope?: import("@/lib/rule-suggestions").KeepScope) {
   const userId = await signedInUserId();
   if (!userId) return signedOut;

@@ -148,9 +148,24 @@ export async function listRecentSent(
   perChannel = 20,
   q: Query = bufferQuery,
 ): Promise<SentPost[]> {
+  return postsWithNotes(token, organizationId, channelIds, perChannel, "sent", "desc", q);
+}
+
+/**
+ * The open posts of each channel (drafts, posts waiting for approval and scheduled posts), soonest first, with the
+ * notes people wrote on them, all channels in one request. The notes finder reads teammates' notes from these.
+ *
+ * @param channelIds - Channels to read; at most MAX_ALIASES
+ * @param perChannel - Posts per channel
+ */
+export async function listOpenWithNotes(token: string, organizationId: string, channelIds: string[], perChannel = 20, q: Query = bufferQuery): Promise<SentPost[]> {
+  return postsWithNotes(token, organizationId, channelIds, perChannel, "draft, needs_approval, scheduled", "asc", q);
+}
+
+async function postsWithNotes(token: string, organizationId: string, channelIds: string[], perChannel: number, status: string, direction: "asc" | "desc", q: Query): Promise<SentPost[]> {
   const ids = channelIds.slice(0, MAX_ALIASES);
   if (!ids.length) return [];
-  const parts = ids.map((_, i) => `c${i}: posts(input: { organizationId: $org, filter: { channelIds: [$ch${i}], status: [sent] }, sort: [{ field: dueAt, direction: desc }] }, first: ${perChannel}) { edges { node { id channelId text sentAt notes { text type createdAt author { name } } } } }`);
+  const parts = ids.map((_, i) => `c${i}: posts(input: { organizationId: $org, filter: { channelIds: [$ch${i}], status: [${status}] }, sort: [{ field: dueAt, direction: ${direction} }] }, first: ${perChannel}) { edges { node { id channelId text sentAt notes { text type createdAt author { name } } } } }`);
   const vars = Object.fromEntries([["org", organizationId], ...ids.map((id, i) => [`ch${i}`, id])]);
   const data: Record<string, { edges: { node: { id: string; channelId: string; text: string | null; sentAt: string | null; notes: { text: string; type: string; createdAt: string | null; author: { name: string | null } | null }[] | null } }[] }> = await q(
     token,
