@@ -33,4 +33,9 @@ describe("security event words", () => {
     expect(showSecurityEvent(ev("app_revoked", { app: "ChatGPT" })).what).toBe("Removed ChatGPT");
     expect(showSecurityEvent(ev("account_deleted")).what).toBe("Account deleted");
   });
+
+  it("words a removed app by the identity kept when it was removed", () => {
+    expect(showSecurityEvent(ev("app_revoked", { app: "Claude", verified: "false" })).what).toBe('Removed an unverified app named "Claude"');
+    expect(showSecurityEvent(ev("app_revoked", { app: "Claude", verified: "true" })).what).toBe("Removed Claude");
+  });
 });

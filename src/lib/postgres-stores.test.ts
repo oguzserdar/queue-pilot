@@ -526,7 +526,7 @@ describe("security activity on real Postgres", () => {
     expect(await revokeApp("us", "ks")).toBe(true);
     const events = await recentSecurityEvents("us");
     expect(events.map((e) => e.event).sort()).toEqual(["app_revoked", "sign_in"]);
-    expect(events.find((e) => e.event === "app_revoked")?.detail).toEqual({ app: "Claude" });
+    expect(events.find((e) => e.event === "app_revoked")?.detail).toEqual({ app: "Claude", verified: "true" });
     const deletedBefore = (await pg.query<{ n: number }>("select count(*)::int as n from qp_security_event where event = 'account_deleted'")).rows[0].n;
     await deleteAccount("us");
     expect((await pg.query("select 1 from qp_security_event where user_id = 'us'")).rows).toHaveLength(0);

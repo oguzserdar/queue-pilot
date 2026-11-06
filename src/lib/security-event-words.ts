@@ -17,7 +17,8 @@ function what(e: SecurityEvent): string {
   const count = Number(d.count ?? "1") || 1;
   switch (e.event) {
     case "sign_in": return "Signed in";
-    case "app_revoked": return `Removed ${d.app ?? "an AI app"}`;
+    // Older removals carry no verified flag and keep the name they were recorded with.
+    case "app_revoked": return d.app ? `Removed ${appWords({ name: d.app, verified: d.verified !== "false" })}` : "Removed an AI app";
     case "account_deleted": return "Account deleted";
     case "app_connected": return d.app ?? d.by ? `Connected ${appWords({ name: (d.app ?? d.by)!, verified: d.verified !== "false" })}` : "Connected an AI app";
     case "drafts_approved": return `Scheduled ${plural(count, "draft")}`;

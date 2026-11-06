@@ -13,7 +13,7 @@ const testDb = drizzle(pg, { schema: { ...(await import("../db/schema")), ...(aw
 vi.mock("../db", () => ({ db: () => testDb, schema: {} }));
 
 const { recordAction, recentSecurityEvents, ACTION_EVENTS } = await import("./security-events");
-const { recordAppConnected, connectedApp } = await import("./ai-access");
+const { recordAppConnected, connectedApp, revokeApp } = await import("./ai-access");
 const { showSecurityEvent } = await import("./security-event-words");
 const { approverLine, approverFor } = await import("./rule-origin");
 
@@ -85,5 +85,45 @@ describe("recorded actions on real Postgres", () => {
     expect(app.verified).toBe(false);
     expect(Array.from(app.name)).toHaveLength(60);
     expect(app.name.endsWith("…")).toBe(true);
+  });
+});
+
+describe("removing a connected app on real Postgres", () => {
+  const removedLine = async (user: string) => {
+    const removed = (await recentSecurityEvents(user, 50)).find((e) => e.event === "app_revoked");
+    expect(removed).toBeDefined();
+    return showSecurityEvent(removed!).what;
+  };
+
+  it("keeps a self-named client unverified after its approval is removed", async () => {
+    await pg.query(`insert into "user" (id, name, email) values ('r1', 'r1', 'r1@x')`);
+    await pg.query(`insert into oauth_client (id, client_id, name, redirect_uris) values ('rm-evil', 'rm-evil', 'Claude', '{https://attacker.example/cb}')`);
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values ('rm-k1', 'rm-evil', 'r1', '{openid}', now(), now())`);
+    expect(await revokeApp("r1", "rm-k1")).toBe(true);
+    expect(await removedLine("r1")).toBe('Removed an unverified app named "Claude"');
+  });
+
+  it("names a client its registered address proves by its brand", async () => {
+    await pg.query(`insert into "user" (id, name, email) values ('r2', 'r2', 'r2@x')`);
+    await pg.query(`insert into oauth_client (id, client_id, name, redirect_uris) values ('rm-real', 'rm-real', 'ChatGPT', '{https://chatgpt.com/connector_platform_oauth_redirect}')`);
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values ('rm-k2', 'rm-real', 'r2', '{openid}', now(), now())`);
+    expect(await revokeApp("r2", "rm-k2")).toBe(true);
+    expect(await removedLine("r2")).toBe("Removed ChatGPT");
+  });
+
+  it("caps a long self-declared name when removing it", async () => {
+    await pg.query(`insert into "user" (id, name, email) values ('r3', 'r3', 'r3@x')`);
+    await pg.query(`insert into oauth_client (id, client_id, name, redirect_uris) values ('rm-long', 'rm-long', $1, '{https://attacker.example/cb}')`, ["y".repeat(500)]);
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values ('rm-k3', 'rm-long', 'r3', '{openid}', now(), now())`);
+    await revokeApp("r3", "rm-k3");
+    const removed = (await recentSecurityEvents("r3", 5)).find((e) => e.event === "app_revoked");
+    expect(removed?.detail).toMatchObject({ verified: "false" });
+    expect(Array.from(removed!.detail!.app)).toHaveLength(60);
+  });
+
+  it("refuses another person's approval and records nothing", async () => {
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values ('rm-k4', 'rm-evil', 'a', '{openid}', now(), now())`);
+    expect(await revokeApp("r1", "rm-k4")).toBe(false);
+    expect((await recentSecurityEvents("a", 50)).some((e) => e.event === "app_revoked")).toBe(false);
   });
 });

@@ -128,11 +128,16 @@ export async function recordAppUse(userId: string, clientId: string, now: Date =
 
 /** Revokes one approved app for this user only. Returns false when the approval is not this user's (or is gone). */
 export async function revokeApp(userId: string, consentId: string): Promise<boolean> {
+  // The app's identity is read with the same check as connecting, before its approval is deleted, so the record says
+  // "an unverified app named …" for a client whose address did not prove its name.
+  const [owned] = await db().select({ clientId: oauthConsent.clientId }).from(oauthConsent)
+    .where(and(eq(oauthConsent.id, consentId), eq(oauthConsent.userId, userId)));
+  if (!owned) return false;
+  const app = await connectedApp(owned.clientId);
   return db().transaction(async (tx) => {
     const [consent] = await tx
-      .select({ clientId: oauthConsent.clientId, name: oauthClient.name })
+      .select({ clientId: oauthConsent.clientId })
       .from(oauthConsent)
-      .leftJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
       .where(and(eq(oauthConsent.id, consentId), eq(oauthConsent.userId, userId)));
     if (!consent) return false;
     await tx.delete(oauthRefreshToken).where(and(eq(oauthRefreshToken.userId, userId), eq(oauthRefreshToken.clientId, consent.clientId)));
@@ -140,7 +145,7 @@ export async function revokeApp(userId: string, consentId: string): Promise<bool
     await tx.delete(oauthConsent).where(and(eq(oauthConsent.id, consentId), eq(oauthConsent.userId, userId)));
     await tx.delete(aiAppUse).where(and(eq(aiAppUse.userId, userId), eq(aiAppUse.clientId, consent.clientId)));
     await tx.delete(aiAppLabel).where(and(eq(aiAppLabel.userId, userId), eq(aiAppLabel.clientId, consent.clientId)));
-    await tx.insert(securityEvent).values({ userId, event: "app_revoked", detail: { app: consent.name?.trim() || "An AI app" } });
+    await tx.insert(securityEvent).values({ userId, event: "app_revoked", detail: { app: app.name || "An AI app", verified: String(app.verified) } });
     return true;
   });
 }
