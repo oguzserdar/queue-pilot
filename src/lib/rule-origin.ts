@@ -88,16 +88,21 @@ export function ruleOrigin(rule: { learnedFrom?: unknown; addedBy?: AddedBy }): 
 }
 
 /**
- * Who approved a draft for scheduling, in words.
+ * The last approval Queue Pilot recorded for a draft, in words. It is history, not current authority: the record
+ * survives the post going back to draft or being approved again in Buffer, which Queue Pilot cannot see.
  *
  * @param approvedBy - The recorded approver: a tagged Approver, its stored JSON, or an older bare string
  *   ("queue-pilot" for the in-app button, else an AI app's name)
- * @returns "Approved by you in Queue Pilot", "Approved through Claude" or "Approved through an unverified app named
- *   "x"", or null when not approved here
+ * @param approvedAt - When it was recorded, if known
+ * @returns "Last approved through Queue Pilot: by you in Queue Pilot, 3 Nov", "… by Claude, 3 Nov" or "… by an
+ *   unverified app named "x"", or null when no approval was recorded here
  */
-export function approverLine(approvedBy: Approver | string | null | undefined): string | null {
+export function approverLine(approvedBy: Approver | string | null | undefined, approvedAt?: string | null): string | null {
   if (!approvedBy) return null;
   const a = typeof approvedBy === "string" ? parseApprover(approvedBy) : approvedBy;
-  if (typeof a === "string") return a === LEGACY_IN_APP ? "Approved by you in Queue Pilot" : `Approved through ${a}`;
-  return a.via === "app" ? "Approved by you in Queue Pilot" : `Approved through ${appWords({ name: a.app, verified: a.verified })}`;
+  const who = typeof a === "string"
+    ? a === LEGACY_IN_APP ? "you in Queue Pilot" : a
+    : a.via === "app" ? "you in Queue Pilot" : appWords({ name: a.app, verified: a.verified });
+  const on = day(approvedAt);
+  return `Last approved through Queue Pilot: by ${who}${on ? `, ${on}` : ""}`;
 }

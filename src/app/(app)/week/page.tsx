@@ -46,9 +46,9 @@ export default async function Page() {
     return [w.postId, rules ? draftReadiness(w, post?.text ?? "", rules, { network, channelId: post?.channelId }) : { state: "check", reason: "The playbook could not be read. Try again." }];
   }));
   const evidence = userId ? await sourceCards(userId, user.posts, user.channels) : [];
-  // Who approved each of Queue Pilot's posts that left draft: the person in the app, or which AI app.
+  // The last approval recorded through Queue Pilot for each of its posts that left draft: the person in the app, or which AI app.
   const approved = userId ? await readOr(postgresWrittenStore().get(userId, week.posts.filter((p) => p.status !== "draft").map((p) => p.id)), [], "week-approvers") : [];
-  const approvals = Object.fromEntries(approved.flatMap((w) => { const line = approverLine(w.approvedBy); return line ? [[w.postId, line]] : []; }));
+  const approvals = Object.fromEntries(approved.flatMap((w) => { const line = approverLine(w.approvedBy, w.approvedAt); return line ? [[w.postId, line]] : []; }));
   const blocks = sourceHoldsFromCards(evidence);
   for (const [id, reason] of blocks) readiness[id] = { state: "check", reason };
   const writing = userId ? await writingAvailabilityFor(userId) : undefined;

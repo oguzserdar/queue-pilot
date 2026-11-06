@@ -27,7 +27,7 @@ export function capAppName(name: string): string {
  *
  * @param app - The app's name, and false for verified when its address did not prove the name. Older records carry
  *   no flag and are shown by name, as they were.
- * @returns A short phrase to put after "Connected", "By" or "Approved through"
+ * @returns A short phrase to put after "Connected", "By" or "Last approved through Queue Pilot: by"
  */
 export function appWords(app: { name: string; verified?: boolean }): string {
   return app.verified === false ? `an unverified app named "${capAppName(app.name)}"` : app.name;

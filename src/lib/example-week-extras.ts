@@ -58,8 +58,8 @@ export const exampleTags = (ids: string[]) => Object.fromEntries(ids.map((id) =>
 /** Alex's playbook, which the draft window summarises per account. */
 export const exampleRules: Rule[] = EXAMPLE_RULES;
 
-/** Who approved the example's scheduled posts, as the week shows it under each one. */
-export const exampleApprovals: Record<string, string> = { p1: approverLine(APPROVED_IN_APP)! };
+/** The last approval recorded through Queue Pilot for the example's scheduled posts, as the week shows it under each one. */
+export const exampleApprovals: Record<string, string> = { p1: approverLine(APPROVED_IN_APP, "2026-11-03T08:00:00Z")! };
 
 /** The example writer: built-in AI, ready. Pressing it on the example changes nothing. */
 export const exampleWriting: WritingAvailability = { ready: true, source: "built-in AI" };

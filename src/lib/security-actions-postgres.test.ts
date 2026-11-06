@@ -68,7 +68,7 @@ describe("recorded actions on real Postgres", () => {
     await recordAction("a", "draft_deleted", { via: "ai", app: app.name, verified: app.verified }, { ids: ["p1"] });
     const [deleted] = await recentSecurityEvents("a", 1);
     expect(showSecurityEvent(deleted).where).toBe(`By an unverified app named "${name.trim()}"`);
-    expect(approverLine(approverFor(app))).toBe(`Approved through an unverified app named "${name.trim()}"`);
+    expect(approverLine(approverFor(app))).toBe(`Last approved through Queue Pilot: by an unverified app named "${name.trim()}"`);
   });
 
   it("keeps the brand for a client proven by its registered address", async () => {
@@ -76,7 +76,7 @@ describe("recorded actions on real Postgres", () => {
     await pg.query(`insert into oauth_client (id, client_id, name, redirect_uris) values ('dcr-real', 'dcr-real', 'ChatGPT', '{https://chatgpt.com/connector_platform_oauth_redirect}')`);
     const app = await connectedApp("dcr-real");
     expect(app).toEqual({ name: "ChatGPT", verified: true });
-    expect(approverLine(approverFor(app))).toBe("Approved through ChatGPT");
+    expect(approverLine(approverFor(app))).toBe("Last approved through Queue Pilot: by ChatGPT");
   });
 
   it("caps a long self-declared name", async () => {

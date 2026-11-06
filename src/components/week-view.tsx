@@ -454,7 +454,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             <>
               {note ? <p className={styles.footNote} role={note.ok ? "status" : "alert"}>{note.text}</p>
                 : current.ours === false ? <p id="approve-foreign" className={styles.footNote}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>
-                : approved.has(current.id) ? <p className={styles.footNote}>{`Scheduled in Buffer. ${approverLine(APPROVED_IN_APP)}${live ? "" : " (example)"}.`}</p>
+                : approved.has(current.id) ? <p className={styles.footNote}>{`Scheduled in Buffer. ${approverLine(APPROVED_IN_APP, new Date().toISOString())}${live ? "" : " (example)"}.`}</p>
                 : needsCheck(current.id) ? <p id="approve-playbook" className={styles.footNote}>{approveOffNote(readiness[current.id])}</p>
                 : worstTone(current) === "danger" ? <p id="approve-off" className={styles.footNote}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
                 : <p className={styles.footNote}>Saved as a draft in Buffer.</p>}

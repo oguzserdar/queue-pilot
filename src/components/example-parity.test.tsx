@@ -62,7 +62,7 @@ describe("example matches the signed-in screens", () => {
     expect(exampleRules.every((r) => ruleOrigin(r) ?? (r as { origin?: string }).origin)).toBe(true);
     const ids = demoWeek.posts.filter((p) => p.status === "draft").map((p) => p.id);
     const html = renderToStaticMarkup(<WeekView week={demoWeek} evidence={exampleEvidence} notesPreview={exampleNotes(ids)} tagsPreview={exampleTags(ids)} rules={exampleRules} writing={exampleWriting} writeCount={countOpenSlots(demoWeek)} approvals={exampleApprovals} />);
-    expect(html).toContain("Approved by you in Queue Pilot");
+    expect(html).toContain("Last approved through Queue Pilot: by you in Queue Pilot, 3 Nov");
   });
 
   it("shows the playbook's account view, as the live playbook does", () => {

@@ -37,24 +37,30 @@ describe("ruleOrigin", () => {
 });
 
 describe("approverLine", () => {
-  it("says whether the person approved in the app or which AI app did", () => {
-    expect(approverLine(APPROVED_IN_APP)).toBe("Approved by you in Queue Pilot");
-    expect(approverLine("Claude")).toBe("Approved through Claude");
-    expect(approverLine(undefined)).toBeNull();
+  const LAST = "Last approved through Queue Pilot:";
+  it("says it is the last approval recorded through Queue Pilot, by whom and on which day", () => {
+    expect(approverLine(APPROVED_IN_APP, "2026-11-03T09:00:00Z")).toBe(`${LAST} by you in Queue Pilot, 3 Nov`);
+    expect(approverLine("Claude", "2026-11-03T09:00:00Z")).toBe(`${LAST} by Claude, 3 Nov`);
+    expect(approverLine(APPROVED_IN_APP)).toBe(`${LAST} by you in Queue Pilot`);
+    expect(approverLine(undefined, "2026-11-03T09:00:00Z")).toBeNull();
+  });
+
+  it("never words a recorded approval as who approved the post now", () => {
+    for (const line of [approverLine(APPROVED_IN_APP), approverLine("Claude", "2026-11-03T09:00:00Z")]) expect(line).not.toMatch(/^Approved/);
   });
 
   it("stores the approver as a tagged value no client name can turn into the in-app wording", () => {
-    expect(approverLine(serializeApprover(APPROVED_IN_APP))).toBe("Approved by you in Queue Pilot");
+    expect(approverLine(serializeApprover(APPROVED_IN_APP))).toBe(`${LAST} by you in Queue Pilot`);
     for (const name of ["queue-pilot", "Queue Pilot", '{"via":"app"}']) {
       const stored = serializeApprover(approverFor({ name, verified: false }));
-      expect(approverLine(stored)).toBe(`Approved through an unverified app named "${name}"`);
+      expect(approverLine(stored)).toBe(`${LAST} by an unverified app named "${name}"`);
     }
-    expect(approverLine(serializeApprover(approverFor({ name: "Claude", verified: true })))).toBe("Approved through Claude");
+    expect(approverLine(serializeApprover(approverFor({ name: "Claude", verified: true })))).toBe(`${LAST} by Claude`);
   });
 
   it("still reads rows written in the old string form", () => {
-    expect(approverLine("queue-pilot")).toBe("Approved by you in Queue Pilot");
-    expect(approverLine("Claude")).toBe("Approved through Claude");
-    expect(approverLine("{not json")).toBe("Approved through {not json");
+    expect(approverLine("queue-pilot")).toBe(`${LAST} by you in Queue Pilot`);
+    expect(approverLine("Claude")).toBe(`${LAST} by Claude`);
+    expect(approverLine("{not json")).toBe(`${LAST} by {not json`);
   });
 });

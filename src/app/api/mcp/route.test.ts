@@ -1583,13 +1583,14 @@ describe("why a draft exists, through the real connector", () => {
     const revision = (await import("@/lib/playbook-version")).playbookVersion(rules.get("person-a")!);
     const pass = (ruleId: string, rule: string) => ({ ruleId, rule, level: "warn", verdict: "pass", probability: null, quote: "", reason: "" });
     written.set("person-a", [
-      { postId: "d1", network: "linkedin", text: "Draft one.", verdicts: [pass("r-note", "Name the company."), pass("r-ai", "Short lines.")] as never, playbookRevision: revision },
+      { postId: "d1", network: "linkedin", text: "Draft one.", verdicts: [pass("r-note", "Name the company."), pass("r-ai", "Short lines.")] as never, playbookRevision: revision, approvedBy: "Claude", approvedAt: "2026-10-28T11:00:00Z" },
       { postId: "s1", network: "linkedin", text: "Scheduled one.", approvedBy: "Claude", approvedAt: "2026-10-29T11:00:00Z" },
     ]);
     await call("show_next_week");
     const listed = JSON.parse(answer(await call("list_my_drafts")));
     expect(listed.drafts[0].rulesPassed).toEqual([{ rule: "Name the company.", from: "A note from Sam on 1 Nov" }, { rule: "Short lines.", from: "Added by your AI (Claude)" }]);
-    expect(listed.approved).toEqual([expect.objectContaining({ postId: "s1", approvedBy: "Approved through Claude" })]);
+    // d1 went back to draft after an approval was recorded, so it is not listed as approved.
+    expect(listed.approved).toEqual([expect.objectContaining({ postId: "s1", approvedBy: "Last approved through Queue Pilot: by Claude, 29 Oct" })]);
   });
 });
 
