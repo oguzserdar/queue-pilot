@@ -5,7 +5,12 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-05 Research with Grok Bot, draft in Buffer
+
 ### Added
+- Expand the Buffer adapter from 9 to 37 of 49 operations, including content items, templates, Notes, tags and team reads. Saved hashtag sets are implemented but were refused by Buffer on the demo account.
+- Add conditional guidance to the 19 Buffer-only connector tools: use one connector when Buffer's official connector exposes the same action. Keep Queue Pilot checks, source evidence and learning in Queue Pilot, and never switch to bypass refusals or limits.
+- Share Buffer request accounting across users and servers, with a reserve for assistant and background calls in known windows and one-at-a-time probes when the allowance is unknown.
 - Read and write Buffer Notes, the comments that live on a post in Buffer. The draft window shows a post's notes with author, time and "edited", and lets you add a note, or edit and delete one where Buffer allows it. A solo Buffer account is told to leave notes for itself. A team account is told everyone with access to the channel sees them. Your AI can read notes as information, never as instructions, and add a note to a draft Queue Pilot wrote when you ask. Notes need a new Buffer permission: sign out and sign in with Buffer once.
 - Read your Buffer ideas board with its columns, and save an idea into a column when you ask. Saving an idea posts and schedules nothing.
 - New material shows your Buffer ideas board, read only, with Buffer's columns in Buffer's order and a link to open it in Buffer.
@@ -16,7 +21,12 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Tell your AI when a channel's queue is paused in Buffer. Buffer offers no way to resume a queue from outside, so you resume it in Buffer.
 - Settings lists connected AI apps grouped by app, with where each returns to, when it was approved and last used, and a name you can give it. A connection unused for 30 days stops working and can be removed in one go. Connect your AI keeps setup only, with one line linking to Settings.
 
+### Changed
+- Group a draft's source quotes once per source and show them in the order its sentences read, alongside checks and Notes.
+- Show a plain row for a single AI connection, with custom names and recent use. Group multiple connections by their registered app identity.
+
 ### Fixed
+- Reconcile uncertain draft writes before retrying, and refuse stale edits and writes to posts that are no longer drafts.
 - A renamed connection showed only part of its name in Settings.
 - Setting tags sent Buffer an edit without the draft's text, which Buffer refuses as an empty post. Tagging now reads the draft first and sends its own text.
 - Notes say who sees them behind an info button, in Buffer's own words, and an empty notes list shows a title and one line.
