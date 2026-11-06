@@ -11,27 +11,27 @@ const v = (id: string, verdict: Verdict["verdict"], quote: string, reason: strin
 /** By example draft id (demo-data.ts). */
 export const EXAMPLE_VERDICTS: Record<string, Verdict[]> = {
   d1: [
-    v("r1", "pass", "White bean and kale soup", "The first line names the soup."),
-    v("r2", "pass", "", "The opening is the dish, not an announcement."),
-    v("r4", "pass", "", "No broth, and no other word for it."),
+    v("r1", "pass", "A new open-weights coding model finished 9 of 10", "The first line names the model and its score."),
+    v("r2", "pass", "", "Says what changed, with no \"game-changer\"."),
+    v("r4", "pass", "open-weights", "Open-weights is the word the playbook asks for."),
   ],
-  d2: [v("r3", "pass", "Recipe in the newsletter, link in bio.", "Ends with the line."), v("r4", "pass", "", "No broth, and no other word for it.")],
-  d3: [v("r4", "pass", "", "No broth, and no other word for it.")],
-  d4: [v("r4", "pass", "", "No broth, and no other word for it.")],
+  d2: [v("r3", "pass", "Full notes in the newsletter, link in bio.", "Ends with the line."), v("r4", "pass", "", "No open-source, and no other word for it.")],
+  d3: [v("r4", "pass", "", "No open-source, and no other word for it.")],
+  d4: [v("r4", "pass", "", "No open-source, and no other word for it.")],
   d5: [
-    v("r1", "unsure", "", "It names three swaps, not one dish; the rule may not fit a list post."),
-    v("r2", "pass", "", "The opening is the swaps, not an announcement."),
-    v("r4", "pass", "", "Stock is the word the playbook asks for."),
+    v("r1", "unsure", "", "It names three questions, not one model; the rule may not fit a list post."),
+    v("r2", "pass", "", "Says what changed, with no \"game-changer\"."),
+    v("r4", "pass", "", "No open-source, and no other word for it."),
   ],
 };
 
 /** Try a draft's sample text on the example Playbook, and how the judge would answer it. */
 export const EXAMPLE_TRY = {
-  text: "Ravi di condividere il mio nuovo brodo per le sere fredde.",
+  text: "Un modello open source che cambia le regole del gioco.",
   network: "linkedin",
   verdicts: [
-    v("r2", "fail", "Ravi di condividere", 'Italian for "Excited to share".'),
-    v("r4", "fail", "brodo", 'Italian for "broth".'),
-    v("r1", "fail", "il mio nuovo brodo", "The first line names a broth, not a dish."),
+    v("r2", "fail", "cambia le regole del gioco", 'Italian for "game-changer".'),
+    v("r4", "fail", "open source", 'Calls a model "open source"; the playbook asks for "open-weights".'),
+    v("r1", "fail", "Un modello open source", "The first line names no model and no number."),
   ],
 };

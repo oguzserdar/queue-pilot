@@ -41,10 +41,10 @@ const LIVE_AI = [
 const EXAMPLE = {
   channels: channels.map((c) => ({ id: c.id, name: c.name, service: c.service, isDisconnected: c.isDisconnected, isLocked: false, isQueuePaused: c.isQueuePaused })),
   sources: [
-    { id: "example-newsletter", title: "Weeknight Dinners", url: "https://weeknightdinners.example/feed" },
-    { id: "example-youtube", title: "Weeknight Dinners on YouTube", url: "https://youtube.example/weeknightdinners" },
+    { id: "example-newsletter", title: "This Week in AI", url: "https://thisweekinai.example/feed" },
+    { id: "example-youtube", title: "This Week in AI on YouTube", url: "https://youtube.example/thisweekinai" },
   ],
-  copies: [{ kind: "telegram" as const, label: "@weeknightdinners" }],
+  copies: [{ kind: "telegram" as const, label: "@thisweekinai" }],
   discordResult: null,
 };
 

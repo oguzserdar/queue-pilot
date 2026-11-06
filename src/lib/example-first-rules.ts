@@ -1,7 +1,8 @@
 /**
- * What "Find rules in my past posts" returns for the example account. Generated from a real run of
- * evals/first-rules.eval.ts (EVAL_CLEAN=1) on Mark's 12 LinkedIn posts and 3 Instagram posts (28 Oct 2026, Claude Haiku), not written
- * by hand. Rerun the eval and regenerate rather than editing.
+ * What "Find rules in my past posts" returns for the example account, on Alex's 12 LinkedIn posts and 3 Instagram
+ * posts. The shape and verdicts come from a real run of evals/first-rules.eval.ts (EVAL_CLEAN=1, 28 Oct 2026, Claude
+ * Haiku); the post text was rewritten by hand on 6 Nov 2026 when the example account changed from a cooking newsletter
+ * to This Week in AI. Rerun the eval on matching fixtures and regenerate rather than editing further.
  */
 import type { FirstRuleOffer } from "@/app/(app)/actions";
 
@@ -24,24 +25,24 @@ export const EXAMPLE_FIRST_RULES: { offers: FirstRuleOffer[]; skipped: string[] 
         "unclear": 0,
         "unclearPosts": [],
         "examples": [
-          "Tuesday's chickpea curry takes 25 minutes and one pan. The trick is blooming the spices in oil first. What do you cook when the week runs long?",
-          "Tomato and white bean soup, 35 minutes, mostly hands-off. Freezes well for next week. Do you batch cook on Sundays?"
+          "A new open-weights model finished 9 of 10 tasks in my coding test. I rerun every test myself before I write it up. Which result would you check first?",
+          "Three agent frameworks, one refactor: two finished, one looped. Full notes in Sunday's issue. Which framework do you use day to day?"
         ]
       }
     },
     {
-      "text": "Say stock, never broth",
+      "text": "Say open-weights, never open-source",
       "channels": [
         "linkedin"
       ],
       "where": "LinkedIn",
-      "key": "first:linkedin:Say stock, never broth",
+      "key": "first:linkedin:Say open-weights, never open-source",
       "proof": {
         "kind": "note",
-        "note": "Say stock, never broth, for this client. Their customers are in the UK.",
-        "by": "Sara",
+        "note": "Say open-weights, never open-source, for a model. Our readers know the difference.",
+        "by": "Sam",
         "at": "2026-10-27T09:00:00Z",
-        "post": "Black bean tacos in 15 minutes, using the tin and a lime. Nothing fancy, still good. Corn or flour tortillas?"
+        "post": "An open-source model now runs on a laptop in my tests, 12 tokens a second. Slow, still useful. Would you trade speed for privacy?"
       }
     }
   ]

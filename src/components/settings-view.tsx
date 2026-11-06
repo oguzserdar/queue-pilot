@@ -56,8 +56,8 @@ export type SettingsAccount = {
  * answer "Sign in with Buffer first", and the three account buttons are swapped for sign-in.
  */
 const EXAMPLE_ACCOUNT: SettingsAccount = {
-  email: "mark@weeknightdinners.example",
-  name: "Mark Evans",
+  email: "alex@thisweekinai.example",
+  name: "Alex Rivera",
   image: null,
   channelNames: ["LinkedIn", "Instagram", "Bluesky", "X"],
   rateLimit: EXAMPLE_RATE_LIMIT,

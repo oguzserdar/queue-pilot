@@ -13,8 +13,8 @@ export type Channel = {
 
 
 export const channels: Channel[] = [
-  { id: "linkedin", service: "linkedin", name: "LinkedIn", handle: "Mark Evans", isDisconnected: false, isQueuePaused: false },
-  { id: "instagram", service: "instagram", name: "Instagram", handle: "@weeknightdinners", isDisconnected: false, isQueuePaused: false },
-  { id: "bluesky", service: "bluesky", name: "Bluesky", handle: "weeknightdinners.bsky.social", isDisconnected: true, isQueuePaused: false },
-  { id: "x", service: "twitter", name: "X", handle: "@weeknightdinners", isDisconnected: false, isQueuePaused: false },
+  { id: "linkedin", service: "linkedin", name: "LinkedIn", handle: "Alex Rivera", isDisconnected: false, isQueuePaused: false },
+  { id: "instagram", service: "instagram", name: "Instagram", handle: "@thisweekinai", isDisconnected: false, isQueuePaused: false },
+  { id: "bluesky", service: "bluesky", name: "Bluesky", handle: "thisweekinai.bsky.social", isDisconnected: true, isQueuePaused: false },
+  { id: "x", service: "twitter", name: "X", handle: "@alexrivera_ai", isDisconnected: false, isQueuePaused: false },
 ];

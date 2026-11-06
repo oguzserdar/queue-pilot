@@ -81,7 +81,7 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
         label="The rule, as you would say it"
         value={text}
         rows={2}
-        placeholder={'Say "stock", never "broth". Name the dish in the first line.'}
+        placeholder={'Say "open-weights", never "open-source". Name the model and the number in the first line.'}
         maxLength={200}
         error={fieldProblem ?? undefined}
         onChange={(e) => { setText(e.target.value); setProblem(null); setFieldProblem(null); }}

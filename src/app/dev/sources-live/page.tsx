@@ -7,7 +7,7 @@ import { SourcesView } from "@/components/sources-view";
 export default async function Page({ searchParams }: { searchParams: Promise<{ connected?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
   const connected = (await searchParams).connected === "1";
-  const account: ShellAccount = { email: "mark@weeknightdinners.example", channels: exampleChannels.slice(0, 3).map(c => ({ ...c, name: c.handle })), fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Mark Evans", image: null };
+  const account: ShellAccount = { email: "alex@thisweekinai.example", channels: exampleChannels.slice(0, 3).map(c => ({ ...c, name: c.handle })), fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Alex Rivera", image: null };
   return (
     <AppShell account={account} signInOpen>
       <SourcesView
@@ -19,10 +19,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
           { id: "bs", name: "Bluesky", service: "bluesky", isDisconnected: true, isLocked: false, isQueuePaused: false },
         ]}
         sources={[
-          { id: "s1", title: "Weeknight Dinners", url: "https://weeknightdinners.example/feed" },
-          { id: "s2", title: "Weeknight Dinners on YouTube", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCweeknightdinners" },
+          { id: "s1", title: "This Week in AI", url: "https://thisweekinai.example/feed" },
+          { id: "s2", title: "This Week in AI on YouTube", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCthisweekinai" },
         ]}
-        copies={connected ? [{ kind: "telegram", label: "Weeknight Dinners news" }, { kind: "discord", label: "Weeknight Dinners #new-issues" }] : []}
+        copies={connected ? [{ kind: "telegram", label: "This Week in AI news" }, { kind: "discord", label: "This Week in AI #new-issues" }] : []}
         discordResult={null}
       />
     </AppShell>

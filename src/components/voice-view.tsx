@@ -11,9 +11,9 @@ import { MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT } from "@/lib/voice-limits"
 import styles from "./voice-view.module.css";
 
 const EXAMPLES = [
-  { id: "e1", channel: "LinkedIn", text: "Soup weather. Here is the one I make on repeat: white beans, kale, and the bread you were about to throw out." },
-  { id: "e2", channel: "Instagram", text: "Three pantry swaps that save a weeknight. Recipe in the newsletter, link in bio." },
-  { id: "e3", channel: "X", text: "Stock from scraps: onion skins, carrot ends, parmesan rind. Issue 37 has the rest." },
+  { id: "e1", channel: "LinkedIn", text: "Four releases this week. I ran the same refactor on each: one open-weights coding model finished 9 of 10 tasks, the rest stalled." },
+  { id: "e2", channel: "Instagram", text: "Three questions for any benchmark. Full notes in the newsletter, link in bio." },
+  { id: "e3", channel: "X", text: "Context windows: what they hold, what they drop, and my recall test. Issue 37 has the rest." },
 ];
 
 /** Live mode: the person's picked example posts, their note, and recent sent posts to pick from. */
@@ -136,13 +136,13 @@ function ExampleVoice() {
   return (
     <div className={styles.page}>
       <header className={styles.head}>
-        <h1 className={styles.title}>Mark's voice</h1>
-        <p className={styles.sub}>A note on how he writes and a few of his own posts. Drafts match them. Rules from his fixes live in the <a href="/playbook">playbook</a>.</p>
+        <h1 className={styles.title}>Alex's voice</h1>
+        <p className={styles.sub}>A note on how Alex writes and a few of Alex's own posts. Drafts match them. Rules from Alex's fixes live in the <a href="/playbook">playbook</a>.</p>
       </header>
 
       <section aria-labelledby="note" className={styles.block}>
-        <h2 id="note" className={styles.h2}>How he writes</h2>
-        <p>Warm and short. The dish first, then one useful detail. Says "stock", never "broth". One link at the end.</p>
+        <h2 id="note" className={styles.h2}>How Alex writes</h2>
+        <p>Plain and short. The model and the number first, then one useful detail. Says "open-weights", never "open-source". One link at the end.</p>
       </section>
 
       <section aria-labelledby="examples" className={styles.block}>

@@ -9,9 +9,9 @@ import type { IdeaBoard } from "@/app/(app)/idea-actions";
 type Idea = { id: string; foundBy: string; title: string; why: string; link: string; slot?: string };
 
 const IDEAS: Idea[] = [
-  { id: "i1", foundBy: "Your newsletter", title: "Weeknight Dinners 41: white bean and kale soup", why: "Sent Sunday and not posted yet", link: "weeknightdinners.example/41", slot: "4 drafts: Tue 27 to Thu 29" },
-  { id: "i2", foundBy: "Your newsletter", title: "Weeknight Dinners 39: three pantry swaps", why: "Posted once on LinkedIn, never on the others", link: "weeknightdinners.example/39", slot: "a draft: Thu 29, LinkedIn, 15:00" },
-  { id: "i3", foundBy: "Your YouTube", title: "Knife skills in five minutes", why: "New video, no open time left this week", link: "youtube.example/weeknightdinners" },
+  { id: "i1", foundBy: "Your newsletter", title: "This Week in AI 41: four releases, one refactor test", why: "Sent Sunday and not posted yet", link: "thisweekinai.example/41", slot: "4 drafts: Tue 27 to Thu 29" },
+  { id: "i2", foundBy: "Your newsletter", title: "This Week in AI 39: three questions for any benchmark", why: "Posted once on LinkedIn, never on the others", link: "thisweekinai.example/39", slot: "a draft: Thu 29, LinkedIn, 15:00" },
+  { id: "i3", foundBy: "Your YouTube", title: "Reading an agent's trace in five minutes", why: "New video, no open time left this week", link: "youtube.example/thisweekinai" },
 ];
 
 /** Example mode shows what is new in the example feeds; live mode says what works today: the AI reads the user's feeds through the connector. */

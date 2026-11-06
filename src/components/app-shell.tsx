@@ -118,7 +118,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
                 {/* The same status card as a signed-in account, describing the example one. */}
                 <div className={`${styles.syncRow} ${styles.statusCard}`}>
                   <ChannelStatus channels={exampleChannels.map(c => ({ ...c, name: c.handle }))} />
-                  <span className={styles.statusNote}>Example account: Mark Evans</span>
+                  <span className={styles.statusNote}>Example account: Alex Rivera</span>
                 </div>
                 {signInOpen ? <SignInButton variant="primary" size="md" className={styles.signIn} /> : <span className={`${styles.aiNote} ${styles.who}`}>Sign in with Buffer opens shortly.</span>}
               </>
@@ -127,7 +127,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
         </aside>
         <div className={styles.column}>
           {account ? <SyncBanner /> : (
-            <div className={styles.demo}>Example account: Mark writes Weeknight Dinners, a cooking newsletter. Sign in with Buffer to see your own queue.</div>
+            <div className={styles.demo}>Example account: Alex writes This Week in AI, a Sunday newsletter on AI model releases and agents. Sign in with Buffer to see your own queue.</div>
           )}
           <main className={styles.main}><SignInNotice />{children}</main>
         </div>

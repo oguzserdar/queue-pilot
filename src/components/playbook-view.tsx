@@ -30,7 +30,7 @@ function reviewEvidence(value: unknown): { comment: string; reason: string } | n
 }
 
 const EXAMPLE: ShownRule[] = EXAMPLE_RULES;
-const OFFERED: ShownRule = { id: "r5", kind: "guidance", channels: ["instagram"], level: "warn", text: "Start with the dish, not a feeling.", origin: "You changed the opening in 2 drafts" };
+const OFFERED: ShownRule = { id: "r5", kind: "guidance", channels: ["instagram"], level: "warn", text: "Start with the result, not a feeling.", origin: "You changed the opening in 2 drafts" };
 const HOLD_TONE = { "Blocks drafts": "danger", "Flags drafts": "warning" } as const;
 const HOLD_HINT = { "Blocks drafts": "A draft that breaks it is rewritten once, then not saved", "Flags drafts": "A draft that breaks it is saved and flagged for you" };
 
@@ -44,7 +44,7 @@ function groups(rules: ShownRule[], accounts: RuleAccount[]): [string, ShownRule
   return [...m.entries()].sort(([a], [b]) => (a === "Every network" ? 1 : b === "Every network" ? -1 : a.localeCompare(b)));
 }
 
-/** Example mode: Mark's playbook and one repeated fix waiting for his yes. Live mode: the person's own rules. */
+/** Example mode: Alex's playbook and one repeated fix waiting for Alex's yes. Live mode: the person's own rules. */
 export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS, accounts = [], inheritance = {} }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[]; accounts?: RuleAccount[]; inheritance?: Inheritance }) {
   const live = mode === "live";
   // Networks a shared rule was switched off for on this screen, ahead of the server's answer.
@@ -105,13 +105,13 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   return (
     <div className={styles.page}>
       <header className={styles.head}>
-        <h1 className={styles.title}>{live ? (shown.length ? <>Playbook <span className={styles.count}>{shown.length} rule{shown.length === 1 ? "" : "s"}</span></> : "Your playbook") : shown.length ? `Mark's playbook has ${shown.length} rule${shown.length === 1 ? "" : "s"}` : "Mark's first visit"}</h1>
+        <h1 className={styles.title}>{live ? (shown.length ? <>Playbook <span className={styles.count}>{shown.length} rule{shown.length === 1 ? "" : "s"}</span></> : "Your playbook") : shown.length ? `Alex's playbook has ${shown.length} rule${shown.length === 1 ? "" : "s"}` : "Alex's first visit"}</h1>
         <p className={styles.sub}>
           {!live && firstVisit && !shown.length
             ? "No rules yet. Queue Pilot checks each draft against your rules before saving it in Buffer, so the first ones come from what you already posted."
             : live && !shown.length
             ? "No rules yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike."
-            : accounts.length ? "Pick an account to see what applies there. What you changed for it comes first." : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix he made more than once."}`}
+            : accounts.length ? "Pick an account to see what applies there. What you changed for it comes first." : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix Alex made more than once."}`}
         </p>
       </header>
 
@@ -121,8 +121,8 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       {offer === "open" && (
         <section className={styles.offer} aria-labelledby="offer-title">
           <h2 id="offer-title" className={styles.h2}>You made the same fix twice</h2>
-          <p className={styles.diff}><del><span className="sr-only">Before: </span>The soup I make on repeat</del> <span className="sr-only">After: </span>My cold-night soup.</p>
-          <p className={styles.muted}>On Instagram you replaced a feeling with the dish, on Tuesday and last Friday.</p>
+          <p className={styles.diff}><del><span className="sr-only">Before: </span>This week felt like a turning point for coding agents.</del> <span className="sr-only">After: </span>Two of three agents finished my refactor.</p>
+          <p className={styles.muted}>On Instagram you replaced a feeling with the result, on Tuesday and last Friday.</p>
           <p className={styles.proposed}>Keep as a rule: "{OFFERED.text}"</p>
           <div className={styles.actions}>
             <Button variant="primary" size="sm" onClick={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }}>Keep as a rule</Button>
@@ -130,7 +130,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
           </div>
         </section>
       )}
-      {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the dish.</p>}
+      {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the result.</p>}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
       {accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} onDelete={(r) => remove(r.id)} onAdd={focusAdd} example={!live} />}

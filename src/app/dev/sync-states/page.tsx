@@ -16,11 +16,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   const name = (await searchParams).state ?? "fresh";
   const state = STATES[name] ?? STATES.fresh;
   const account: ShellAccount = {
-    email: "mark@weeknightdinners.example",
+    email: "alex@thisweekinai.example",
     channels: exampleChannels.slice(0, 3).map(c => ({ ...c, name: c.handle })),
     fetchedAt: new Date(Date.now() - state.minutesAgo * 60_000).toISOString(),
     needsRefresh: false,
-    name: "Mark Evans",
+    name: "Alex Rivera",
     image: null,
     syncPreview: state.status,
   };

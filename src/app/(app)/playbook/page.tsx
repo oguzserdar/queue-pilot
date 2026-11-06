@@ -6,7 +6,7 @@ import { postgresRulesStore } from "@/lib/rules-store";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ first?: string }> }) {
   const userId = await signedInUserId();
-  // The example shows the same account view a signed-in person sees, for Mark's four accounts.
+  // The example shows the same account view a signed-in person sees, for Alex's four accounts.
   if (!userId) return <PlaybookView mode="example" firstVisit={(await searchParams).first === "1"} accounts={exampleChannels.filter((c) => !c.isDisconnected).map((c) => ({ id: c.id, name: c.handle, service: c.service }))} />;
   const loaded = await Promise.all([postgresRulesStore().list(userId), readInheritance(userId)]).catch((e) => {
     console.error(JSON.stringify({ event: "qp-rules-read-failed", message: e instanceof Error ? e.message : String(e) }));

@@ -6,9 +6,9 @@ import { AccountsComposer } from "@/components/accounts-composer";
 import type { ComposerAccount } from "@/app/(app)/accounts-actions";
 
 const ACCOUNTS: ComposerAccount[] = [
-  { id: "x", name: "@weeknightmark", service: "twitter", limit: 280, limitFrom: "buffer", disconnected: false },
-  { id: "li", name: "Mark Evans", service: "linkedin", limit: 3000, limitFrom: "built-in", disconnected: false },
-  { id: "ig", name: "weeknightdinners", service: "instagram", limit: 2196, limitFrom: "built-in", disconnected: true },
+  { id: "x", name: "@alexrivera_ai", service: "twitter", limit: 280, limitFrom: "buffer", disconnected: false },
+  { id: "li", name: "Alex Rivera", service: "linkedin", limit: 3000, limitFrom: "built-in", disconnected: false },
+  { id: "ig", name: "thisweekinai", service: "instagram", limit: 2196, limitFrom: "built-in", disconnected: true },
 ];
 
 export function ComposerPreview() {
