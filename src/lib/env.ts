@@ -35,21 +35,66 @@ function deploymentSource(): SettingsSource {
   return { store: postgresSettingsStore(), master, env: process.env };
 }
 
+/** How long a server keeps a setting it has read before asking the database again. */
+export const SETTINGS_CACHE_MS = 30_000;
+
+type CacheEntry = { promise: Promise<{ value: string | null; ok: boolean }>; expiresAt: number };
+/** Settings this server has read recently, keyed by setting; each entry holds the read itself so parallel callers share it. */
+export type SettingsCache = Map<SettingKey, CacheEntry>;
+
+/** An empty settings cache. */
+export const createSettingsCache = (): SettingsCache => new Map();
+
+const deploymentCache = createSettingsCache();
+
+/** Forgets every cached setting on this server, so a value just saved or removed in /admin applies at once. */
+export function clearOperatorSettingsCache(): void {
+  deploymentCache.clear();
+}
+
+/** One setting by the registry's rule; a failed read of the saved values falls back to the environment and is marked. */
+async function readSetting(key: SettingKey, src: SettingsSource): Promise<{ value: string | null; ok: boolean }> {
+  try {
+    return { value: (await resolveSetting(src.store, key, src.master, src.env))?.value ?? null, ok: true };
+  } catch (e) {
+    console.error(JSON.stringify({ event: "qp-settings-read-failed", setting: key, message: e instanceof Error ? e.message : String(e) }));
+    return { value: (await resolveSetting(memoryStore(), key, "", src.env))?.value ?? null, ok: false };
+  }
+}
+
+/**
+ * Operator settings through a cache: each setting is read once per {@link SETTINGS_CACHE_MS} and parallel callers share
+ * that read. A read that could not reach the saved values is never kept, so the next request tries again.
+ *
+ * @param keys - The settings to read
+ * @param src - Where to read them from
+ * @param cache - The cache to use
+ * @param now - The current time in milliseconds (injected in tests)
+ * @returns Each setting's working value, or null when none is set
+ */
+export async function cachedOperatorSettings<K extends SettingKey>(keys: readonly K[], src: SettingsSource, cache: SettingsCache, now = Date.now()): Promise<Record<K, string | null>> {
+  const values = await Promise.all(keys.map((key) => {
+    const hit = cache.get(key);
+    if (hit && now < hit.expiresAt) return hit.promise;
+    const promise = readSetting(key, src);
+    const entry: CacheEntry = { promise, expiresAt: now + SETTINGS_CACHE_MS };
+    cache.set(key, entry);
+    void promise.then((r) => { if (!r.ok && cache.get(key) === entry) cache.delete(key); });
+    return promise;
+  }));
+  return Object.fromEntries(keys.map((k, i) => [k, values[i].value])) as Record<K, string | null>;
+}
+
 /**
  * Operator settings by the registry's rule (src/lib/settings.ts): saved in /admin, else the server's environment, else
  * the default; null when none is set. When the saved values cannot be read, the environment and defaults still apply.
+ * This deployment's own settings go through a short cache (see {@link cachedOperatorSettings}); /admin clears it on
+ * every change, and other servers pick a change up within {@link SETTINGS_CACHE_MS}. An explicit source is read fresh.
  */
-export async function operatorSettings<K extends SettingKey>(keys: readonly K[], src: SettingsSource = deploymentSource()): Promise<Record<K, string | null>> {
-  const read = async (key: K) => {
-    try {
-      return (await resolveSetting(src.store, key, src.master, src.env))?.value ?? null;
-    } catch (e) {
-      console.error(JSON.stringify({ event: "qp-settings-read-failed", setting: key, message: e instanceof Error ? e.message : String(e) }));
-      return (await resolveSetting(memoryStore(), key, "", src.env))?.value ?? null;
-    }
-  };
-  const values = await Promise.all(keys.map(read));
-  return Object.fromEntries(keys.map((k, i) => [k, values[i]])) as Record<K, string | null>;
+export async function operatorSettings<K extends SettingKey>(keys: readonly K[], src?: SettingsSource): Promise<Record<K, string | null>> {
+  if (!src) return cachedOperatorSettings(keys, deploymentSource(), deploymentCache);
+  const values = await Promise.all(keys.map((key) => readSetting(key, src)));
+  return Object.fromEntries(keys.map((k, i) => [k, values[i].value])) as Record<K, string | null>;
 }
 
 /** One operator setting by the same rule as {@link operatorSettings}; null when none is set. */

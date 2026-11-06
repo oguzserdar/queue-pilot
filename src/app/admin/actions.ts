@@ -7,6 +7,7 @@ import { checkSetupCode } from "@/lib/admin-setup-code";
 import { limit } from "@/lib/rate-limit";
 import { adminAccess, signedInUserId } from "@/lib/current-user";
 import { hasDatabase, postgresSettingsStore } from "@/lib/db";
+import { clearOperatorSettingsCache } from "@/lib/env";
 import { SETTINGS, clearSetting, keepSavedSetting, saveSetting, type SettingKey } from "@/lib/settings";
 
 function secrets() {
@@ -67,6 +68,7 @@ export async function saveAdminSetting(_prev: AdminResult | null, form: FormData
   const value = String(form.get("value") ?? "");
   try {
     await saveSetting(postgresSettingsStore(), key, value, secrets().master, by);
+    clearOperatorSettingsCache();
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "It could not be saved." };
   }
@@ -81,6 +83,7 @@ export async function clearAdminSetting(_prev: AdminResult | null, form: FormDat
   if (!isSettingKey(key)) return { ok: false, message: "Unknown setting." };
   if (!hasDatabase()) return { ok: false, message: "Connect a database to this deployment first." };
   await clearSetting(postgresSettingsStore(), key, by);
+  clearOperatorSettingsCache();
   revalidatePath("/admin");
   return { ok: true, message: `${SETTINGS[key].label} removed. ${fallbackNote(key)}` };
 }
@@ -92,6 +95,7 @@ export async function keepAdminSetting(_prev: AdminResult | null, form: FormData
   if (!isSettingKey(key)) return { ok: false, message: "Unknown setting." };
   if (!hasDatabase()) return { ok: false, message: "Connect a database to this deployment first." };
   await keepSavedSetting(postgresSettingsStore(), key, by);
+  clearOperatorSettingsCache();
   revalidatePath("/admin");
   return { ok: true, message: `${SETTINGS[key].label}: the saved value is in use now.` };
 }
