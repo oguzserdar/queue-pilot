@@ -10,6 +10,8 @@ import type { DraftTag } from "@/app/(app)/tag-actions";
 import type { Rule } from "./rules";
 import type { WritingAvailability } from "./writing-availability";
 import { EXAMPLE_RULES } from "./example-playbook";
+import { APPROVED_IN_APP, approverLine } from "./rule-origin";
+import { EXAMPLE_TEAM_NOTE } from "./example-notes";
 
 const CHECKED = "2026-11-01T18:00:00Z";
 /** Primary sources behind the example drafts: the company's own page for each piece of news, read 6 Nov 2026. */
@@ -40,10 +42,14 @@ export const exampleEvidence: EvidenceCard[] = [
 ];
 
 const noteOn: Record<string, DraftNote[]> = {
-  d1: [{ id: "n1", author: "Alex Rivera", avatar: null, createdAt: "2026-11-01T19:10:00Z", edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true }],
+  // Newest first, as Buffer returns them. Sam's note is the one the Playbook turns into a LinkedIn rule (example-notes.ts).
+  d1: [
+    { id: "n2", author: "Sam", avatar: null, createdAt: EXAMPLE_TEAM_NOTE.at!, edited: false, text: EXAMPLE_TEAM_NOTE.text, canEdit: false, canDelete: false },
+    { id: "n1", author: "Alex Rivera", avatar: null, createdAt: "2026-11-01T19:10:00Z", edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true },
+  ],
 };
-/** Notes on each example draft, as Buffer would return them. */
-export const exampleNotes = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { notes: noteOn[id] ?? [], more: false, team: false }]));
+/** Notes on each example draft, as Buffer would return them. Alex works with Sam, so notes are worded for a team. */
+export const exampleNotes = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { notes: noteOn[id] ?? [], more: false, team: true }]));
 
 const TAGS: DraftTag[] = [{ id: "t1", name: "Releases", color: "#8F2457" }, { id: "t2", name: "Agents", color: "#2F6F4E" }, { id: "t3", name: "Newsletter", color: "#3B5BA5" }];
 /** Tags on each example draft, from Alex's three Buffer tags. */
@@ -51,6 +57,9 @@ export const exampleTags = (ids: string[]) => Object.fromEntries(ids.map((id) =>
 
 /** Alex's playbook, which the draft window summarises per account. */
 export const exampleRules: Rule[] = EXAMPLE_RULES;
+
+/** Who approved the example's scheduled posts, as the week shows it under each one. */
+export const exampleApprovals: Record<string, string> = { p1: approverLine(APPROVED_IN_APP)! };
 
 /** The example writer: built-in AI, ready. Pressing it on the example changes nothing. */
 export const exampleWriting: WritingAvailability = { ready: true, source: "built-in AI" };

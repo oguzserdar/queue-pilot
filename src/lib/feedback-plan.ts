@@ -12,7 +12,7 @@ const Answer = z.object({
 });
 export type FeedbackPlan = { kind: z.infer<typeof Answer>["kind"]; reason: string; preference: string | null; edits: { postId: string; before: string; after: string; problem: string }[] };
 export async function planFeedback(model: LanguageModel, comment: { text: string; quote: string | null; original: string }, drafts: JudgeInput[]): Promise<FeedbackPlan> {
-  if (!drafts.length || drafts.length > 30) throw new Error("Choose between 1 and 30 drafts.");
+  if (drafts.length > 30) throw new Error("Choose up to 30 drafts.");
   const { output } = await generateText({
     model, output: Output.object({ schema: Answer }), maxRetries: 1, abortSignal: AbortSignal.timeout(45_000),
     system: [

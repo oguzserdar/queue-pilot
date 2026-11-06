@@ -6,7 +6,8 @@ import { WeekView } from "@/components/week-view";
 import { getCurrentUser } from "@/lib/current-user";
 import { demoWeek } from "@/lib/demo-data";
 import { countOpenSlots } from "@/lib/week-model";
-import { exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
+import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
+import { approverLine } from "@/lib/rule-origin";
 import { postsBetween } from "@/lib/posts-between";
 import { nextWeekRange, weekFromBuffer } from "@/lib/week-from-buffer";
 import { postgresWrittenStore } from "@/lib/written-store";
@@ -20,7 +21,7 @@ export default async function Page() {
   if (!user) {
     // The example shows the same week a signed-in person sees, with Alex's sample quotes, Notes, tags and rules.
     const ids = demoWeek.posts.filter((p) => p.status === "draft").map((p) => p.id);
-    return <WeekView week={demoWeek} evidence={exampleEvidence} notesPreview={exampleNotes(ids)} tagsPreview={exampleTags(ids)} rules={exampleRules} writing={exampleWriting} writeCount={countOpenSlots(demoWeek)} />;
+    return <WeekView week={demoWeek} evidence={exampleEvidence} notesPreview={exampleNotes(ids)} tagsPreview={exampleTags(ids)} rules={exampleRules} writing={exampleWriting} writeCount={countOpenSlots(demoWeek)} approvals={exampleApprovals} />;
   }
   // One reference timezone for the week's columns: the first channel's, else the account's own in Buffer.
   const timeZone = user.timeZone;
@@ -44,9 +45,12 @@ export default async function Page() {
     return [w.postId, rules ? draftReadiness(w, post?.text ?? "", rules, { network, channelId: post?.channelId }) : { state: "check", reason: "The playbook could not be read. Try again." }];
   }));
   const evidence = userId ? await sourceCards(userId, user.posts, user.channels) : [];
+  // Who approved each of Queue Pilot's posts that left draft: the person in the app, or which AI app.
+  const approved = userId ? await postgresWrittenStore().get(userId, week.posts.filter((p) => p.status !== "draft").map((p) => p.id)).catch(() => []) : [];
+  const approvals = Object.fromEntries(approved.flatMap((w) => { const line = approverLine(w.approvedBy); return line ? [[w.postId, line]] : []; }));
   const blocks = sourceHoldsFromCards(evidence);
   for (const [id, reason] of blocks) readiness[id] = { state: "check", reason };
   const writing = userId ? await writingAvailabilityFor(userId) : undefined;
   const count = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, timeZone).length;
-  return <WeekView week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} />;
+  return <WeekView week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} approvals={approvals} />;
 }

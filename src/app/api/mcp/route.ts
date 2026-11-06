@@ -31,7 +31,7 @@ import { materialInput, postgresMaterialStore } from "@/lib/material-store"
 import { AiCapError } from "@/lib/judge-model";
 import { TooManyRulesError, postgresRulesStore } from "@/lib/rules-store";
 import { ruleScope } from "@/lib/rules";
-import { approvalState, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
+import { approvalState, consentClientLabel, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
 import { clientIp } from "@/lib/client-ip";
 import { limit, limitHeaders, type Action, type Limited } from "@/lib/rate-limit";
 import { toolErrorMessage } from "@/lib/tool-error";
@@ -49,7 +49,7 @@ import { createTag, deleteTag, listTags, MAX_TAG_NAME, setDraftTags, updateTag }
 import { postingLimits } from "@/lib/buffer/posting-limits";
 import { remainingOf } from "@/lib/rate-limit-text";
 import { MAX_APPROVE } from "@/lib/approve-drafts";
-import { approveChecked } from "@/lib/approve-checked";
+import { approveChecked, recordApprover } from "@/lib/approve-checked";
 import { approvePermission, claimApproval, releaseApproval, signApproval, verifyApproval } from "@/lib/agent-permission";
 import { readPostsNow, type Post } from "@/lib/buffer/queries";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
@@ -155,7 +155,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         console.error(JSON.stringify({ event: "qp-tool-failed", tool: name, message: e instanceof Error ? e.message : String(e) }));
         if (e instanceof BufferAllowanceLowError || e instanceof BufferAllowanceUnknownError || e instanceof BufferRateLimitedError) return { ...text(e.message), isError: true };
         if (name === "remove_voice_example") return { ...text("Could not remove that example just now. Try again in a minute."), isError: true }
-        const controls = ["get_transcript", "list_sources_to_check", "report_source_version", "add_rule", "remove_rule", "read_rule", "check_draft", "fill_post_template", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage", "share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes", "propose_review_changes", "get_effective_rules", "set_rule_override", "set_rule_inheritance", "list_ai_models", "set_ai_model"];
+        const controls = ["get_transcript", "list_sources_to_check", "report_source_version", "add_rule", "remove_rule", "read_rule", "check_draft", "fill_post_template", "list_rule_suggestions", "keep_suggestion", "dismiss_suggestion", "list_sources", "remove_source", "remove_material", "get_setup_status", "write_my_week", "list_my_drafts", "refresh_buffer", "list_channels", "get_ai_usage", "share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes", "propose_review_changes", "propose_note_changes", "get_effective_rules", "set_rule_override", "set_rule_inheritance", "list_ai_models", "set_ai_model"];
         if (controls.includes(name) && (e instanceof AiCapError || e instanceof TooManyRulesError)) return { ...text(e.message), isError: true };
         if (controls.includes(name)) return { ...text("Could not complete that action just now. Read the current state before retrying."), isError: true };
         const privateWrite = ["save_my_voice_note", "add_voice_example", "add_material"].includes(name)
@@ -163,10 +163,12 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       }
     }) as never)) as typeof server.registerTool;
 
+  // The connected app's name, for the records that say which app approved a draft or added a rule.
+  const appName = async () => { try { return await consentClientLabel(clientId); } catch { return "An AI app"; } };
   registerControls(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { ...b, userId, token: b.accessToken };
-  }, websiteUrl);
+  }, websiteUrl, appName);
   registerContentItemTools(server, userId, async (force = false) => {
     const b = await bufferFor(auth, userId, { force });
     return { token: b.accessToken, organizationIds: b.organizationIds, channels: b.channels, posts: b.posts };
@@ -808,6 +810,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       // A yes that scheduled nothing can be tried again; one that scheduled anything is spent.
       if (claim && res.approved.length === 0 && !res.uncertain?.length) await releaseApproval(userId, claim.nonce);
       const done = new Set(res.approved);
+      if (done.size) await recordApprover(userId, res.approved, await appName());
       if (done.size) await patchSnapshot(userId, (posts) => posts.map((p) => (done.has(p.id) ? { ...p, status: "scheduled" as const } : p)));
       const answer = text([`${res.approved.length} scheduled in Buffer, ${res.refused.length} not.`, ...res.refused.map((r) => `Not scheduled: ${r.id} · ${r.reason}`)].join("\n"));
       return res.approved.length === 0 ? { ...answer, isError: true } : answer;

@@ -22,7 +22,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
       { label: "Buffer's request allowance and daily posting limits", tools: ["get_buffer_limits"] },
       { label: "Setup progress and AI allowance", tools: ["get_setup_status", "get_ai_usage", "list_ai_models"] },
       { label: "Checks a draft without saving", tools: ["check_draft"] },
-      { label: "Finds and proposes rules and fixes", tools: ["list_rule_suggestions", "propose_rule_fixes", "propose_review_changes"] },
+      { label: "Finds and proposes rules and fixes", tools: ["list_rule_suggestions", "propose_rule_fixes", "propose_review_changes", "propose_note_changes"] },
     ],
   },
   {

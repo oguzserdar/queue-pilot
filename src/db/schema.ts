@@ -171,6 +171,9 @@ export const written = pgTable(
     verdicts: jsonb("verdicts"),
     playbookRevision: text("playbook_revision"),
     savedAt: timestamp("saved_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Who approved the draft for scheduling: "queue-pilot" for the person in the app, else the AI app's name. Null until approved. */
+    approvedBy: text("approved_by"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.userId, t.postId] })],
 );

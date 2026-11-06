@@ -5,12 +5,15 @@
  */
 
 import { resolveRule, type RuleRouting } from "./rule-scopes";
+import type { AddedBy } from "./rule-origin";
 
 export type RuleLevel = "block" | "warn";
 
 type RuleBase = RuleRouting & {
   /** Evidence saved only by the server when a suggestion is kept. */
   learnedFrom?: unknown;
+  /** Who added the rule by hand ("you", or an AI app by name). Set only by the server, never parsed from input. */
+  addedBy?: AddedBy;
   id: string;
   /** The rule as the person reads it in their playbook. */
   text: string;
