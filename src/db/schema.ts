@@ -234,7 +234,7 @@ export const aiUsageTotal = pgTable("qp_ai_usage_total", {
 
 /**
  * Every change to an operator setting in /admin (src/lib/db.ts postgresSettingsStore), written in the same transaction
- * as the change. Secret values are never recorded: only that one was set or cleared.
+ * as the change, with the admin who made it. Secret values are never recorded: only that one was set or cleared.
  */
 export const settingsAudit = pgTable("qp_settings_audit", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -243,6 +243,11 @@ export const settingsAudit = pgTable("qp_settings_audit", {
   fromValue: text("from_value"),
   toValue: text("to_value"),
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  /**
+   * The admin who made the change, from the server session. Null for changes recorded before this was kept. Not a
+   * foreign key, so a change stays listed after that admin's account is deleted.
+   */
+  actorId: text("actor_id"),
 });
 
 /**

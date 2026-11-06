@@ -9,7 +9,9 @@ import { TabsContent, TabsList, TabsTrigger } from "@/registry/components/tabs/t
 import { adminAccess, signedInEmail } from "@/lib/current-user";
 import { hasDatabase, postgresSettingsStore, recentSettingChanges } from "@/lib/db";
 import { describeSettings, GROUPS, memoryStore, SETTINGS, type GroupId, type SettingKey } from "@/lib/settings";
-import { claimAdmin, clearAdminSetting, saveAdminSetting } from "./actions";
+import { clearAdminSetting, saveAdminSetting } from "./actions";
+import { AdminRecovery, SetupSteps } from "./setup-steps";
+import { setupCodeReady, setupCodeRequired } from "@/lib/admin-setup-code";
 import { HeldBackNotice, LegacyChoice, ShadowedNotice } from "./shadowed-notice";
 import { hasAdmin } from "@/lib/admin-role";
 import { postgresAllowanceStore, utcDay } from "@/lib/ai-allowance";
@@ -49,7 +51,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
     return (
       <main className={styles.page}>
         {unclaimed ? (
-          <SetupSteps email={access === "signed-out" ? null : await signedInEmail()} codeWrong={problem === "code"} />
+          <SetupSteps email={access === "signed-out" ? null : await signedInEmail()} needsCode={setupCodeRequired()} ready={setupCodeReady()} problem={problem} />
         ) : access === "signed-out" ? (
           <>
             <h1 className={styles.title}>Queue Pilot admin</h1>
@@ -60,6 +62,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
           <>
           <h1 className={styles.title}>Queue Pilot admin</h1>
           <p className={styles.sub}>Only this deployment&apos;s admin can change its keys. You are signed in, but you are not the admin.</p>
+          <AdminRecovery />
           </>
         )}
       </main>
@@ -172,12 +175,13 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
         ))}
         <TabsContent value="activity">
           <div className={styles.section}>
-            <p className={styles.sub}>Every change made on this page, newest first. Secrets are never shown.</p>
+            <p className={styles.sub}>Every change made on this page, newest first, with who made it. Secrets are never shown.</p>
             {changes.length ? (
               <ul className={styles.card}>
                 {changes.map((c) => (
                   <li key={c.id} className={styles.change}>
                     <time className={styles.help} dateTime={c.at.toISOString()}>{c.at.toISOString().slice(0, 16).replace("T", " ")} UTC</time>
+                    <span className={styles.help}>{c.actorId === null ? "By an unknown admin (recorded before names were kept)" : c.actorEmail ? `By ${c.actorEmail}` : "By an admin whose account was deleted"}</span>
                     <span>{SETTINGS[c.key as SettingKey]?.label ?? c.key} {c.action === "cleared" ? "removed" : c.action === "kept" ? "saved value chosen over the server's" : c.fromValue !== null || c.toValue !== null ? `${c.fromValue ?? "not set"} → ${c.toValue}` : "changed"}</span>
                   </li>
                 ))}
@@ -192,38 +196,3 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
 
 /** An example in each empty field, so the expected shape is clear before typing. */
 const PLACEHOLDER: Record<string, string> = { secret: "Paste the key", "ai-key": "sk-ant-…, sk-… or sk-or-…", usd: "e.g. 50", int: "e.g. 10" };
-
-/** First-run setup, two numbered steps: sign in with Buffer, then claim the deployment. A done step shows its tick. */
-function SetupSteps({ email, codeWrong = false }: { email: string | null; codeWrong?: boolean }) {
-  const needsCode = Boolean(process.env.ADMIN_SETUP_CODE?.trim());
-  return (
-    <section className={styles.setup} aria-labelledby="setup-title">
-      <p className={styles.mark}>Queue Pilot<span>.</span></p>
-      <h1 id="setup-title" className={styles.title}>Set up Queue Pilot</h1>
-      <p className={styles.sub}>Two steps, once. The person who finishes them runs this deployment and manages its keys.</p>
-      <ol className={styles.steps}>
-        <li className={styles.step} data-done={email ? "true" : undefined}>
-          <span className={styles.num} aria-hidden="true">{email ? "✓" : "1"}</span>
-          <div className={styles.stepBody}>
-            <strong>Sign in with Buffer</strong>
-            {email ? <span className={styles.muted}>Signed in as {email}</span> : <SignInButton variant="primary" size="md" returnTo="/admin" />}
-          </div>
-        </li>
-        <li className={styles.step} data-current={email ? "true" : undefined}>
-          <span className={styles.num} aria-hidden="true">2</span>
-          <div className={styles.stepBody}>
-            <strong>Become the admin</strong>
-            <span className={styles.muted}>Only one person can claim a new deployment. More admins are added later from the server.</span>
-            {email ? (
-              <form action={claimAdmin} className={styles.field}>
-                {needsCode ? <PasswordField name="code" label="Setup code" description="The ADMIN_SETUP_CODE value from this deployment's settings." autoComplete="off" required /> : null}
-                <Button type="submit" variant="primary" size="md">Become the admin</Button>
-              </form>
-            ) : null}
-            {codeWrong ? <p className={styles.error} role="alert">That setup code does not match this deployment's.</p> : null}
-          </div>
-        </li>
-      </ol>
-    </section>
-  );
-}

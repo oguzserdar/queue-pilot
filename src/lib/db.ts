@@ -6,6 +6,7 @@ import { Pool } from "pg";
 import { attachDatabasePool } from "@vercel/functions";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { operatorSettings, settingsAudit } from "../db/schema";
+import { user } from "../db/auth-schema";
 import { isSecret, type SettingKey, type SettingsStore } from "./settings";
 
 let pool: Pool | null = null;
@@ -107,39 +108,45 @@ export function postgresSettingsStore(): SettingsStore {
     async legacy(key: SettingKey) {
       return (await cachedSettings()).legacy.has(key);
     },
-    async set(key: SettingKey, stored: string) {
+    async set(key: SettingKey, stored: string, by?: string) {
       const { db } = await import("../db");
       await db().transaction(async (tx) => {
         const [old] = await tx.select().from(operatorSettings).where(eq(operatorSettings.key, key));
         await tx.insert(operatorSettings).values({ key, value: stored, adminWins: true }).onConflictDoUpdate({ target: operatorSettings.key, set: { value: stored, adminWins: true, updatedAt: sql`now()` } });
-        await tx.insert(settingsAudit).values({ key, action: "set", fromValue: shown(key, old?.value ?? null), toValue: shown(key, stored) });
+        await tx.insert(settingsAudit).values({ key, action: "set", fromValue: shown(key, old?.value ?? null), toValue: shown(key, stored), actorId: by ?? null });
       });
       forgetSettings();
     },
-    async keep(key: SettingKey) {
+    async keep(key: SettingKey, by?: string) {
       const { db } = await import("../db");
       const kept = await db().transaction(async (tx) => {
         const [row] = await tx.update(operatorSettings).set({ adminWins: true, updatedAt: sql`now()` })
           .where(and(eq(operatorSettings.key, key), eq(operatorSettings.adminWins, false))).returning({ key: operatorSettings.key });
-        if (row) await tx.insert(settingsAudit).values({ key, action: "kept", fromValue: null, toValue: null });
+        if (row) await tx.insert(settingsAudit).values({ key, action: "kept", fromValue: null, toValue: null, actorId: by ?? null });
         return Boolean(row);
       });
       forgetSettings();
       return kept;
     },
-    async remove(key: SettingKey) {
+    async remove(key: SettingKey, by?: string) {
       const { db } = await import("../db");
       await db().transaction(async (tx) => {
         const [old] = await tx.delete(operatorSettings).where(eq(operatorSettings.key, key)).returning();
-        if (old) await tx.insert(settingsAudit).values({ key, action: "cleared", fromValue: shown(key, old.value), toValue: null });
+        if (old) await tx.insert(settingsAudit).values({ key, action: "cleared", fromValue: shown(key, old.value), toValue: null, actorId: by ?? null });
       });
       forgetSettings();
     },
   };
 }
 
-/** The latest changes to operator settings, newest first, for /admin. */
+/**
+ * The latest changes to operator settings, newest first, for /admin, each with who made it: the admin's id and email,
+ * or null for changes recorded before the actor was kept.
+ */
 export async function recentSettingChanges(limit = 20) {
   const { db } = await import("../db");
-  return db().select().from(settingsAudit).orderBy(desc(settingsAudit.id)).limit(limit);
+  return db().select({
+    id: settingsAudit.id, key: settingsAudit.key, action: settingsAudit.action, fromValue: settingsAudit.fromValue,
+    toValue: settingsAudit.toValue, at: settingsAudit.at, actorId: settingsAudit.actorId, actorEmail: user.email,
+  }).from(settingsAudit).leftJoin(user, eq(user.id, settingsAudit.actorId)).orderBy(desc(settingsAudit.id)).limit(limit);
 }

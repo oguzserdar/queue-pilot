@@ -232,6 +232,13 @@
       "when": 1793950767264,
       "tag": "20261106073927_saved_setting_admin_wins",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793951128379,
+      "tag": "20261106074528_settings_change_actor",
+      "breakpoints": true
     }
   ]
 }

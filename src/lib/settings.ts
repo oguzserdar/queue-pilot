@@ -75,11 +75,11 @@ export type SettingsStore = {
   get(key: SettingKey): Promise<string | null>;
   /** True when the saved value was written before v0.8 and has not been saved or kept since. */
   legacy(key: SettingKey): Promise<boolean>;
-  /** Saves a value; it wins over the server's environment. */
-  set(key: SettingKey, stored: string): Promise<void>;
+  /** Saves a value; it wins over the server's environment. `by` is the admin's user id from the server session. */
+  set(key: SettingKey, stored: string, by?: string): Promise<void>;
   /** Marks an older saved value as the operator's choice, so it wins too. False when there is no older value. */
-  keep(key: SettingKey): Promise<boolean>;
-  remove(key: SettingKey): Promise<void>;
+  keep(key: SettingKey, by?: string): Promise<boolean>;
+  remove(key: SettingKey, by?: string): Promise<void>;
 };
 
 /** A setting's working value and where it came from, or null when it has none. */
@@ -176,13 +176,16 @@ const SAVE_CHECKS: Partial<Record<SettingKey, (v: string) => string | null>> = {
   discord_client_id: (v) => (/^\d{17,20}$/.test(v) ? null : "Discord application ID must be 17 to 20 digits"),
 };
 
-/** Saves a setting from /admin after parsing it by its type; throws with the reason when it cannot be saved. */
-export async function saveSetting(store: SettingsStore, key: SettingKey, input: string, masterKeyHex: string): Promise<void> {
+/**
+ * Saves a setting from /admin after parsing it by its type; throws with the reason when it cannot be saved. `by` is the
+ * admin's user id, taken from the server session by the caller, never from the form.
+ */
+export async function saveSetting(store: SettingsStore, key: SettingKey, input: string, masterKeyHex: string, by?: string): Promise<void> {
   const parsed = parseSetting(key, input);
   if (!parsed.ok) throw new Error(parsed.error);
   const problem = SAVE_CHECKS[key]?.(parsed.value);
   if (problem) throw new Error(problem);
-  await store.set(key, isSecret(key) ? encryptSecret(parsed.value, masterKeyHex) : parsed.value);
+  await store.set(key, isSecret(key) ? encryptSecret(parsed.value, masterKeyHex) : parsed.value, by);
 }
 
 /**
@@ -190,15 +193,16 @@ export async function saveSetting(store: SettingsStore, key: SettingKey, input: 
  *
  * @param store - Where saved values live
  * @param key - The setting
+ * @param by - The admin's user id from the server session
  * @returns False when there is no older saved value to keep
  */
-export function keepSavedSetting(store: SettingsStore, key: SettingKey): Promise<boolean> {
-  return store.keep(key);
+export function keepSavedSetting(store: SettingsStore, key: SettingKey, by?: string): Promise<boolean> {
+  return store.keep(key, by);
 }
 
 /** Removes a saved setting; the server's environment value, else the default, then applies again. */
-export function clearSetting(store: SettingsStore, key: SettingKey): Promise<void> {
-  return store.remove(key);
+export function clearSetting(store: SettingsStore, key: SettingKey, by?: string): Promise<void> {
+  return store.remove(key, by);
 }
 
 /**

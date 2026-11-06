@@ -1,0 +1,1 @@
+ALTER TABLE "qp_settings_audit" ADD COLUMN "actor_id" text;
