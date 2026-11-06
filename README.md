@@ -18,12 +18,12 @@ Teach Queue Pilot your voice by pasting something you've written, or ask your co
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/media/week-mobile.png">
-  <img alt="Next week: one row per Buffer channel, posting times, and the empty times highlighted" src="docs/media/week.png">
+  <img alt="Next week: one row per Buffer channel, posting times, the empty times highlighted, and New post, Fill next week, Share for review and Approve" src="docs/media/week.png">
 </picture>
 
-**2. Your AI writes drafts into the empty times.** From your newsletter, your videos and your own past posts. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes on its own. Only your Approve schedules.
+**2. Your AI writes drafts into the empty times.** From your newsletter, your videos and your own past posts. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
 
-![A draft opened from the week: the rules it follows and the problem that would stop it in Buffer](docs/media/draft-check.png)
+![A draft opened from the week: the post with its tag, the quotes from the newsletter behind each claim, the checks, the rules set for that account, and a Note](docs/media/draft-check.png)
 
 **3. It learns from the edits you make in Buffer.** Make the same kind of fix to two drafts, and Queue Pilot offers it as a rule, with your two edits as proof. It groups edits by what you meant, not by the exact words, so cutting "Excited to share" and cutting "Thrilled to share" count as the same fix.
 
@@ -31,7 +31,7 @@ Teach Queue Pilot your voice by pasting something you've written, or ask your co
 
 **4. Every draft is checked against your rules.** A model judges each rule by meaning, in the draft's own language: "never broth" also catches "Brühe". A broken rule either stops the draft or flags it for you, whichever you chose.
 
-![The playbook: rules grouped by network, each with where it came from](docs/media/playbook.png)
+![The playbook for one account: the shared and network rules it inherits, each with a switch to turn it off for that account](docs/media/playbook.png)
 
 **5. It tells you what went out.** A failed post shows Buffer's own reason and how to fix it. Sent posts can be copied to your Telegram channel and Discord server.
 
@@ -44,7 +44,15 @@ Teach Queue Pilot your voice by pasting something you've written, or ask your co
 
 Queue Pilot is a connector. Your AI app signs in with Buffer through it once, then reads your week, your material and your playbook, and saves drafts. Your rules apply whichever app wrote the draft.
 
-![The Connect screen: one card per AI app with its setup steps and when it last used Queue Pilot](docs/media/connect.png)
+Here Grok Bot read a public X post, kept the exact quote, and saved a checked draft through Queue Pilot:
+
+![Grok Bot beside the original X post: the draft it saved through Queue Pilot, the source quotes, and both playbook rules passing](docs/media/grok-bot-draft.png)
+
+The same draft in Buffer, still a draft until you schedule it:
+
+![The draft in Buffer's Drafts tab, created by Queue Pilot and not scheduled](docs/media/buffer-draft.png)
+
+![The Connect page: one line to set up a coding agent, the connector address, a card per chat app, and what your AI can read, change, and needs your yes for](docs/media/connect.png)
 
 | App | How to connect |
 |---|---|
@@ -75,6 +83,8 @@ Give your AI the skills for the steps to follow once connected: the setup line o
 
 The connector schedules only drafts Queue Pilot wrote, only when you ask, and asks you first unless you change that in Settings. It edits or deletes a single draft only when Queue Pilot wrote it. Organization tools work only inside your own Buffer organizations, and the ones that remove something your team shares (a tag, a hashtag set, or a content item with every post in it) ask you first. Account settings, AI keys and app access stay with you.
 
+Some of these actions Buffer's own MCP has too. Where it does, the tool says so: if you have Buffer's connector, use one of them for that action, not both. Drafting, the checks against your rules and the source quotes stay in Queue Pilot.
+
 ## Your AI key, or ours
 
 - **Your own key** (Anthropic, OpenAI or OpenRouter) always works, with no limit from Queue Pilot. It is stored encrypted and shown masked. Your provider bills you.
@@ -89,9 +99,10 @@ When Buffer sends a post, Queue Pilot can copy it to your Telegram channel and y
 
 ![How Queue Pilot uses Buffer's API: screens and AI apps read one saved copy of your queue, it refreshes when old, re-reads before writing, and new posts are saved as drafts](docs/media/diagram-api.png)
 
-- **Drafts first.** Queue Pilot never schedules or publishes on its own. Only your Approve schedules.
+- **Drafts first.** Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
 - **Only its own drafts.** It approves, edits or deletes a single draft only when it wrote that draft. Deleting a whole content item, which you confirm first, removes the posts in it.
 - **One saved copy per person.** Channels, posting times and posts from 7 days back to 14 days ahead. Screens and the connector read the copy, so browsing costs no requests.
+- **Every request is counted.** All Queue Pilot users share one Buffer allowance, so each request is counted before it's sent, across every server. Assistant and background requests pause at 15 left in a known window. When the allowance isn't known yet, they go one at a time until Buffer reports it.
 - **Polling, not webhooks.** Buffer has no webhooks, so the copy refreshes when it is older than 5 minutes, from the Refresh button, and once a day.
 - **Within Buffer's limits.** Each app gets 500 requests a day plus 25 for every person who signs in ([API limits](https://developers.buffer.com/guides/api-limits)). A whole first session costs 21:
 
@@ -150,9 +161,9 @@ The budget is enforced by Queue Pilot: before each built-in AI action it compare
 
 Next up, on the way to 1.0:
 
-- **More places to write from.** Claude, ChatGPT, Grok and coding agents (Claude Code, Codex and Cursor) can all connect now. Next is a tested walkthrough for each one.
-- **Rules from day one.** Your first rules come from the posts and notes already in Buffer.
-- **Your team's notes count.** A note left on a draft in Buffer becomes a rule too.
+- **Your team's notes count.** A comment on a draft in Buffer shows who left it, Queue Pilot tells a one-off fix from a lasting preference, and a kept preference applies to that account only.
+- **Someone new can use it alone.** Try the example, connect your own Buffer and one AI, and get a useful draft without anyone explaining setup.
+- **1.0, proven from a clean copy.** A fresh build, database, sign-in, AI connection and saved draft, checked automatically.
 
 More in the [roadmap](ROADMAP.md), and what shipped in [CHANGELOG.md](CHANGELOG.md).
 
