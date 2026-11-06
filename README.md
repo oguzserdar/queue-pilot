@@ -23,7 +23,7 @@ Teach Queue Pilot your voice by pasting something you've written, or ask your co
 
 **2. Your AI writes drafts into the empty times.** From your newsletter, your videos and your own past posts. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
 
-![A draft opened from the week: the post with its tag, the quotes from the newsletter behind each claim, the checks, the rules set for that account, and a Note](docs/media/draft-check.png)
+![A draft opened from the week: the post with its tag, the quote from Google's announcement behind each claim, the checks, the rules set for that account, and a Note](docs/media/draft-check.png)
 
 **3. It learns from the edits you make in Buffer.** Make the same kind of fix to two drafts, and Queue Pilot offers it as a rule, with your two edits as proof. It groups edits by what you meant, not by the exact words, so cutting "Excited to share" and cutting "Thrilled to share" count as the same fix.
 
