@@ -9,10 +9,12 @@ vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn(), signedInUserId
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
 vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn(async () => ({ ok: true })) }))
+vi.mock("@/lib/security-events", () => ({ recordAction: vi.fn(async () => {}) }))
 const buffer = { answer: (() => ({})) as (query: string, variables: Record<string, unknown>) => unknown }
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: async (_t: string, q: string, v: Record<string, unknown>) => { const a = buffer.answer(q, v); if (a instanceof Error) throw a; return a } }))
 
 const { bufferForReading } = await import("@/lib/current-user")
+const { recordAction } = await import("@/lib/security-events")
 const { readDraftNotes, addDraftNote, editDraftNote, deleteDraftNote, listNoteTeammates } = await import("./note-actions")
 const post = { id: "mine", channelId: "ch", status: "draft", text: "Soup", dueAt: null, sentAt: null, externalLink: null, error: null }
 
@@ -99,6 +101,18 @@ describe("adding, editing and deleting notes from the draft window", () => {
     expect(await deleteDraftNote("mine", "mine-note")).toEqual({ ok: true })
     expect(await deleteDraftNote("theirs", "mine-note")).toEqual({ ok: false, message: "This post is not in your queue." })
     expect(mutations).toEqual(["update:mine-note", "delete:mine-note"])
+  })
+
+  it("records a note deleted in the app in Security activity, with no note text", async () => {
+    buffer.answer = (q) => q.includes("collaborationNotes(") ? thread(note("mine-note", ["deleteNote"])) : { deleteCollaborationNote: { __typename: "DeleteCollaborationNoteSuccess", noteId: "mine-note" } }
+    expect(await deleteDraftNote("mine", "mine-note")).toEqual({ ok: true })
+    expect(recordAction).toHaveBeenCalledWith("person-a", "note_deleted", { via: "app" }, { ids: ["mine-note"] })
+  })
+
+  it("records nothing when the app's delete is refused", async () => {
+    buffer.answer = (q) => q.includes("collaborationNotes(") ? thread(note("sara-note", [])) : {}
+    expect(await deleteDraftNote("mine", "sara-note")).toMatchObject({ ok: false })
+    expect(recordAction).not.toHaveBeenCalled()
   })
 })
 

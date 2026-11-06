@@ -14,6 +14,7 @@ import { carryMentions, createPostNote, deletePostNote, listPostNotes, MAX_NOTE,
 import { listTeamMembers, type TeamMember } from "@/lib/buffer/workspace";
 import type { NoteTeammate } from "@/lib/note-mention-picker";
 import { limit } from "@/lib/rate-limit";
+import { recordAction } from "@/lib/security-events";
 
 /** One @mention in a note: who, and the name written after the @. */
 export type DraftMention = { urn: string; name: string };
@@ -174,7 +175,10 @@ export async function deleteDraftNote(postId: string, noteId: string): Promise<R
     const own = await ownNote(p.token, postId, noteId, "canDelete");
     if (!own.ok) return own;
     const r = await deletePostNote(p.token, noteId);
-    return r.ok ? { ok: true } : { ok: false, message: r.message };
+    if (!r.ok) return { ok: false, message: r.message };
+    // Same record a connected AI app's delete leaves, so Security activity lists every deleted note.
+    await recordAction(p.userId, "note_deleted", { via: "app" }, { ids: [noteId] });
+    return { ok: true };
   } catch (e) {
     return failure(e, "qp-delete-note-failed");
   }
