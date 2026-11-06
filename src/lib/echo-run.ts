@@ -9,12 +9,14 @@ import { imageOf, planEchoes, runEchoes, type EchoRecord, type EchoSend } from "
 import { CLAIM_MS, postgresEchoStore, type EchoStore } from "./echo-store";
 import * as telegram from "./telegram";
 import * as discord from "./discord";
+import { operatorSettings, type SettingsSource } from "./env";
 
 export type BotTokens = { telegram?: string; discord?: string };
 
-/** The bot tokens from the environment; empty strings count as missing. */
-export function botTokensFromEnv(env: NodeJS.ProcessEnv = process.env): BotTokens {
-  return { telegram: env.TELEGRAM_BOT_TOKEN || undefined, discord: env.DISCORD_BOT_TOKEN || undefined };
+/** The bot tokens, saved in /admin or in the server's environment; a missing or empty one is left out. */
+export async function botTokens(src?: SettingsSource): Promise<BotTokens> {
+  const s = await operatorSettings(["telegram_bot_token", "discord_bot_token"], src);
+  return { telegram: s.telegram_bot_token ?? undefined, discord: s.discord_bot_token ?? undefined };
 }
 
 type CopyBody = { text: string; link?: string | null; imageUrl?: string | null };
@@ -60,13 +62,14 @@ export async function echoForUser(userId: string, posts: Post[], deps: { store: 
 
 /**
  * After fresh Buffer data is read (the sync button, auto-sync, or the AI's connector), copy newly sent posts once the
- * response has gone out, so the echo never slows a page. Does nothing until at least one bot token is configured.
+ * response has gone out, so the echo never slows a page. The tokens are read then too, and nothing is sent until at
+ * least one bot token is configured.
  */
 export function scheduleEcho(userId: string, posts: Post[]): void {
-  const tokens = botTokensFromEnv();
-  if (!tokens.telegram && !tokens.discord) return;
   after(async () => {
     try {
+      const tokens = await botTokens();
+      if (!tokens.telegram && !tokens.discord) return;
       const out = await echoForUser(userId, posts, { store: postgresEchoStore(), tokens });
       for (const r of out.filter((x) => x.status === "failed")) console.warn(JSON.stringify({ event: "qp-echo-failed", postId: r.postId, attempts: r.attempts, error: r.error }));
     } catch (e) {

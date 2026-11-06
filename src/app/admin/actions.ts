@@ -52,8 +52,7 @@ export async function saveAdminSetting(form: FormData) {
   const key = String(form.get("key")) as SettingKey;
   if (!(key in SETTINGS)) redirect("/admin?error=key");
   if (!hasDatabase()) redirect("/admin?error=db");
-  // The server's environment pins a setting; /admin shows it read-only and never overrides it.
-  if (process.env[SETTINGS[key].env]?.trim()) redirect(`/admin?error=pinned&field=${key}`);
+  // A value saved here wins over the server's environment; removing it brings the environment's value back.
   const value = String(form.get("value") ?? "");
   let problem: string | null = null;
   try {
@@ -65,7 +64,7 @@ export async function saveAdminSetting(form: FormData) {
   redirect(`/admin?saved=${key}`);
 }
 
-/** Removes one saved setting, so the environment value (if any) applies again. */
+/** Removes one saved setting, so the server's environment value (if any), else the default, applies again. */
 export async function clearAdminSetting(form: FormData) {
   await requireAdmin();
   const key = String(form.get("key")) as SettingKey;

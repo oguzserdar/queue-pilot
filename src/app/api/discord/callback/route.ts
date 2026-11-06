@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { signedInUserId } from "@/lib/current-user";
 import { defaultChannel, exchangeInstall, postableChannels, stateMatches } from "@/lib/discord";
 import { postgresEchoStore } from "@/lib/echo-store";
+import { operatorSettings } from "@/lib/env";
 import { publicOrigin } from "@/lib/origin";
 import { limit } from "@/lib/rate-limit";
 
@@ -13,7 +14,8 @@ export async function GET(req: NextRequest) {
   const back = (result: string) => NextResponse.redirect(`${publicOrigin(req.headers)}/sources?discord=${result}`, 303);
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state") ?? "";
-  const { DISCORD_CLIENT_ID: clientId, DISCORD_CLIENT_SECRET: clientSecret, DISCORD_BOT_TOKEN: botToken, SESSION_SECRET: secret } = process.env;
+  const { discord_client_id: clientId, discord_client_secret: clientSecret, discord_bot_token: botToken } = await operatorSettings(["discord_client_id", "discord_client_secret", "discord_bot_token"]);
+  const secret = process.env.SESSION_SECRET;
   if (!clientId || !clientSecret || !botToken || !secret) return back("not-set-up");
   const userId = await signedInUserId();
   if (!userId) return back("signed-out");

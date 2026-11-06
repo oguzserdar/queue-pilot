@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Post } from "./buffer/queries";
 import { memoryEchoStore } from "./echo-store";
-import { botTokensFromEnv, echoForUser, type Senders } from "./echo-run";
+import { botTokens, echoForUser, type Senders } from "./echo-run";
+import { memoryStore, saveSetting, type SettingsStore } from "./settings";
+
+const KEY = "c".repeat(64);
 
 const now = new Date("2026-11-03T12:00:00Z");
 const sent = (id: string, sentAt = "2026-11-03T09:00:05Z"): Post => ({ id, channelId: "x", status: "sent", text: `post ${id}`, dueAt: sentAt, sentAt, externalLink: `https://x.com/p/${id}`, error: null });
@@ -53,9 +56,18 @@ describe("echoForUser", () => {
   });
 });
 
-describe("botTokensFromEnv", () => {
-  it("treats empty values as missing", () => {
-    expect(botTokensFromEnv({ TELEGRAM_BOT_TOKEN: "", DISCORD_BOT_TOKEN: "d" } as unknown as NodeJS.ProcessEnv)).toEqual({ telegram: undefined, discord: "d" });
+describe("botTokens", () => {
+  it("treats empty environment values as missing", async () => {
+    expect(await botTokens({ store: memoryStore(), master: KEY, env: { TELEGRAM_BOT_TOKEN: "", DISCORD_BOT_TOKEN: "d" } })).toEqual({ telegram: undefined, discord: "d" });
+  });
+  it("uses a token saved in /admin over the server's", async () => {
+    const store = memoryStore();
+    await saveSetting(store, "telegram_bot_token", "saved-telegram", KEY);
+    expect(await botTokens({ store, master: KEY, env: { TELEGRAM_BOT_TOKEN: "env-telegram", DISCORD_BOT_TOKEN: "env-discord" } })).toEqual({ telegram: "saved-telegram", discord: "env-discord" });
+  });
+  it("still uses the server's tokens when the saved ones cannot be read", async () => {
+    const broken: SettingsStore = { get: async () => { throw new Error("database down"); }, set: async () => {}, remove: async () => {} };
+    expect(await botTokens({ store: broken, master: KEY, env: { TELEGRAM_BOT_TOKEN: "env-telegram" } })).toEqual({ telegram: "env-telegram", discord: undefined });
   });
 });
 

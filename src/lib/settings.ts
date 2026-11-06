@@ -3,9 +3,11 @@
  * and environment variable. Values are parsed by type before they are stored, secrets are stored
  * encrypted (src/lib/secrets.ts) and only ever shown masked.
  *
- * Which value applies: the server's environment variable when set (it pins the setting, and /admin shows it read-only),
- * else the value saved in /admin, else the default. Bootstrap secrets (SETTINGS_KEY, SESSION_SECRET)
- * are environment-only and not listed here: a key never lives in the database it unlocks.
+ * Which value applies: the value saved in /admin, else the server's environment variable, else the default. So an
+ * operator can change any of these from /admin without touching the server, and removing the saved value goes back to
+ * the environment's. Bootstrap values (SETTINGS_KEY, SESSION_SECRET, DATABASE_URL, ADMIN_SETUP_CODE, CRON_SECRET,
+ * BUFFER_REDIRECT_URI, TRUSTED_PROXIES) are environment-only and not listed here: a key never lives in the database it
+ * unlocks, and the server needs them before /admin can open.
  * The storage itself is injected so the same rules run against Postgres in production and memory in tests.
  */
 import * as z from "zod";
@@ -17,6 +19,7 @@ export const GROUPS = {
   buffer: { title: "Buffer app", help: "The app client people sign in with. From Settings, API in your Buffer account." },
   ai: { title: "Built-in AI", help: "This deployment's own AI key, used for people who have not connected their own AI. Its calls are billed to this key." },
   sources: { title: "Sources", help: "Optional services that bring in material to write from." },
+  copies: { title: "Copies to Telegram and Discord", help: "Optional. The shared bots that copy people's sent posts to their own Telegram channel or Discord server." },
 } as const;
 /** One /admin section. */
 export type GroupId = keyof typeof GROUPS;
@@ -34,6 +37,11 @@ export const SETTINGS = {
   ai_cap_total: { group: "ai", label: "Actions per day, everyone", help: "Optional ceiling on all built-in AI actions in one day, to spread the budget over time. Empty means no daily ceiling.", type: "int", env: "AI_CAP_TOTAL", default: null },
   supadata_api_key: { group: "sources", label: "Supadata API key", help: "Optional. Adds YouTube transcripts to the material drafts are written from.", type: "secret", env: "SUPADATA_API_KEY", default: null },
   exa_api_key: { group: "sources", label: "Exa API key", help: "Optional. Lets the AI search the web for deeper context and save a page as material.", type: "secret", env: "EXA_API_KEY", default: null },
+  telegram_bot_token: { group: "copies", label: "Telegram bot token", help: "From @BotFather. Telegram copies turn on when this and the bot's username are both set.", type: "secret", env: "TELEGRAM_BOT_TOKEN", default: null },
+  telegram_bot_username: { group: "copies", label: "Telegram bot username", help: "The bot's username, without the @. People add this bot as an admin of their channel.", type: "string", env: "TELEGRAM_BOT_USERNAME", default: null },
+  discord_client_id: { group: "copies", label: "Discord application ID", help: "From the Discord Developer Portal, General Information. It is public and goes in the Add to server link.", type: "string", env: "DISCORD_CLIENT_ID", default: null },
+  discord_client_secret: { group: "copies", label: "Discord client secret", help: "From the Discord Developer Portal, OAuth2. Used when someone adds the bot to their server.", type: "secret", env: "DISCORD_CLIENT_SECRET", default: null },
+  discord_bot_token: { group: "copies", label: "Discord bot token", help: "From the Discord Developer Portal, Bot. Discord copies turn on when the application ID, client secret and this are all set.", type: "secret", env: "DISCORD_BOT_TOKEN", default: null },
 } as const satisfies Record<string, Def>;
 
 /** One operator setting. */
@@ -68,7 +76,12 @@ export type SettingsStore = {
 };
 
 /** A setting's working value and where it came from, or null when it has none. */
-export type Resolved = { value: string; source: "environment" | "saved" | "default" } | null;
+export type Resolved = { value: string; source: Source } | null;
+
+/** Where a setting's value comes from. */
+export type Source = "saved" | "environment" | "default";
+/** The order sources are tried in: saved in /admin, then the server's environment, then the default. */
+const ORDER = ["saved", "environment", "default"] as const satisfies readonly Source[];
 
 /**
  * A setting's value from the server's environment, read by the same parser as a value saved in /admin, so "$400"
@@ -83,12 +96,12 @@ function envValue(key: SettingKey, env: Record<string, string | undefined>): str
   return null;
 }
 
-/** The working value of a setting: the environment's when set, else the saved one, else the default. */
+/** The working value of a setting: the one saved in /admin, else the environment's, else the default. */
 export async function resolveSetting(store: SettingsStore, key: SettingKey, masterKeyHex: string, env: Record<string, string | undefined> = process.env): Promise<Resolved> {
-  const fromEnv = envValue(key, env);
-  if (fromEnv) return { value: fromEnv, source: "environment" };
   const saved = await store.get(key);
   if (saved !== null) return { value: isSecret(key) ? decryptSecret(saved, masterKeyHex) : saved, source: "saved" };
+  const fromEnv = envValue(key, env);
+  if (fromEnv) return { value: fromEnv, source: "environment" };
   const fallback = SETTINGS[key].default as string | null;
   return fallback !== null ? { value: fallback, source: "default" } : null;
 }
@@ -100,13 +113,13 @@ export async function saveSetting(store: SettingsStore, key: SettingKey, input: 
   await store.set(key, isSecret(key) ? encryptSecret(parsed.value, masterKeyHex) : parsed.value);
 }
 
-/** Removes a saved setting; the environment value or default then applies. */
+/** Removes a saved setting; the server's environment value, else the default, then applies again. */
 export function clearSetting(store: SettingsStore, key: SettingKey): Promise<void> {
   return store.remove(key);
 }
 
 /**
- * What /admin shows for each setting: every source in the order it is tried (server env, saved here, default), the one
+ * What /admin shows for each setting: every source in the order it is tried (saved here, server env, default), the one
  * in use marked, secrets masked. Each saved value is read and decrypted once.
  */
 export async function describeSettings(store: SettingsStore, masterKeyHex: string, env: Record<string, string | undefined> = process.env) {
@@ -114,12 +127,12 @@ export async function describeSettings(store: SettingsStore, masterKeyHex: strin
     (Object.keys(SETTINGS) as SettingKey[]).map(async (key) => {
       const def = SETTINGS[key];
       const saved = await store.get(key);
-      const values = {
-        environment: envValue(key, env),
+      const values: Record<Source, string | null> = {
         saved: saved === null ? null : isSecret(key) ? decryptSecret(saved, masterKeyHex) : saved,
+        environment: envValue(key, env),
         default: def.default as string | null,
       };
-      const source = (["environment", "saved", "default"] as const).find((k) => values[k] !== null) ?? null;
+      const source = ORDER.find((k) => values[k] !== null) ?? null;
       const shown = (v: string | null) => (v === null ? null : isSecret(key) ? maskSecret(v) : v);
       return {
         key,
@@ -129,11 +142,9 @@ export async function describeSettings(store: SettingsStore, masterKeyHex: strin
         type: def.type as Type,
         env: def.env as string,
         source,
-        /** True when the environment sets it, so /admin cannot change it. */
-        pinned: source === "environment",
         display: source ? shown(values[source]) : null,
         /** Every source in the order they are tried, with the one in use marked; a value set lower down is shown as ignored. */
-        layers: (["environment", "saved", "default"] as const).map((k) => ({ source: k, display: shown(values[k]), inUse: k === source })),
+        layers: ORDER.map((k) => ({ source: k, display: shown(values[k]), inUse: k === source })),
       };
     }),
   );

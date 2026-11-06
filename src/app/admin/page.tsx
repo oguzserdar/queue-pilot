@@ -21,7 +21,6 @@ export const dynamic = "force-dynamic";
 const NOTES: Record<string, string> = {
   db: "Connect a database to this deployment before saving keys.",
   empty: "A key cannot be empty. Use Remove to clear it.",
-  pinned: "The server's environment sets that one, so it cannot be changed here.",
   key: "Unknown setting.",
 };
 
@@ -118,7 +117,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
                   <div className={styles.cardHead}>
                     <h2 id={`s-${r.key}`} className={styles.cardTitle}>{r.label}</h2>
                     <Badge size="sm" tone={r.source === "saved" ? "success" : r.display ? "neutral" : "warning"}>
-                      {r.source === "environment" ? "Set on the server" : r.source === "saved" ? "Saved here" : r.display ? "Default" : "Not set"}
+                      {r.source === "environment" ? "From the server environment" : r.source === "saved" ? "Saved here" : r.display ? "Default" : "Not set"}
                     </Badge>
                   </div>
                   <p className={styles.help}>{r.help}</p>
@@ -135,27 +134,26 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
                   </ol>
                   {(r.key === "supadata_api_key" || r.key === "exa_api_key") && <TestSourceKey setting={r.key} />}
                   {saved === r.key ? <p className={styles.ok} role="status">Saved.</p> : null}
-                  {cleared === r.key ? <p className={styles.ok} role="status">Removed. {r.source === "environment" ? "The server's value applies again." : ""}</p> : null}
+                  {cleared === r.key ? <p className={styles.ok} role="status">Removed. {r.source === "environment" ? "The server environment's value applies again." : r.source === "default" ? "The default applies again." : ""}</p> : null}
                   {field === r.key && (problem || error) ? <p className={styles.error} role="alert">{problem ?? NOTES[error ?? ""]}</p> : null}
-                  {r.pinned ? (
-                    <p className={styles.help}>Set in the server&apos;s environment as <code className={styles.code}>{r.env}</code>. Change it there; this page shows it read-only.</p>
-                  ) : (
-                    <div className={styles.cardFoot}>
-                      <form action={saveAdminSetting} className={styles.field}>
+                  {r.source === "environment" ? (
+                    <p className={styles.help}>Set in the server&apos;s environment as <code className={styles.code}>{r.env}</code>. A value saved here replaces it, and removing that value goes back to the server&apos;s.</p>
+                  ) : null}
+                  <div className={styles.cardFoot}>
+                    <form action={saveAdminSetting} className={styles.field}>
+                      <input type="hidden" name="key" value={r.key} />
+                      {r.type === "secret" || r.type === "ai-key"
+                        ? <PasswordField name="value" label={r.display ? "Replace with" : "Value"} autoComplete="off" placeholder={PLACEHOLDER[r.type]} />
+                        : <Input name="value" label={r.display ? "Replace with" : "Value"} inputMode={r.type === "usd" ? "decimal" : r.type === "int" ? "numeric" : undefined} autoComplete="off" placeholder={PLACEHOLDER[r.type]} />}
+                      <Button type="submit" variant="primary" size="md">Save</Button>
+                    </form>
+                    {r.source === "saved" ? (
+                      <form action={clearAdminSetting}>
                         <input type="hidden" name="key" value={r.key} />
-                        {r.type === "secret" || r.type === "ai-key"
-                          ? <PasswordField name="value" label={r.display ? "Replace with" : "Value"} autoComplete="off" placeholder={PLACEHOLDER[r.type]} />
-                          : <Input name="value" label={r.display ? "Replace with" : "Value"} inputMode={r.type === "usd" ? "decimal" : "numeric"} autoComplete="off" placeholder={PLACEHOLDER[r.type]} />}
-                        <Button type="submit" variant="primary" size="md">Save</Button>
+                        <Button type="submit" variant="ghost" size="sm">{r.layers.some((l) => l.source === "environment" && l.display) ? "Use the server's value" : "Remove"}</Button>
                       </form>
-                      {r.source === "saved" ? (
-                        <form action={clearAdminSetting}>
-                          <input type="hidden" name="key" value={r.key} />
-                          <Button type="submit" variant="ghost" size="sm">Remove</Button>
-                        </form>
-                      ) : null}
-                    </div>
-                  )}
+                    ) : null}
+                  </div>
                 </section>
               ))}
             </div>

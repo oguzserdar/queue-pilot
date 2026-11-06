@@ -142,7 +142,7 @@ This runs the app and Postgres, applies migrations on start, and runs the daily 
 
 ### Settings
 
-Everything an operator can change lives in `/admin`: Buffer app keys, the hosted AI key and its budget, the daily allowance per person, and source keys. Secrets are encrypted and shown masked. A value set in the server's environment wins and is shown read-only. Every change is logged.
+Everything an operator can change lives in `/admin`: Buffer app keys, the hosted AI key and its budget, the daily allowance per person, source keys, and the Telegram and Discord bots. Secrets are encrypted and shown masked. A value saved in `/admin` wins over the server's environment variable, which wins over the default, and `/admin` shows which one is in use. Removing a saved value goes back to the environment's. `DATABASE_URL`, `SESSION_SECRET`, `SETTINGS_KEY` and the other startup values stay in the environment only. Every change is logged.
 
 | Variable | In /admin | What it does | Default |
 |---|---|---|---|
@@ -154,6 +154,11 @@ Everything an operator can change lives in `/admin`: Buffer app keys, the hosted
 | `AI_CAP_TOTAL` | Actions per day, everyone | Optional ceiling on all built-in AI actions in one day, to spread the budget over time. Empty means no daily ceiling. | none |
 | `SUPADATA_API_KEY` | Supadata API key | Optional. Adds YouTube transcripts to the material drafts are written from. | none |
 | `EXA_API_KEY` | Exa API key | Optional. Lets the AI search the web for deeper context and save a page as material. | none |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | From @BotFather. Telegram copies turn on when this and the bot's username are both set. | none |
+| `TELEGRAM_BOT_USERNAME` | Telegram bot username | The bot's username, without the @. People add this bot as an admin of their channel. | none |
+| `DISCORD_CLIENT_ID` | Discord application ID | From the Discord Developer Portal, General Information. It is public and goes in the Add to server link. | none |
+| `DISCORD_CLIENT_SECRET` | Discord client secret | From the Discord Developer Portal, OAuth2. Used when someone adds the bot to their server. | none |
+| `DISCORD_BOT_TOKEN` | Discord bot token | From the Discord Developer Portal, Bot. Discord copies turn on when the application ID, client secret and this are all set. | none |
 
 The budget is enforced by Queue Pilot: before each built-in AI action it compares what was spent with the budget, and it records each action's real cost. It does not limit the key at your provider, so also set a spend limit there.
 

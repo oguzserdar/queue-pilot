@@ -26,6 +26,7 @@ import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram";
 import { postgresEchoStore, postgresTelegramCodes } from "@/lib/echo-store";
 import { installState, installUrl } from "@/lib/discord";
+import { operatorSetting, operatorSettings } from "@/lib/env";
 import { headers } from "next/headers";
 import { publicOrigin } from "@/lib/origin";
 import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
@@ -152,18 +153,19 @@ export type TelegramConnectInfo = { ok: true; bot: string; code: string } | { ok
 export async function telegramConnectInfo(): Promise<TelegramConnectInfo> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  const bot = process.env.TELEGRAM_BOT_USERNAME;
+  const { telegram_bot_token: token, telegram_bot_username: username } = await operatorSettings(["telegram_bot_token", "telegram_bot_username"]);
+  const bot = username?.replace(/^@/, "");
   const secret = process.env.SESSION_SECRET;
-  if (!process.env.TELEGRAM_BOT_TOKEN || !bot || !secret) return { ok: false, message: "Telegram copies turn on once Queue Pilot's Telegram bot is set up." };
+  if (!token || !bot || !secret) return { ok: false, message: "Telegram copies turn on once Queue Pilot's Telegram bot is set up." };
   return { ok: true, bot, code: connectCodeFor(userId, secret, new Date()) };
 }
 
 /** Looks for today's (or yesterday's) code in the bot's recent messages and saves that channel. */
 export async function checkTelegramConnect(): Promise<SourceActionResult> {
   const userId = await signedInUserId();
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const secret = process.env.SESSION_SECRET;
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  const token = await operatorSetting("telegram_bot_token");
+  const secret = process.env.SESSION_SECRET;
   if (!token || !secret) return { ok: false, message: "Telegram copies turn on once Queue Pilot's Telegram bot is set up." };
   const now = new Date();
   try {
@@ -199,7 +201,8 @@ export async function disconnectEcho(kind: "telegram" | "discord"): Promise<Sour
 export async function discordInstallLink(): Promise<{ ok: true; url: string } | { ok: false; message: string }> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  const { DISCORD_CLIENT_ID: clientId, DISCORD_BOT_TOKEN: botToken, SESSION_SECRET: secret } = process.env;
+  const { discord_client_id: clientId, discord_bot_token: botToken } = await operatorSettings(["discord_client_id", "discord_bot_token"]);
+  const secret = process.env.SESSION_SECRET;
   if (!clientId || !botToken || !secret) return { ok: false, message: "Discord copies turn on once Queue Pilot's Discord bot is set up." };
   const origin = publicOrigin(await headers());
   return { ok: true, url: installUrl({ clientId, redirectUri: `${origin}/api/discord/callback`, state: installState(userId, secret, new Date()) }) };

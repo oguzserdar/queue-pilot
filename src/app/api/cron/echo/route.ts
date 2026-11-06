@@ -10,7 +10,7 @@ import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { refreshSnapshot } from "@/lib/buffer/snapshot";
 import { withBudget } from "@/lib/buffer/budget";
 import { bufferAccessToken } from "@/lib/buffer-token";
-import { botTokensFromEnv, echoForUser } from "@/lib/echo-run";
+import { botTokens, echoForUser } from "@/lib/echo-run";
 import { pruneRequestCounts } from "@/lib/rate-limit";
 import { postgresEchoStore } from "@/lib/echo-store";
 
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   if (!authorized(req.headers.get("authorization"), process.env.CRON_SECRET)) return new Response(null, { status: 401 });
   // Request-limit windows older than a day are deleted here, so the counter table stays small.
   await pruneRequestCounts().catch((e) => console.error(JSON.stringify({ event: "qp-prune-request-counts-failed", message: e instanceof Error ? e.message : String(e) })));
-  const tokens = botTokensFromEnv();
+  const tokens = await botTokens();
   const auth = await getAuth();
   if (!auth || (!tokens.telegram && !tokens.discord)) return Response.json({ users: 0, skipped: "not set up" });
 
