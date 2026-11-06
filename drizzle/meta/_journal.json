@@ -225,6 +225,13 @@
       "when": 1793944120788,
       "tag": "20261106054840_record_approver",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793950767264,
+      "tag": "20261106073927_saved_setting_admin_wins",
+      "breakpoints": true
     }
   ]
 }

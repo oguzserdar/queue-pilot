@@ -6,7 +6,7 @@ import { claimAdminIfNone } from "@/lib/admin-role";
 import { limit } from "@/lib/rate-limit";
 import { adminAccess, signedInUserId } from "@/lib/current-user";
 import { hasDatabase, postgresSettingsStore } from "@/lib/db";
-import { SETTINGS, clearSetting, saveSetting, type SettingKey } from "@/lib/settings";
+import { SETTINGS, clearSetting, keepSavedSetting, saveSetting, type SettingKey } from "@/lib/settings";
 
 function secrets() {
   const master = process.env.SETTINGS_KEY;
@@ -71,6 +71,15 @@ export async function clearAdminSetting(form: FormData) {
   if (!(key in SETTINGS) || !hasDatabase()) redirect("/admin");
   await clearSetting(postgresSettingsStore(), key);
   redirect(`/admin?cleared=${key}`);
+}
+
+/** Makes a value saved before v0.8 win over the server's environment, without typing it again. */
+export async function keepAdminSetting(form: FormData) {
+  await requireAdmin();
+  const key = String(form.get("key")) as SettingKey;
+  if (!(key in SETTINGS) || !hasDatabase()) redirect("/admin");
+  await keepSavedSetting(postgresSettingsStore(), key);
+  redirect(`/admin?kept=${key}`);
 }
 
 

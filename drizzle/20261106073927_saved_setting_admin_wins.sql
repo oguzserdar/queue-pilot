@@ -1,0 +1,1 @@
+ALTER TABLE "operator_settings" ADD COLUMN "admin_wins" boolean DEFAULT false NOT NULL;

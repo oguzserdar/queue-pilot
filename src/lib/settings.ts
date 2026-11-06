@@ -5,7 +5,9 @@
  *
  * Which value applies: the value saved in /admin, else the server's environment variable, else the default. So an
  * operator can change any of these from /admin without touching the server, and removing the saved value goes back to
- * the environment's. Bootstrap values (SETTINGS_KEY, SESSION_SECRET, DATABASE_URL, ADMIN_SETUP_CODE, CRON_SECRET,
+ * the environment's. One exception covers the upgrade: before v0.8 the environment won, so a value saved before then
+ * (no "admin wins" mark) does not replace a set environment value. The environment's value stays in use until the
+ * operator saves the value again, or chooses "Use the saved value", in /admin. Bootstrap values (SETTINGS_KEY, SESSION_SECRET, DATABASE_URL, ADMIN_SETUP_CODE, CRON_SECRET,
  * BUFFER_REDIRECT_URI, TRUSTED_PROXIES) are environment-only and not listed here: a key never lives in the database it
  * unlocks, and the server needs them before /admin can open.
  * The storage itself is injected so the same rules run against Postgres in production and memory in tests.
@@ -71,7 +73,12 @@ export function parseSetting(key: SettingKey, input: string): { ok: true; value:
 /** One row per setting; secret values hold the encrypted form only. */
 export type SettingsStore = {
   get(key: SettingKey): Promise<string | null>;
+  /** True when the saved value was written before v0.8 and has not been saved or kept since. */
+  legacy(key: SettingKey): Promise<boolean>;
+  /** Saves a value; it wins over the server's environment. */
   set(key: SettingKey, stored: string): Promise<void>;
+  /** Marks an older saved value as the operator's choice, so it wins too. False when there is no older value. */
+  keep(key: SettingKey): Promise<boolean>;
   remove(key: SettingKey): Promise<void>;
 };
 
@@ -96,39 +103,65 @@ function envValue(key: SettingKey, env: Record<string, string | undefined>): str
   return null;
 }
 
-/** The working value of a setting: the one saved in /admin, else the environment's, else the default. */
+/** True when a saved value is in use: saved in this release, or saved earlier and the environment sets nothing. */
+async function savedWins(store: SettingsStore, key: SettingKey, fromEnv: string | null): Promise<boolean> {
+  return fromEnv === null || !(await store.legacy(key));
+}
+
+/**
+ * The working value of a setting: the one saved in /admin, else the environment's, else the default. A value saved
+ * before v0.8 does not replace a set environment value until the operator chooses it in /admin.
+ */
 export async function resolveSetting(store: SettingsStore, key: SettingKey, masterKeyHex: string, env: Record<string, string | undefined> = process.env): Promise<Resolved> {
   const saved = await store.get(key);
-  if (saved !== null) return { value: isSecret(key) ? decryptSecret(saved, masterKeyHex) : saved, source: "saved" };
   const fromEnv = envValue(key, env);
+  if (saved !== null && (await savedWins(store, key, fromEnv))) return { value: isSecret(key) ? decryptSecret(saved, masterKeyHex) : saved, source: "saved" };
   if (fromEnv) return { value: fromEnv, source: "environment" };
   const fallback = SETTINGS[key].default as string | null;
   return fallback !== null ? { value: fallback, source: "default" } : null;
 }
 
+/** Settings with both a saved value and an environment value, split by whether the saved one is from before v0.8. */
+async function conflicts(store: SettingsStore, env: Record<string, string | undefined>, legacy: boolean): Promise<SettingKey[]> {
+  const keys = Object.keys(SETTINGS) as SettingKey[];
+  const hit = await Promise.all(keys.map(async (key) => envValue(key, env) !== null && (await store.get(key)) !== null && (await store.legacy(key)) === legacy));
+  return keys.filter((_, i) => hit[i]);
+}
+
 /**
- * Settings whose value saved in /admin hides a value set in the server's environment. Before v0.8 the environment
- * won, so an old saved row can quietly replace a newer key or a lower cost ceiling set on the server.
+ * Settings whose value saved in /admin hides a value set in the server's environment, by the operator's choice.
  *
  * @param store - Where saved values live
  * @param env - The server's environment
  * @returns The setting keys, in registry order
  */
-export async function shadowedSettings(store: SettingsStore, env: Record<string, string | undefined> = process.env): Promise<SettingKey[]> {
-  const keys = Object.keys(SETTINGS) as SettingKey[];
-  const hidden = await Promise.all(keys.map(async (key) => envValue(key, env) !== null && (await store.get(key)) !== null));
-  return keys.filter((_, i) => hidden[i]);
+export function shadowedSettings(store: SettingsStore, env: Record<string, string | undefined> = process.env): Promise<SettingKey[]> {
+  return conflicts(store, env, false);
 }
 
 /**
- * Logs, once, which settings have a saved value hiding the server's environment value. Names only, never values.
+ * Settings with a value saved before v0.8 that the server's environment value holds back. The environment's value
+ * stays in use until the operator saves the value again or chooses it in /admin.
+ *
+ * @param store - Where saved values live
+ * @param env - The server's environment
+ * @returns The setting keys, in registry order
+ */
+export function heldBackSettings(store: SettingsStore, env: Record<string, string | undefined> = process.env): Promise<SettingKey[]> {
+  return conflicts(store, env, true);
+}
+
+/**
+ * Logs, once, which settings have a saved value hiding the server's environment value, and which older saved values
+ * the environment holds back. Names only, never values.
  *
  * @param store - Where saved values live
  * @param env - The server's environment
  */
 export async function logShadowedSettings(store: SettingsStore, env: Record<string, string | undefined> = process.env): Promise<void> {
-  const keys = await shadowedSettings(store, env);
-  if (keys.length) console.warn(JSON.stringify({ event: "qp-setting-shadows-env", settings: keys, env: keys.map((k) => SETTINGS[k].env) }));
+  const [shadowed, held] = await Promise.all([shadowedSettings(store, env), heldBackSettings(store, env)]);
+  if (shadowed.length) console.warn(JSON.stringify({ event: "qp-setting-shadows-env", settings: shadowed, env: shadowed.map((k) => SETTINGS[k].env) }));
+  if (held.length) console.warn(JSON.stringify({ event: "qp-setting-held-back", settings: held, env: held.map((k) => SETTINGS[k].env) }));
 }
 
 /**
@@ -152,6 +185,17 @@ export async function saveSetting(store: SettingsStore, key: SettingKey, input: 
   await store.set(key, isSecret(key) ? encryptSecret(parsed.value, masterKeyHex) : parsed.value);
 }
 
+/**
+ * Makes a value saved before v0.8 the operator's choice, so it wins over the server's environment like a new save.
+ *
+ * @param store - Where saved values live
+ * @param key - The setting
+ * @returns False when there is no older saved value to keep
+ */
+export function keepSavedSetting(store: SettingsStore, key: SettingKey): Promise<boolean> {
+  return store.keep(key);
+}
+
 /** Removes a saved setting; the server's environment value, else the default, then applies again. */
 export function clearSetting(store: SettingsStore, key: SettingKey): Promise<void> {
   return store.remove(key);
@@ -166,12 +210,14 @@ export async function describeSettings(store: SettingsStore, masterKeyHex: strin
     (Object.keys(SETTINGS) as SettingKey[]).map(async (key) => {
       const def = SETTINGS[key];
       const saved = await store.get(key);
+      const legacy = saved !== null && (await store.legacy(key));
       const values: Record<Source, string | null> = {
         saved: saved === null ? null : isSecret(key) ? decryptSecret(saved, masterKeyHex) : saved,
         environment: envValue(key, env),
         default: def.default as string | null,
       };
-      const source = ORDER.find((k) => values[k] !== null) ?? null;
+      const heldBack = legacy && values.environment !== null;
+      const source = ORDER.find((k) => values[k] !== null && !(k === "saved" && heldBack)) ?? null;
       const shown = (v: string | null) => (v === null ? null : isSecret(key) ? maskSecret(v) : v);
       return {
         key,
@@ -183,7 +229,11 @@ export async function describeSettings(store: SettingsStore, masterKeyHex: strin
         source,
         display: source ? shown(values[source]) : null,
         /** True when the value saved here hides one set in the server's environment. */
-        shadowsEnv: values.saved !== null && values.environment !== null,
+        shadowsEnv: values.saved !== null && values.environment !== null && !legacy,
+        /** True when the saved value is from before v0.8 and has not been saved or kept since. */
+        legacy,
+        /** True when that older saved value is not in use because the server's environment sets one. */
+        heldBack,
         /** Every source in the order they are tried, with the one in use marked; a value set lower down is shown as ignored. */
         layers: ORDER.map((k) => ({ source: k, display: shown(values[k]), inUse: k === source })),
       };
@@ -191,13 +241,17 @@ export async function describeSettings(store: SettingsStore, masterKeyHex: strin
   );
 }
 
-/** In-memory store for tests and local runs without a database. */
-export function memoryStore(): SettingsStore & { raw: Map<SettingKey, string> } {
+/** In-memory store for tests and local runs without a database. `legacyKeys` marks values saved before v0.8. */
+export function memoryStore(): SettingsStore & { raw: Map<SettingKey, string>; legacyKeys: Set<SettingKey> } {
   const raw = new Map<SettingKey, string>();
+  const legacyKeys = new Set<SettingKey>();
   return {
     raw,
+    legacyKeys,
     get: async (k) => raw.get(k) ?? null,
-    set: async (k, v) => { raw.set(k, v); },
-    remove: async (k) => { raw.delete(k); },
+    legacy: async (k) => raw.has(k) && legacyKeys.has(k),
+    set: async (k, v) => { raw.set(k, v); legacyKeys.delete(k); },
+    keep: async (k) => raw.has(k) && legacyKeys.delete(k),
+    remove: async (k) => { raw.delete(k); legacyKeys.delete(k); },
   };
 }

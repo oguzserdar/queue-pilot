@@ -5,8 +5,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-vi.mock("./actions", () => ({ clearAdminSetting: async () => {} }));
-const { ShadowedNotice } = await import("./shadowed-notice");
+vi.mock("./actions", () => ({ clearAdminSetting: async () => {}, keepAdminSetting: async () => {} }));
+const { HeldBackNotice, ShadowedNotice } = await import("./shadowed-notice");
 
 describe("shadowed settings notice", () => {
   it("lists each hidden server value with its own Use the server's value action", () => {
@@ -23,5 +23,20 @@ describe("shadowed settings notice", () => {
 
   it("shows nothing when no saved value hides the server's", () => {
     expect(renderToStaticMarkup(<ShadowedNotice keys={[]} />)).toBe("");
+  });
+});
+
+describe("older saved values the server's value holds back", () => {
+  it("says the server's value stays in use and offers both choices for each", () => {
+    const html = renderToStaticMarkup(<HeldBackNotice keys={["buffer_client_secret"]} />);
+    expect(html).toContain("BUFFER_CLIENT_SECRET");
+    expect(html).toContain("still in use");
+    expect(html).toContain("Use the saved value");
+    expect(html).toContain("Remove the saved value");
+    expect(html).toContain('name="key" value="buffer_client_secret"');
+  });
+
+  it("shows nothing when none are held back", () => {
+    expect(renderToStaticMarkup(<HeldBackNotice keys={[]} />)).toBe("");
   });
 });

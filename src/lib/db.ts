@@ -4,7 +4,7 @@
  */
 import { Pool } from "pg";
 import { attachDatabasePool } from "@vercel/functions";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { operatorSettings, settingsAudit } from "../db/schema";
 import { isSecret, type SettingKey, type SettingsStore } from "./settings";
 
@@ -48,7 +48,7 @@ export function hasDatabase(): boolean {
 export const SETTINGS_TTL_MS = 30_000;
 
 /** This server's copy of every operator setting, and the change number it was loaded at. */
-type SettingsSnapshot = { version: number; checkedAt: number; values: Map<string, string> };
+type SettingsSnapshot = { version: number; checkedAt: number; values: Map<string, string>; legacy: Set<string> };
 let settingsCache: Promise<SettingsSnapshot> | null = null;
 
 /** The newest audit row's id: every settings write adds one in the same transaction, so it changes on every write. */
@@ -61,7 +61,7 @@ async function settingsVersion(): Promise<number> {
 async function loadSettings(): Promise<SettingsSnapshot> {
   const { db } = await import("../db");
   const [version, rows] = await Promise.all([settingsVersion(), db().select().from(operatorSettings)]);
-  return { version, checkedAt: Date.now(), values: new Map(rows.map((r) => [r.key, r.value])) };
+  return { version, checkedAt: Date.now(), values: new Map(rows.map((r) => [r.key, r.value])), legacy: new Set(rows.filter((r) => !r.adminWins).map((r) => r.key)) };
 }
 
 /**
@@ -95,7 +95,8 @@ export function forgetSettings(): void {
 
 /**
  * Operator settings stored in Postgres through Drizzle. Secret values arrive here already encrypted. Every change is
- * written to qp_settings_audit in the same transaction; secret values are never written there.
+ * written to qp_settings_audit in the same transaction; secret values are never written there. A save or keep marks
+ * the row admin_wins; rows from before that column default to false and are reported as legacy.
  */
 export function postgresSettingsStore(): SettingsStore {
   const shown = (key: SettingKey, v: string | null) => (isSecret(key) ? null : v);
@@ -103,14 +104,28 @@ export function postgresSettingsStore(): SettingsStore {
     async get(key: SettingKey) {
       return (await cachedSettings()).values.get(key) ?? null;
     },
+    async legacy(key: SettingKey) {
+      return (await cachedSettings()).legacy.has(key);
+    },
     async set(key: SettingKey, stored: string) {
       const { db } = await import("../db");
       await db().transaction(async (tx) => {
         const [old] = await tx.select().from(operatorSettings).where(eq(operatorSettings.key, key));
-        await tx.insert(operatorSettings).values({ key, value: stored }).onConflictDoUpdate({ target: operatorSettings.key, set: { value: stored, updatedAt: sql`now()` } });
+        await tx.insert(operatorSettings).values({ key, value: stored, adminWins: true }).onConflictDoUpdate({ target: operatorSettings.key, set: { value: stored, adminWins: true, updatedAt: sql`now()` } });
         await tx.insert(settingsAudit).values({ key, action: "set", fromValue: shown(key, old?.value ?? null), toValue: shown(key, stored) });
       });
       forgetSettings();
+    },
+    async keep(key: SettingKey) {
+      const { db } = await import("../db");
+      const kept = await db().transaction(async (tx) => {
+        const [row] = await tx.update(operatorSettings).set({ adminWins: true, updatedAt: sql`now()` })
+          .where(and(eq(operatorSettings.key, key), eq(operatorSettings.adminWins, false))).returning({ key: operatorSettings.key });
+        if (row) await tx.insert(settingsAudit).values({ key, action: "kept", fromValue: null, toValue: null });
+        return Boolean(row);
+      });
+      forgetSettings();
+      return kept;
     },
     async remove(key: SettingKey) {
       const { db } = await import("../db");

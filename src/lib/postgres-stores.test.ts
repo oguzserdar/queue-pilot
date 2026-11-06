@@ -158,6 +158,24 @@ describe("settings store on real Postgres", () => {
     }
   });
 
+  it("marks a row saved before this release as older, until it is saved again or kept", async () => {
+    forgetSettings();
+    const s = postgresSettingsStore();
+    // How a pre-release row looks: written without the mark that a saved value wins.
+    await pg.query("insert into operator_settings (key, value) values ('exa_api_key', 'v1:old-blob'), ('supadata_api_key', 'v1:old-blob')");
+    await pg.query("insert into qp_settings_audit (key, action) values ('exa_api_key', 'set')");
+    expect(await s.legacy("exa_api_key")).toBe(true);
+    expect(await s.legacy("supadata_api_key")).toBe(true);
+    await s.set("exa_api_key", "v1:new-blob");
+    expect(await s.legacy("exa_api_key")).toBe(false);
+    expect(await s.keep("supadata_api_key")).toBe(true);
+    expect(await s.legacy("supadata_api_key")).toBe(false);
+    expect(await s.keep("supadata_api_key")).toBe(false);
+    expect(await s.keep("discord_bot_token")).toBe(false);
+    const [kept] = await recentSettingChanges(1);
+    expect([kept.key, kept.action, kept.fromValue, kept.toValue]).toEqual(["supadata_api_key", "kept", null, null]);
+  });
+
   it("loads once for many readers at the same moment", async () => {
     forgetSettings();
     const s = postgresSettingsStore();

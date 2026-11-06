@@ -66,7 +66,7 @@ describe("botTokens", () => {
     expect(await botTokens({ store, master: KEY, env: { TELEGRAM_BOT_TOKEN: "env-telegram", DISCORD_BOT_TOKEN: "env-discord" } })).toEqual({ telegram: "saved-telegram", discord: "env-discord" });
   });
   it("still uses the server's tokens when the saved ones cannot be read", async () => {
-    const broken: SettingsStore = { get: async () => { throw new Error("database down"); }, set: async () => {}, remove: async () => {} };
+    const broken: SettingsStore = { get: async () => { throw new Error("database down"); }, legacy: async () => false, set: async () => {}, keep: async () => false, remove: async () => {} };
     expect(await botTokens({ store: broken, master: KEY, env: { TELEGRAM_BOT_TOKEN: "env-telegram" } })).toEqual({ telegram: "env-telegram", discord: undefined });
   });
 });

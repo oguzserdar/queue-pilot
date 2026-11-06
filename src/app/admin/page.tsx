@@ -10,7 +10,7 @@ import { adminAccess, signedInEmail } from "@/lib/current-user";
 import { hasDatabase, postgresSettingsStore, recentSettingChanges } from "@/lib/db";
 import { describeSettings, GROUPS, memoryStore, SETTINGS, type GroupId, type SettingKey } from "@/lib/settings";
 import { claimAdmin, clearAdminSetting, saveAdminSetting } from "./actions";
-import { ShadowedNotice } from "./shadowed-notice";
+import { HeldBackNotice, LegacyChoice, ShadowedNotice } from "./shadowed-notice";
 import { hasAdmin } from "@/lib/admin-role";
 import { postgresAllowanceStore, utcDay } from "@/lib/ai-allowance";
 import { AiUsage } from "@/components/ai-usage";
@@ -25,8 +25,8 @@ const NOTES: Record<string, string> = {
   key: "Unknown setting.",
 };
 
-export default async function Admin({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; cleared?: string; field?: string; problem?: string; tab?: string }> }) {
-  const { error, saved, cleared, field, problem, tab } = await searchParams;
+export default async function Admin({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; cleared?: string; kept?: string; field?: string; problem?: string; tab?: string }> }) {
+  const { error, saved, cleared, kept, field, problem, tab } = await searchParams;
   const master = process.env.SETTINGS_KEY;
 
   if (!master) {
@@ -85,7 +85,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
   const totalCap = num("ai_cap_total");
   const groups = Object.keys(GROUPS) as GroupId[];
   // After a save or remove, reopen the tab that holds the field that changed.
-  const changed = (saved ?? cleared ?? field) as SettingKey | undefined;
+  const changed = (saved ?? cleared ?? kept ?? field) as SettingKey | undefined;
   // The tab of a setting just changed, else the one in the address, else the first.
   const openTab = changed && SETTINGS[changed] ? SETTINGS[changed].group : tab && [...groups, "activity"].includes(tab) ? tab : groups[0];
   return (
@@ -99,6 +99,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
         <a className={styles.back} href="/">Back to Queue Pilot</a>
       </header>
       {!hasDatabase() ? <p className={styles.error} role="alert">{NOTES.db}</p> : null}
+      <HeldBackNotice keys={rows.filter((r) => r.heldBack).map((r) => r.key)} />
       <ShadowedNotice keys={rows.filter((r) => r.shadowsEnv).map((r) => r.key)} />
       <UrlTabs initial={openTab} first={groups[0]}>
         <TabsList aria-label="Settings sections">
@@ -130,15 +131,23 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
                         <span className={styles.layerNum}>{i + 1}</span>
                         <span className={styles.layerName}>{l.source === "environment" ? <>Server env <code className={styles.code}>{r.env}</code></> : l.source === "saved" ? "Saved here" : "Default"}</span>
                         <span className={styles.layerValue}>{l.display ? <code className={styles.code}>{l.display}</code> : <span className={styles.none}>none</span>}</span>
-                        <span className={styles.layerState}>{l.inUse ? "In use" : l.display && r.layers.some((x) => x.inUse) ? "Ignored" : ""}</span>
+                        <span className={styles.layerState}>{l.inUse ? "In use" : l.source === "saved" && r.heldBack ? "Waiting for you" : l.display && r.layers.some((x) => x.inUse) ? "Ignored" : ""}</span>
                       </li>
                     ))}
                   </ol>
                   {(r.key === "supadata_api_key" || r.key === "exa_api_key") && <TestSourceKey setting={r.key} />}
                   {saved === r.key ? <p className={styles.ok} role="status">Saved.</p> : null}
+                  {kept === r.key ? <p className={styles.ok} role="status">The saved value is in use now.</p> : null}
                   {cleared === r.key ? <p className={styles.ok} role="status">Removed. {r.source === "environment" ? "The server environment's value applies again." : r.source === "default" ? "The default applies again." : ""}</p> : null}
                   {field === r.key && (problem || error) ? <p className={styles.error} role="alert">{problem ?? NOTES[error ?? ""]}</p> : null}
-                  {r.source === "environment" ? (
+                  {r.heldBack ? (
+                    <div className={styles.help}>
+                      <p>The value saved here is from before this version, when the server&apos;s environment won. So nothing changed on upgrade, the server&apos;s value <code className={styles.code}>{r.env}</code> is still in use. Use the saved value to make it win, save a new one, or remove it.</p>
+                      <LegacyChoice settingKey={r.key} />
+                    </div>
+                  ) : r.legacy ? (
+                    <p className={styles.help}>Saved here before this version. It is in use because the server&apos;s environment sets no <code className={styles.code}>{r.env}</code>. If the server sets one later, the server&apos;s value is used until you save this again.</p>
+                  ) : r.source === "environment" ? (
                     <p className={styles.help}>Set in the server&apos;s environment as <code className={styles.code}>{r.env}</code>. A value saved here replaces it, and removing that value goes back to the server&apos;s.</p>
                   ) : null}
                   <div className={styles.cardFoot}>
@@ -169,7 +178,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
                 {changes.map((c) => (
                   <li key={c.id} className={styles.change}>
                     <time className={styles.help} dateTime={c.at.toISOString()}>{c.at.toISOString().slice(0, 16).replace("T", " ")} UTC</time>
-                    <span>{SETTINGS[c.key as SettingKey]?.label ?? c.key} {c.action === "cleared" ? "removed" : c.fromValue !== null || c.toValue !== null ? `${c.fromValue ?? "not set"} → ${c.toValue}` : "changed"}</span>
+                    <span>{SETTINGS[c.key as SettingKey]?.label ?? c.key} {c.action === "cleared" ? "removed" : c.action === "kept" ? "saved value chosen over the server's" : c.fromValue !== null || c.toValue !== null ? `${c.fromValue ?? "not set"} → ${c.toValue}` : "changed"}</span>
                   </li>
                 ))}
               </ul>

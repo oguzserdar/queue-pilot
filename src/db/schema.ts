@@ -6,7 +6,7 @@ import type { SourceMetadata } from "../lib/source-evidence";
  */
 import { sql } from "drizzle-orm";
 import { user } from "./auth-schema";
-import { bigint, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { bigint, boolean, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 /** Where a copy goes. A Postgres enum, so the database itself refuses any other value. */
 export const echoKind = pgEnum("qp_echo_kind", ["telegram", "discord"]);
@@ -17,6 +17,12 @@ export const echoStatus = pgEnum("qp_echo_status", ["sent", "failed"]);
 export const operatorSettings = pgTable("operator_settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
+  /**
+   * True once the value was saved or kept in /admin in a release where a saved value wins over the server's
+   * environment. Rows from before that release default to false: the environment's value stays in use over them until
+   * the operator chooses in /admin (src/lib/settings.ts).
+   */
+  adminWins: boolean("admin_wins").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

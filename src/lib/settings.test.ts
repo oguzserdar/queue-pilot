@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { clearSetting, describeSettings, GROUPS, isSecret, logShadowedSettings, memoryStore, parseSetting, resolveSetting, saveSetting, SETTINGS, shadowedSettings } from "./settings";
+import { clearSetting, describeSettings, GROUPS, heldBackSettings, isSecret, keepSavedSetting, logShadowedSettings, memoryStore, parseSetting, resolveSetting, saveSetting, SETTINGS, shadowedSettings } from "./settings";
 
 const KEY = "c".repeat(64);
 
@@ -174,6 +174,79 @@ describe("saved values that hide the server's environment", () => {
       warn.mockClear();
       await logShadowedSettings(memoryStore(), { FALLBACK_AI_KEY: "sk-ant-api03-newnewnewnew" });
       expect(warn).not.toHaveBeenCalled();
+    } finally { warn.mockRestore(); }
+  });
+});
+
+describe("upgrading from a release where the environment won", () => {
+  const ENV = { BUFFER_CLIENT_SECRET: "rotated-synthetic-secret", AI_BUDGET_USD: "100" };
+  /** A row saved before this release: it carries no mark that the saved value should win. */
+  async function legacyStore() {
+    const store = memoryStore();
+    await saveSetting(store, "buffer_client_secret", "old-synthetic-secret", KEY);
+    await saveSetting(store, "ai_budget_usd", "900", KEY);
+    store.legacyKeys.add("buffer_client_secret");
+    store.legacyKeys.add("ai_budget_usd");
+    return store;
+  }
+
+  it("keeps the environment's value in use over an older saved value", async () => {
+    const store = await legacyStore();
+    expect(await resolveSetting(store, "buffer_client_secret", KEY, ENV)).toEqual({ value: "rotated-synthetic-secret", source: "environment" });
+    expect(await resolveSetting(store, "ai_budget_usd", KEY, ENV)).toEqual({ value: "100.00", source: "environment" });
+  });
+
+  it("still uses an older saved value when the environment sets nothing", async () => {
+    const store = await legacyStore();
+    expect(await resolveSetting(store, "buffer_client_secret", KEY, {})).toEqual({ value: "old-synthetic-secret", source: "saved" });
+  });
+
+  it("lets a value saved in this release win over the environment", async () => {
+    const store = memoryStore();
+    await saveSetting(store, "buffer_client_secret", "new-synthetic-secret", KEY);
+    expect(await resolveSetting(store, "buffer_client_secret", KEY, ENV)).toEqual({ value: "new-synthetic-secret", source: "saved" });
+  });
+
+  it("lets the older saved value win once it is saved again", async () => {
+    const store = await legacyStore();
+    await saveSetting(store, "buffer_client_secret", "old-synthetic-secret", KEY);
+    expect(await resolveSetting(store, "buffer_client_secret", KEY, ENV)).toEqual({ value: "old-synthetic-secret", source: "saved" });
+  });
+
+  it("lets the operator choose the older saved value without typing it again", async () => {
+    const store = await legacyStore();
+    expect(await keepSavedSetting(store, "ai_budget_usd")).toBe(true);
+    expect(await resolveSetting(store, "ai_budget_usd", KEY, ENV)).toEqual({ value: "900.00", source: "saved" });
+    expect(await keepSavedSetting(store, "exa_api_key")).toBe(false);
+  });
+
+  it("goes back to the environment when the older saved value is removed", async () => {
+    const store = await legacyStore();
+    await clearSetting(store, "buffer_client_secret");
+    expect(await resolveSetting(store, "buffer_client_secret", KEY, ENV)).toEqual({ value: "rotated-synthetic-secret", source: "environment" });
+  });
+
+  it("shows /admin which older saved values the environment holds back, and offers the choice", async () => {
+    const store = await legacyStore();
+    expect(await heldBackSettings(store, ENV)).toEqual(["buffer_client_secret", "ai_budget_usd"]);
+    expect(await shadowedSettings(store, ENV)).toEqual([]);
+    const rows = await describeSettings(store, KEY, ENV);
+    const secret = rows.find((r) => r.key === "buffer_client_secret")!;
+    expect(secret).toMatchObject({ source: "environment", legacy: true, heldBack: true, shadowsEnv: false });
+    expect(secret.display).not.toContain("old-synthetic");
+    expect(secret.layers.find((l) => l.source === "saved")).toMatchObject({ inUse: false });
+    const quiet = (await describeSettings(store, KEY, {})).find((r) => r.key === "buffer_client_secret")!;
+    expect(quiet).toMatchObject({ source: "saved", legacy: true, heldBack: false });
+  });
+
+  it("logs the held-back setting names at startup, never their values", async () => {
+    const store = await legacyStore();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await logShadowedSettings(store, ENV);
+      const lines = warn.mock.calls.map((c) => String(c[0]));
+      expect(lines.map((l) => JSON.parse(l))).toEqual([{ event: "qp-setting-held-back", settings: ["buffer_client_secret", "ai_budget_usd"], env: ["BUFFER_CLIENT_SECRET", "AI_BUDGET_USD"] }]);
+      expect(lines.join("")).not.toContain("synthetic");
     } finally { warn.mockRestore(); }
   });
 });
