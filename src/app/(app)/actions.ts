@@ -71,7 +71,8 @@ export async function refreshBuffer(): Promise<RefreshResult> {
   return { ok: true };
 }
 
-export type ApproveActionResult = ({ ok: true } & ApproveResult) | { ok: false; kind: "limited"; retryAt: string } | { ok: false; kind: "failed" | "signedOut" };
+/** On success, `note` says the drafts were scheduled in Buffer even though this page could not update its copy yet. */
+export type ApproveActionResult = ({ ok: true; note?: string } & ApproveResult) |{ ok: false; kind: "limited"; retryAt: string } | { ok: false; kind: "failed" | "signedOut" };
 
 /** The Approve buttons: schedules the user's own drafts at their slot times, then refreshes the screens. */
 export async function approveDrafts(ids: string[]): Promise<ApproveActionResult> {
@@ -82,11 +83,16 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
     if (!b) return { ok: false, kind: "signedOut" };
     // Read from Buffer now and check the playbook: a draft with an out-of-date check or a broken blocking rule is refused.
     const { approved, refused } = await approveChecked(b.userId, b.token, ids, new Date(), undefined, undefined, b.channels);
-    await b.markScheduled(approved);
+    // Buffer has already scheduled these. Failing to update our saved copy must not hide that or skip the records.
+    let note: string | undefined;
+    try { await b.markScheduled(approved); } catch (e) {
+      console.error(JSON.stringify({ event: "qp-approve-mark-failed", message: e instanceof Error ? e.message : String(e) }));
+      note = "Scheduled in Buffer. This page may take a minute to show it.";
+    }
     if (approved.length) await recordAction(b.userId, "drafts_approved", { via: "app" }, { ids: approved });
     await recordApprover(b.userId, approved, APPROVED_IN_APP);
     revalidatePath("/", "layout");
-    return { ok: true, approved, refused };
+    return { ok: true, approved, refused, ...(note ? { note } : {}) };
   } catch (e) {
     if (e instanceof BufferRateLimitedError) return { ok: false, kind: "limited", retryAt: e.retryAt.toISOString() };
     console.error(JSON.stringify({ event: "qp-approve-failed", message: e instanceof Error ? e.message : String(e) }));

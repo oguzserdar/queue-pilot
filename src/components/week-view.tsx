@@ -138,7 +138,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         return;
       }
       markApproved(res.approved);
-      if (res.approved.length) toast({ type: "success", title: `${res.approved.length} post${res.approved.length === 1 ? "" : "s"} scheduled in Buffer` });
+      if (res.approved.length) toast({ type: "success", title: `${res.approved.length} post${res.approved.length === 1 ? "" : "s"} scheduled in Buffer`, ...(res.note ? { description: res.note } : {}) });
       if (res.refused.length) setProblem({ title: `${res.refused.length} draft${res.refused.length === 1 ? " was" : "s were"} not scheduled`, text: res.refused.map((r) => r.reason).join(" ") });
     });
   };

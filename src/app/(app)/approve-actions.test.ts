@@ -10,10 +10,12 @@ vi.mock("@/lib/written-store", () => ({ wroteIds: vi.fn(), postgresWrittenStore:
 vi.mock("@/lib/rules-store", () => ({ postgresRulesStore: () => ({ list: async () => [] }) }))
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: vi.fn() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
+vi.mock("@/lib/security-events", () => ({ recordAction: vi.fn() }))
 
 const { freshBufferForCurrentUser, signedInUserId } = await import("@/lib/current-user")
 const { bufferQuery } = await import("@/lib/buffer/client")
 const { approveDrafts } = await import("./actions")
+const { recordAction } = await import("@/lib/security-events")
 const markScheduled = vi.fn()
 const post = (id: string): Post => ({ id, channelId: "ch", status: "draft", via: "api", text: "Draft", dueAt: "2099-11-01T09:00:00Z", sentAt: null, externalLink: null, error: null })
 
@@ -43,6 +45,16 @@ describe("Approve action", () => {
     expect(await approveDrafts(["ours"])).toEqual({ ok: false, kind: "signedOut" })
     expect(written.get).not.toHaveBeenCalled()
     expect(bufferQuery).not.toHaveBeenCalled()
+  })
+
+  it("still records and reports a scheduling Buffer accepted when saving it on our side fails", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {})
+    markScheduled.mockRejectedValue(new Error("snapshot write failed"))
+    const result = await approveDrafts(["ours"])
+    expect(result).toMatchObject({ ok: true, approved: ["ours"], note: expect.stringMatching(/scheduled in Buffer/i) })
+    expect(recordAction).toHaveBeenCalledWith("person-a", "drafts_approved", { via: "app" }, { ids: ["ours"] })
+    expect(log.mock.calls.some(([line]) => String(line).includes("qp-approve-mark-failed"))).toBe(true)
+    log.mockRestore()
   })
 
   it("makes no write when ownership cannot be read", async () => {

@@ -51,7 +51,7 @@ export function TriageList({ items, live, onRemaining }: { items: TriageItem[]; 
     if (!r.ok) { toast({ type: "error", title: "Nothing was scheduled", description: r.kind === "limited" ? "Buffer's request limit is reached. Try again in a few minutes." : "Buffer could not be reached." }); return; }
     setPicked(new Set());
     await leave(r.approved);
-    if (r.approved.length) toast({ type: "success", title: `${r.approved.length} post${r.approved.length === 1 ? "" : "s"} scheduled in Buffer` });
+    if (r.approved.length) toast({ type: "success", title: `${r.approved.length} post${r.approved.length === 1 ? "" : "s"} scheduled in Buffer`, ...(r.note ? { description: r.note } : {}) });
     if (r.refused.length) toast({ type: "error", title: `${r.refused.length} not scheduled`, description: r.refused.map((x) => x.reason).join(" ") });
     router.refresh();
   });
