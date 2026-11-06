@@ -6,6 +6,7 @@
  */
 import type { EvidenceCard } from "./source-presentation";
 import type { DraftNote } from "@/app/(app)/note-actions";
+import type { NoteTeammate } from "./note-mention-picker";
 import type { DraftTag } from "@/app/(app)/tag-actions";
 import type { Rule } from "./rules";
 import type { WritingAvailability } from "./writing-availability";
@@ -48,8 +49,11 @@ const noteOn: Record<string, DraftNote[]> = {
     { id: "n1", author: "Alex Rivera", avatar: null, createdAt: "2026-11-01T19:10:00Z", edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true },
   ],
 };
+/** The teammate Alex can @mention in a note: Sam, who can read notes on every example channel. */
+export const EXAMPLE_TEAMMATES: NoteTeammate[] = [{ urn: "urn:buffer:account:example-sam", name: "Sam", email: "sam@example.com", avatar: null, locked: false }];
+
 /** Notes on each example draft, as Buffer would return them. Alex works with Sam, so notes are worded for a team. */
-export const exampleNotes = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { notes: noteOn[id] ?? [], more: false, team: true }]));
+export const exampleNotes = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { notes: noteOn[id] ?? [], more: false, team: true, teammates: EXAMPLE_TEAMMATES }]));
 
 const TAGS: DraftTag[] = [{ id: "t1", name: "Releases", color: "#8F2457" }, { id: "t2", name: "Agents", color: "#2F6F4E" }, { id: "t3", name: "Newsletter", color: "#3B5BA5" }];
 /** Tags on each example draft, from Alex's three Buffer tags. */

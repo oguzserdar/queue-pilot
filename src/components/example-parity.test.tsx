@@ -65,6 +65,16 @@ describe("example matches the signed-in screens", () => {
     expect(html).toContain("Last approved through Queue Pilot: by you in Queue Pilot, 3 Nov");
   });
 
+  it("offers the same @mention picker on the example's notes as on live ones, with Sam and no Buffer call", async () => {
+    const { DraftNotes } = await import("./draft-notes");
+    const example = exampleNotes(["d1"]).d1;
+    expect(example.teammates).toEqual([expect.objectContaining({ name: "Sam", locked: false })]);
+    const html = renderToStaticMarkup(<DraftNotes postId="d1" preview={example} />);
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain("Type @ to mention a teammate");
+    // The note action module is mocked empty above, so any network call from the example would throw.
+  });
+
   it("shows the playbook's account view, as the live playbook does", () => {
     const html = renderToStaticMarkup(<PlaybookView mode="example" accounts={channels.map((c) => ({ id: c.id, name: c.handle, service: c.service }))} />);
     expect(html).toContain("Rules for");

@@ -53,4 +53,16 @@
 .send:not(:disabled):active { transform: scale(0.94); }
 .send:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .composer[data-busy] .send { opacity: 0.6; }
-@media (prefers-reduced-motion: reduce) { .note, .tools, .tool, .field, .send, .info { transition: none; } }
+/* The @mention list: teammates in the same quiet rows as the thread, under the field it belongs to. */
+.mentions { display: grid; gap: 2px; margin-top: 4px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); }
+.mentions .muted:empty { display: none; }
+.mentions .muted { margin: 0; padding: 4px 6px; }
+.mentionList { display: grid; gap: 2px; max-height: 220px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.mentionOption { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 10px; padding: 6px; border-radius: var(--radius-control); cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard); }
+.mentionOption[aria-selected="true"] { background: var(--surface-muted); }
+.mentionOption[aria-disabled] { cursor: default; opacity: 0.6; }
+.mentionText { display: grid; min-width: 0; }
+.mentionText > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mention { font-weight: 600; color: var(--qp-crimson); }
+
+@media (prefers-reduced-motion: reduce) { .note, .tools, .tool, .field, .send, .info, .mentionOption { transition: none; } }
