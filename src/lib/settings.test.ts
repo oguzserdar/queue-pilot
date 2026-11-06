@@ -122,6 +122,31 @@ describe("typed settings", () => {
   });
 });
 
+describe("bot settings saved in /admin", () => {
+  it("checks the Telegram bot username's shape and says why it cannot be saved", async () => {
+    const store = memoryStore();
+    await saveSetting(store, "telegram_bot_username", "QueuePilot_bot", KEY);
+    expect(store.raw.get("telegram_bot_username")).toBe("QueuePilot_bot");
+    await saveSetting(store, "telegram_bot_username", "qp1Bot", KEY);
+    await expect(saveSetting(store, "telegram_bot_username", "@QueuePilot_bot", KEY)).rejects.toThrow(/without the @/);
+    for (const bad of ["abot", "QueuePilot", "queue-pilot_bot", `${"a".repeat(30)}bot`]) {
+      await expect(saveSetting(store, "telegram_bot_username", bad, KEY), bad).rejects.toThrow(/Telegram bot username/);
+    }
+  });
+
+  it("checks the Discord application ID is 17 to 20 digits", async () => {
+    const store = memoryStore();
+    await saveSetting(store, "discord_client_id", "123456789012345678", KEY);
+    for (const bad of ["1234567890123456", "123456789012345678901", "12345678901234567a", "my-app"]) {
+      await expect(saveSetting(store, "discord_client_id", bad, KEY), bad).rejects.toThrow(/Discord application ID must be 17 to 20 digits/);
+    }
+  });
+
+  it("still reads a server environment username written with a leading @", async () => {
+    expect(await resolveSetting(memoryStore(), "telegram_bot_username", KEY, { TELEGRAM_BOT_USERNAME: "@qp_bot" })).toEqual({ value: "@qp_bot", source: "environment" });
+  });
+});
+
 describe("saved values that hide the server's environment", () => {
   it("finds every saved value that hides a set environment value", async () => {
     const store = memoryStore();

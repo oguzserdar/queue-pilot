@@ -131,10 +131,24 @@ export async function logShadowedSettings(store: SettingsStore, env: Record<stri
   if (keys.length) console.warn(JSON.stringify({ event: "qp-setting-shadows-env", settings: keys, env: keys.map((k) => SETTINGS[k].env) }));
 }
 
+/**
+ * Shape checks for values typed in /admin, beyond their type. Only a save is checked: a server environment value keeps
+ * being read as before, so an existing deployment's "@name" still works (copies strip the @).
+ */
+const SAVE_CHECKS: Partial<Record<SettingKey, (v: string) => string | null>> = {
+  telegram_bot_username: (v) =>
+    v.startsWith("@") ? "Telegram bot username must be typed without the @"
+      : /^[A-Za-z0-9_]{5,32}$/.test(v) && /bot$/i.test(v) ? null
+      : "Telegram bot username must be 5 to 32 letters, digits or underscores, ending in \"bot\"",
+  discord_client_id: (v) => (/^\d{17,20}$/.test(v) ? null : "Discord application ID must be 17 to 20 digits"),
+};
+
 /** Saves a setting from /admin after parsing it by its type; throws with the reason when it cannot be saved. */
 export async function saveSetting(store: SettingsStore, key: SettingKey, input: string, masterKeyHex: string): Promise<void> {
   const parsed = parseSetting(key, input);
   if (!parsed.ok) throw new Error(parsed.error);
+  const problem = SAVE_CHECKS[key]?.(parsed.value);
+  if (problem) throw new Error(problem);
   await store.set(key, isSecret(key) ? encryptSecret(parsed.value, masterKeyHex) : parsed.value);
 }
 
