@@ -44,6 +44,17 @@ const noteKey = (postId: string, at: string | null, text: string) => `note:${cre
  * @param read - The Buffer reader, replaceable in tests
  */
 export async function teamNotes(b: Pick<NoteBuffer, "token" | "channels">, read = listOpenWithNotes): Promise<TeamNote[]> {
+  return (await allTeamNotes(b, read)).slice(0, MAX_NOTES);
+}
+
+/**
+ * Every note on the person's open posts, newest first, with no count limit: keeping a note rule checks its note
+ * against this, so an older note past the first MAX_NOTES still counts as present.
+ *
+ * @param b - The person's Buffer: token and channels
+ * @param read - The Buffer reader, replaceable in tests
+ */
+export async function allTeamNotes(b: Pick<NoteBuffer, "token" | "channels">, read = listOpenWithNotes): Promise<TeamNote[]> {
   const byId = new Map(b.channels.map((c) => [c.id, c]));
   const posts = (await Promise.all([...channelsByOrganization(b.channels)].map(([org, ids]) => read(b.token, org, ids)))).flat();
   return posts
@@ -51,8 +62,7 @@ export async function teamNotes(b: Pick<NoteBuffer, "token" | "channels">, read 
       const c = byId.get(p.channelId);
       return c ? p.notes.filter((n) => n.text.trim()).map((n) => ({ key: noteKey(p.id, n.at, n.text), postId: p.id, channelId: p.channelId, account: c.name, network: c.service, post: p.text.slice(0, 5000), author: n.by, at: n.at, text: n.text.trim().slice(0, 5000) })) : [];
     })
-    .sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""))
-    .slice(0, MAX_NOTES);
+    .sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
 }
 
 /** The words a kept note rule records as its origin: "a note from Sam on 2026-11-01". */

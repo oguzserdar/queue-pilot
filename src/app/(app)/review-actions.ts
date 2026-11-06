@@ -101,7 +101,17 @@ export async function keepReviewPreference(token: string, scope?: import("@/lib/
   const userId = await signedInUserId();
   if (!userId) return signedOut;
   const { applySuggestion } = await import("@/lib/rule-suggestions");
-  const r = await applySuggestion(userId, token, "keep", scope);
+  // A rule offered from a teammate's note is kept only if that note is still in Buffer, unchanged.
+  const readNotes = async () => {
+    const { limit } = await import("@/lib/rate-limit");
+    if (!(await limit("bufferWrite", userId)).ok) throw new Error("Buffer limit reached");
+    const { freshBufferForCurrentUser } = await import("@/lib/current-user");
+    const b = await freshBufferForCurrentUser();
+    if (!b) throw new Error("Signed out");
+    const { allTeamNotes } = await import("@/lib/note-feedback");
+    return allTeamNotes(b);
+  };
+  const r = await applySuggestion(userId, token, "keep", scope, readNotes);
   if (r.ok) revalidatePath("/playbook");
   return r;
 }

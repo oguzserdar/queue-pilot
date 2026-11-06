@@ -14,6 +14,7 @@ import { judgeModelFor } from "./judge-model";
 import { postgresReviewStore, reviewNotes } from "./review-store";
 import { parseNewRule, ruleInput, type NewRule } from "./rules";
 import type { WriteBuffer } from "./write-slots-for-user";
+import type { TeamNote } from "./note-feedback";
 
 type Suggestion = { key: string; rule: NewRule; fixes: number; evidence: unknown };
 function secret() {
@@ -136,7 +137,25 @@ export function atScope(s: Suggestion, scope?: KeepScope): Suggestion["rule"] | 
   return scope.level === "network" && typeof scope.network === "string" && networks.includes(scope.network) ? { ...rest, channels: [scope.network] } : null;
 }
 
-export async function applySuggestion(userId: string, token: string, action: "keep" | "dismiss", scope?: KeepScope) {
+/** True when the note a suggestion came from is still on its post with the same author, time and words. */
+async function noteStillThere(evidence: Record<string, unknown>, readNotes?: () => Promise<TeamNote[]>): Promise<boolean> {
+  if (!readNotes) return false;
+  try {
+    const notes = await readNotes();
+    return notes.some((n) => n.postId === evidence.postId && n.text === evidence.note && (n.at ?? null) === (evidence.at ?? null) && (n.author ?? null) === (evidence.author ?? null));
+  } catch (e) {
+    console.error(JSON.stringify({ event: "qp-note-reread-failed", message: e instanceof Error ? e.message : String(e) }));
+    return false;
+  }
+}
+
+/**
+ * Keeps or dismisses a signed suggestion.
+ *
+ * @param readNotes - Reads the teammates' notes from Buffer now. Keeping a rule offered from a note needs it: a note
+ *   deleted or edited since the offer is refused.
+ */
+export async function applySuggestion(userId: string, token: string, action: "keep" | "dismiss", scope?: KeepScope, readNotes?: () => Promise<TeamNote[]>) {
   const signed = verifySuggestion(userId, token);
   if (!signed) return { ok: false, message: "That suggestion is invalid or expired. List suggestions again." };
   const rule = atScope(signed, scope);
@@ -144,6 +163,8 @@ export async function applySuggestion(userId: string, token: string, action: "ke
   const s = { ...signed, rule };
   const store = postgresRulesStore();
   if (action === "dismiss") { await store.dismiss(userId, s.key); return { ok: true, message: "Suggestion dismissed." }; }
+  const ev = s.evidence && typeof s.evidence === "object" && !Array.isArray(s.evidence) ? s.evidence as Record<string, unknown> : null;
+  if (ev?.kind === "note" && !(await noteStillThere(ev, readNotes))) return { ok: false, message: "That note is no longer on its post in Buffer, or it changed. Read the notes again." };
   if ((await store.dismissed(userId)).has(s.key)) return { ok: false, message: "That suggestion was dismissed. List suggestions again." };
   const existing = (await store.list(userId)).find(r => r.text === s.rule.text && JSON.stringify(r.channels) === JSON.stringify(s.rule.channels) && JSON.stringify(r.accountIds ?? []) === JSON.stringify(s.rule.accountIds ?? []));
   if (existing) return { ok: true, id: existing.id, message: "That rule is already kept." };
