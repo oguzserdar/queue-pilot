@@ -127,7 +127,7 @@ Building your own MCP server on Buffer? [Giving an AI safe write access to Buffe
 1. In Buffer, open **Settings → API → App Clients** and create a client. Set its redirect URI to `https://<your address>/api/auth/callback/buffer`.
 2. Create a Postgres database (Neon works) and set the variables from [`.env.example`](.env.example), including the Buffer client ID and secret. Each line says how to generate its value.
 3. Deploy. Migrations run on every deploy.
-4. Open `/admin`, sign in with Buffer, enter your `ADMIN_SETUP_CODE`, and press **Become the admin**. The code keeps anyone else from claiming the deployment first.
+4. Open `/admin`, sign in with Buffer, enter your `ADMIN_SETUP_CODE`, and press **Become the admin**. In production the code is required, 24 characters or more: without it nobody can claim the deployment from the web, even after the last admin is gone. The code keeps anyone else from claiming it first.
 5. Manage the other keys in `/admin`. To add or restore an admin later: `DATABASE_URL=<your database> pnpm admin:grant you@example.com`.
 
 ### With Docker
@@ -142,7 +142,11 @@ This runs the app and Postgres, applies migrations on start, and runs the daily 
 
 ### Settings
 
-Everything an operator can change lives in `/admin`: Buffer app keys, the hosted AI key and its budget, the daily allowance per person, source keys, and the Telegram and Discord bots. Secrets are encrypted and shown masked. A value saved in `/admin` wins over the server's environment variable, which wins over the default, and `/admin` shows which one is in use. Removing a saved value goes back to the environment's. `DATABASE_URL`, `SESSION_SECRET`, `SETTINGS_KEY` and the other startup values stay in the environment only. Every change is logged.
+The settings in the table below can be changed in `/admin`: Buffer app keys, the hosted AI key and its budget, the daily allowance per person, source keys, and the five Telegram and Discord bot fields. For each one, a value saved in `/admin` wins over the server's environment variable, which wins over the default, and `/admin` shows which one is in use. Removing a saved value goes back to the environment's. Secrets are encrypted and shown masked. Every change is logged with the admin who made it, never with a secret's value.
+
+Startup values stay in the server's environment only and are not in `/admin`: `DATABASE_URL`, `SESSION_SECRET`, `SETTINGS_KEY`, `ADMIN_SETUP_CODE`, `CRON_SECRET`, `BUFFER_REDIRECT_URI` and `TRUSTED_PROXIES`. The server needs them before `/admin` can open, and a key never lives in the database it unlocks.
+
+**Upgrading from 0.7 or earlier.** Before 0.8 the environment won over a saved value. So that an upgrade changes nothing, a value saved before 0.8 does not replace a value set in the environment: the environment's value stays in use, and `/admin` lists each one. Choose **Use the saved value**, save a new value, or remove the saved one. A value saved before 0.8 with no environment value is still used. Values saved from 0.8 on win as described above.
 
 | Variable | In /admin | What it does | Default |
 |---|---|---|---|
