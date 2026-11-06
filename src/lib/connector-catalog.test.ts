@@ -20,6 +20,6 @@ describe("connector catalog", () => {
   });
   it("puts scheduling and deleting under the group that needs a yes", () => {
     const asks = CONNECTOR_CATALOG.find((g) => g.key === "asks")!.items.flatMap((i) => i.tools);
-    expect(asks).toEqual(expect.arrayContaining(["approve_drafts", "delete_draft"]));
+    expect(asks).toEqual(expect.arrayContaining(["approve_drafts", "delete_draft", "update_draft_note", "delete_draft_note"]));
   });
 });

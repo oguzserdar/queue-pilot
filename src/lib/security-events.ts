@@ -1,7 +1,7 @@
 /**
  * @fileoverview Security events: what the person sees under "Security activity" in Settings. Besides sign-ins and
  * removed apps, it records each consequential action (connecting an AI app, scheduling drafts, deleting a draft,
- * content item, tag or hashtag set) with who did it: the connected app's name, or Queue Pilot for the app's own
+ * content item, tag, hashtag set or Buffer note) with who did it: the connected app's name, or Queue Pilot for the app's own
  * buttons. Only counts, ids and names of labels are kept, never post text.
  *
  * Recording never throws: a failed write is logged and the action it describes still completes.
@@ -12,7 +12,7 @@ import { securityEvent } from "../db/schema";
 import { capAppName } from "./app-identity";
 
 /** Actions that change what goes out or remove something, recorded with who did them. */
-export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted"] as const;
+export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted", "note_deleted"] as const;
 export type ActionEventKind = (typeof ACTION_EVENTS)[number];
 
 export type SecurityEventKind = "sign_in" | "app_revoked" | "account_deleted" | ActionEventKind;

@@ -20,7 +20,7 @@ const tool = (file: string, name: string) => {
 const action = (name: string) => actions.slice(actions.indexOf(`export async function ${name}(`), actions.indexOf("\nexport ", actions.indexOf(`export async function ${name}(`) + 1));
 
 describe("action records", () => {
-  it.each([["delete_draft", "draft_deleted"], ["delete_tag", "tag_deleted"], ["delete_snippet", "snippet_deleted"], ["approve_drafts", "drafts_approved"]])("%s records %s under the connected app", (name, kind) => {
+  it.each([["delete_draft", "draft_deleted"], ["delete_draft_note", "note_deleted"], ["delete_tag", "tag_deleted"], ["delete_snippet", "snippet_deleted"], ["approve_drafts", "drafts_approved"]])("%s records %s under the connected app", (name, kind) => {
     expect(tool(route, name)).toContain(`recordAction(userId, "${kind}", await byApp()`);
   });
 
@@ -30,6 +30,12 @@ describe("action records", () => {
 
   it.each([["approveDrafts", "drafts_approved"], ["deleteMyDraft", "draft_deleted"]])("the app's %s button records %s as Queue Pilot", (name, kind) => {
     expect(action(name)).toContain(`recordAction(b.userId, "${kind}", { via: "app" }`);
+  });
+
+  it("delete_draft_note asks for a yes and is marked destructive", () => {
+    const t = tool(route, "delete_draft_note");
+    expect(t).toMatch(/get a clear yes first/);
+    expect(t).toMatch(/destructiveHint: true/);
   });
 
   it.each([[route, "delete_tag"], [route, "delete_snippet"], [items, "delete_content_item"]])("%#: the team-wide delete says the whole team loses it and asks for a yes", (file, name) => {

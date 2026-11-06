@@ -26,6 +26,7 @@ function what(e: SecurityEvent): string {
     case "content_item_deleted": return "Deleted a post kept before choosing accounts";
     case "tag_deleted": return d.name ? `Deleted the tag "${d.name}"` : "Deleted a tag";
     case "snippet_deleted": return "Deleted a hashtag set";
+    case "note_deleted": return "Deleted a note";
   }
 }
 

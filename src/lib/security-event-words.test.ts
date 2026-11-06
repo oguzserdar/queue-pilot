@@ -23,6 +23,7 @@ describe("security event words", () => {
     expect(showSecurityEvent(ev("content_item_deleted", { ...byClaude, count: "2", ids: "ci,p" })).what).toBe("Deleted a post kept before choosing accounts");
     expect(showSecurityEvent(ev("tag_deleted", { ...byClaude, count: "1", ids: "t", name: "launch" })).what).toBe('Deleted the tag "launch"');
     expect(showSecurityEvent(ev("snippet_deleted", { ...byClaude, count: "1", ids: "s" })).what).toBe("Deleted a hashtag set");
+    expect(showSecurityEvent(ev("note_deleted", { ...byClaude, count: "1", ids: "n" })).what).toBe("Deleted a note");
   });
 
   it("says the person did it in Queue Pilot for the app's own buttons", () => {

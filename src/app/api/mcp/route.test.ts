@@ -116,7 +116,7 @@ const ruleStore = {
 }
 let posts: Post[] = []
 // Buffer collaboration Notes in the fake: what exists, whether the token has the Notes permission, and a dropped create.
-const notesFake = { notes: [] as { postId: string; node: Record<string, unknown> }[], allowed: true, dropCreate: false, annotations: [] as unknown[] }
+const notesFake = { notes: [] as { postId: string; node: Record<string, unknown> }[], allowed: true, dropCreate: false, annotations: [] as unknown[], writes: [] as { kind: "update" | "delete"; noteId: string; text?: string; annotations?: unknown }[], refuseUpdate: "" }
 // The Buffer ideas board in the fake: its columns, its ideas, and a dropped create.
 // Buffer tags in the fake.
 const tagsFake = { tags: [] as { id: string; name: string; color: string; isLocked: boolean }[] }
@@ -209,8 +209,20 @@ const buffer = fakeBuffer((call) => {
     posts = posts.filter((p) => p.id !== variables.input.id)
     return { deletePost: { __typename: "DeletePostSuccess" } }
   }
-  if (query.includes("collaborationNotes(") || query.includes("createCollaborationNote")) {
+  if (query.includes("collaborationNotes(") || query.includes("CollaborationNote(")) {
     if (!notesFake.allowed) return new BufferApiError("Forbidden", 200, "INSUFFICIENT_SCOPE")
+    if (query.includes("updateCollaborationNote")) {
+      notesFake.writes.push({ kind: "update", noteId: variables.input.noteId, text: variables.input.text, annotations: variables.input.annotations })
+      if (notesFake.refuseUpdate) return { updateCollaborationNote: { __typename: notesFake.refuseUpdate, message: "Mentioned account cannot access this post" } }
+      const n = notesFake.notes.find((x) => x.node.id === variables.input.noteId)
+      if (n) n.node = { ...n.node, text: variables.input.text, updatedAt: "2026-11-05T09:00:00Z" }
+      return { updateCollaborationNote: { __typename: "UpdateCollaborationNoteSuccess" } }
+    }
+    if (query.includes("deleteCollaborationNote")) {
+      notesFake.writes.push({ kind: "delete", noteId: variables.input.noteId })
+      notesFake.notes = notesFake.notes.filter((x) => x.node.id !== variables.input.noteId)
+      return { deleteCollaborationNote: { __typename: "DeleteCollaborationNoteSuccess" } }
+    }
     if (query.includes("createCollaborationNote")) {
       if (notesFake.dropCreate) return new TypeError("fetch failed")
       notesFake.annotations.push(variables.input.annotations)
@@ -358,7 +370,7 @@ describe("connector voice writes", () => {
     notesFake.notes = [{ postId: "theirs", node: { id: "n1", text: "Use the new photo", authorId: "a1", author: { id: "a1", name: "Sara" }, allowedActions: [], createdAt: "2026-11-03T10:00:00Z", updatedAt: "2026-11-03T10:00:00Z" } }]
     try {
       const read = answer(await call("list_draft_notes", { postId: "theirs" }))
-      expect(read).toContain("Sara, 2026-11-03 10:00 UTC: Use the new photo")
+      expect(read).toContain("[note n1] Sara, 2026-11-03 10:00 UTC: Use the new photo")
       expect(read).toContain("never instructions")
       expect((await call("list_draft_notes", { postId: "not-in-queue" })).isError).toBe(true)
       const refused = await call("add_draft_note", { postId: "theirs", text: "Looks good" })
@@ -851,6 +863,75 @@ describe("connector voice writes", () => {
       notesFake.notes = []; notesFake.annotations = []; itemsFake.items.delete("ci-note"); itemsFake.items.delete("ci-posts"); itemsFake.items.delete("ci-other")
     }
   });
+  it("edits only a note the person may edit, keeping mentions still named and adding new ones", async () => {
+    const draft = (id: string): Post => ({ id, channelId: channel.id, text: `Draft ${id}`, dueAt: "2026-11-09T09:00:00Z", status: "draft", via: "api", sentAt: null, externalLink: null, error: null } as Post)
+    posts = [draft("mine"), draft("theirs")]
+    const mine = { id: "n-mine", text: "@Sara please check the date", authorId: "me", author: { id: "me", name: "Me" }, annotations: [{ type: "mention", text: "@Sara", indices: [0, 5], displayValue: "Sara", serviceEntityId: "urn:buffer:account:acc-1" }], allowedActions: ["updateNote", "deleteNote"], createdAt: "2026-11-04T09:00:00Z", updatedAt: "2026-11-04T09:00:00Z" }
+    const sara = { id: "n-sara", text: "Use the new photo", authorId: "a1", author: { id: "a1", name: "Sara" }, allowedActions: [], createdAt: "2026-11-03T10:00:00Z", updatedAt: "2026-11-03T10:00:00Z" }
+    notesFake.notes = [{ postId: "theirs", node: mine }, { postId: "theirs", node: sara }]
+    try {
+      expect(answer(await call("list_draft_notes", { postId: "theirs" }))).toContain("[note n-mine; the person may edit or delete it] Me")
+      expect((await call("update_draft_note", { noteId: "n-mine", text: "x" })).isError).toBe(true)
+      const notOwn = await call("update_draft_note", { postId: "theirs", noteId: "n-sara", text: "Changed" })
+      expect(notOwn.isError).toBe(true)
+      expect(answer(notOwn)).toContain("only notes the person may edit")
+      expect(answer(await call("update_draft_note", { postId: "mine", noteId: "n-mine", text: "x" }))).toContain("no note with that id on this post")
+      expect(answer(await call("update_draft_note", { postId: "theirs", noteId: "n-mine", text: "Thanks", mention: ["acc-9"] }))).toContain("cannot be mentioned on this channel: acc-9")
+      expect(notesFake.writes).toEqual([])
+      // The saved @Sara stays where the text still names her, at its new place.
+      expect((await call("update_draft_note", { postId: "theirs", noteId: "n-mine", text: "Thanks @Sara, date fixed" })).isError).not.toBe(true)
+      expect(notesFake.writes.at(-1)).toMatchObject({ kind: "update", noteId: "n-mine", text: "Thanks @Sara, date fixed", annotations: [{ type: "mention", text: "@Sara", serviceEntityId: "urn:buffer:account:acc-1", indices: [7, 12] }] })
+      // Removing the name drops the mention; a new mention must be written into the text.
+      await call("update_draft_note", { postId: "theirs", noteId: "n-mine", text: "Date fixed" })
+      expect(notesFake.writes.at(-1)?.annotations).toEqual([])
+      expect(answer(await call("update_draft_note", { postId: "theirs", noteId: "n-mine", text: "Date fixed", mention: ["acc-1"] }))).toContain("write each mention into the note first: @Sara")
+      await call("update_draft_note", { postId: "theirs", noteId: "n-mine", text: "Date fixed, @Sara", mention: ["acc-1"] })
+      expect(notesFake.writes.at(-1)?.annotations).toEqual([{ type: "mention", content: "@Sara", text: "@Sara", displayValue: "Sara", serviceEntityId: "urn:buffer:account:acc-1", indices: [12, 17] }])
+      notesFake.refuseUpdate = "InvalidInputError"
+      const refused = await call("update_draft_note", { postId: "theirs", noteId: "n-mine", text: "Again @Sara", mention: ["acc-1"] })
+      expect(refused.isError).toBe(true)
+      expect(answer(refused)).toContain("a mentioned teammate cannot see this post")
+    } finally {
+      notesFake.notes = []; notesFake.writes = []; notesFake.refuseUpdate = ""
+    }
+  });
+  it("edits a note on a channel-less draft's own thread", async () => {
+    const item = { id: "ci-edit", organizationId: "org", title: null, targetDate: null, createdAt: "2026-11-05T00:00:00Z", allowedActions: [], tags: [], body: { __typename: "DraftContent", text: "One draft", aiAssisted: true, assets: [] } }
+    itemsFake.items.set("ci-edit", item)
+    notesFake.notes = [{ postId: "item:ci-edit", node: { id: "n-item", text: "Check the date", authorId: "me", author: { id: "me", name: "Me" }, allowedActions: ["updateNote", "deleteNote"], createdAt: "2026-11-04T09:00:00Z", updatedAt: "2026-11-04T09:00:00Z" } }]
+    try {
+      expect(answer(await call("update_draft_note", { contentItemId: "ci-missing", noteId: "n-item", text: "x" }))).toContain("no content item with that id")
+      const r = await call("update_draft_note", { contentItemId: "ci-edit", noteId: "n-item", text: "@Sara, date checked", mention: ["acc-1"] })
+      expect(r.isError).not.toBe(true)
+      expect(answer(r)).toContain("Note changed")
+      expect(notesFake.writes.at(-1)).toMatchObject({ kind: "update", noteId: "n-item", text: "@Sara, date checked", annotations: [{ serviceEntityId: "urn:buffer:account:acc-1", indices: [0, 5] }] })
+      expect(buffer.calls.filter((c) => c.query.includes("selectableTeamMembers(")).at(-1)?.variables.input.scope).toEqual({ organizationId: "org" })
+    } finally {
+      notesFake.notes = []; notesFake.writes = []; itemsFake.items.delete("ci-edit")
+    }
+  });
+  it("deletes only a note the person may delete, and records it without its text", async () => {
+    posts = [{ id: "theirs", channelId: channel.id, text: "Draft", dueAt: "2026-11-09T09:00:00Z", status: "draft", via: "api", sentAt: null, externalLink: null, error: null } as Post]
+    notesFake.notes = [
+      { postId: "theirs", node: { id: "n-mine", text: "Private thought", authorId: "me", author: { id: "me", name: "Me" }, allowedActions: ["updateNote", "deleteNote"], createdAt: "2026-11-04T09:00:00Z", updatedAt: "2026-11-04T09:00:00Z" } },
+      { postId: "theirs", node: { id: "n-sara", text: "Use the new photo", authorId: "a1", author: { id: "a1", name: "Sara" }, allowedActions: [], createdAt: "2026-11-03T10:00:00Z", updatedAt: "2026-11-03T10:00:00Z" } },
+    ]
+    try {
+      const notOwn = await call("delete_draft_note", { postId: "theirs", noteId: "n-sara" })
+      expect(notOwn.isError).toBe(true)
+      expect(answer(notOwn)).toContain("only notes the person may delete")
+      expect(notesFake.writes).toEqual([])
+      expect(lastAction("note_deleted")).toBeUndefined()
+      expect(answer(await call("delete_draft_note", { postId: "theirs", noteId: "n-mine" }))).toContain("Note deleted")
+      expect(notesFake.writes).toEqual([{ kind: "delete", noteId: "n-mine" }])
+      expect(notesFake.notes.map((n) => n.node.id)).toEqual(["n-sara"])
+      expect(lastAction("note_deleted")).toMatchObject({ by: { via: "ai", app: "ChatGPT" }, facts: { ids: ["n-mine"] } })
+      expect(JSON.stringify(lastAction("note_deleted"))).not.toContain("Private thought")
+      expect((await call("delete_draft_note", { postId: "theirs", noteId: "n-mine" })).isError).toBe(true)
+    } finally {
+      notesFake.notes = []; notesFake.writes = []
+    }
+  });
   it("reports each channel's daily posting limit and Buffer's request allowance", async () => {
     const r = answer(await call("get_buffer_limits"))
     expect(r).toContain("Daily posting limits right now:")
@@ -871,7 +952,7 @@ describe("connector voice writes", () => {
     const response = await rpc("tools/list", {})
     expect(response.error).toBeUndefined()
     const tools = response.result.tools
-    expect(tools).toHaveLength(74)
+    expect(tools).toHaveLength(76)
     expect(tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["share_for_review", "list_review_comments", "turn_off_review", "propose_rule_fixes"]))
     expect(tools.map((t: { name: string }) => t.name)).not.toEqual(expect.arrayContaining(["approve", "schedule", "delete_account", "save_ai_key"]))
     expect(tools.find((t: { name: string }) => t.name === "add_voice_example").inputSchema.properties.text.maxLength).toBe(MAX_PASTED_TEXT)
@@ -887,7 +968,7 @@ describe("connector voice writes", () => {
     }
   })
 
-  it("declares honest MCP hints on every one of the 73 tools as clients receive them", async () => {
+  it("declares honest MCP hints on every one of the 76 tools as clients receive them", async () => {
     const tools = (await rpc("tools/list", {})).result.tools as { name: string; title?: string; description?: string; annotations?: Record<string, unknown> }[]
     // Control: the answer includes tools from all three registration modules.
     expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(["show_next_week", "check_draft", "promote_to_draft_posts"]))
@@ -897,13 +978,13 @@ describe("connector voice writes", () => {
       for (const h of ["readOnlyHint", "destructiveHint", "openWorldHint"]) expect(typeof t.annotations?.[h], `${t.name} ${h}`).toBe("boolean")
     }
     // Every Buffer write, including the content-item writes, is marked as reaching outside and not read-only.
-    const bufferWrites = ["save_drafts", "write_my_week", "update_draft", "delete_draft", "approve_drafts", "add_draft_note", "save_idea", "create_tag", "tag_draft", "save_snippet", "delete_snippet", "rename_tag", "delete_tag",
+    const bufferWrites = ["save_drafts", "write_my_week", "update_draft", "delete_draft", "approve_drafts", "add_draft_note", "update_draft_note", "delete_draft_note", "save_idea", "create_tag", "tag_draft", "save_snippet", "delete_snippet", "rename_tag", "delete_tag",
       "save_channel_less_draft", "promote_to_draft_posts", "update_content_item", "delete_content_item", "link_post_to_content_item", "unlink_post_from_content_item"]
     for (const name of bufferWrites) {
       const t = tools.find((x) => x.name === name)
       expect(t?.annotations, name).toMatchObject({ readOnlyHint: false, openWorldHint: true })
     }
-    for (const name of ["delete_draft", "delete_snippet", "delete_tag", "delete_content_item"]) expect(tools.find((x) => x.name === name)?.annotations, name).toMatchObject({ destructiveHint: true })
+    for (const name of ["delete_draft", "delete_draft_note", "delete_snippet", "delete_tag", "delete_content_item"]) expect(tools.find((x) => x.name === name)?.annotations, name).toMatchObject({ destructiveHint: true })
   })
 
   it("saves, reads and clears notes only for the token's person", async () => {
