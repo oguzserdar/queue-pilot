@@ -1,0 +1,10 @@
+/* A 2px ring that fills clockwise from twelve o'clock at a steady rate, then gives a small settle as it closes. */
+.ring { display: block; width: 18px; height: 18px; flex: none; rotate: -90deg; overflow: visible }
+.track { fill: none; stroke-width: 2.2; stroke: color-mix(in oklab, currentColor 22%, transparent) }
+.fill { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke: currentColor; stroke-dasharray: 100; stroke-dashoffset: 100;
+  animation: fill var(--ms, 4000ms) linear forwards }
+.ring[data-paused] .fill { animation-play-state: paused }
+.ring[data-tone="light"] { color: var(--background) }
+.ring[data-tone="dark"] { color: var(--accent) }
+@keyframes fill { to { stroke-dashoffset: 0 } }
+@media (prefers-reduced-motion: reduce) { .fill { animation: none; stroke-dashoffset: 0; opacity: .5 } }

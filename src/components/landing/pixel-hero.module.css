@@ -19,6 +19,7 @@
 .pop[data-edge="left"][data-place="above"] { translate: -24px calc(-100% - 10px) }
 .pop b { font-weight: 650 }
 .pop > span:last-child { opacity: .84 }
+.head { display: flex; align-items: center; justify-content: space-between; gap: 12px }
 .n { font: 650 11.5px/1 var(--font-body); letter-spacing: .04em; color: color-mix(in oklab, var(--accent) 45%, var(--background)); font-variant-numeric: tabular-nums }
 @keyframes line { from { opacity: 0 } }
 /* A phone's board is too short to hold a popover, so the same card sits under it, one fixed height so nothing jumps. */

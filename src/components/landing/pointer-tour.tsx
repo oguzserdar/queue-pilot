@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import styles from "./pointer-tour.module.css";
+import { TimerRing } from "./timer-ring";
 
 /** One stop of the tour: how to find the part on the real draft window, and what to say about it. */
 export type TourStop = { find: (root: HTMLElement) => HTMLElement | undefined; title: string; text: string; side?: Side };
@@ -51,7 +52,8 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 export function PointerTour({ stops: STOPS, children, className }: { stops: TourStop[]; children: ReactNode; className?: string }) {
   const root = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
-  const [say, setSay] = useState<{ i: number; place: Place } | null>(null);
+  const [say, setSay] = useState<{ i: number; place: Place; ms: number } | null>(null);
+  const [paused, setPaused] = useState(false);
   // The spotlight: the part being explained stays bright, the rest of the screen fades back behind a soft wash.
   const [spot, setSpot] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   useEffect(() => {
@@ -88,9 +90,10 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
           setSpot({ x: r.left - box.left - PAD, y: r.top - box.top - PAD, w: r.width + PAD * 2, h: r.height + PAD * 2 });
           if (still) { pos = to; setAt(to); } else await glide(to);
           const lit = new DOMRect(r.left - PAD, r.top - PAD, r.width + PAD * 2, r.height + PAD * 2);
-          setSay({ i, place: placeBeside(lit, box, STOPS[i].side) });
-          // Long enough to read the popover at an average 4 words a second, plus a moment to look.
-          await wait(Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500));
+          // Long enough to read the popover at an average 4 words a second, plus a moment to look; the ring shows it.
+          const ms = Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500);
+          setSay({ i, place: placeBeside(lit, box, STOPS[i].side), ms });
+          await wait(ms);
         }
         i = (i + 1) % STOPS.length;
       }
@@ -106,7 +109,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
       if (near && near.d < 160 && near.k !== current && jump === null) jump = near.k;
     };
     el.addEventListener("pointermove", onMove);
-    const seen = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.3 });
+    const seen = new IntersectionObserver(([e]) => { visible = e.isIntersecting; setPaused(!visible); }, { threshold: 0.3 });
     seen.observe(el);
     void play();
     return () => { alive = false; seen.disconnect(); el.removeEventListener("pointermove", onMove); };
@@ -120,6 +123,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
       {at && (
         <div className={styles.pointer} style={{ transform: `translate(${at.x}px, ${at.y}px)` }} aria-hidden="true">
           <svg viewBox="0 0 11 17" shapeRendering="crispEdges">{POINTER}</svg>
+          {say && <span className={styles.timer}><TimerRing key={say.i} ms={say.ms} paused={paused} tone="dark" /></span>}
         </div>
       )}
       {stop && say && (
