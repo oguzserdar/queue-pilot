@@ -9,7 +9,7 @@ import { AiStrip } from "@/components/landing/ai-strip";
 import { HandUnderline } from "@/components/landing/hand-underline";
 import { LiveSameFix, LiveWeek } from "@/components/landing/live-screens";
 import { SetupScene } from "@/components/landing/setup-scene";
-import { HeroWalkthrough } from "@/components/landing/hero-walkthrough";
+import { PixelHero } from "@/components/landing/pixel-hero";
 import { demoWeek } from "@/lib/demo-data";
 import { countOpenSlots } from "@/lib/week-model";
 import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
@@ -85,9 +85,7 @@ export default function HomePage() {
               </div>
             </div>
             <PilotWeek week={false} className={s.heroPilot} />
-            <figure className={[s.shot, s.heroShot, s.liveShot].join(" ")}>
-              <HeroWalkthrough {...demoWeekProps()} />
-            </figure>
+            <div className={s.heroArt}><PixelHero week={demoWeek} /></div>
           </div>
         </section>
 
