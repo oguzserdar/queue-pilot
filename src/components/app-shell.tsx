@@ -4,6 +4,7 @@ import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
 import Link from "next/link";
 
 import { SignInButton, SignInNotice } from "./sign-in-button";
+import button from "@/registry/components/button/button.module.css";
 import { DemoNudge } from "./demo-nudge";
 
 import { MotionConfig } from "motion/react";
@@ -131,7 +132,11 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
         </aside>
         <div className={styles.column}>
           {account ? <SyncBanner /> : (
-            <div className={styles.demo}>Demo: Alex writes This Week in AI, a Sunday newsletter on AI model releases and agents. This is the app itself with sample data. Sign in with Buffer to see your own queue, or <a href="/demo/leave">leave the demo</a>.</div>
+            // The demo bar says where you are and always offers the way out, as a button, not a link at the end of a sentence.
+            <div className={styles.demo}>
+              <p className={styles.demoText}><b>Demo</b> Alex Rivera&apos;s sample account: the app itself, with sample data. Nothing here touches a real Buffer.</p>
+              <a className={[button.button, button.secondary, button.sm, styles.demoExit].join(" ")} href="/demo/leave">Exit demo</a>
+            </div>
           )}
           <main className={styles.main}><SignInNotice />{children}</main>
         </div>
