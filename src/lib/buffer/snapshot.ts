@@ -8,7 +8,7 @@
  * a short claim on the row (refreshing_until) keeps a second instance from starting a parallel refresh.
  */
 import { BufferApiError, BufferRateLimitedError, bufferQuery, type RateLimitWindow } from "./client";
-import { getAccount, listPostsDue, readOrganizations, type Account, type Channel, type OrgRead, type Post } from "./queries";
+import { IncompleteReadError, getAccount, listPostsDue, readOrganizations, type Account, type Channel, type OrgRead, type Post } from "./queries";
 
 /** Posts from this many days ago (delivery check) to this many days ahead (next week plus margin). */
 export const PAST_DAYS = 7;
@@ -86,17 +86,26 @@ async function fetchFromBuffer(token: string, now: Date, query: typeof bufferQue
     start: new Date(now.getTime() - PAST_DAYS * 86_400_000).toISOString(),
     end: new Date(now.getTime() + FUTURE_DAYS * 86_400_000).toISOString(),
   };
-  const fromAccount = async () => ({ account: await getAccount(token, q), orgs: new Map<string, OrgRead>() });
-  // Buffer refuses the whole request when one known organization is no longer the person's; then start from the
-  // account. Sign-in, rate-limit and server errors are not that, and still fail the refresh.
-  const first = knownOrganizationIds.length
-    ? await readOrganizations(token, knownOrganizationIds, range, true, q).catch((e) => {
-      if (e instanceof BufferApiError && e.status === 200 && !(e instanceof BufferRateLimitedError)) return fromAccount();
-      throw e;
-    })
-    : await fromAccount();
-  const account: Account = first.account ?? (await getAccount(token, q));
-  const orgs = first.orgs;
+  // Buffer refuses the whole request when one organization in it is no longer the person's. Recover only when the
+  // account's organizations really changed; any other refusal (a query error, a missing permission) is not that and
+  // fails the refresh as it is, so the last good copy stays and the failing query is not sent again.
+  let account: Account;
+  let orgs = new Map<string, OrgRead>();
+  if (knownOrganizationIds.length) {
+    try {
+      const read = await readOrganizations(token, knownOrganizationIds, range, true, q);
+      if (!read.account) throw new IncompleteReadError("account");
+      account = read.account;
+      orgs = read.orgs;
+    } catch (e) {
+      if (!(e instanceof BufferApiError) || e.status !== 200 || e instanceof BufferRateLimitedError) throw e;
+      account = await getAccount(token, q);
+      const same = account.organizationIds.length === knownOrganizationIds.length && account.organizationIds.every((id) => knownOrganizationIds.includes(id));
+      if (same) throw e;
+    }
+  } else {
+    account = await getAccount(token, q);
+  }
   const joined = account.organizationIds.filter((id) => !orgs.has(id));
   if (joined.length) for (const [id, read] of (await readOrganizations(token, joined, range, false, q)).orgs) orgs.set(id, read);
 
@@ -112,7 +121,7 @@ async function fetchFromBuffer(token: string, now: Date, query: typeof bufferQue
       teamSizes: account.teamSizes,
       channels: reads.flatMap((r) => r.channels),
       posts: reads.flatMap((r, i) => [...r.posts, ...more[i].posts]),
-      truncated: more.some((m) => m.truncated),
+      truncated: reads.some((r) => r.truncated) || more.some((m) => m.truncated),
       range,
     },
     fetchedAt: now,

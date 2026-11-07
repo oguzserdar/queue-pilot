@@ -126,4 +126,36 @@ describe("refresh request count", () => {
     expect(buffer.requests).toHaveLength(2);
     expect(snap?.data.posts).toHaveLength(20);
   });
+
+  it("sends a refused request once and does not ask again when the account's organizations did not change", async () => {
+    const store = memorySnapshotStore();
+    await refreshSnapshot("u1", "tok", { store, query: fakeBuffer([{ id: "o1", posts: 1 }]).query, now: () => NOW });
+    const good = await store.get("u1");
+    const requests: string[] = [];
+    const query = (async (_t: string, text: string) => {
+      requests.push(text);
+      if (/c0: channels/.test(text)) throw new BufferApiError("Query has a validation error", 200, "GRAPHQL_VALIDATION_FAILED");
+      return { account: { email: "a@b.co", timezone: "UTC", organizations: [{ id: "o1" }] } };
+    }) as unknown as typeof bufferQuery;
+    await expect(refreshSnapshot("u1", "tok", { store, query, now: () => LATER })).rejects.toThrow("validation error");
+    expect(requests.filter((r) => /c0: channels/.test(r))).toHaveLength(1);
+    expect(await store.get("u1")).toEqual(good);
+  });
+
+  it("keeps the last good copy when Buffer's answer leaves out an organization's posts", async () => {
+    const store = memorySnapshotStore();
+    await refreshSnapshot("u1", "tok", { store, query: fakeBuffer([{ id: "o1", posts: 1 }]).query, now: () => NOW });
+    const good = await store.get("u1");
+    const query = (async () => ({ account: { email: "a@b.co", timezone: "UTC", organizations: [{ id: "o1" }] }, c0: [{ id: "o1-c", name: "X" }] })) as unknown as typeof bufferQuery;
+    await expect(refreshSnapshot("u1", "tok", { store, query, now: () => LATER })).rejects.toThrow("left out");
+    expect(await store.get("u1")).toEqual(good);
+  });
+
+  it("marks the copy incomplete when Buffer says there are more posts but gives no cursor", async () => {
+    const query = (async (_t: string, text: string) => /c0: channels/.test(text)
+      ? { c0: [{ id: "o1-c", name: "X" }], p0: { edges: [], pageInfo: { hasNextPage: true, endCursor: null } } }
+      : { account: { email: "a@b.co", timezone: "UTC", organizations: [{ id: "o1" }] } }) as unknown as typeof bufferQuery;
+    const snap = await refreshSnapshot("u1", "tok", { store: memorySnapshotStore(), query, now: () => NOW });
+    expect(snap?.data.truncated).toBe(true);
+  });
 });

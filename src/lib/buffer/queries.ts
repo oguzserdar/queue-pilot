@@ -137,7 +137,9 @@ export async function listPostsDue(
       },
     );
     posts.push(...data.posts.edges.map((e) => e.node));
-    if (!data.posts.pageInfo.hasNextPage || !data.posts.pageInfo.endCursor) return { posts, truncated: false };
+    if (!data.posts.pageInfo.hasNextPage) return { posts, truncated: false };
+    // More exists but there is no cursor to reach it: what was read is not the whole queue.
+    if (!data.posts.pageInfo.endCursor) return { posts, truncated: true };
     after = data.posts.pageInfo.endCursor;
   }
   return { posts, truncated: true };
@@ -148,8 +150,16 @@ const postsInput = (organizationId: string, range: { start: string; end: string 
 /** Organizations per request: each takes two aliases (channels and posts), within Buffer's MAX_ALIASES. */
 const ORGS_PER_REQUEST = Math.floor(MAX_ALIASES / 2);
 
+/** Buffer answered without a field that was asked for, so the read cannot stand for the whole queue. */
+export class IncompleteReadError extends Error {
+  constructor(what: string) {
+    super(`Buffer's answer left out ${what}`);
+    this.name = "IncompleteReadError";
+  }
+}
+
 /** One organization's channels, its first page of due posts, and the cursor of the next page when there is one. */
-export type OrgRead = { channels: Channel[]; posts: Post[]; next: string | null };
+export type OrgRead = { channels: Channel[]; posts: Post[]; next: string | null; truncated: boolean };
 
 /**
  * The channels and the first page of due posts of several organizations, and the account when asked, in as few
@@ -187,13 +197,19 @@ export async function readOrganizations(
     type Answer = { account?: RawAccount } & Record<string, Channel[] | { edges: { node: Post }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } | RawAccount | undefined>;
     const data = await q<Answer>(token, `query (${decl.join(", ")}) { ${fields.join(" ")} }`, vars);
     if (askAccount && data.account) account = toAccount(data.account);
+    if (askAccount && !data.account) throw new IncompleteReadError("account");
     ids.forEach((id, i) => {
-      const channels = (data[`c${i}`] as Channel[] | undefined) ?? [];
+      const channels = data[`c${i}`] as Channel[] | undefined;
       const page = data[`p${i}`] as { edges: { node: Post }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } | undefined;
+      // A field missing from the answer is not an empty queue: fail, so the last good copy stays.
+      if (!Array.isArray(channels) || !page?.edges || !page.pageInfo) throw new IncompleteReadError(`organization ${id}`);
+      const more = page.pageInfo.hasNextPage;
       orgs.set(id, {
         channels: channels.map((c) => ({ ...c, organizationId: id })),
-        posts: page?.edges.map((e) => e.node) ?? [],
-        next: page?.pageInfo.hasNextPage && page.pageInfo.endCursor ? page.pageInfo.endCursor : null,
+        posts: page.edges.map((e) => e.node),
+        next: more && page.pageInfo.endCursor ? page.pageInfo.endCursor : null,
+        // Buffer says there is more but gives no cursor to continue: what was read is not the whole queue.
+        truncated: more && !page.pageInfo.endCursor,
       });
     });
   }
