@@ -65,7 +65,7 @@ function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect,
   // Beside the part: as wide as the room allows (up to 400px) so it wraps to fewer lines, its top level with the
   // part, and only lifted as far as the frame's bottom edge needs.
   const sideW = Math.min(400, box.width - EDGE - right);
-  if (sideW >= 220) {
+  if (sideW >= 190) {
     const sideH = heightAt(sideW);
     const y = Math.max(EDGE, Math.min(part.top - box.top - 4, box.height - sideH - 8));
     if (y + sideH <= box.height - 8) return { side: "right", x: right, y, w: sideW };
