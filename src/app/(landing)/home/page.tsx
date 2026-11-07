@@ -141,10 +141,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               <p><a href={REPO}>Code, changelog and issues on GitHub</a></p>
             </div>
             <ol className={s.loop}>
-              <li className={s.step}><span className={s.meta}>Buffer</span><p>Create an app client in Buffer under Settings, API, App Clients, with your address as its redirect.</p></li>
-              <li className={s.step}><span className={s.meta}>Database</span><p>Create a Postgres database and fill in the values from <code>.env.example</code>. Each line says how.</p></li>
-              <li className={s.step}><span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every start.</p></li>
-              <li className={s.step}><span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim the deployment with your setup code.</p></li>
+              <li className={s.step}><Image className={s.stepArt} src="/landing/setup/step-1.png" alt="" width={1920} height={1280} sizes="(max-width: 900px) 100vw, 300px" /><span className={s.meta}>Buffer</span><p>Create an app client in Buffer under Settings, API, App Clients, with your address as its redirect.</p></li>
+              <li className={s.step}><Image className={s.stepArt} src="/landing/setup/step-2.png" alt="" width={1920} height={1280} sizes="(max-width: 900px) 100vw, 300px" /><span className={s.meta}>Database</span><p>Create a Postgres database and fill in the values from <code>.env.example</code>. Each line says how.</p></li>
+              <li className={s.step}><Image className={s.stepArt} src="/landing/setup/step-3.png" alt="" width={1920} height={1280} sizes="(max-width: 900px) 100vw, 300px" /><span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every start.</p></li>
+              <li className={s.step}><Image className={s.stepArt} src="/landing/setup/step-4.png" alt="" width={1920} height={1280} sizes="(max-width: 900px) 100vw, 300px" /><span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim the deployment with your setup code.</p></li>
             </ol>
           </div>
         </section>

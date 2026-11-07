@@ -85,6 +85,8 @@
 .step del { color: var(--text-muted); text-decoration-color: var(--danger) }
 .step ins { text-decoration: none; background: var(--qp-success-wash); border-radius: 4px; padding: 0 2px }
 .step b { font-size: 17px }
+/* The step's pixel picture sits on top, above the number, edge to edge inside the card's padding. */
+.stepArt { order: -1; width: 100%; height: auto; aspect-ratio: 3 / 2; border-radius: var(--radius-control); background: var(--background); margin-bottom: 4px }
 .offer { box-shadow: 0 0 0 2px var(--accent) }
 .offer::before { background: var(--accent); color: var(--accent-foreground) }
 .hint { font-size: 14px; color: var(--text-secondary) }
@@ -123,7 +125,9 @@
 .heroStack .heroCopy h1 { max-width: 16ch }
 /* Copy left, the Pilot right and bigger than before; the real screen spans both columns below. */
 @media (min-width: 901px) { .heroStack { grid-template-columns: minmax(0, 1fr) auto } .heroStack > figure { grid-column: 1 / -1 } }
-.heroPilot { --pw: clamp(180px, 20vw, 260px); align-self: end; padding-right: clamp(0px, 4vw, 64px) }
+.heroPilot { --pw: clamp(180px, 20vw, 260px); align-self: center; padding-right: clamp(0px, 4vw, 64px) }
+/* Alone in the hero it stands on nothing, so it drops the overlap it keeps when standing on the example week. */
+.heroPilot > div { margin-bottom: 0 }
 @media (max-width: 900px) { .heroPilot { display: none } }
 .shot { margin: 0; border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 24px 60px -24px oklch(0.35 0.08 357 / 0.28) }
 .shot img { display: block; width: 100%; height: auto }
