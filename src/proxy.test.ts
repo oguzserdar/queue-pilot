@@ -40,14 +40,17 @@ describe("the app's screens", () => {
 });
 
 describe("the demo", () => {
-  it("starts from /demo and opens the app's home with sample data", () => {
+  it("lives at /demo: it opens the app's home with sample data and keeps the address /demo", () => {
     const res = proxy(at("/demo"));
-    expect(redirectedTo(res)).toBe("/");
+    expect(rewrittenTo(res)).toBe("/");
     expect(res.headers.get("set-cookie")).toMatch(new RegExp(`${DEMO_COOKIE}=1`));
   });
-  it("lets a demo visitor use every screen", () => {
-    expect(passes(proxy(at("/", DEMO)))).toBe(true);
+  it("never takes over /: going back from the demo shows the homepage", () => {
+    expect(rewrittenTo(proxy(at("/", DEMO)))).toBe("/home");
+  });
+  it("lets a demo visitor use every screen, and come back to its home at /demo", () => {
     expect(passes(proxy(at("/week", DEMO)))).toBe(true);
+    expect(rewrittenTo(proxy(at("/demo", DEMO)))).toBe("/");
   });
   it("ends at /demo/leave, back on the homepage", () => {
     const res = proxy(at("/demo/leave", DEMO));

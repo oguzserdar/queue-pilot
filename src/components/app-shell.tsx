@@ -81,6 +81,8 @@ function MaybeSync({ account, children }: { account: ShellAccount; children: Rea
 /** The app frame: sidebar navigation, the user's AI, and the Buffer account. Signed out, every screen shows example data and says so. */
 export function AppShell({ account, signInOpen, children }: { account: ShellAccount; signInOpen: boolean; children: ReactNode }) {
   const path = usePathname();
+  // The demo's home lives at /demo, because / is the homepage for anyone not signed in.
+  const home = account ? "/" : "/demo";
   const navRef = useRef<HTMLElement>(null);
   // On a phone the tab row scrolls sideways: bring the current page's tab into view, so you can see where you are.
   useEffect(() => {
@@ -93,13 +95,14 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
     <MaybeSync account={account}>
     <div className={styles.frame}>
         <aside className={styles.side}>
-          <Link href="/" className={styles.brand} aria-label="Queue Pilot home">Queue Pilot<span className={styles.brandDot} aria-hidden="true">.</span></Link>
+          <Link href={home} className={styles.brand} aria-label="Queue Pilot home">Queue Pilot<span className={styles.brandDot} aria-hidden="true">.</span></Link>
           <nav ref={navRef} className={styles.nav} aria-label="Main">
             {NAV_GROUPS.map((group) => (
               <div key={group.label ?? "home"} className={styles.group}>
                 {group.label && <span className={styles.groupLabel}>{group.label}</span>}
-                {group.items.map(({ href, label, Icon }) => {
-                  const active = href === "/" ? path === "/" : path.startsWith(href);
+                {group.items.map(({ href: to, label, Icon }) => {
+                  const href = to === "/" ? home : to;
+                  const active = to === "/" ? path === "/" || path === "/demo" : path.startsWith(href);
                   return <NavItem key={href} href={href} label={label} Icon={Icon} active={active} className={active ? `${styles.link} ${styles.active}` : styles.link} iconClassName={styles.navIcon} pendingClassName={styles.pending} />;
                 })}
               </div>

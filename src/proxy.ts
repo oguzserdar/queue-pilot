@@ -4,9 +4,10 @@
  * - Signed in with Buffer: the app, everywhere.
  * - Not signed in: the homepage at `/` (served from /home, so the address stays `/`), and every app screen sends the
  *   visitor back to `/`.
- * - "Try the demo" (`/demo`): marks the visit as a demo and opens the app's home. The demo is the app itself, the same
- *   screens and code, showing sample data because there is no account. `/demo/leave` ends it. Someone signed in is
- *   sent to their own app instead, so demo buttons can never act on a real account.
+ * - "Try the demo" (`/demo`): marks the visit as a demo and shows the app's home at that address. The demo is the app
+ *   itself, the same screens and code, showing sample data because there is no account. Its home stays at `/demo`, so
+ *   `/` is always the homepage for someone not signed in: going back from the demo lands on the homepage. `/demo/leave`
+ *   ends it. Someone signed in is sent to their own app instead, so demo buttons can never act on a real account.
  *
  * Only the presence of a session cookie is checked here. That is a routing choice, not authorization: every app page
  * and action still reads the real session itself.
@@ -36,8 +37,11 @@ export function proxy(request: NextRequest) {
 
   if (path === "/home") return to(request, "/");
   if (path === "/demo") {
-    const res = to(request, "/");
-    if (!signedIn) res.cookies.set(DEMO_COOKIE, "1", { path: "/", httpOnly: true, sameSite: "lax", secure: request.nextUrl.protocol === "https:", maxAge: DEMO_DAYS * 86_400 });
+    if (signedIn) return to(request, "/");
+    const app = request.nextUrl.clone();
+    app.pathname = "/";
+    const res = NextResponse.rewrite(app);
+    res.cookies.set(DEMO_COOKIE, "1", { path: "/", httpOnly: true, sameSite: "lax", secure: request.nextUrl.protocol === "https:", maxAge: DEMO_DAYS * 86_400 });
     return res;
   }
   if (path === "/demo/leave") {
@@ -45,8 +49,8 @@ export function proxy(request: NextRequest) {
     res.cookies.delete(DEMO_COOKIE);
     return res;
   }
-  if (signedIn || demo) return NextResponse.next();
-  if (path !== "/") return to(request, "/");
+  if (signedIn) return NextResponse.next();
+  if (path !== "/") return demo ? NextResponse.next() : to(request, "/");
   // The homepage keeps its query string, so a campaign link like /?ref=launch reaches the page with it.
   const home = request.nextUrl.clone();
   home.pathname = "/home";
