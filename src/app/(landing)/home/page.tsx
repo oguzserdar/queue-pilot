@@ -6,7 +6,6 @@ import button from "@/registry/components/button/button.module.css";
 import { PilotWeek } from "@/components/landing/pilot-week";
 import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
-import { PilotMark } from "@/components/landing/pilot-mark";
 import { HandUnderline } from "@/components/landing/hand-underline";
 import { LiveSameFix, LiveWeek } from "@/components/landing/live-screens";
 import { demoWeek } from "@/lib/demo-data";
@@ -151,7 +150,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
         <section className={s.band} aria-labelledby="start-title">
           <PixelField placement="band" />
-          <div className={s.wrap} aria-hidden="true"><PilotMark className={s.bandPilot} /></div>
           <div className={[s.wrap, s.bandInner].join(" ")}>
             <h2 id="start-title">Fill next week from what you already shipped</h2>
             <p>Sign in with Buffer, connect your AI, and ask it to fill next week from your newsletter, blog or videos.</p>

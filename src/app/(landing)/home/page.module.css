@@ -101,8 +101,6 @@
 .bandLink { color: oklch(0.92 0.01 357); font-size: 16px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px }
 /* The still Pilot stands on the band's top edge, at the left of the column. */
 .band > .wrap[aria-hidden] { position: relative; z-index: 1; height: 0 }
-.bandPilot { position: absolute; left: var(--gutter); bottom: -6px; width: 76px; height: 76px }
-@media (max-width: 600px) { .bandPilot { width: 60px; height: 60px } }
 
 /* Footer: one row on the same wrapper. */
 .footer { border-top: 1px solid var(--border-subtle) }
