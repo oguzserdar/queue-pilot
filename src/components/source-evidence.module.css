@@ -50,3 +50,8 @@
 .linkButton:focus-visible { outline: 2px solid var(--accent, #921653); outline-offset: 3px; border-radius: 4px; }
 
 @media (max-width: 700px) { .pair { grid-template-columns: 1fr; } }
+
+/* The recheck action and what it does: one line, one size, one baseline. */
+.recheck { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px }
+.recheck .caption { font-size: 13px; color: var(--text-muted) }
+.recheck .linkButton svg { align-self: center }

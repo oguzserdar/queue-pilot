@@ -60,7 +60,7 @@ export function DraftSources({ cards, live }: { cards: EvidenceCard[]; live: boo
           : <details key={`${c.snapshotId}-${i}`} className={styles.folded}><summary><ChevronDown size={15} strokeWidth={1.75} aria-hidden="true" className={styles.chevron} /><span className={styles.pairLabel}>Quote {i + 1}</span><span className={styles.summaryText}>{c.claim}</span></summary><QuotePair c={c} /></details>)}
       </div>;
     })}
-    <div><button type="button" className={styles.linkButton} disabled={pending} onClick={() => live ? start(async () => { const r = await recheckSourceEvidence(cards[0].postId); setMessage(r.message ?? "Checked."); router.refresh(); }) : setMessage("Example account: the quotes above are already checked against the saved issue.")}><RotateCw size={14} strokeWidth={1.75} aria-hidden="true" />{pending ? "Rechecking…" : "Recheck draft"}</button><span className={styles.caption}> Uses the saved source; it does not fetch the page again.</span></div>
+    <div className={styles.recheck}><button type="button" className={styles.linkButton} disabled={pending} onClick={() => live ? start(async () => { const r = await recheckSourceEvidence(cards[0].postId); setMessage(r.message ?? "Checked."); router.refresh(); }) : setMessage("Example account: the quotes above are already checked against the saved issue.")}><RotateCw size={14} strokeWidth={1.75} aria-hidden="true" />{pending ? "Rechecking…" : "Recheck draft"}</button><span className={styles.caption}>Checks the saved source again, without fetching the page.</span></div>
     {message && <p className={styles.caption} role="status">{message}</p>}
   </section>;
 }
