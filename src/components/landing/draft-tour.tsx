@@ -7,14 +7,17 @@ import { ToastStackProvider } from "@/registry/components/toast-stack/toast-stac
 import { PointerTour, byText, type TourStop } from "./pointer-tour";
 import styles from "./pointer-tour.module.css";
 
+/** The smallest element whose text passes the test: a whole block, found by what it says. */
+const block = (test: (s: string) => boolean) => (r: HTMLElement) => byText(r, test);
+
 const STOPS: TourStop[] = [
-  { find: (r) => byText(r, (s) => s === "Post"), title: "A draft in your Buffer week",
+  { find: block((s) => s.startsWith("Gemini 4 Carbon ranks") && s.includes("This Week in AI")), title: "A draft in your Buffer week",
     text: "Your AI wrote it for an empty LinkedIn time. It waits in Buffer as a draft." },
-  { find: (r) => byText(r, (s) => s.startsWith("In this draft")), title: "Quotes match the source",
+  { find: block((s) => s.startsWith("In this draft") && s.includes("From the source")), title: "Quotes match the source",
     text: "Each quote is matched word for word to the page it came from." },
-  { find: (r) => byText(r, (s) => s === "Checks"), title: "Checked before Buffer",
+  { find: block((s) => s.startsWith("Checks") && s.includes("rules set")), title: "Checked before Buffer",
     text: "Your playbook rules, and whether this channel can take the post right now." },
-  { find: (r) => byText(r, (s) => s.startsWith("Notes")), title: "Notes from your team",
+  { find: block((s) => s.startsWith("Notes") && s.includes("Alex Rivera") && !s.includes("Checks")), title: "Notes from your team",
     text: "Teammates leave notes on the draft. Type @ to mention someone." },
   { find: (r) => byText(r, (s) => s === "Edit"), title: "Change it, then approve",
     text: "Edit here or in Buffer. Approving is what schedules it." },
@@ -26,13 +29,13 @@ export function DraftTour(props: ComponentProps<typeof WeekView>) {
 }
 
 const SAME_FIX: TourStop[] = [
-  { find: (r) => r.querySelector<HTMLElement>("del")?.closest("p") ?? undefined, side: "below", title: "Your edit in Buffer",
+  { find: (r) => r.querySelector<HTMLElement>("del")?.closest("p") ?? undefined, title: "Your edit in Buffer",
     text: "You cut the opening line and led with what happened." },
-  { find: (r) => byText(r, (s) => s.startsWith("On Instagram")), title: "Spotted twice",
+  { find: block((s) => s.startsWith("On Instagram")), title: "Spotted twice",
     text: "The same fix on two posts, so it is probably a habit worth keeping." },
-  { find: (r) => byText(r, (s) => s.startsWith("Keep as a rule:")), title: "One rule for every AI",
+  { find: block((s) => s.startsWith("Keep as a rule:")), title: "One rule for every AI",
     text: "Kept, it is checked on every draft, whichever AI writes it." },
-  { find: (r) => byText(r, (s) => s === "Not now"), title: "Your call",
+  { find: block((s) => s.includes("Keep as a rule") && s.includes("Not now") && !s.includes("Start with")), title: "Your call",
     text: "Keep it, or Not now. Nothing changes until you choose." },
 ];
 

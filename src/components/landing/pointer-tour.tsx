@@ -9,14 +9,7 @@ type Side = "right" | "left" | "above" | "below";
 /** Where the popover opens: beside its target, never over it. */
 type Place = { side: Side; x: number; y: number; w: number };
 
-const POP_WIDE = 248, POP_H = 76, GAP = 12;
-/** The box around a target's own text, not its whole block, so a short line leaves room beside it. */
-const tightRect = (el: HTMLElement) => {
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  const r = range.getBoundingClientRect();
-  return r.width > 0 ? r : el.getBoundingClientRect();
-};
+const POP_WIDE = 248, POP_H = 76, GAP = 12, PAD = 6;
 /** Picks the first side with room inside the frame: the stop's own preference, then right, left, below, above. */
 function placeBeside(r: DOMRect, box: DOMRect, prefer?: Side): Place {
   // On a phone the card is narrow: the popover takes the card's width less a margin, and opens above or below.
@@ -59,6 +52,8 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
   const root = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const [say, setSay] = useState<{ i: number; place: Place } | null>(null);
+  // The spotlight: the part being explained stays bright, the rest of the screen fades back behind a soft wash.
+  const [spot, setSpot] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   useEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -87,11 +82,13 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
         current = i;
         const target = STOPS[i].find(el);
         if (target) {
-          const box = el.getBoundingClientRect(), r = tightRect(target);
+          const box = el.getBoundingClientRect(), r = target.getBoundingClientRect();
           const to = { x: r.left - box.left + Math.min(r.width * 0.5, 40), y: r.top - box.top + r.height * 0.6 };
           setSay(null);
+          setSpot({ x: r.left - box.left - PAD, y: r.top - box.top - PAD, w: r.width + PAD * 2, h: r.height + PAD * 2 });
           if (still) { pos = to; setAt(to); } else await glide(to);
-          setSay({ i, place: placeBeside(r, box, STOPS[i].side) });
+          const lit = new DOMRect(r.left - PAD, r.top - PAD, r.width + PAD * 2, r.height + PAD * 2);
+          setSay({ i, place: placeBeside(lit, box, STOPS[i].side) });
           // Long enough to read the popover at an average 4 words a second, plus a moment to look.
           await wait(Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500));
         }
@@ -119,6 +116,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
   return (
     <div ref={root} className={[styles.root, className].filter(Boolean).join(" ")}>
       <div className={styles.screen} inert>{children}</div>
+      {spot && <div className={styles.spot} style={{ transform: `translate(${spot.x}px, ${spot.y}px)`, width: spot.w, height: spot.h }} aria-hidden="true" />}
       {at && (
         <div className={styles.pointer} style={{ transform: `translate(${at.x}px, ${at.y}px)` }} aria-hidden="true">
           <svg viewBox="0 0 11 17" shapeRendering="crispEdges">{POINTER}</svg>
