@@ -20,6 +20,10 @@ describe("the homepage", () => {
   it("sends anyone who types the homepage's own address to /", () => {
     expect(redirectedTo(proxy(at("/home")))).toBe("/");
   });
+  it("keeps the query string, so /?live=1 reaches the homepage", () => {
+    const r = proxy(at("/?live=1")).headers.get("x-middleware-rewrite");
+    expect(r && new URL(r).search).toBe("?live=1");
+  });
   it("ignores unrelated cookies", () => {
     expect(rewrittenTo(proxy(at("/", "theme=dark")))).toBe("/home");
   });

@@ -8,6 +8,10 @@ import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
 import { PilotMark } from "@/components/landing/pilot-mark";
 import { HandUnderline } from "@/components/landing/hand-underline";
+import { LiveSameFix, LiveWeek } from "@/components/landing/live-screens";
+import { demoWeek } from "@/lib/demo-data";
+import { countOpenSlots } from "@/lib/week-model";
+import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
 import s from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -41,7 +45,15 @@ const faq = [
 ];
 
 /** The public landing page: sections on one wrapper, Arc controls as Arc ships them. */
-export default function HomePage() {
+/** The demo week's props, exactly as the demo's own Next week page passes them. */
+function demoWeekProps() {
+  const ids = demoWeek.posts.filter((p) => p.status === "draft").map((p) => p.id);
+  return { week: demoWeek, evidence: exampleEvidence, notesPreview: exampleNotes(ids), tagsPreview: exampleTags(ids), rules: exampleRules, writing: exampleWriting, writeCount: countOpenSlots(demoWeek), approvals: exampleApprovals };
+}
+
+/** `?live=1` draws the app's real components in place of the three screenshots, to compare the two. */
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ live?: string }> }) {
+  const live = (await searchParams).live === "1";
   return (
     <div className={s.page}>
       <header className={s.header}>
@@ -73,8 +85,8 @@ export default function HomePage() {
               </div>
             </div>
             <PilotWeek week={false} className={s.heroPilot} />
-            <figure className={[s.shot, s.heroShot].join(" ")}>
-              <Image src="/landing/screens/next-week.png" alt="Queue Pilot's Next week screen: drafts by account and day, ready to approve, one blocked" width={2400} height={1640} priority sizes="(max-width: 1240px) 100vw, 1200px" />
+            <figure className={[s.shot, s.heroShot, live ? s.liveShot : ""].join(" ")}>
+              {live ? <LiveWeek {...demoWeekProps()} /> : <Image src="/landing/screens/next-week.png" alt="Queue Pilot's Next week screen: drafts by account and day, ready to approve, one blocked" width={2400} height={1640} priority sizes="(max-width: 1240px) 100vw, 1200px" />}
             </figure>
           </div>
         </section>
@@ -93,8 +105,8 @@ export default function HomePage() {
               <li><b>Queue Pilot checks each draft</b><p>Quotes against your source, then your rules. A draft that breaks a blocking rule is not saved.</p></li>
               <li><b>You approve</b><p>Drafts wait in Buffer. Approve them in Queue Pilot, in Buffer or in your AI chat.</p></li>
             </ol>
-            <figure className={s.shot}>
-              <Image src="/landing/screens/draft.png" alt="A draft in Queue Pilot: its quote matched to the source, 3 playbook rules passed, and two teammate notes from Buffer" width={2160} height={1440} sizes="(max-width: 1240px) 100vw, 1080px" />
+            <figure className={[s.shot, live ? s.liveShot : ""].join(" ")}>
+              {live ? <LiveWeek {...demoWeekProps()} showDraft="d1" /> : <Image src="/landing/screens/draft.png" alt="A draft in Queue Pilot: its quote matched to the source, 3 playbook rules passed, and two teammate notes from Buffer" width={2160} height={1440} sizes="(max-width: 1240px) 100vw, 1080px" />}
             </figure>
           </div>
         </section>
@@ -105,8 +117,8 @@ export default function HomePage() {
               <h2 id="learn-title">Fix it twice. Keep it as a rule.</h2>
               <p>Make the same edit in Buffer twice and Queue Pilot offers it as a rule, for every AI you use.</p>
             </div>
-            <figure className={[s.shot, s.cardShot].join(" ")}>
-              <Image src="/landing/screens/same-fix-twice.png" alt="Queue Pilot noticed the same fix twice and offers: Start with the result, not a feeling" width={1712} height={398} sizes="(max-width: 1000px) 100vw, 720px" />
+            <figure className={[s.shot, s.cardShot, live ? s.liveShot : ""].join(" ")}>
+              {live ? <LiveSameFix /> : <Image src="/landing/screens/same-fix-twice.png" alt="Queue Pilot noticed the same fix twice and offers: Start with the result, not a feeling" width={1712} height={398} sizes="(max-width: 1000px) 100vw, 720px" />}
             </figure>
           </div>
         </section>

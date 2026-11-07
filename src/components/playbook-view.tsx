@@ -47,6 +47,25 @@ function groups(rules: ShownRule[], accounts: RuleAccount[]): [string, ShownRule
 }
 
 /** Example mode: Alex's playbook and one repeated fix waiting for Alex's yes. Live mode: the person's own rules. */
+/**
+ * The offer shown after the same fix is made twice: the edit, where it happened, and the rule it would keep. Drawn by the
+ * playbook and, unchanged, on the homepage.
+ */
+export function SameFixOffer({ onKeep, onDismiss }: { onKeep?: () => void; onDismiss?: () => void }) {
+  return (
+    <section className={styles.offer} aria-labelledby="offer-title">
+      <h2 id="offer-title" className={styles.h2}>You made the same fix twice</h2>
+      <p className={styles.diff}><del><span className="sr-only">Before: </span>This week felt like a turning point for coding agents.</del> <span className="sr-only">After: </span>Android Studio now lets you pick from over 40 coding agents.</p>
+      <p className={styles.muted}>On Instagram you replaced a feeling with the result, on Tuesday and last Friday.</p>
+      <p className={styles.proposed}>Keep as a rule: "{OFFERED.text}"</p>
+      <div className={styles.actions}>
+        <Button variant="primary" size="sm" onClick={onKeep}>Keep as a rule</Button>
+        <Button variant="ghost" size="sm" onClick={onDismiss}>Not now</Button>
+      </div>
+    </section>
+  );
+}
+
 export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS, accounts = [], inheritance = {} }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[]; accounts?: RuleAccount[]; inheritance?: Inheritance }) {
   const live = mode === "live";
   // Networks a shared rule was switched off for on this screen, ahead of the server's answer.
@@ -121,16 +140,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
       {!live && firstVisit && <FirstRulesFinder open onExampleKeep={(o) => setRules((rs) => [...rs, { id: o.key, kind: "guidance", channels: o.channels, level: "warn", text: o.text, origin: o.proof.kind === "note" ? "From a note on your post" : `Followed in ${o.proof.followed} of your ${o.proof.of} posts` } as ShownRule])} />}
 
       {offer === "open" && (
-        <section className={styles.offer} aria-labelledby="offer-title">
-          <h2 id="offer-title" className={styles.h2}>You made the same fix twice</h2>
-          <p className={styles.diff}><del><span className="sr-only">Before: </span>This week felt like a turning point for coding agents.</del> <span className="sr-only">After: </span>Android Studio now lets you pick from over 40 coding agents.</p>
-          <p className={styles.muted}>On Instagram you replaced a feeling with the result, on Tuesday and last Friday.</p>
-          <p className={styles.proposed}>Keep as a rule: "{OFFERED.text}"</p>
-          <div className={styles.actions}>
-            <Button variant="primary" size="sm" onClick={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }}>Keep as a rule</Button>
-            <Button variant="ghost" size="sm" onClick={() => setOffer("dismissed")}>Not now</Button>
-          </div>
-        </section>
+        <SameFixOffer onKeep={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }} onDismiss={() => setOffer("dismissed")} />
       )}
       {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the result.</p>}
       {(live || !firstVisit) && <TeamNotesFinder example={!live} onExampleKeep={() => setRules((rs) => (rs.some((r) => r.id === EXAMPLE_NOTE_RULE.id) ? rs : [...rs, EXAMPLE_NOTE_RULE]))} />}

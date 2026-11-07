@@ -46,7 +46,11 @@ export function proxy(request: NextRequest) {
     return res;
   }
   if (signedIn || demo) return NextResponse.next();
-  return path === "/" ? NextResponse.rewrite(new URL("/home", request.url)) : to(request, "/");
+  if (path !== "/") return to(request, "/");
+  // The homepage keeps its query string, so a link like /?live=1 reaches the page.
+  const home = request.nextUrl.clone();
+  home.pathname = "/home";
+  return NextResponse.rewrite(home);
 }
 
 // Next.js reads the matcher at build time, so it is written out: the paths above and each of APP_SCREENS.

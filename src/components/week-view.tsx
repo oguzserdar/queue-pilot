@@ -53,7 +53,7 @@ const RESULT_TONE = { pass: "success", fail: "danger", unsure: "warning" } as co
  * `live` is true for a signed-in user: Approve schedules the drafts in Buffer. Example data only marks them on screen.
  * `verdicts` are the playbook verdicts each draft was saved with, by post id; null means it was saved unchecked.
  */
-export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {} }: { week: WeekModel; approvals?: Record<string, string>; notesPreview?: Record<string, NotesPreview>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
+export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {}, showDraft }: { week: WeekModel; /** Draw only this draft's window, inline in the page, as the homepage shows it. */ showDraft?: string; approvals?: Record<string, string>; notesPreview?: Record<string, NotesPreview>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
   const { label: WEEK_LABEL, days: DAYS, channels, slots } = week;
   /** A day gets a full column when any channel has a slot or a post on it. */
   const dayHasContent = (d: number) => channels.some((c) => slots[c.id]?.[d]?.length) || posts.some((p) => p.day === d);
@@ -92,9 +92,9 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
   // Where each rule came from, from its record (or the example's own words); nothing when nothing was recorded.
   const originOf = (ruleId: string) => { const r = rules.find((x) => x.id === ruleId); return r ? ruleOrigin(r) ?? (r as { origin?: string }).origin ?? null : null; };
   const [approved, setApproved] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<string | undefined>();
+  const [selected, setSelected] = useState<string | undefined>(showDraft);
   // The draft stays selected while the dialog closes, so its content can animate out and focus can return to the draft that opened it.
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(showDraft !== undefined);
   // "New post": one post written once for several accounts, saved as a Buffer draft per account.
   const [newPostOpen, setNewPostOpen] = useState(false);
   const opener = useRef<HTMLButtonElement | null>(null);
@@ -188,145 +188,12 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
       });
     });
 
-  return (
-    <div className={styles.page}>
-      <header className={styles.head}>
-        <div>
-          <h1 className={styles.title}>
-            {channels.length === 0
-              ? "Next week"
-              : drafts.length > 0
-              ? `Next week: ${[
-                  waiting && `${waiting} draft${waiting === 1 ? "" : "s"} to approve`,
-                  drafts.length - waiting && `${drafts.length - waiting} approved`,
-                  open ? `${open} empty slot${open === 1 ? "" : "s"}` : "every slot filled",
-                ].filter(Boolean).join(", ")}`
-              : open === 0 ? "Next week: every slot has a post" : `Next week: ${open} empty slot${open === 1 ? "" : "s"}`}
-          </h1>
-          <p className={styles.sub}>
-            <span className="tnum">{WEEK_LABEL}</span>.{" "}
-            {channels.length === 0
-              ? "Nothing to fill yet."
-              : drafts.length > 0
-              ? `${live ? (waiting ? `${waiting} waiting for your approval` : "No drafts from Queue Pilot are waiting for approval") : "Written from your newsletter, each one checked against your playbook"}${blocked.length ? `. ${blocked.length} can't go out until ${blocked.length === 1 ? "its" : "their"} problem is fixed` : ""}.`
-              : "Connect your AI, then pick \"Fill my week\" in it to draft the open slots."}
-          </p>
-        </div>
-        <div className={styles.headActions}>
-          {/* Posts that would fail sit behind one button, so the week stays where it is; each card is marked too. */}
-          {blocked.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="secondary" size="lg" className={styles.issues}>
-                  <span className={styles.issueDot} aria-hidden="true" />
-                  {`${blocked.length} post${blocked.length === 1 ? "" : "s"} would fail`}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className={styles.issueList}>
-                {blocked.map((b) => (
-                  <div key={b.id} className={styles.issue}>
-                    <strong>{`${FULL_DAY[b.day]}'s ${channels.find((c) => c.id === b.channel)?.name ?? ""} post`}</strong>
-                    <span>{b.checks?.find((c) => c.tone === "danger")?.label ?? "A check failed for this post."}</span>
-                    <Button variant="secondary" size="sm" onClick={() => { setSelected(b.id); setEditing(null); setConfirmDelete(false); setNote(null); setDialogOpen(true); }}>Open post</Button>
-                  </div>
-                ))}
-              </PopoverContent>
-            </Popover>
-          )}
-          {channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
-          {open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions example={!live} />}
-          {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
-          {drafts.length > 0 && (
-            confirmAll ? (
-              <>
-                <Button variant="ghost" size="lg" autoFocus onClick={() => setConfirmAll(false)}>Cancel</Button>
-                <Button variant="primary" size="lg" onClick={() => { setConfirmAll(false); approve(ready.map((p) => p.id)); }}>
-                  {`Schedule ${ready.length} post${ready.length === 1 ? "" : "s"} in Buffer`}
-                </Button>
-              </>
-            ) : (
-              <Button variant="primary" size="lg" disabled={ready.length === 0 || pending} onClick={() => setConfirmAll(true)}>
-                {pending ? "Approving…" : ready.length > 0 ? `Approve ${ready.length} draft${ready.length === 1 ? "" : "s"}` : waiting > 0 || !approved.size ? "Nothing ready to approve" : "All approved"}
-              </Button>
-            )
-          )}
-        </div>
-      </header>
-
-      <p className={styles.muted}>Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.</p>
-
-      {composed && <p className={styles.muted} role="status">{composed}</p>}
-
-      {problem && (
-        <Alert tone="danger" title={problem.title}>
-          {problem.text}
-        </Alert>
-      )}
-
-
-      {channels.length === 0 ? (
-        <EmptyState
-          title="No channels in Buffer yet"
-          description="Your posting times appear here once Buffer has a channel. Queue Pilot then fills the empty ones with drafts for you to approve."
-          action={<a className={styles.connect} href={BUFFER_CHANNELS_URL} target="_blank" rel="noreferrer">Add a channel in Buffer <ArrowUpRight size={15} strokeWidth={2} aria-hidden="true" /></a>}
-        />
-      ) : (
-      <div className={styles.layout}>
-        <div className={styles.gridWrap}>
-          <div className={styles.grid} role="table" aria-label="Posting slots for next week" style={{ gridTemplateColumns: `max-content ${DAYS.map((_, d) => (dayHasContent(d) ? "minmax(132px, 1fr)" : "56px")).join(" ")}` }}>
-            <div className={styles.corner}>{week.timeZone && week.startsAt && <span className={styles.zone}>Times in {zoneLabel(week.timeZone, new Date(week.startsAt))}</span>}</div>
-            {DAYS.map((d, i) => {
-              const has = dayHasContent(i);
-              return <div key={d} className={styles.day} data-empty={!has} role="columnheader">{has ? d : d.split(" ")[0]}</div>;
-            })}
-            {channels.map((ch) => (
-              <div key={ch.id} className={styles.row} role="row">
-                <div className={styles.channel} role="rowheader">
-                  <span className={styles.chip}><ChannelIcon service={ch.service} />{ch.name}</span>
-                  {ch.timezone && week.timeZone && week.startsAt && ch.timezone !== week.timeZone && (
-                    <span className={styles.zone}>{zoneLabel(ch.timezone, new Date(week.startsAt))} times</span>
-                  )}
-                  {ch.isDisconnected && <>{" "}<Badge tone="danger" size="sm">Disconnected</Badge></>}
-                </div>
-                {DAYS.map((_, day) => {
-                  return (
-                    <div key={day} className={styles.cell} role="cell">
-                      {entriesFor(ch.id, day)}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* On a phone the week reads as a list by day, each post labelled with its channel (the grid is hidden). */}
-        <div className={styles.list} aria-label="Posting slots for next week, by day">
-          {DAYS.map((d, day) => dayHasContent(day) && (
-            <section key={d} className={styles.listDay} aria-label={d}>
-              <h2 className={styles.listHead}>{d}</h2>
-              {channels.map((ch) => {
-                const items = entriesFor(ch.id, day);
-                return items.length > 0 && (
-                  <div key={ch.id} className={styles.listChannel}>
-                    <span className={styles.chip}><ChannelIcon service={ch.service} />{ch.name}</span>
-                    {ch.isDisconnected && <>{" "}<Badge tone="danger" size="sm">Disconnected</Badge></>}
-                    {items}
-                  </div>
-                );
-              })}
-            </section>
-          ))}
-        </div>
-      </div>
-      )}
-
-      <AccountsComposer open={newPostOpen} onClose={(saved) => { setNewPostOpen(false); if (saved) toast({ type: "success", title: saved }); }} />
-      {/* A draft opens in a dialog over the week, the way a calendar opens an event; closing it returns focus to the draft. */}
-      <SlotComposer slot={composing} live={live} onClose={(saved) => { setComposing(null); if (saved) toast({ type: "success", title: saved }); }} />
-      <Dialog open={dialogOpen && current !== undefined} onOpenChange={setDialogOpen}>
+  const draftWindow = (
+    <>
+      <Dialog open={dialogOpen && current !== undefined} onOpenChange={showDraft ? undefined : setDialogOpen} modal={!showDraft}>
         {current && (
         <DialogContent
+          inline={showDraft !== undefined}
           className={styles.dialog}
           onCloseAutoFocus={(e) => { e.preventDefault(); opener.current?.focus(); }}
           title={`${channels.find((c) => c.id === current.channel)?.name ?? ""}, ${DAYS[current.day]} at ${current.time}`}
@@ -473,6 +340,147 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         </DialogContent>
         )}
       </Dialog>
+    </>
+  );
+  if (showDraft) return draftWindow;
+
+  return (
+    <div className={styles.page}>
+      <header className={styles.head}>
+        <div>
+          <h1 className={styles.title}>
+            {channels.length === 0
+              ? "Next week"
+              : drafts.length > 0
+              ? `Next week: ${[
+                  waiting && `${waiting} draft${waiting === 1 ? "" : "s"} to approve`,
+                  drafts.length - waiting && `${drafts.length - waiting} approved`,
+                  open ? `${open} empty slot${open === 1 ? "" : "s"}` : "every slot filled",
+                ].filter(Boolean).join(", ")}`
+              : open === 0 ? "Next week: every slot has a post" : `Next week: ${open} empty slot${open === 1 ? "" : "s"}`}
+          </h1>
+          <p className={styles.sub}>
+            <span className="tnum">{WEEK_LABEL}</span>.{" "}
+            {channels.length === 0
+              ? "Nothing to fill yet."
+              : drafts.length > 0
+              ? `${live ? (waiting ? `${waiting} waiting for your approval` : "No drafts from Queue Pilot are waiting for approval") : "Written from your newsletter, each one checked against your playbook"}${blocked.length ? `. ${blocked.length} can't go out until ${blocked.length === 1 ? "its" : "their"} problem is fixed` : ""}.`
+              : "Connect your AI, then pick \"Fill my week\" in it to draft the open slots."}
+          </p>
+        </div>
+        <div className={styles.headActions}>
+          {/* Posts that would fail sit behind one button, so the week stays where it is; each card is marked too. */}
+          {blocked.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="secondary" size="lg" className={styles.issues}>
+                  <span className={styles.issueDot} aria-hidden="true" />
+                  {`${blocked.length} post${blocked.length === 1 ? "" : "s"} would fail`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className={styles.issueList}>
+                {blocked.map((b) => (
+                  <div key={b.id} className={styles.issue}>
+                    <strong>{`${FULL_DAY[b.day]}'s ${channels.find((c) => c.id === b.channel)?.name ?? ""} post`}</strong>
+                    <span>{b.checks?.find((c) => c.tone === "danger")?.label ?? "A check failed for this post."}</span>
+                    <Button variant="secondary" size="sm" onClick={() => { setSelected(b.id); setEditing(null); setConfirmDelete(false); setNote(null); setDialogOpen(true); }}>Open post</Button>
+                  </div>
+                ))}
+              </PopoverContent>
+            </Popover>
+          )}
+          {channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
+          {open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions example={!live} />}
+          {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
+          {drafts.length > 0 && (
+            confirmAll ? (
+              <>
+                <Button variant="ghost" size="lg" autoFocus onClick={() => setConfirmAll(false)}>Cancel</Button>
+                <Button variant="primary" size="lg" onClick={() => { setConfirmAll(false); approve(ready.map((p) => p.id)); }}>
+                  {`Schedule ${ready.length} post${ready.length === 1 ? "" : "s"} in Buffer`}
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" size="lg" disabled={ready.length === 0 || pending} onClick={() => setConfirmAll(true)}>
+                {pending ? "Approving…" : ready.length > 0 ? `Approve ${ready.length} draft${ready.length === 1 ? "" : "s"}` : waiting > 0 || !approved.size ? "Nothing ready to approve" : "All approved"}
+              </Button>
+            )
+          )}
+        </div>
+      </header>
+
+      <p className={styles.muted}>Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.</p>
+
+      {composed && <p className={styles.muted} role="status">{composed}</p>}
+
+      {problem && (
+        <Alert tone="danger" title={problem.title}>
+          {problem.text}
+        </Alert>
+      )}
+
+
+      {channels.length === 0 ? (
+        <EmptyState
+          title="No channels in Buffer yet"
+          description="Your posting times appear here once Buffer has a channel. Queue Pilot then fills the empty ones with drafts for you to approve."
+          action={<a className={styles.connect} href={BUFFER_CHANNELS_URL} target="_blank" rel="noreferrer">Add a channel in Buffer <ArrowUpRight size={15} strokeWidth={2} aria-hidden="true" /></a>}
+        />
+      ) : (
+      <div className={styles.layout}>
+        <div className={styles.gridWrap}>
+          <div className={styles.grid} role="table" aria-label="Posting slots for next week" style={{ gridTemplateColumns: `max-content ${DAYS.map((_, d) => (dayHasContent(d) ? "minmax(132px, 1fr)" : "56px")).join(" ")}` }}>
+            <div className={styles.corner}>{week.timeZone && week.startsAt && <span className={styles.zone}>Times in {zoneLabel(week.timeZone, new Date(week.startsAt))}</span>}</div>
+            {DAYS.map((d, i) => {
+              const has = dayHasContent(i);
+              return <div key={d} className={styles.day} data-empty={!has} role="columnheader">{has ? d : d.split(" ")[0]}</div>;
+            })}
+            {channels.map((ch) => (
+              <div key={ch.id} className={styles.row} role="row">
+                <div className={styles.channel} role="rowheader">
+                  <span className={styles.chip}><ChannelIcon service={ch.service} />{ch.name}</span>
+                  {ch.timezone && week.timeZone && week.startsAt && ch.timezone !== week.timeZone && (
+                    <span className={styles.zone}>{zoneLabel(ch.timezone, new Date(week.startsAt))} times</span>
+                  )}
+                  {ch.isDisconnected && <>{" "}<Badge tone="danger" size="sm">Disconnected</Badge></>}
+                </div>
+                {DAYS.map((_, day) => {
+                  return (
+                    <div key={day} className={styles.cell} role="cell">
+                      {entriesFor(ch.id, day)}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* On a phone the week reads as a list by day, each post labelled with its channel (the grid is hidden). */}
+        <div className={styles.list} aria-label="Posting slots for next week, by day">
+          {DAYS.map((d, day) => dayHasContent(day) && (
+            <section key={d} className={styles.listDay} aria-label={d}>
+              <h2 className={styles.listHead}>{d}</h2>
+              {channels.map((ch) => {
+                const items = entriesFor(ch.id, day);
+                return items.length > 0 && (
+                  <div key={ch.id} className={styles.listChannel}>
+                    <span className={styles.chip}><ChannelIcon service={ch.service} />{ch.name}</span>
+                    {ch.isDisconnected && <>{" "}<Badge tone="danger" size="sm">Disconnected</Badge></>}
+                    {items}
+                  </div>
+                );
+              })}
+            </section>
+          ))}
+        </div>
+      </div>
+      )}
+
+      <AccountsComposer open={newPostOpen} onClose={(saved) => { setNewPostOpen(false); if (saved) toast({ type: "success", title: saved }); }} />
+      {/* A draft opens in a dialog over the week, the way a calendar opens an event; closing it returns focus to the draft. */}
+      <SlotComposer slot={composing} live={live} onClose={(saved) => { setComposing(null); if (saved) toast({ type: "success", title: saved }); }} />
+      {draftWindow}
     </div>
   );
 }

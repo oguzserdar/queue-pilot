@@ -34,3 +34,6 @@
   .close, .close:active { transition: none; }
   .close:active { transform: none; }
 }
+
+/* Inline: the same window drawn in the page flow, for showing it in place. */
+.inline { position: relative; inset: auto; z-index: auto; width: 100%; max-height: none; margin: 0; box-shadow: none; border: 0; border-radius: 0 }

@@ -26,6 +26,8 @@ export interface DialogContentProps extends ComponentPropsWithoutRef<typeof Dial
   title: string;
   description?: string;
   children: ReactNode;
+  /** Draw the window inside the page instead of over it: no overlay, no animation, and opening never moves focus or scrolls. Use with `<Dialog modal={false}>`. */
+  inline?: boolean;
 }
 
 const fade: Transition = { duration: motionTokens.duration.instant };
@@ -55,7 +57,7 @@ export function focusWindowOnOpen(event: Event, callerHandler?: (event: Event) =
   content?.focus({ preventScroll: true });
 }
 
-export function DialogContent({ title, description, children, className, onPointerDownOutside, onOpenAutoFocus, ...props }: DialogContentProps) {
+export function DialogContent({ title, description, children, className, onPointerDownOutside, onOpenAutoFocus, inline = false, ...props }: DialogContentProps) {
   const open = useContext(OpenContext);
   const reduced = useReducedMotion();
   // When the open state last changed. Radix waits for the click before treating a press as outside, and a press on the trigger
@@ -72,6 +74,7 @@ export function DialogContent({ title, description, children, className, onPoint
     <div className={styles.header}><div><DialogPrimitive.Title className={styles.title}><SwapText text={title}/></DialogPrimitive.Title>{description ? <DialogPrimitive.Description className={styles.description}><SwapText text={description}/></DialogPrimitive.Description> : null}</div><DialogPrimitive.Close className={styles.close} aria-label="Close dialog"><X size={16} strokeWidth={1.75} aria-hidden="true"/></DialogPrimitive.Close></div>
     <div className={styles.body}>{children}</div>
   </>;
+  if (inline) return <DialogPrimitive.Content {...props} onOpenAutoFocus={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} className={`${classes} ${styles.inline}`}>{inner}</DialogPrimitive.Content>;
   // Under a bare Radix root the open state is unknown here, so CSS keyframes keyed off data-state animate the layers instead.
   if (open === null) return <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className={`${styles.overlay} ${styles.keyframes}`}/>
