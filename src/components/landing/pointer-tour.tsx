@@ -51,7 +51,7 @@ function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect)
   const x = Math.max(8, Math.min(tip.x - 24, box.width - POP_W - 8));
   const below = Math.max(part.bottom - box.top + PAD + 8, tip.y + 46);
   if (below + POP_H <= box.height - 4) return { side: "below", x, y: below, w: POP_W };
-  const right = Math.max(part.right - box.left, tip.x + 30) + 14;
+  const right = Math.max(part.right - box.left + PAD + 2, tip.x + 26);
   if (right + POP_W <= box.width - 8) return { side: "right", x: right, y: Math.max(4, Math.min(part.top - box.top + part.height / 2 - POP_H / 2, box.height - POP_H - 4)), w: POP_W };
   return { side: "above", x, y: part.top - box.top - PAD - 8, w: POP_W };
 }
