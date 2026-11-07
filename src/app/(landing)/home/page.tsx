@@ -9,6 +9,7 @@ import { AiStrip } from "@/components/landing/ai-strip";
 import { HandUnderline } from "@/components/landing/hand-underline";
 import { LiveSameFix, LiveWeek } from "@/components/landing/live-screens";
 import { SetupScene } from "@/components/landing/setup-scene";
+import { HeroWalkthrough } from "@/components/landing/hero-walkthrough";
 import { demoWeek } from "@/lib/demo-data";
 import { countOpenSlots } from "@/lib/week-model";
 import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
@@ -91,7 +92,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             </div>
             <PilotWeek week={false} className={s.heroPilot} />
             <figure className={[s.shot, s.heroShot, live ? s.liveShot : ""].join(" ")}>
-              {live ? <LiveWeek {...demoWeekProps()} /> : <Image src="/landing/screens/next-week.png" alt="Queue Pilot's Next week screen: drafts by account and day, ready to approve, one blocked" width={2400} height={1640} priority sizes="(max-width: 1240px) 100vw, 1200px" />}
+              {live ? <HeroWalkthrough {...demoWeekProps()} /> : <Image src="/landing/screens/next-week.png" alt="Queue Pilot's Next week screen: drafts by account and day, ready to approve, one blocked" width={2400} height={1640} priority sizes="(max-width: 1240px) 100vw, 1200px" />}
             </figure>
           </div>
         </section>
