@@ -31,7 +31,8 @@ function box(g: G, x: number, y: number, w: number, h: number, fill: string, edg
 }
 
 /** Where everything sits: one card per channel and weekday that has a posting time, in the demo's own order. */
-const BOARD = { x: 4, y: 5, w: 184, h: 86 };
+/** The board's place on the canvas; the page uses it to draw the dot pattern right up to the board's edge. */
+export const BOARD = { x: 4, y: 5, w: 184, h: 86 };
 const COL0 = 34, COL_W = 30, ROW0 = 29, ROW_H = 15, CARD_W = 26, CARD_H = 11;
 type Card = { x: number; y: number; status: "empty" | "scheduled" | "draft"; draftIndex: number; blocked: boolean; channel: string };
 
@@ -81,7 +82,6 @@ export function drawHero(g: G, cards: Card[], time: number) {
   g.clearRect(0, 0, W, H);
 
   // The board: a window with the newsletter in its header, an Approve button, day columns and channel rows.
-  px(g, BOARD.x + 2, BOARD.y + BOARD.h, BOARD.w - 4, 2, C.shadow);
   box(g, BOARD.x, BOARD.y, BOARD.w, BOARD.h, C.white);
   // The newsletter: a page with a folded corner and lines.
   const docX = 10, docY = 9;

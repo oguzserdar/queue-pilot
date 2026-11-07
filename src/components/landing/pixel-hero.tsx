@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WeekModel } from "@/lib/week-model";
-import { HERO_LOOP, HERO_SIZE, STEP_AT, drawHero, drawQuote, layoutWeek } from "./pixel-hero-scene";
+import { BOARD, HERO_LOOP, HERO_SIZE, STEP_AT, drawHero, drawQuote, layoutWeek } from "./pixel-hero-scene";
 import styles from "./pixel-hero.module.css";
 
 /** Plays at three quarters of the scene's timing, so each step gets close to four seconds to read. */
@@ -55,12 +55,14 @@ export function PixelHero({ week }: { week: WeekModel }) {
     return () => { cancelAnimationFrame(frame); seen.disconnect(); };
   }, [cards]);
   return (
-    <figure className={styles.hero} data-field-frame="">
+    <figure className={styles.hero}>
       <div className={styles.layers} data-blur={blur || undefined}>
         <canvas ref={ref} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.canvas} aria-hidden="true" />
+        {/* Marks exactly where the board is, so the page's dots come right up to its edge. */}
+        <div className={styles.frame} data-field-frame="" style={{ left: `${(BOARD.x / HERO_SIZE.width) * 100}%`, top: `${(BOARD.y / HERO_SIZE.height) * 100}%`, width: `${(BOARD.w / HERO_SIZE.width) * 100}%`, height: `${(BOARD.h / HERO_SIZE.height) * 100}%` }} />
         <canvas ref={top} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.top} aria-hidden="true" />
       </div>
-      <figcaption className={styles.caption}>
+      <figcaption className={styles.caption} data-field-clear="">
         <span className={styles.n}>{step + 1}/{STEPS.length}</span>
         <p key={step} className={styles.line}><b>{STEPS[step].title}.</b> {STEPS[step].text}</p>
       </figcaption>
