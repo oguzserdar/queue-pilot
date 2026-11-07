@@ -95,7 +95,7 @@ export default function HomePage() {
                   <dd className={s.example}>Name the model and the number in the first line.</dd>
                 </div>
               </dl>
-              <p>Rules are judged by meaning, in any language: &ldquo;never open-source for a model&rdquo; also catches &ldquo;c&oacute;digo abierto&rdquo;. The check runs in Queue Pilot, so it is the same in ChatGPT, Claude, Grok and any app that takes an MCP connector.</p>
+              <p>An AI model judges each rule by meaning, not exact words, in the language the draft is written in. The check runs in Queue Pilot, so it is the same in ChatGPT, Claude, Grok and any app that takes an MCP connector.</p>
             </div>
             <figure className={s.chat}>
               <figcaption><span className={s.askMark} style={{ maskImage: "url(/landing/logos/grok.svg)", WebkitMaskImage: "url(/landing/logos/grok.svg)" }} aria-hidden="true" />Grok, with Queue Pilot connected</figcaption>
@@ -146,36 +146,34 @@ export default function HomePage() {
         <section className={s.section} aria-labelledby="checks-title">
           <div className={[s.wrap, s.stack].join(" ")}>
             <div className={s.copy}>
-              <h2 id="checks-title">Checked before it goes out. Watched after.</h2>
-              <p>Quotes are checked against your saved source, and your kept rules are checked, before a draft is saved to Buffer. After it goes out, a copy reaches the chat you pick.</p>
+              <h2 id="checks-title">One post, before and after</h2>
+              <p>Tuesday&apos;s LinkedIn post, from saving it to Buffer to sharing it with your team.</p>
             </div>
             <div className={s.pair}>
-              <article className={s.panel} aria-label="Before">
-                <p className={s.panelLabel}>Before it reaches Buffer</p>
+              <article className={s.panel} aria-label="Before it is saved">
+                <p className={s.panelLabel}>1. Before it is saved to Buffer</p>
                 <div className={s.draft}>
                   <span className={s.meta}>Tue 12:00 · LinkedIn</span>
                   <p><mark>Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59.</mark> I want to see it on real repos before I switch.</p>
                 </div>
                 <ul className={s.checks}>
-                  <li><span>Quote found in &ldquo;Gemini 4 Carbon: our next frontier model&rdquo;</span><Badge size="sm" tone="success">Matches</Badge></li>
-                  <li><span>Your playbook, 4 rules</span><Badge size="sm" tone="success">Passes</Badge></li>
-                  <li className={s.quiet}><span>Length, posting limit and channel, as Buffer would check them</span><Badge size="sm" tone="success">Fits</Badge></li>
+                  <li><span>The highlighted claim is in its source, Google&apos;s &ldquo;Gemini 4 Carbon: our next frontier model&rdquo;</span><Badge size="sm" tone="success">Found</Badge></li>
+                  <li><span>It follows your 4 rules</span><Badge size="sm" tone="success">Passes</Badge></li>
+                  <li className={s.quiet}><span>Length, daily posting limit and channel, as Buffer would check them</span><Badge size="sm" tone="success">Fits</Badge></li>
                 </ul>
               </article>
-              <article className={s.panel} aria-label="After">
-                <p className={s.panelLabel}>After it goes out</p>
+              <article className={s.panel} aria-label="After it goes out">
+                <p className={s.panelLabel}>2. After it goes out</p>
+                <p className={s.panelNote}>The same post is copied to the chats you pick.</p>
                 <div className={s.message}>
-                  <span className={s.meta}>Telegram · This Week in AI · Tue 12:00 from LinkedIn</span>
+                  <span className={s.meta}>Telegram · This Week in AI</span>
                   <p>Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59. I want to see it on real repos before I switch.</p>
                 </div>
                 <div className={s.message}>
                   <span className={s.meta}>Discord · #social</span>
-                  <p>Android Studio now lets you pick from over 40 coding agents.</p>
+                  <p>Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59. I want to see it on real repos before I switch.</p>
                 </div>
-                <ul className={s.checks}>
-                  <li><span>In Queue Pilot: X 09:00. The image could not be loaded from its link.</span><Badge size="sm" tone="danger">Failed</Badge></li>
-                </ul>
-                <p className={s.panelNote}>A copy of each sent post goes to the Telegram chat or Discord channel you pick. A failed post shows Buffer&apos;s own reason in Queue Pilot.</p>
+                <p className={s.panelNote}>If a post fails, Queue Pilot shows Buffer&apos;s own reason, such as &ldquo;The image could not be loaded from its link.&rdquo;</p>
               </article>
             </div>
           </div>
