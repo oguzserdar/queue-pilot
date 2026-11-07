@@ -2,6 +2,10 @@
 .card { position: fixed; right: 24px; bottom: 24px; z-index: 40; width: min(380px, calc(100vw - 32px)); display: grid; grid-template-columns: 52px 1fr; gap: 14px;
   padding: 16px 40px 16px 16px; background: var(--surface); border-radius: var(--radius-surface); box-shadow: 0 0 0 1px var(--border), var(--shadow-floating) }
 .pilot { width: 52px; height: 52px }
+/* The Pilot blinks now and then, like the one on the homepage: its eyes are the drawing's last two shapes. */
+.pilot > rect { transform-box: fill-box; transform-origin: center; animation: blink 4.2s infinite 1.2s }
+@keyframes blink { 0%, 94%, 100% { transform: scaleY(1) } 96% { transform: scaleY(.12) } }
+@media (prefers-reduced-motion: reduce) { .pilot > rect { animation: none } }
 .copy { display: grid; gap: 6px; min-width: 0 }
 .copy b { font-size: .95rem }
 .copy p { margin: 0; font-size: .85rem; line-height: 1.45; color: var(--text-secondary) }

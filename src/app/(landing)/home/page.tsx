@@ -55,8 +55,8 @@ function demoWeekProps() {
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ live?: string; setup?: string }> }) {
   const params = await searchParams;
   const live = params.live === "1";
-  // `?setup=gif` and `?setup=pixel` show the other two versions of the setup pictures, to compare with the stills.
-  const setup = params.setup === "gif" || params.setup === "pixel" ? params.setup : "still";
+  // The setup steps are drawn live in pixels; `?setup=still` and `?setup=gif` show the generated versions, to compare.
+  const setup = params.setup === "gif" || params.setup === "still" ? params.setup : "pixel";
   const stepArt = (n: 1 | 2 | 3 | 4) => setup === "pixel" ? <SetupScene step={(n - 1) as 0 | 1 | 2 | 3} className={s.stepArt} />
     : <Image className={s.stepArt} src={`/landing/setup/step-${n}.${setup === "gif" ? "gif" : "png"}`} alt="" width={1920} height={1280} unoptimized={setup === "gif"} sizes="(max-width: 900px) 100vw, 300px" />;
   return (
