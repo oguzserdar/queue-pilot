@@ -72,7 +72,7 @@ export function PixelHero({ week }: { week: WeekModel }) {
       <div className={styles.layers} data-blur={blur || undefined}>
         <canvas ref={ref} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.canvas} aria-hidden="true" />
         {/* Marks exactly where the board is, so the page's dots come right up to its edge. */}
-        <div className={styles.frame} data-field-frame="" style={{ left: `${(BOARD.x / HERO_SIZE.width) * 100}%`, top: `${(BOARD.y / HERO_SIZE.height) * 100}%`, width: `${(BOARD.w / HERO_SIZE.width) * 100}%`, height: `${(BOARD.h / HERO_SIZE.height) * 100}%` }} />
+        <div className={styles.frame} data-field-frame="" data-field-cells={BOARD.w} style={{ left: `${(BOARD.x / HERO_SIZE.width) * 100}%`, top: `${(BOARD.y / HERO_SIZE.height) * 100}%`, width: `${(BOARD.w / HERO_SIZE.width) * 100}%`, height: `${(BOARD.h / HERO_SIZE.height) * 100}%` }} />
         <canvas ref={top} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.top} aria-hidden="true" />
       </div>
       <figcaption className={styles.caption} data-field-clear="">
