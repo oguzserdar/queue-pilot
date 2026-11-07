@@ -39,7 +39,8 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 /**
  * A real draft window from the app with Alex's demo data, toured by our pointer: it rests on five parts in turn and a
  * small popover says what each one is. The window's close button is hidden, since there is nothing to close here, and
- * visitors cannot click into it. It plays only while on screen and never pauses on hover.
+ * visitors cannot click into it. It plays only while on screen and never pauses on hover; moving the mouse near a part
+ * sends the pointer there, and the tour carries on in order from that part.
  */
 export function DraftTour(props: ComponentProps<typeof WeekView>) {
   const root = useRef<HTMLDivElement>(null);
@@ -49,7 +50,9 @@ export function DraftTour(props: ComponentProps<typeof WeekView>) {
     const el = root.current;
     if (!el) return;
     let alive = true, visible = false, pos = { x: el.clientWidth * 0.7, y: el.clientHeight * 0.8 };
-    const wait = async (ms: number) => { let left = ms; while (left > 0 && alive) { await new Promise((r) => setTimeout(r, 50)); if (visible) left -= 50; } };
+    // A visitor's mouse over the window picks the part nearest it: the tour goes there next and carries on in order.
+    let jump: number | null = null, current = -1;
+    const wait = async (ms: number) => { let left = ms; while (left > 0 && alive && jump === null) { await new Promise((r) => setTimeout(r, 50)); if (visible) left -= 50; } };
     const glide = (to: { x: number; y: number }) => new Promise<void>((done) => {
       const from = pos, dist = Math.hypot(to.x - from.x, to.y - from.y), length = Math.min(900, 350 + dist * 0.6);
       let start = 0;
@@ -65,10 +68,12 @@ export function DraftTour(props: ComponentProps<typeof WeekView>) {
     });
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const play = async () => {
+      let i = 0;
       while (alive) {
-        for (let i = 0; i < STOPS.length && alive; i++) {
-          const target = STOPS[i].find(el);
-          if (!target) continue;
+        if (jump !== null) { i = jump; jump = null; }
+        current = i;
+        const target = STOPS[i].find(el);
+        if (target) {
           const box = el.getBoundingClientRect(), r = target.getBoundingClientRect();
           const to = { x: r.left - box.left + Math.min(r.width * 0.5, 40), y: r.top - box.top + r.height * 0.6 };
           setSay(null);
@@ -77,12 +82,24 @@ export function DraftTour(props: ComponentProps<typeof WeekView>) {
           // Long enough to read the popover at an average 4 words a second, plus a moment to look.
           await wait(Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500));
         }
+        i = (i + 1) % STOPS.length;
       }
     };
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      const near = STOPS.map((s, k) => {
+        const r = s.find(el)?.getBoundingClientRect();
+        if (!r) return { k, d: Infinity };
+        const dx = Math.max(r.left - e.clientX, 0, e.clientX - r.right), dy = Math.max(r.top - e.clientY, 0, e.clientY - r.bottom);
+        return { k, d: Math.hypot(dx, dy) };
+      }).sort((a, b) => a.d - b.d)[0];
+      if (near && near.d < 160 && near.k !== current && jump === null) jump = near.k;
+    };
+    el.addEventListener("pointermove", onMove);
     const seen = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.3 });
     seen.observe(el);
     void play();
-    return () => { alive = false; seen.disconnect(); };
+    return () => { alive = false; seen.disconnect(); el.removeEventListener("pointermove", onMove); };
   }, []);
 
   const stop = say ? STOPS[say.i] : null;
