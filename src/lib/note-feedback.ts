@@ -35,7 +35,13 @@ export const MAX_NOTES = 10;
 
 type NoteBuffer = { token: string; channels: Channel[]; posts: Post[] };
 
-const noteKey = (postId: string, at: string | null, text: string) => `note:${createHash("sha256").update(JSON.stringify([postId, at, text])).digest("hex").slice(0, 32)}`;
+/**
+ * A note's key names its account (channel), so proposing changes for it reads that one account's open posts again
+ * instead of every organization's, and finds the note however many newer notes arrived since it was listed.
+ */
+const noteKey = (channelId: string, postId: string, at: string | null, text: string) => `note:${channelId}:${createHash("sha256").update(JSON.stringify([postId, at, text])).digest("hex").slice(0, 32)}`;
+/** The account (channel) a note key names, or null when the key is not one. */
+const channelOfKey = (key: string): string | null => key.match(/^note:([^:]+):[0-9a-f]{32}$/)?.[1] ?? null;
 
 /**
  * The notes people wrote on the person's open posts (drafts, posts waiting for approval, scheduled), newest first.
@@ -55,12 +61,17 @@ export async function teamNotes(b: Pick<NoteBuffer, "token" | "channels">, read 
  * @param read - The Buffer reader, replaceable in tests
  */
 export async function allTeamNotes(b: Pick<NoteBuffer, "token" | "channels">, read = listOpenWithNotes): Promise<TeamNote[]> {
-  const byId = new Map(b.channels.map((c) => [c.id, c]));
   const posts = (await Promise.all([...channelsByOrganization(b.channels)].map(([org, ids]) => read(b.token, org, ids)))).flat();
+  return notesOn(posts, b.channels);
+}
+
+/** The non-empty notes on these posts, newest first, each with its post and account; posts on unknown accounts are left out. */
+function notesOn(posts: Awaited<ReturnType<typeof listOpenWithNotes>>, channels: Channel[]): TeamNote[] {
+  const byId = new Map(channels.map((c) => [c.id, c]));
   return posts
     .flatMap((p) => {
       const c = byId.get(p.channelId);
-      return c ? p.notes.filter((n) => n.text.trim()).map((n) => ({ key: noteKey(p.id, n.at, n.text), postId: p.id, channelId: p.channelId, account: c.name, network: c.service, post: p.text.slice(0, 5000), author: n.by, at: n.at, text: n.text.trim().slice(0, 5000) })) : [];
+      return c ? p.notes.filter((n) => n.text.trim()).map((n) => ({ key: noteKey(p.channelId, p.id, n.at, n.text), postId: p.id, channelId: p.channelId, account: c.name, network: c.service, post: p.text.slice(0, 5000), author: n.by, at: n.at, text: n.text.trim().slice(0, 5000) })) : [];
     })
     .sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""));
 }
@@ -76,9 +87,13 @@ export const noteOrigin = (n: Pick<TeamNote, "author" | "at">) => `a note from $
  * @param key - A note key from teamNotes
  */
 export async function feedbackForNote(userId: string, loadBuffer: () => Promise<NoteBuffer>, key: unknown, read = listOpenWithNotes): Promise<{ ok: true; note: TeamNote; drafts: { id: string; label: string }[]; plan: FeedbackResult } | { ok: false; message: string }> {
-  if (typeof key !== "string" || !key.startsWith("note:") || key.length > 100) return { ok: false, message: "Choose a note from the list." };
+  const channelId = typeof key === "string" && key.length <= 200 ? channelOfKey(key) : null;
+  if (!channelId) return { ok: false, message: "Choose a note from the list." };
   const b = await loadBuffer();
-  const note = (await teamNotes(b, read)).find((n) => n.key === key);
+  // Read only the note's own account, live: the note is found on its thread whatever its age, and a note that was
+  // changed or deleted, or an account no longer connected, is refused.
+  const account = b.channels.find((c) => c.id === channelId && c.organizationId);
+  const note = account ? notesOn(await read(b.token, account.organizationId!, [channelId]), [account]).find((n) => n.key === key) : undefined;
   if (!note) return { ok: false, message: "That note is no longer on an open post in Buffer. Read the notes again." };
   const channels = new Map(b.channels.map((c) => [c.id, c]));
   const candidates = b.posts.filter((p) => p.status === "draft" && p.channelId === note.channelId);
