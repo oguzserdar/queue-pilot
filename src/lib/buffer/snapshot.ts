@@ -7,8 +7,8 @@
  * One refresh per user at a time: concurrent callers in this process share one promise, and across server instances
  * a short claim on the row (refreshing_until) keeps a second instance from starting a parallel refresh.
  */
-import { bufferQuery, type RateLimitWindow } from "./client";
-import { getAccount, listChannels, listPostsDue, type Channel, type Post } from "./queries";
+import { BufferApiError, BufferRateLimitedError, bufferQuery, type RateLimitWindow } from "./client";
+import { getAccount, listPostsDue, readOrganizations, type Account, type Channel, type OrgRead, type Post } from "./queries";
 
 /** Posts from this many days ago (delivery check) to this many days ahead (next week plus margin). */
 export const PAST_DAYS = 7;
@@ -69,8 +69,15 @@ type Deps = { store: SnapshotStore; now?: () => Date; query?: typeof bufferQuery
 
 const inFlight = new Map<string, Promise<Snapshot | null>>();
 
-/** Reads everything the screens need from Buffer, recording the RateLimit windows seen on the way. */
-async function fetchFromBuffer(token: string, now: Date, query: typeof bufferQuery): Promise<Snapshot> {
+/**
+ * Reads everything the screens need from Buffer, recording the RateLimit windows seen on the way. Buffer counts each
+ * request against the app's shared limit, so the account, every known organization's channels and its first 100 due
+ * posts come in one request. More requests go only to an organization the account newly joined (or every one, on the
+ * first read) and to an organization with more than one page of posts.
+ *
+ * @param knownOrganizationIds - Organizations from the previous copy; empty on the first read
+ */
+async function fetchFromBuffer(token: string, now: Date, query: typeof bufferQuery, knownOrganizationIds: string[] = []): Promise<Snapshot> {
   let rateLimit: RateLimitWindow[] = [];
   const q: typeof bufferQuery = (t, text, variables, opts) =>
     query(t, text, variables, { ...opts, onRateLimit: (w) => { rateLimit = w; } });
@@ -79,20 +86,33 @@ async function fetchFromBuffer(token: string, now: Date, query: typeof bufferQue
     start: new Date(now.getTime() - PAST_DAYS * 86_400_000).toISOString(),
     end: new Date(now.getTime() + FUTURE_DAYS * 86_400_000).toISOString(),
   };
-  const account = await getAccount(token, q);
-  const [channels, postResults] = await Promise.all([
-    Promise.all(account.organizationIds.map((id) => listChannels(token, id, q))).then((c) => c.flat()),
-    Promise.all(account.organizationIds.map((id) => listPostsDue(token, id, range, q))),
-  ]);
+  const fromAccount = async () => ({ account: await getAccount(token, q), orgs: new Map<string, OrgRead>() });
+  // Buffer refuses the whole request when one known organization is no longer the person's; then start from the
+  // account. Sign-in, rate-limit and server errors are not that, and still fail the refresh.
+  const first = knownOrganizationIds.length
+    ? await readOrganizations(token, knownOrganizationIds, range, true, q).catch((e) => {
+      if (e instanceof BufferApiError && e.status === 200 && !(e instanceof BufferRateLimitedError)) return fromAccount();
+      throw e;
+    })
+    : await fromAccount();
+  const account: Account = first.account ?? (await getAccount(token, q));
+  const orgs = first.orgs;
+  const joined = account.organizationIds.filter((id) => !orgs.has(id));
+  if (joined.length) for (const [id, read] of (await readOrganizations(token, joined, range, false, q)).orgs) orgs.set(id, read);
+
+  // Only the account's current organizations count: one it left is dropped even though it was read.
+  const reads = account.organizationIds.map((id) => orgs.get(id)!);
+  const more = await Promise.all(account.organizationIds.map((id, i) =>
+    reads[i].next ? listPostsDue(token, id, range, q, { after: reads[i].next!, pagesRead: 1 }) : Promise.resolve({ posts: [], truncated: false })));
   return {
     data: {
       email: account.email,
       timezone: account.timezone,
       organizationIds: account.organizationIds,
       teamSizes: account.teamSizes,
-      channels,
-      posts: postResults.flatMap((r) => r.posts),
-      truncated: postResults.some((r) => r.truncated),
+      channels: reads.flatMap((r) => r.channels),
+      posts: reads.flatMap((r, i) => [...r.posts, ...more[i].posts]),
+      truncated: more.some((m) => m.truncated),
       range,
     },
     fetchedAt: now,
@@ -128,7 +148,7 @@ function start(userId: string, token: string, deps: Deps, opts: { force?: boolea
       return opts.force ? awaitOtherInstance(userId, now, deps) : existing;
     }
     try {
-      const fresh = await fetchFromBuffer(token, now, deps.query ?? bufferQuery);
+      const fresh = await fetchFromBuffer(token, now, deps.query ?? bufferQuery, existing?.data.organizationIds ?? []);
       // A write confirmed while this read ran is in the saved copy and this read may predate it: keep that copy.
       if (await deps.store.save(userId, fresh)) return fresh;
       return (await deps.store.get(userId)) ?? fresh;

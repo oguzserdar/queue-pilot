@@ -27,7 +27,8 @@ describe("listPostsDue", () => {
     let n = 0;
     const q = vi.fn(async () => page([`p${n++}`], `cur${n}`));
     const r = await listPostsDue("t", "org", { start: "S", end: "E" }, q as never);
-    expect(q).toHaveBeenCalledTimes(10);
+    // Five pages of Buffer's largest page (100): the same 500-post ceiling as ten pages of 50, in half the requests.
+    expect(q).toHaveBeenCalledTimes(5);
     expect(r.truncated).toBe(true);
   });
 });

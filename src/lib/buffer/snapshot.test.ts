@@ -4,15 +4,22 @@ import { MIN_FORCED_REFRESH_MS, MIN_REFRESH_MS, SnapshotBusyError, memorySnapsho
 
 const NOW = new Date("2026-10-26T09:00:00Z");
 
-/** A fake Buffer that answers the three queries a refresh makes and reports one RateLimit window. */
+/**
+ * A fake Buffer with one organization. It answers the first read of an account (account alone, then channels and posts
+ * for its organizations under aliases) and a later refresh (account plus aliases in one request), and records each
+ * request by what it asked for.
+ */
 function fakeBuffer() {
   const calls: string[] = [];
   const query = vi.fn(async (_t: string, text: string, _v?: unknown, opts?: { onRateLimit?: (w: unknown) => void }) => {
     opts?.onRateLimit?.([{ policy: "250-in-24h", remaining: 200, resetSeconds: 3600 }]);
-    if (text.includes("account")) { calls.push("account"); return { account: { email: "a@b.co", organizations: [{ id: "o1" }] } }; }
-    if (text.includes("channels")) { calls.push("channels"); return { channels: [{ id: "c1", name: "X" }] }; }
-    calls.push("posts");
-    return { posts: { edges: [{ node: { id: "p1", channelId: "c1" } }], pageInfo: { hasNextPage: false, endCursor: null } } };
+    const out: Record<string, unknown> = {};
+    const asked: string[] = [];
+    if (/\baccount\s*\{/.test(text)) { asked.push("account"); out.account = { email: "a@b.co", organizations: [{ id: "o1" }] }; }
+    if (/c0: channels/.test(text)) { asked.push("channels"); out.c0 = [{ id: "c1", name: "X" }]; }
+    if (/p0: posts/.test(text)) { asked.push("posts"); out.p0 = { edges: [{ node: { id: "p1", channelId: "c1" } }], pageInfo: { hasNextPage: false, endCursor: null } }; }
+    calls.push(asked.join("+"));
+    return out;
   }) as unknown as typeof bufferQuery;
   return { query, calls };
 }
@@ -22,7 +29,7 @@ describe("refreshSnapshot", () => {
     const store = memorySnapshotStore();
     const { query, calls } = fakeBuffer();
     const snap = await refreshSnapshot("u1", "tok", { store, query, now: () => NOW });
-    expect(calls.sort()).toEqual(["account", "channels", "posts"]);
+    expect(calls).toEqual(["account", "channels+posts"]);
     expect(snap?.data.posts).toHaveLength(1);
     expect(snap?.rateLimit[0]).toMatchObject({ remaining: 200 });
     expect(await store.get("u1")).toEqual(snap);
@@ -42,7 +49,7 @@ describe("refreshSnapshot", () => {
     await refreshSnapshot("u1", "tok", { store, query: fakeBuffer().query, now: () => NOW });
     const again = fakeBuffer();
     await refreshSnapshot("u1", "tok", { store, query: again.query, now: () => new Date(NOW.getTime() + MIN_FORCED_REFRESH_MS) }, { force: true });
-    expect(again.calls.length).toBe(3);
+    expect(again.calls).toEqual(["account+channels+posts"]);
   });
 
   it("ignores a forced refresh when the copy is under 30 seconds old (repeated Refresh clicks)", async () => {
@@ -61,7 +68,7 @@ describe("refreshSnapshot", () => {
       refreshSnapshot("u1", "tok", { store, query, now: () => NOW }),
     ]);
     expect(a).toBe(b);
-    expect(calls.length).toBe(3);
+    expect(calls).toEqual(["account", "channels+posts"]);
   });
 
   it("returns the existing copy when another instance holds the claim", async () => {
@@ -128,7 +135,7 @@ describe("refreshSnapshot for a write (force)", () => {
     const write = fakeBuffer();
     const snap = await refreshSnapshot("u1", "tok", { store, query: write.query, now: later }, { force: true });
     await page;
-    expect(write.calls.length).toBe(3);
+    expect(write.calls).toEqual(["account+channels+posts"]);
     expect(snap?.fetchedAt).toEqual(later());
   });
 

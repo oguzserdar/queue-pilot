@@ -132,7 +132,18 @@ const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", or
 const judge = deciding((ids, state) => Object.fromEntries(ids.map((id) => [id, { type: "choice", choice: state.includes("broth") ? "fail" : "pass" }])))
 const buffer = fakeBuffer((call) => {
   const { query, variables } = call
-  if (query.includes("{ account")) return { account: { email: "a@example.com", timezone: "UTC", organizations: libFake.orgs.map((id) => ({ id })) } }
+  const account = { email: "a@example.com", timezone: "UTC", organizations: libFake.orgs.map((id) => ({ id })) }
+  // A refresh asks for the account and each organization's channels and first page of posts in one request, one
+  // alias per field, as Buffer allows.
+  if (/\bc\d+: channels\(/.test(query)) {
+    const out: Record<string, unknown> = query.includes("account {") ? { account } : {}
+    for (const [, n] of query.matchAll(/\bc(\d+): channels\(/g)) {
+      out[`c${n}`] = [channel, ...itemsFake.extraChannels]
+      out[`p${n}`] = { edges: structuredClone(posts).map((node) => ({ node })), pageInfo: { hasNextPage: false, endCursor: null } }
+    }
+    return out
+  }
+  if (query.includes("{ account")) return { account }
   if (query.includes("channels(input")) return { channels: [channel, ...itemsFake.extraChannels] }
   // Open posts with the notes people wrote on them, one alias per channel (listOpenWithNotes).
   if (query.includes("needs_approval, scheduled")) return Object.fromEntries(Object.entries(variables as Record<string, string>).filter(([k]) => k.startsWith("ch")).map(([k, id]) => [`c${k.slice(2)}`, { edges: posts.filter((p) => p.channelId === id && p.status !== "sent").map((p) => ({ node: { id: p.id, channelId: p.channelId, text: p.text, sentAt: null, notes: openNotes.get(p.id) ?? [] } })) }]))

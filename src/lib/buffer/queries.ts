@@ -46,15 +46,29 @@ export type Post = {
 
 type Query = typeof bufferQuery;
 
+/** Buffer allows up to 30 aliased queries in one request, and counts the request once (Buffer staff, 26 Oct 2026). */
+export const MAX_ALIASES = 30;
+
 /**
  * The signed-in Buffer account: email, its own timezone (set in Buffer's preferences), the ids of its organizations,
  * and how many people each organization has (Buffer gives a count, not a list), so screens can tell a solo account
  * from a team.
  */
-export async function getAccount(token: string, q: Query = bufferQuery): Promise<{ email: string; timezone: string | null; organizationIds: string[]; teamSizes: Record<string, number> }> {
-  const { account } = await q<{ account: { email: string; timezone?: string | null; organizations: { id: string; members?: { totalCount: number } | null }[] } }>(token, "{ account { email timezone organizations { id members { totalCount } } } }");
-  return { email: account.email, timezone: account.timezone || null, organizationIds: account.organizations.map((o) => o.id), teamSizes: Object.fromEntries(account.organizations.filter((o) => typeof o.members?.totalCount === "number").map((o) => [o.id, o.members!.totalCount])) };
+export async function getAccount(token: string, q: Query = bufferQuery): Promise<Account> {
+  const { account } = await q<{ account: RawAccount }>(token, `{ ${ACCOUNT_FIELD} }`);
+  return toAccount(account);
 }
+
+/** The signed-in account as getAccount returns it. */
+export type Account = { email: string; timezone: string | null; organizationIds: string[]; teamSizes: Record<string, number> };
+type RawAccount = { email: string; timezone?: string | null; organizations: { id: string; members?: { totalCount: number } | null }[] };
+const ACCOUNT_FIELD = "account { email timezone organizations { id members { totalCount } } }";
+const toAccount = (a: RawAccount): Account => ({
+  email: a.email,
+  timezone: a.timezone || null,
+  organizationIds: a.organizations.map((o) => o.id),
+  teamSizes: Object.fromEntries(a.organizations.filter((o) => typeof o.members?.totalCount === "number").map((o) => [o.id, o.members!.totalCount])),
+});
 
 /** The ids of every organization the signed-in Buffer account belongs to. */
 export async function listOrganizationIds(token: string, q: Query = bufferQuery): Promise<string[]> {
@@ -92,8 +106,10 @@ export async function readPostsNow(token: string, ids: string[], q: Query = buff
   return posts;
 }
 
-const PAGE_SIZE = 50;
-const MAX_PAGES = 10;
+/** Buffer's largest page (developers.buffer.com/guides/efficient-api-usage): fewer, bigger pages spend fewer requests. */
+const PAGE_SIZE = 100;
+/** At most this many pages of posts per organization in one refresh, so one huge account cannot spend the shared limit. */
+const MAX_PAGES = 5;
 
 /**
  * Posts in one organization due between start and end (inclusive), following pagination.
@@ -104,17 +120,18 @@ export async function listPostsDue(
   organizationId: string,
   range: { start: string; end: string },
   q: Query = bufferQuery,
+  from: { after: string; pagesRead: number } | null = null,
 ): Promise<{ posts: Post[]; truncated: boolean }> {
   const posts: Post[] = [];
-  let after: string | null = null;
-  for (let page = 0; page < MAX_PAGES; page++) {
+  let after: string | null = from?.after ?? null;
+  for (let page = from?.pagesRead ?? 0; page < MAX_PAGES; page++) {
     const data: { posts: { edges: { node: Post }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } } = await q(
       token,
       `query ($input: PostsInput!, $first: Int, $after: String) {
-        posts(input: $input, first: $first, after: $after) { edges { node { ${POST_FIELDS} } } pageInfo { hasNextPage endCursor } }
+        posts(input: $input, first: $first, after: $after) { ${POSTS_PAGE} }
       }`,
       {
-        input: { organizationId, filter: { dueAt: { start: range.start, end: range.end } }, sort: [{ field: "dueAt", direction: "asc" }] },
+        input: postsInput(organizationId, range),
         first: PAGE_SIZE,
         after,
       },
@@ -126,13 +143,68 @@ export async function listPostsDue(
   return { posts, truncated: true };
 }
 
+const POSTS_PAGE = `edges { node { ${POST_FIELDS} } } pageInfo { hasNextPage endCursor }`;
+const postsInput = (organizationId: string, range: { start: string; end: string }) => ({ organizationId, filter: { dueAt: { start: range.start, end: range.end } }, sort: [{ field: "dueAt", direction: "asc" }] });
+/** Organizations per request: each takes two aliases (channels and posts), within Buffer's MAX_ALIASES. */
+const ORGS_PER_REQUEST = Math.floor(MAX_ALIASES / 2);
+
+/** One organization's channels, its first page of due posts, and the cursor of the next page when there is one. */
+export type OrgRead = { channels: Channel[]; posts: Post[]; next: string | null };
+
+/**
+ * The channels and the first page of due posts of several organizations, and the account when asked, in as few
+ * requests as Buffer allows: one query carries the account plus two aliases per organization (channels, posts), so up
+ * to ORGS_PER_REQUEST organizations share a request.
+ *
+ * @param organizationIds - The organizations to read
+ * @param range - Due-date window for posts
+ * @param withAccount - Also read the account in the first request
+ * @returns The account (when asked) and each organization's read
+ */
+export async function readOrganizations(
+  token: string,
+  organizationIds: string[],
+  range: { start: string; end: string },
+  withAccount: boolean,
+  q: Query = bufferQuery,
+): Promise<{ account: Account | null; orgs: Map<string, OrgRead> }> {
+  let account: Account | null = null;
+  const orgs = new Map<string, OrgRead>();
+  const chunks: string[][] = [];
+  for (let i = 0; i < organizationIds.length; i += ORGS_PER_REQUEST) chunks.push(organizationIds.slice(i, i + ORGS_PER_REQUEST));
+  if (!chunks.length && withAccount) chunks.push([]);
+  for (const [n, ids] of chunks.entries()) {
+    const askAccount = withAccount && n === 0;
+    const vars: Record<string, unknown> = { first: PAGE_SIZE };
+    const decl = ["$first: Int"];
+    const fields = askAccount ? [ACCOUNT_FIELD] : [];
+    ids.forEach((id, i) => {
+      vars[`o${i}`] = id;
+      vars[`p${i}`] = postsInput(id, range);
+      decl.push(`$o${i}: OrganizationId!`, `$p${i}: PostsInput!`);
+      fields.push(`c${i}: channels(input: { organizationId: $o${i} }) { ${CHANNEL_FIELDS} }`, `p${i}: posts(input: $p${i}, first: $first) { ${POSTS_PAGE} }`);
+    });
+    type Answer = { account?: RawAccount } & Record<string, Channel[] | { edges: { node: Post }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } | RawAccount | undefined>;
+    const data = await q<Answer>(token, `query (${decl.join(", ")}) { ${fields.join(" ")} }`, vars);
+    if (askAccount && data.account) account = toAccount(data.account);
+    ids.forEach((id, i) => {
+      const channels = (data[`c${i}`] as Channel[] | undefined) ?? [];
+      const page = data[`p${i}`] as { edges: { node: Post }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } | undefined;
+      orgs.set(id, {
+        channels: channels.map((c) => ({ ...c, organizationId: id })),
+        posts: page?.edges.map((e) => e.node) ?? [],
+        next: page?.pageInfo.hasNextPage && page.pageInfo.endCursor ? page.pageInfo.endCursor : null,
+      });
+    });
+  }
+  return { account, orgs };
+}
+
 /** A sent post and the notes people wrote on it, for learning first rules (src/lib/day-one-rules.ts). */
 export type SentPost = { id: string; channelId: string; text: string; sentAt: string | null; notes: SentNote[] };
 /** A note a person wrote on a post: who wrote it (null when they left or set no name) and when. */
 export type SentNote = { text: string; by: string | null; at: string | null };
 
-/** Buffer allows up to 30 aliased queries in one request, and counts the request once (Buffer staff, 26 Oct 2026). */
-export const MAX_ALIASES = 30;
 
 /**
  * The newest sent posts of each channel, all channels in one request (one aliased query per channel), with only the

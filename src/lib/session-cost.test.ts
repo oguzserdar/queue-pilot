@@ -24,6 +24,11 @@ function countingBuffer() {
   const calls: string[] = [];
   let next = 0;
   const query = (async (_t: string, text: string) => {
+    // A refresh of a known account is one request: the account plus channels and posts under aliases.
+    if (/\bc0: channels\(/.test(text)) {
+      calls.push(text.includes("account {") ? "refresh" : "organizations");
+      return { ...(text.includes("account {") ? { account: { email: "judge@x", organizations: [{ id: "o1" }] } } : {}), c0: CHANNELS, p0: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } } };
+    }
     const op = text.match(/\b(account|channels|posts|dailyPostingLimits|createContentItem|createPost|editPost|post)\b/)?.[1] ?? "other";
     calls.push(op);
     if (op === "account") return { account: { email: "judge@x", organizations: [{ id: "o1" }] } };
@@ -47,41 +52,39 @@ const week: OpenSlot[] = [0, 1, 2, 3, 4].flatMap((d) =>
 );
 
 describe("a judge's first session", () => {
-  it("costs 22 Buffer requests, less than the 25 a day each signed-in person adds to the app's limit", async () => {
+  it("costs 17 Buffer requests, less than the 25 a day each signed-in person adds to the app's limit", async () => {
     const store = memorySnapshotStore();
     const { query, calls } = countingBuffer();
     const signIn = 1; // Better Auth's getUserInfo asks Buffer for the account once (src/lib/auth.ts).
 
-    // First page: no copy yet, so one refresh: account, channels, posts.
-    await refreshSnapshot("judge", "t", { store, query, now: () => at(0) });
-    const afterFirstPage = calls.length;
+    // Each step's cost is what it actually asked Buffer for.
+    const spent = async (step: () => Promise<unknown>) => { const before = calls.length; await step(); return calls.length - before; };
+
+    // First page: no copy yet, so the account, then its organization's channels and posts in one more request.
+    const firstPage = await spent(() => refreshSnapshot("judge", "t", { store, query, now: () => at(0) }));
 
     // Browsing every screen reads the saved copy.
-    for (let i = 1; i <= 5; i++) await refreshSnapshot("judge", "t", { store, query, now: () => at(i * 0.5) });
-    expect(calls.length).toBe(afterFirstPage);
+    const browsing = await spent(async () => { for (let i = 1; i <= 5; i++) await refreshSnapshot("judge", "t", { store, query, now: () => at(i * 0.5) }); });
 
     // Write my week, two minutes in: a write refreshes first, then saves 15 drafts.
-    await refreshSnapshot("judge", "t", { store, query, now: () => at(2) }, { force: true });
-    const saved = await saveDrafts("t", { title: "Week", drafts: week.map((s) => ({ slotId: s.id, text: "A short post." })), open: week }, query);
-    expect(saved.saved).toHaveLength(15);
+    const writeWeek = await spent(async () => {
+      await refreshSnapshot("judge", "t", { store, query, now: () => at(2) }, { force: true });
+      const saved = await saveDrafts("t", { title: "Week", drafts: week.map((s) => ({ slotId: s.id, text: "A short post." })), open: week }, query);
+      expect(saved.saved).toHaveLength(15);
+    });
 
     // Edit one draft at once: the copy is under 30 seconds old, but the edit re-reads its target before writing.
-    const snap = await refreshSnapshot("judge", "t", { store, query, now: () => at(2.2) }, { force: true });
-    const post = { id: "p1", channelId: "x", status: "draft", text: "A short post.", dueAt: week[0].at, via: "api" } as never;
-    expect((await updateDraft("t", "p1", "A shorter post.", [post], snap!.data.channels, new Set(["p1"]), query)).ok).toBe(true);
+    const edit = await spent(async () => {
+      const snap = await refreshSnapshot("judge", "t", { store, query, now: () => at(2.2) }, { force: true });
+      const post = { id: "p1", channelId: "x", status: "draft", text: "A short post.", dueAt: week[0].at, via: "api" } as never;
+      expect((await updateDraft("t", "p1", "A shorter post.", [post], snap!.data.channels, new Set(["p1"]), query)).ok).toBe(true);
+    });
 
     // The Refresh button ten minutes later.
-    await refreshSnapshot("judge", "t", { store, query, now: () => at(10) }, { force: true });
+    const refresh = await spent(() => refreshSnapshot("judge", "t", { store, query, now: () => at(10) }, { force: true }));
 
     const total = signIn + calls.length;
-    expect({
-      firstPage: 3,
-      browsing: 0,
-      writeWeek: calls.filter((c) => c === "dailyPostingLimits" || c === "createContentItem").length + 3,
-      edit: 2,
-      refresh: 3,
-      total,
-    }).toEqual({ firstPage: 3, browsing: 0, writeWeek: 13, edit: 2, refresh: 3, total: 22 });
+    expect({ firstPage, browsing, writeWeek, edit, refresh, total }).toEqual({ firstPage: 2, browsing: 0, writeWeek: 11, edit: 2, refresh: 1, total: 17 });
     expect(total).toBeLessThan(25);
   });
 });
