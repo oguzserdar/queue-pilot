@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Image from "next/image";
-import { Badge } from "@/registry/components/badge/badge";
 import { Accordion } from "@/registry/components/accordion/accordion";
 import button from "@/registry/components/button/button.module.css";
-import { PilotWeek } from "@/components/landing/pilot-week";
 import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
 import { PilotMark } from "@/components/landing/pilot-mark";
@@ -64,118 +62,50 @@ export default function HomePage() {
       <main>
         <section className={s.hero} aria-labelledby="hero-title">
           <PixelField placement="hero" />
-          <div className={[s.wrap, s.heroGrid].join(" ")}>
+          <div className={[s.wrap, s.heroStack].join(" ")}>
             <div className={s.heroCopy}>
-              <h1 id="hero-title">Drafts for your Buffer queue, written from your own work, that <HandUnderline>learn from your fixes</HandUnderline>.</h1>
-              <p className={s.lede}>Every AI writes a little differently, and none of them follows instructions every time. Queue Pilot checks each draft against your rules before it reaches your Buffer queue, whichever AI wrote it. Make the same fix twice and it offers to keep it as a rule.</p>
+              <h1 id="hero-title">Your Buffer week, written from <HandUnderline>your own work</HandUnderline>.</h1>
+              <p className={s.lede}>Any AI drafts posts from your newsletter. Queue Pilot checks each one against your rules before it reaches Buffer.</p>
               <div className={s.ctas}>
-                <LinkButton href={SIGN_IN} kind="primary" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
-                <LinkButton href={DEMO} kind="secondary" say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</LinkButton>
+                <LinkButton href={SIGN_IN} kind="primary">Sign in with Buffer</LinkButton>
+                <LinkButton href={DEMO} kind="secondary">Try the demo</LinkButton>
               </div>
-              <AiStrip />
             </div>
-            <div className={s.heroMedia}><PixelField placement="hero" /><PilotWeek /></div>
+            <figure className={[s.shot, s.heroShot].join(" ")}>
+              <Image src="/landing/screens/next-week.png" alt="Queue Pilot's Next week screen: drafts by account and day, ready to approve, one blocked" width={2400} height={1640} priority sizes="(max-width: 1240px) 100vw, 1200px" />
+            </figure>
           </div>
         </section>
 
-        <section className={s.section} id="how" aria-labelledby="rules-title">
-          <div className={[s.wrap, s.split].join(" ")}>
+        <section className={s.strip} aria-label="Works in">
+          <div className={s.wrap}><AiStrip /></div>
+        </section>
+
+        <section className={s.section} id="how" aria-labelledby="how-title">
+          <div className={[s.wrap, s.stack].join(" ")}>
             <div className={s.copy}>
-              <h2 id="rules-title">Your rules are enforced, not suggested</h2>
-              <p>Buffer checks what each network requires. Queue Pilot checks what you require, on every draft, before it is saved to Buffer. Each rule in your playbook has one of two strengths.</p>
-              <dl className={s.strengths}>
-                <div>
-                  <dt><Badge size="sm" tone="danger">Blocks drafts</Badge></dt>
-                  <dd>A draft that breaks it is not saved to Buffer. If the check cannot run, the draft is not saved either.</dd>
-                  <dd className={s.example}>No &ldquo;game-changer&rdquo;. Say what changed.</dd>
-                </div>
-                <div>
-                  <dt><Badge size="sm" tone="warning">Flags drafts</Badge></dt>
-                  <dd>A draft that breaks it is saved and flagged for you, so you see it before you approve.</dd>
-                  <dd className={s.example}>Name the model and the number in the first line.</dd>
-                </div>
-              </dl>
-              <p>An AI model judges each rule by meaning, not exact words, in the language the draft is written in. The check runs in Queue Pilot, so it is the same in ChatGPT, Claude, Grok and any app that takes an MCP connector.</p>
+              <h2 id="how-title">How a draft reaches Buffer</h2>
             </div>
-            <figure className={s.chat}>
-              <figcaption><span className={s.askMark} style={{ maskImage: "url(/landing/logos/grok.svg)", WebkitMaskImage: "url(/landing/logos/grok.svg)" }} aria-hidden="true" />Grok, with Queue Pilot connected</figcaption>
-              <p className={s.you}>Fill next week from my newsletter.</p>
-              <p className={s.qp}>Saved 5 drafts in your empty times. One was not saved: Thursday&apos;s LinkedIn post called Gemini 4 Carbon a &ldquo;game-changer&rdquo;, and your playbook blocks that.</p>
-              <ul className={s.checks} aria-label="What your playbook decided">
-                <li><span>Thu, LinkedIn: &ldquo;Gemini 4 Carbon is a game-changer&hellip;&rdquo;</span><Badge size="sm" tone="danger">Not saved</Badge></li>
-                <li><span>Fri, LinkedIn: &ldquo;This week&apos;s biggest release&hellip;&rdquo;</span><Badge size="sm" tone="warning">Flagged</Badge></li>
-                <li><span>4 drafts pass your playbook</span><Badge size="sm" tone="success">Saved</Badge></li>
-              </ul>
+            <ol className={s.flow}>
+              <li><b>Ask your AI</b><p>&ldquo;Fill next week from my newsletter.&rdquo; In Claude, ChatGPT, Grok or any MCP app.</p></li>
+              <li><b>Queue Pilot checks each draft</b><p>Quotes against your source, then your rules. A draft that breaks a blocking rule is not saved.</p></li>
+              <li><b>You approve</b><p>Drafts wait in Buffer. Approve them in Queue Pilot, in Buffer or in your AI chat.</p></li>
+            </ol>
+            <figure className={s.shot}>
+              <Image src="/landing/screens/draft.png" alt="A draft in Queue Pilot: its quote matched to the source, 3 playbook rules passed, and two teammate notes from Buffer" width={2160} height={1440} sizes="(max-width: 1240px) 100vw, 1080px" />
             </figure>
           </div>
         </section>
 
         <section className={[s.section, s.tinted].join(" ")} aria-labelledby="learn-title">
-          <div className={[s.wrap, s.stack].join(" ")}>
+          <div className={[s.wrap, s.split].join(" ")}>
             <div className={s.copy}>
-              <h2 id="learn-title">Fix it in Buffer twice. Keep it as a rule.</h2>
-              <p>Queue Pilot reads the edits you make to its drafts in Buffer. When you make the same kind of fix twice, it finds it the next time you or your AI look, and offers a rule with your two edits as proof. Every AI you connect follows the rules you keep.</p>
+              <h2 id="learn-title">Fix it twice. Keep it as a rule.</h2>
+              <p>Make the same edit in Buffer twice and Queue Pilot offers it as a rule, for every AI you use.</p>
             </div>
-            <ol className={s.loop}>
-              <li className={s.step}>
-                <span className={s.meta}>Your edit in Buffer · Tue, LinkedIn</span>
-                <p><del>This week&apos;s biggest release is a game-changer.</del></p>
-                <p><ins>Gemini 4 Carbon ranks #1 on the Intelligence Index, at 59.</ins></p>
-              </li>
-              <li className={s.step}>
-                <span className={s.meta}>Your edit in Buffer · Fri, LinkedIn</span>
-                <p><del>A real game-changer for anyone running agents.</del></p>
-                <p><ins>Claude Duet keeps working when you step away and checks with you before it acts.</ins></p>
-                <span className={s.hint}>Other words, same fix. Edits are grouped by meaning.</span>
-              </li>
-              <li className={[s.step, s.offer].join(" ")}>
-                <span className={s.meta}>Queue Pilot</span>
-                <b>You made the same fix twice</b>
-                <p>No &ldquo;game-changer&rdquo;. Say what changed.</p>
-                <Badge size="sm" tone="success">Kept in your playbook</Badge>
-              </li>
-              <li className={s.step}>
-                <span className={s.meta}>Next week · written in Claude</span>
-                <p>GPT-6.1 Terra is OpenAI&apos;s new fast model for high-volume work and computer use.</p>
-                <span className={s.check}><span>No &ldquo;game-changer&rdquo;</span><Badge size="sm" tone="success">Passes</Badge></span>
-              </li>
-            </ol>
-          </div>
-        </section>
-
-        <section className={s.section} aria-labelledby="checks-title">
-          <div className={[s.wrap, s.stack].join(" ")}>
-            <div className={s.copy}>
-              <h2 id="checks-title">One post, before and after</h2>
-              <p>Tuesday&apos;s LinkedIn post, from saving it to Buffer to sharing it with your team.</p>
-            </div>
-            <div className={s.pair}>
-              <article className={s.panel} aria-label="Before it is saved">
-                <p className={s.panelLabel}>1. Before it is saved to Buffer</p>
-                <div className={s.draft}>
-                  <span className={s.meta}>Tue 12:00 · LinkedIn</span>
-                  <p><mark>Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59.</mark> I want to see it on real repos before I switch.</p>
-                </div>
-                <ul className={s.checks}>
-                  <li><span>The highlighted claim is in its source, Google&apos;s &ldquo;Gemini 4 Carbon: our next frontier model&rdquo;</span><Badge size="sm" tone="success">Found</Badge></li>
-                  <li><span>It follows your 4 rules</span><Badge size="sm" tone="success">Passes</Badge></li>
-                  <li className={s.quiet}><span>Length, daily posting limit and channel, as Buffer would check them</span><Badge size="sm" tone="success">Fits</Badge></li>
-                </ul>
-              </article>
-              <article className={s.panel} aria-label="After it goes out">
-                <p className={s.panelLabel}>2. After it goes out</p>
-                <p className={s.panelNote}>The same post is copied to the chats you pick.</p>
-                <div className={s.message}>
-                  <span className={s.meta}>Telegram · This Week in AI</span>
-                  <p>Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59. I want to see it on real repos before I switch.</p>
-                </div>
-                <div className={s.message}>
-                  <span className={s.meta}>Discord · #social</span>
-                  <p>Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59. I want to see it on real repos before I switch.</p>
-                </div>
-                <p className={s.panelNote}>If a post fails, Queue Pilot shows Buffer&apos;s own reason, such as &ldquo;The image could not be loaded from its link.&rdquo;</p>
-              </article>
-            </div>
+            <figure className={[s.shot, s.cardShot].join(" ")}>
+              <Image src="/landing/screens/same-fix-twice.png" alt="Queue Pilot noticed the same fix twice and offers: Start with the result, not a feeling" width={1724} height={410} sizes="(max-width: 1000px) 100vw, 720px" />
+            </figure>
           </div>
         </section>
 

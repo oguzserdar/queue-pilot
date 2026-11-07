@@ -117,3 +117,18 @@
 
 /* On wide screens the enforcement copy runs longer than the chat, so the chat sits at the column's middle, not its top. */
 @media (min-width: 1001px) { .split > .chat { align-self: center } }
+
+/* v2: the hero stacks copy over one real screen; every product picture is a real capture in the same frame. */
+.heroStack { position: relative; z-index: 1; display: grid; gap: clamp(40px, 5vw, 64px); padding-block: clamp(48px, 6vw, 88px) 0 }
+.heroStack .heroCopy h1 { max-width: 16ch }
+.shot { margin: 0; border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 24px 60px -24px oklch(0.35 0.08 357 / 0.28) }
+.shot img { display: block; width: 100%; height: auto }
+.heroShot { margin-bottom: calc(var(--section) * -0.6); position: relative; z-index: 1 }
+.strip { padding-block: calc(var(--section) * 0.6 + 32px) 32px }
+.cardShot { align-self: center }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; counter-reset: flow }
+.flow li { counter-increment: flow; display: grid; gap: 6px; align-content: start }
+.flow li::before { content: counter(flow); display: grid; place-items: center; width: 28px; height: 28px; margin-bottom: 6px; border-radius: 8px; background: var(--accent); color: var(--accent-foreground); font-size: 14px; font-weight: 650 }
+.flow b { font-size: 18px }
+.flow p { margin: 0; color: var(--text-secondary); font-size: 16px; max-width: 34ch }
+@media (max-width: 800px) { .flow { grid-template-columns: minmax(0, 1fr); gap: 20px } }
