@@ -35,12 +35,12 @@ function tipAfter(el: HTMLElement, box: DOMRect) {
   const lines = linesOf(el);
   const end = lines[lines.length - 1] ?? el.getBoundingClientRect();
   const buttons = [...el.querySelectorAll<HTMLElement>("button, a")].map((b) => b.getBoundingClientRect()).filter((b) => b.width > 0);
-  // A part that ends in a row of buttons: rest on the first one, the main action, near its right end.
+  // A part that ends in a row of buttons: rest just right of the first one, the main action, with a small gap.
   const first = buttons[0], last = buttons[buttons.length - 1];
-  const onButton = last && last.right >= end.right - 2;
-  const x = onButton ? first.left + first.width * 0.72 : end.right + 6;
-  const y = onButton ? first.top + first.height * 0.45 : end.top + end.height * 0.3;
-  return { x: Math.min(x - box.left, box.width - 34), y: Math.min(y - box.top, box.height - 50) };
+  const onButton = Boolean(last && last.right >= end.right - 2);
+  const x = onButton ? first.right + 6 : end.right + 6;
+  const y = onButton ? first.top + first.height * 0.3 : end.top + end.height * 0.3;
+  return { x: Math.min(x - box.left, box.width - 34), y: Math.min(y - box.top, box.height - 50), button: onButton };
 }
 
 /**
@@ -48,12 +48,17 @@ function tipAfter(el: HTMLElement, box: DOMRect) {
  * clear of the pointer; above it next. Every choice keeps 16px from the frame's edges, using the popover's real
  * height `h` (it wraps to more lines on a phone), and when nothing fits cleanly it takes the side with most room.
  */
-function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect, heightAt: (w: number) => number): Place {
+function placeBeside(tip: { x: number; y: number; button?: boolean }, part: DOMRect, box: DOMRect, heightAt: (w: number) => number): Place {
   const POP_W = Math.min(POP_WIDE, box.width - EDGE * 2);
   const h = heightAt(POP_W);
   // Hang the popover off the pointer's side that has room: on the right half it opens down and to the left of the
   // pointer, on the left half down and to the right.
   const x = Math.max(EDGE, Math.min(tip.x > box.width / 2 ? tip.x - POP_W + 24 : tip.x - 8, box.width - POP_W - EDGE));
+  // Beside a button, the popover goes straight to the pointer's right, a small gap after it.
+  if (tip.button) {
+    const x = tip.x + 38, w = Math.min(400, box.width - EDGE - x);
+    if (w >= 190) { const hb = heightAt(w); return { side: "right", x, y: Math.max(EDGE, Math.min(tip.y - 6, box.height - hb - 8)), w }; }
+  }
   // First choice: just under the part, beside the pointer rather than under it, so it sits close to the words.
   const under = part.bottom - box.top + PAD + 8;
   const onRight = tip.x > box.width / 2;
@@ -61,7 +66,8 @@ function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect,
   if (besideX >= EDGE && besideX + POP_W <= box.width - EDGE && under + h <= box.height - EDGE) return { side: "below", x: besideX, y: under, w: POP_W };
   const below = Math.max(under, tip.y + 46);
   if (below + h <= box.height - EDGE) return { side: "below", x, y: below, w: POP_W };
-  const right = Math.max(part.right - box.left + PAD + 2, tip.x + 38);
+  // Beside a button the popover follows the pointer, a small gap after it; beside text it clears the whole part.
+  const right = tip.button ? tip.x + 38 : Math.max(part.right - box.left + PAD + 2, tip.x + 38);
   // Beside the part: as wide as the room allows (up to 400px) so it wraps to fewer lines, its top level with the
   // part, and only lifted as far as the frame's bottom edge needs.
   const sideW = Math.min(400, box.width - EDGE - right);
