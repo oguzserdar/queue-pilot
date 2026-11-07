@@ -52,10 +52,11 @@ function demoWeekProps() {
   return { week: demoWeek, evidence: exampleEvidence, notesPreview: exampleNotes(ids), tagsPreview: exampleTags(ids), rules: exampleRules, writing: exampleWriting, writeCount: countOpenSlots(demoWeek), approvals: exampleApprovals };
 }
 
-/** `?live=1` draws the app's real components in place of the three screenshots, to compare the two. */
+/** The homepage, drawn with the app's real components (the hero plays a scripted walkthrough). */
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ live?: string; setup?: string }> }) {
   const params = await searchParams;
-  const live = params.live === "1";
+  // The app's real components are the default; `?live=0` shows the older screenshots, to compare.
+  const live = params.live !== "0";
   // The setup steps are drawn live in pixels; `?setup=still` and `?setup=gif` show the generated versions, to compare.
   const setup = params.setup === "gif" || params.setup === "still" ? params.setup : "pixel";
   const stepArt = (n: 1 | 2 | 3 | 4) => setup === "pixel" ? <SetupScene step={(n - 1) as 0 | 1 | 2 | 3} className={s.stepArt} />

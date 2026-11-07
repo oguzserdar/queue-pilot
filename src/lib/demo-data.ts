@@ -48,7 +48,7 @@ export const DAYS = ["Mon 2", "Tue 3", "Wed 4", "Thu 5", "Fri 6", "Sat 7", "Sun 
 export const slots: Record<ChannelId, Record<number, string[]>> = {
   linkedin: { 1: ["12:00"], 3: ["15:00"], 4: ["12:00"] },
   instagram: { 1: ["18:00"], 4: ["10:00"] },
-  bluesky: { 2: ["9:00"] },
+  threads: { 2: ["9:00"] },
   x: { 0: ["9:00"], 3: ["9:00"] },
 };
 
@@ -71,7 +71,7 @@ const draftsAndPosts: Post[] = [
     text: "Android Studio now lets you pick from over 40 coding agents. Full notes in the newsletter, link in bio.",
   },
   {
-    id: "d3", channel: "bluesky", day: 2, time: "9:00", status: "draft", source: issue41,
+    id: "d3", channel: "threads", day: 2, time: "9:00", status: "draft", source: issue41,
     text: "GPT-6.1 Terra, Gemini 4 Carbon, and over 40 coding agents in Android Studio. This Week in AI 41 is out.",
   },
   {

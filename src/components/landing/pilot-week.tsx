@@ -19,7 +19,7 @@ interface Slot { time: string; channel: string; state: SlotState }
 const DAYS: { day: string; slots: Slot[] }[] = [
   { day: "Mon", slots: [{ time: "9:00", channel: "X", state: "scheduled" }, { time: "12:00", channel: "LinkedIn", state: "scheduled" }] },
   { day: "Tue", slots: [{ time: "12:00", channel: "LinkedIn", state: "draft" }, { time: "18:00", channel: "Instagram", state: "empty" }] },
-  { day: "Wed", slots: [{ time: "9:00", channel: "Bluesky", state: "empty" }, { time: "12:00", channel: "LinkedIn", state: "scheduled" }] },
+  { day: "Wed", slots: [{ time: "9:00", channel: "Threads", state: "empty" }, { time: "12:00", channel: "LinkedIn", state: "scheduled" }] },
   { day: "Thu", slots: [{ time: "9:00", channel: "X", state: "empty" }, { time: "15:00", channel: "LinkedIn", state: "empty" }] },
   { day: "Fri", slots: [{ time: "10:00", channel: "Instagram", state: "scheduled" }, { time: "12:00", channel: "LinkedIn", state: "empty" }] },
 ];
