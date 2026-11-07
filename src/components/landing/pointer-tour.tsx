@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import styles from "./pointer-tour.module.css";
-import { TimerRing } from "./timer-ring";
 
 /** One stop of the tour: how to find the part on the real draft window, and what to say about it. */
 export type TourStop = { find: (root: HTMLElement) => HTMLElement | undefined; title: string; text: string; side?: Side };
@@ -40,8 +39,29 @@ const POINTER_ROWS = [
   "o", "oo", "oxo", "oxxo", "oxxxo", "oxxxxo", "oxxxxxo", "oxxxxxxo", "oxxxxxxxo", "oxxxxxxxxo",
   "oxxxxxoooo", "oxxoxxo", "oxo.oxxo", "oo..oxxo", "o....oxxo", ".....oxxo", "......oo",
 ];
-const POINTER = POINTER_ROWS.flatMap((row, y) => [...row].map((c, x) =>
-  c === "." ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} className={c === "x" ? styles.fill : styles.edge} />));
+const cells = (want: string, className: string) => POINTER_ROWS.flatMap((row, y) => [...row].map((c, x) =>
+  c === want ? <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} className={className} /> : null));
+const EDGE = cells("o", styles.edge);
+
+/**
+ * The pointer is its own timer: its body starts pale and fills with crimson from the tip down over `ms`; when it is
+ * full, the next stop comes. `run` restarts the fill.
+ */
+function TimerPointer({ ms, run }: { ms: number | null; run: number }) {
+  const clip = useId().replace(/:/g, "");
+  return (
+    <svg viewBox="0 0 11 17" shapeRendering="crispEdges">
+      <clipPath id={clip}>
+        <rect key={run} x="0" y="0" width="11" height={ms ? 0 : 17}>
+          {ms ? <animate attributeName="height" from="0" to="17" dur={`${ms}ms`} fill="freeze" /> : null}
+        </rect>
+      </clipPath>
+      {cells("x", styles.pale)}
+      <g clipPath={`url(#${clip})`}>{cells("x", styles.fill)}</g>
+      {EDGE}
+    </svg>
+  );
+}
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 
 /**
@@ -53,7 +73,6 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
   const root = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const [say, setSay] = useState<{ i: number; place: Place; ms: number } | null>(null);
-  const [paused, setPaused] = useState(false);
   // The spotlight: the part being explained stays bright, the rest of the screen fades back behind a soft wash.
   const [spot, setSpot] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   useEffect(() => {
@@ -109,7 +128,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
       if (near && near.d < 160 && near.k !== current && jump === null) jump = near.k;
     };
     el.addEventListener("pointermove", onMove);
-    const seen = new IntersectionObserver(([e]) => { visible = e.isIntersecting; setPaused(!visible); }, { threshold: 0.3 });
+    const seen = new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.3 });
     seen.observe(el);
     void play();
     return () => { alive = false; seen.disconnect(); el.removeEventListener("pointermove", onMove); };
@@ -122,8 +141,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
       {spot && <div className={styles.spot} style={{ transform: `translate(${spot.x}px, ${spot.y}px)`, width: spot.w, height: spot.h }} aria-hidden="true" />}
       {at && (
         <div className={styles.pointer} style={{ transform: `translate(${at.x}px, ${at.y}px)` }} aria-hidden="true">
-          <svg viewBox="0 0 11 17" shapeRendering="crispEdges">{POINTER}</svg>
-          {say && <span className={styles.timer}><TimerRing key={say.i} ms={say.ms} paused={paused} tone="light" /></span>}
+          <TimerPointer ms={say?.ms ?? null} run={say?.i ?? -1} />
         </div>
       )}
       {stop && say && (
