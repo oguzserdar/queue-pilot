@@ -82,7 +82,8 @@
 
 /* On a phone a draft opens full screen, as post editors do there, not as a small centred box. */
 @media (max-width: 767px) {
-  .dialog.dialog { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
+  /* Only the popup: the same window drawn inside a page (the homepage) keeps the page's width. */
+  .dialog.dialog:not([data-inline]) { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
 }
 .existing .state { color: var(--text-muted); }
 .existing[data-status="error"] { background: var(--surface); border: 1px solid var(--danger); }
