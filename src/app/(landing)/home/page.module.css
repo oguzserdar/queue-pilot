@@ -121,6 +121,10 @@
 /* v2: the hero stacks copy over one real screen; every product picture is a real capture in the same frame. */
 .heroStack { position: relative; z-index: 1; display: grid; gap: clamp(40px, 5vw, 64px); padding-block: clamp(48px, 6vw, 88px) 0 }
 .heroStack .heroCopy h1 { max-width: 16ch }
+/* Copy left, the Pilot right and bigger than before; the real screen spans both columns below. */
+@media (min-width: 901px) { .heroStack { grid-template-columns: minmax(0, 1fr) auto } .heroStack > figure { grid-column: 1 / -1 } }
+.heroPilot { --pw: clamp(180px, 20vw, 260px); align-self: end; padding-right: clamp(0px, 4vw, 64px) }
+@media (max-width: 900px) { .heroPilot { display: none } }
 .shot { margin: 0; border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 24px 60px -24px oklch(0.35 0.08 357 / 0.28) }
 .shot img { display: block; width: 100%; height: auto }
 .heroShot { margin-bottom: calc(var(--section) * -0.6); position: relative; z-index: 1 }

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { Accordion } from "@/registry/components/accordion/accordion";
 import button from "@/registry/components/button/button.module.css";
+import { PilotWeek } from "@/components/landing/pilot-week";
 import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
 import { PilotMark } from "@/components/landing/pilot-mark";
@@ -67,10 +68,11 @@ export default function HomePage() {
               <h1 id="hero-title">Your Buffer week, written from <HandUnderline>your own work</HandUnderline>.</h1>
               <p className={s.lede}>Any AI drafts posts from your newsletter. Queue Pilot checks each one against your rules before it reaches Buffer.</p>
               <div className={s.ctas}>
-                <LinkButton href={SIGN_IN} kind="primary">Sign in with Buffer</LinkButton>
-                <LinkButton href={DEMO} kind="secondary">Try the demo</LinkButton>
+                <LinkButton href={SIGN_IN} kind="primary" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
+                <LinkButton href={DEMO} kind="secondary" say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</LinkButton>
               </div>
             </div>
+            <PilotWeek week={false} className={s.heroPilot} />
             <figure className={[s.shot, s.heroShot].join(" ")}>
               <Image src="/landing/screens/next-week.png" alt="Queue Pilot's Next week screen: drafts by account and day, ready to approve, one blocked" width={2400} height={1640} priority sizes="(max-width: 1240px) 100vw, 1200px" />
             </figure>
@@ -104,7 +106,7 @@ export default function HomePage() {
               <p>Make the same edit in Buffer twice and Queue Pilot offers it as a rule, for every AI you use.</p>
             </div>
             <figure className={[s.shot, s.cardShot].join(" ")}>
-              <Image src="/landing/screens/same-fix-twice.png" alt="Queue Pilot noticed the same fix twice and offers: Start with the result, not a feeling" width={1724} height={410} sizes="(max-width: 1000px) 100vw, 720px" />
+              <Image src="/landing/screens/same-fix-twice.png" alt="Queue Pilot noticed the same fix twice and offers: Start with the result, not a feeling" width={1712} height={398} sizes="(max-width: 1000px) 100vw, 720px" />
             </figure>
           </div>
         </section>

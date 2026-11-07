@@ -26,7 +26,8 @@ const DAYS: { day: string; slots: Slot[] }[] = [
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-export function PilotWeek() {
+/** `week={false}` draws the Pilot alone, without the example week, for a hero that shows the real app below it. */
+export function PilotWeek({ week = true, className }: { week?: boolean; className?: string } = {}) {
   const [states, setStates] = useState<SlotState[]>(() => DAYS.flatMap((d) => d.slots.map((s) => s.state)));
   const [line, setLine] = useState("");
   // The full line, set once, for screen readers; the typed bubble is hidden from them.
@@ -85,7 +86,7 @@ export function PilotWeek() {
 
     // A still visitor: look at an empty slot, fill it with a draft, look back. A full week starts over.
     const idle = reduce ? 0 : window.setInterval(() => {
-      if (document.hidden || busy || look.current || performance.now() - lastMove < 2400) return;
+      if (!week || document.hidden || busy || look.current || performance.now() - lastMove < 2400) return;
       // Only slots on screen: phones hide Thu and Fri, and the Pilot must not stare at a hidden one.
       const empty = statesRef.current.flatMap((st, i) => (st === "empty" && slotRefs.current[i]?.offsetParent ? [i] : []));
       if (!empty.length) { setStates(DAYS.flatMap((d) => d.slots.map((x) => x.state))); return; }
@@ -133,7 +134,7 @@ export function PilotWeek() {
 
   let index = 0;
   return (
-    <div className={styles.root} ref={root}>
+    <div className={[styles.root, className].filter(Boolean).join(" ")} ref={root}>
       <div ref={pilot} className={styles.pilot}>
         <span className={styles.say} data-show={talking || undefined} aria-hidden="true">{line}</span>
         <span className={styles.sr} role="status">{announce}</span>
@@ -151,7 +152,7 @@ export function PilotWeek() {
         </svg>
       </div>
 
-      <div className={styles.week} aria-label="Example Buffer week">
+      {week ? <div className={styles.week} aria-label="Example Buffer week">
         <div className={styles.head}><b>Next week</b><span>Alex Rivera, demo</span></div>
         <div className={styles.days}>
           {DAYS.map((d) => (
@@ -170,7 +171,7 @@ export function PilotWeek() {
             </div>
           ))}
         </div>
-      </div>
+      </div> : null}
     </div>
   );
 }
