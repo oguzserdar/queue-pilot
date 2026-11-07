@@ -47,8 +47,9 @@ function tipAfter(el: HTMLElement, box: DOMRect) {
  * clear of the pointer; above it next. Every choice keeps 16px from the frame's edges, using the popover's real
  * height `h` (it wraps to more lines on a phone), and when nothing fits cleanly it takes the side with most room.
  */
-function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect, h: number): Place {
+function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect, heightAt: (w: number) => number): Place {
   const POP_W = Math.min(POP_WIDE, box.width - EDGE * 2);
+  const h = heightAt(POP_W);
   // Hang the popover off the pointer's side that has room: on the right half it opens down and to the left of the
   // pointer, on the left half down and to the right.
   const x = Math.max(EDGE, Math.min(tip.x > box.width / 2 ? tip.x - POP_W + 24 : tip.x - 8, box.width - POP_W - EDGE));
@@ -60,8 +61,14 @@ function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect,
   const below = Math.max(under, tip.y + 46);
   if (below + h <= box.height - EDGE) return { side: "below", x, y: below, w: POP_W };
   const right = Math.max(part.right - box.left + PAD + 2, tip.x + 26);
-  const mid = Math.max(EDGE, Math.min(part.top - box.top + part.height / 2 - h / 2, box.height - h - EDGE));
-  if (right + POP_W <= box.width - EDGE) return { side: "right", x: right, y: mid, w: POP_W };
+  // Beside the part: as wide as the room allows (up to 400px) so it wraps to fewer lines, its top level with the
+  // part, and only lifted as far as the frame's bottom edge needs.
+  const sideW = Math.min(400, box.width - EDGE - right);
+  if (sideW >= 220) {
+    const sideH = heightAt(sideW);
+    const y = Math.max(EDGE, Math.min(part.top - box.top - 4, box.height - sideH - 8));
+    if (y + sideH <= box.height - 8) return { side: "right", x: right, y, w: sideW };
+  }
   const above = part.top - box.top - PAD - 8;
   if (above - h >= EDGE) return { side: "above", x, y: above, w: POP_W };
   // Nothing fits cleanly: whichever of below or above has more room, held inside the edges.
@@ -159,15 +166,18 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
           if (still) { pos = to; setAt(to); } else await glide(to);
           // Long enough to read the popover at an average 4 words a second, plus a moment to look; the pointer fills to show it.
           const ms = Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500);
-          // Measure the popover's real height at its width before placing it, so it never runs past an edge.
-          const probe = document.createElement("div");
-          probe.className = styles.pop;
-          probe.style.cssText = `visibility:hidden;left:0;top:0;width:${Math.min(POP_WIDE, box.width - EDGE * 2)}px;animation:none`;
-          const b = document.createElement("b"), t = document.createElement("span");
-          b.textContent = STOPS[i].title; t.textContent = STOPS[i].text;
-          probe.append(b, t); el.append(probe);
-          const h = probe.offsetHeight; probe.remove();
-          setSay({ i, place: placeBeside(to, lit, box, h), ms });
+          // The popover's real height at a given width, measured off-screen, so placement never runs past an edge.
+          const heightAt = (w: number) => {
+            const probe = document.createElement("div");
+            probe.className = styles.pop;
+            probe.style.cssText = `visibility:hidden;left:0;top:0;width:${w}px;animation:none`;
+            const b = document.createElement("b"), t = document.createElement("span");
+            b.textContent = STOPS[i].title; t.textContent = STOPS[i].text;
+            probe.append(b, t); el.append(probe);
+            const h = probe.offsetHeight; probe.remove();
+            return h;
+          };
+          setSay({ i, place: placeBeside(to, lit, box, heightAt), ms });
           await wait(ms);
         }
         i = (i + 1) % STOPS.length;
