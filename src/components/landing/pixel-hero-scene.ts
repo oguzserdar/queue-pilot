@@ -1,12 +1,12 @@
 /**
- * The homepage hero as pixel art: Alex's demo week drawn on a 192x108 grid that CSS scales up crisp. The same five
+ * The homepage hero as pixel art: Alex's demo week drawn on a 192x96 grid that CSS scales up crisp. The same five
  * steps as the walkthrough play on one 20-second loop: the empty times blink, drafts land from the newsletter, each
  * is checked and a quote is matched to its source, the post that would fail turns red, and the cursor approves the
  * rest. Every frame is drawn whole from the time t, so the loop is seamless and any moment can be drawn on its own.
  */
 import type { WeekModel } from "@/lib/week-model";
 
-export const HERO_SIZE = { width: 192, height: 108 } as const;
+export const HERO_SIZE = { width: 192, height: 96 } as const;
 export const HERO_LOOP = 20;
 /** When each step starts, in seconds into the loop: empty times, drafts, checks, the failing post, approve. */
 export const STEP_AT = [0, 2.2, 6, 10, 13] as const;
@@ -31,8 +31,8 @@ function box(g: G, x: number, y: number, w: number, h: number, fill: string, edg
 }
 
 /** Where everything sits: one card per channel and weekday that has a posting time, in the demo's own order. */
-const BOARD = { x: 4, y: 18, w: 184, h: 86 };
-const COL0 = 34, COL_W = 30, ROW0 = 42, ROW_H = 15, CARD_W = 26, CARD_H = 11;
+const BOARD = { x: 4, y: 5, w: 184, h: 86 };
+const COL0 = 34, COL_W = 30, ROW0 = 29, ROW_H = 15, CARD_W = 26, CARD_H = 11;
 type Card = { x: number; y: number; status: "empty" | "scheduled" | "draft"; draftIndex: number; blocked: boolean; channel: string };
 
 /** Lays out Alex's Monday-to-Friday week as cards: scheduled posts, drafts (in the order they land) and empty times. */
@@ -59,17 +59,6 @@ export function layoutWeek(week: WeekModel): Card[] {
 const POINTER = ["o", "oo", "oxo", "oxxo", "oxxxo", "oxxxxo", "oxxxxxo", "oxxxxoo", "oxoxxo", "oo.oxxo", "....oo"];
 function pointer(g: G, x: number, y: number, down: boolean) {
   POINTER.forEach((row, r) => [...row].forEach((c, k) => { if (c !== ".") px(g, x + k, y + r + (down ? 1 : 0), 1, 1, c === "o" ? C.white : down ? C.deep : C.crimson); }));
-}
-
-/** The Pilot, 16x16, standing on the board's top edge: body, belly, shine, two eyes that blink. */
-function pilot(g: G, x: number, y: number, t: number, lift: number) {
-  y -= lift;
-  for (let r = 0; r < 16; r++) { const i = r === 0 || r === 15 ? 3 : r === 1 || r === 14 ? 1 : 0; px(g, x + i, y + r, 16 - i * 2, 1, C.ink); }
-  for (let r = 1; r < 15; r++) { const i = r === 1 || r === 14 ? 3 : r === 2 || r === 13 ? 2 : 1; px(g, x + i, y + r, 16 - i * 2, 1, r >= 11 ? C.deep : C.crimson); }
-  px(g, x + 3, y + 3, 2, 1, C.shine); px(g, x + 2, y + 4, 1, 2, C.shine);
-  const shut = t % 3.6 < 0.16;
-  if (shut) { px(g, x + 4, y + 7, 2, 1, C.white); px(g, x + 10, y + 7, 2, 1, C.white); }
-  else { px(g, x + 4, y + 5, 2, 5, C.white); px(g, x + 10, y + 5, 2, 5, C.white); }
 }
 
 function badge(g: G, x: number, y: number, good: boolean) {
@@ -99,18 +88,18 @@ export function drawHero(g: G, cards: Card[], time: number) {
   px(g, BOARD.x + 2, BOARD.y + BOARD.h, BOARD.w - 4, 2, C.shadow);
   box(g, BOARD.x, BOARD.y, BOARD.w, BOARD.h, C.white);
   // The newsletter: a page with a folded corner and lines.
-  const docX = 10, docY = 22;
+  const docX = 10, docY = 9;
   box(g, docX, docY, 10, 12, C.white);
   px(g, docX + 7, docY + 1, 2, 2, C.pink); px(g, docX + 2, docY + 4, 6, 1, C.crimson); px(g, docX + 2, docY + 6, 5, 1, C.greyMid); px(g, docX + 2, docY + 8, 6, 1, C.greyMid);
-  px(g, 24, 24, 46, 3, C.ink); px(g, 24, 29, 30, 2, C.greyText);
+  px(g, 24, 11, 46, 3, C.ink); px(g, 24, 16, 30, 2, C.greyText);
   // Approve: lit while drafts are waiting, pressed at its moment, quiet once everything is scheduled.
-  const btn = { x: 128, y: 23, w: 32, h: 9 };
+  const btn = { x: 150, y: 10, w: 32, h: 9 };
   const anyWaiting = t >= landAt(0) && t < doneAt(drafts.length - 1);
   const pressed = t >= approveAt - 0.15 && t < approveAt + 0.15;
   box(g, btn.x, btn.y, btn.w, btn.h, anyWaiting ? (pressed ? C.deep : C.crimson) : C.grey, anyWaiting ? C.deep : C.greyMid);
   px(g, btn.x + 7, btn.y + 4, 18, 1, anyWaiting ? C.white : C.greyText);
   // Day columns and channel rows.
-  for (let d = 0; d < 5; d++) px(g, COL0 + d * COL_W + 3, 37, 9, 2, C.greyText);
+  for (let d = 0; d < 5; d++) px(g, COL0 + d * COL_W + 3, 24, 9, 2, C.greyText);
   for (let r = 0; r < 4; r++) {
     const y = ROW0 + r * ROW_H;
     px(g, BOARD.x + 1, y - 1, BOARD.w - 2, 1, C.grey);
@@ -180,9 +169,4 @@ export function drawHero(g: G, cards: Card[], time: number) {
     const fx = 176, fy = 96, tx = btn.x + 20, ty = btn.y + 5;
     pointer(g, fx + (tx - fx) * e, fy + (ty - fy) * e - Math.sin(k * Math.PI) * 6, pressed);
   }
-
-  // The Pilot on the board's top edge, hopping as each draft lands and when everything is scheduled.
-  const hops = [...drafts.map((_, i) => landAt(i)), approveAt + 0.4];
-  const lift = Math.max(0, ...hops.map((h) => { const k = (t - h) / 0.35; return k > 0 && k < 1 ? Math.sin(k * Math.PI) * 3 : 0; }));
-  pilot(g, 166, BOARD.y - 15, time, Math.round(lift));
 }

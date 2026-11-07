@@ -1,14 +1,12 @@
 /* The pixel hero: the drawing, then one line saying which step it shows. Nothing is laid over the picture. */
 .hero { margin: 0; display: grid; gap: 14px }
-.canvas { display: block; width: 100%; height: auto; aspect-ratio: 192 / 108; image-rendering: pixelated; border-radius: 14px;
+.canvas { display: block; width: 100%; height: auto; aspect-ratio: 192 / 96; image-rendering: pixelated; border-radius: 14px;
   box-shadow: 0 0 0 1px var(--border), 0 24px 60px -24px oklch(0.35 0.08 357 / 0.28) }
-.caption { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 14px; min-height: 2.9em }
-.dots { display: flex; gap: 5px; margin: 0; padding: 0; list-style: none; align-self: center }
-.dots li { width: 7px; height: 7px; background: var(--border) }
-.dots li[data-done] { background: color-mix(in oklab, var(--accent) 45%, var(--border)) }
-.dots li[data-on] { background: var(--accent) }
+/* One line: a small step chip, then the step's title and sentence, centred on the same axis. */
+.caption { display: flex; align-items: center; gap: 10px; min-height: 2.9em }
+.n { flex: none; padding: 3px 9px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 12%, transparent); color: var(--accent);
+  font: 650 12px/1.4 var(--font-body); font-variant-numeric: tabular-nums }
 .line { margin: 0; font: 400 16px/1.45 var(--font-body); color: var(--text-secondary); animation: line .3s ease both }
 .line b { color: var(--foreground); font-weight: 650 }
-.n { font: 600 12px/1 var(--font-body); color: var(--accent); letter-spacing: .03em; text-transform: uppercase; margin-right: 4px; font-variant-numeric: tabular-nums }
 @keyframes line { from { opacity: 0; transform: translateY(3px) } }
-@media (max-width: 600px) { .caption { grid-template-columns: 1fr; gap: 8px } .line { font-size: 15px } }
+@media (max-width: 600px) { .caption { align-items: flex-start } .n { margin-top: 1px } .line { font-size: 15px } }
