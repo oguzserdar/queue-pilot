@@ -30,7 +30,7 @@
 .heroGrid { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 64px; align-items: start; padding-block: clamp(48px, 6vw, 88px) clamp(56px, 7vw, 104px) }
 .heroCopy { display: grid; gap: 24px; justify-items: start; min-width: 0 }
 .heroCopy h1 { font-size: var(--h1); line-height: 1.04; letter-spacing: -0.03em }
-.lede { margin: 0; font-size: clamp(18px, 1.3vw, 20px); line-height: 1.5; color: var(--text-secondary); max-width: 40ch; text-wrap: pretty }
+.lede { margin: 0; font-size: clamp(18px, 1.3vw, 20px); line-height: 1.5; color: var(--text-secondary); max-width: 52ch; text-wrap: balance }
 .ctas { display: flex; flex-wrap: wrap; gap: 12px }
 .heroCopy .ctas { margin-bottom: 8px }
 .heroMedia > canvas { display: none; inset: auto; top: -24px; left: calc(var(--gutter) * -1); width: calc(100% + var(--gutter) * 2); height: calc(100% + 24px + clamp(56px, 7vw, 104px)) }
