@@ -7,9 +7,9 @@ import styles from "./pointer-tour.module.css";
 export type TourStop = { find: (root: HTMLElement) => HTMLElement | undefined; title: string; text: string; side?: Side };
 type Side = "right" | "left" | "above" | "below";
 /** Where the popover opens: beside its target, never over it. */
-type Place = { side: Side; x: number; y: number };
+type Place = { side: Side; x: number; y: number; w: number };
 
-const POP_W = 248, POP_H = 76, GAP = 12;
+const POP_WIDE = 248, POP_H = 76, GAP = 12;
 /** The box around a target's own text, not its whole block, so a short line leaves room beside it. */
 const tightRect = (el: HTMLElement) => {
   const range = document.createRange();
@@ -19,6 +19,8 @@ const tightRect = (el: HTMLElement) => {
 };
 /** Picks the first side with room inside the frame: the stop's own preference, then right, left, below, above. */
 function placeBeside(r: DOMRect, box: DOMRect, prefer?: Side): Place {
+  // On a phone the card is narrow: the popover takes the card's width less a margin, and opens above or below.
+  const POP_W = Math.min(POP_WIDE, box.width - 16);
   const x0 = r.left - box.left, x1 = r.right - box.left, y0 = r.top - box.top, y1 = r.bottom - box.top;
   const cy = (y0 + y1) / 2, clampX = (x: number) => Math.max(8, Math.min(box.width - POP_W - 8, x));
   const fits: Record<Side, boolean> = {
@@ -27,9 +29,9 @@ function placeBeside(r: DOMRect, box: DOMRect, prefer?: Side): Place {
   };
   const order: Side[] = [...(prefer ? [prefer] : []), "right", "left", "below", "above"];
   const side = order.find((o) => fits[o]) ?? "below";
-  if (side === "right") return { side, x: x1 + GAP, y: cy };
-  if (side === "left") return { side, x: x0 - GAP - POP_W, y: cy };
-  return { side, x: clampX(x0), y: side === "below" ? y1 + GAP : y0 - GAP };
+  if (side === "right") return { side, x: x1 + GAP, y: cy, w: POP_W };
+  if (side === "left") return { side, x: x0 - GAP - POP_W, y: cy, w: POP_W };
+  return { side, x: clampX(x0), y: side === "below" ? y1 + GAP : y0 - GAP, w: POP_W };
 }
 
 /** Finds the innermost element whose own text matches, so the pointer lands on the label, not its whole section. */
@@ -123,7 +125,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
         </div>
       )}
       {stop && say && (
-        <div key={say.i} className={styles.pop} data-side={say.place.side} style={{ left: say.place.x, top: say.place.y }} aria-hidden="true">
+        <div key={say.i} className={styles.pop} data-side={say.place.side} style={{ left: say.place.x, top: say.place.y, width: say.place.w }} aria-hidden="true">
           <b>{stop.title}</b>
           <span>{stop.text}</span>
         </div>
