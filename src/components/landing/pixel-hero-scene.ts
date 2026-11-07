@@ -1,12 +1,12 @@
 /**
- * The homepage hero as pixel art: Alex's demo week drawn on a 192x96 grid that CSS scales up crisp. The same five
+ * The homepage hero as pixel art: Alex's demo week drawn on a 192x80 grid that CSS scales up crisp. The same five
  * steps as the walkthrough play on one 14-second loop: the empty times blink, drafts land from the newsletter, each
  * is checked and a quote is matched to its source, the post that would fail turns red, and the cursor approves the
  * rest. Every frame is drawn whole from the time t, so the loop is seamless and any moment can be drawn on its own.
  */
 import type { WeekModel } from "@/lib/week-model";
 
-export const HERO_SIZE = { width: 192, height: 96 } as const;
+export const HERO_SIZE = { width: 192, height: 80 } as const;
 export const HERO_LOOP = 14;
 /** When each step starts, in seconds into the loop: empty times, drafts, checks, the failing post, approve. */
 export const STEP_AT = [0, 1.6, 4.4, 7.2, 10] as const;
@@ -32,8 +32,8 @@ function box(g: G, x: number, y: number, w: number, h: number, fill: string, edg
 
 /** Where everything sits: one card per channel and weekday that has a posting time, in the demo's own order. */
 /** The board's place on the canvas; the page uses it to draw the dot pattern right up to the board's edge. */
-export const BOARD = { x: 4, y: 5, w: 184, h: 86 };
-const COL0 = 34, COL_W = 30, ROW0 = 29, ROW_H = 15, CARD_W = 26, CARD_H = 11;
+export const BOARD = { x: 4, y: 4, w: 184, h: 72 };
+const COL0 = 34, COL_W = 30, ROW0 = 26, ROW_H = 12, CARD_W = 26, CARD_H = 9;
 type Card = { x: number; y: number; status: "empty" | "scheduled" | "draft"; draftIndex: number; blocked: boolean; channel: string };
 
 /** Lays out Alex's Monday-to-Friday week as cards: scheduled posts, drafts (in the order they land) and empty times. */
@@ -84,24 +84,24 @@ export function drawHero(g: G, cards: Card[], time: number) {
   // The board: a window with the newsletter in its header, an Approve button, day columns and channel rows.
   box(g, BOARD.x, BOARD.y, BOARD.w, BOARD.h, C.white);
   // The newsletter: a page with a folded corner and lines.
-  const docX = 10, docY = 9;
+  const docX = 10, docY = 7;
   box(g, docX, docY, 10, 12, C.white);
   px(g, docX + 7, docY + 1, 2, 2, C.pink); px(g, docX + 2, docY + 4, 6, 1, C.crimson); px(g, docX + 2, docY + 6, 5, 1, C.greyMid); px(g, docX + 2, docY + 8, 6, 1, C.greyMid);
-  px(g, 24, 11, 46, 3, C.ink); px(g, 24, 16, 30, 2, C.greyText);
+  px(g, 24, 9, 46, 3, C.ink); px(g, 24, 14, 30, 2, C.greyText);
   // Approve: lit while drafts are waiting, pressed at its moment, quiet once everything is scheduled.
-  const btn = { x: 150, y: 10, w: 32, h: 9 };
+  const btn = { x: 150, y: 8, w: 32, h: 9 };
   const anyWaiting = t >= landAt(0) && t < doneAt(drafts.length - 1);
   const pressed = t >= approveAt - 0.15 && t < approveAt + 0.15;
   box(g, btn.x, btn.y, btn.w, btn.h, anyWaiting ? (pressed ? C.deep : C.crimson) : C.grey, anyWaiting ? C.deep : C.greyMid);
   px(g, btn.x + 7, btn.y + 4, 18, 1, anyWaiting ? C.white : C.greyText);
   // Day columns and channel rows.
-  for (let d = 0; d < 5; d++) px(g, COL0 + d * COL_W + 3, 24, 9, 2, C.greyText);
+  for (let d = 0; d < 5; d++) px(g, COL0 + d * COL_W + 3, 21, 9, 2, C.greyText);
   for (let r = 0; r < 4; r++) {
     const y = ROW0 + r * ROW_H;
     px(g, BOARD.x + 1, y - 1, BOARD.w - 2, 1, C.grey);
     const ch = ["linkedin", "instagram", "threads", "x"][r];
-    px(g, 9, y + 4, 7, 7, CHANNEL_COLOR[ch] ?? C.ink); px(g, 11, y + 6, 3, 3, C.white);
-    px(g, 18, y + 6, 11, 2, C.greyText);
+    px(g, 9, y + 2, 7, 7, CHANNEL_COLOR[ch] ?? C.ink); px(g, 11, y + 4, 3, 3, C.white);
+    px(g, 18, y + 4, 11, 2, C.greyText);
   }
 
   // Cards.
@@ -109,7 +109,7 @@ export function drawHero(g: G, cards: Card[], time: number) {
     const i = c.draftIndex;
     if (c.status === "scheduled") {
       px(g, c.x, c.y, CARD_W, CARD_H, C.grey); px(g, c.x + 2, c.y + 2, 2, 2, C.green);
-      px(g, c.x + 6, c.y + 2, 12, 2, C.greyText); px(g, c.x + 2, c.y + 6, 20, 1, C.greyMid); px(g, c.x + 2, c.y + 8, 16, 1, C.greyMid);
+      px(g, c.x + 6, c.y + 2, 12, 2, C.greyText); px(g, c.x + 2, c.y + 5, 20, 1, C.greyMid); px(g, c.x + 2, c.y + 7, 16, 1, C.greyMid);
       continue;
     }
     const landed = c.status === "draft" && t >= landAt(i);
@@ -138,15 +138,15 @@ export function drawHero(g: G, cards: Card[], time: number) {
     const fill = failing ? C.redWash : approved ? C.greenWash : C.white;
     px(g, x, y, CARD_W, CARD_H, edge); px(g, x + 1, y + 1, CARD_W - 2, CARD_H - 2, fill);
     px(g, x + 1, y + 1, 2, CARD_H - 2, edge);
-    px(g, x + 5, y + 3, 14, 2, failing ? C.red : approved ? C.green : C.crimson);
-    px(g, x + 5, y + 7, 17, 1, C.greyMid);
+    px(g, x + 5, y + 2, 14, 2, failing ? C.red : approved ? C.green : C.crimson);
+    px(g, x + 5, y + 6, 17, 1, C.greyMid);
     if (t >= checkAt(i)) badge(g, x + CARD_W - 5, y - 3, !c.blocked);
   }
 
   // Step five: the pointer comes in from the corner, settles on Approve, presses.
   if (t >= STEP_AT[4] && t < HERO_LOOP - 1.5) {
     const k = clamp((t - STEP_AT[4] - 0.1) / 0.9), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-    const fx = 176, fy = 96, tx = btn.x + 20, ty = btn.y + 5;
+    const fx = 176, fy = H, tx = btn.x + 20, ty = btn.y + 5;
     pointer(g, fx + (tx - fx) * e, fy + (ty - fy) * e - Math.sin(k * Math.PI) * 6, pressed);
   }
 }

@@ -30,7 +30,7 @@ const sceneAt = (real: number) => {
 };
 
 /**
- * The homepage hero as pixel art (pixel-hero-scene.ts): Alex's demo week, drawn at 192x96 and scaled up crisp, playing
+ * The homepage hero as pixel art (pixel-hero-scene.ts): Alex's demo week, drawn at 192x80 and scaled up crisp, playing
  * the five steps on a loop with the step's title and sentence underneath. Twelve frames a second, only while on screen;
  * reduced motion shows the finished week. It never pauses on hover: it runs whenever it is on screen.
  */
