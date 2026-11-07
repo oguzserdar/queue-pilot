@@ -50,3 +50,9 @@
 .pause:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
 /* Phones: the button sits in the flow above the narration. */
 .root:has(.phoneWindow) .pause { position: static; align-self: flex-end }
+
+/* Each step: its number, a short title, and one plain sentence about what the screen shows. */
+.say, .phoneSay { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 2px; text-align: left }
+.stepNo { grid-row: 1; font: 600 12px/1.6 var(--font-body); color: color-mix(in oklab, var(--background) 65%, transparent); font-variant-numeric: tabular-nums }
+.say b, .phoneSay b { grid-row: 1; font-weight: 650 }
+.stepText { grid-column: 1 / -1; font-weight: 450; color: color-mix(in oklab, var(--background) 85%, transparent) }

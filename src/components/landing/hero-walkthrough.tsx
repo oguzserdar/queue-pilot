@@ -9,6 +9,9 @@ import styles from "./hero-walkthrough.module.css";
 
 type WeekProps = ComponentProps<typeof WeekView>;
 type Target = (root: HTMLElement) => HTMLElement | null | undefined;
+/** One of the five steps the walkthrough explains: which step, its title, and what the screen shows right now. */
+type Step = { n: number; title: string; text: string };
+const STEPS = ["Your empty times", "Drafts from your newsletter", "Every draft is checked", "Problems are caught first", "You approve, Buffer schedules"] as const;
 
 const byText = (root: ParentNode, test: (s: string) => boolean) =>
   [...root.querySelectorAll<HTMLElement>("button")].find((b) => test((b.textContent ?? "").trim()));
@@ -45,7 +48,7 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
   const [shown, setShown] = useState(drafts.length);
   const [windowId, setWindowId] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
-  const [say, setSay] = useState("");
+  const [say, setSayState] = useState<Step | null>(null);
   const [run, setRun] = useState(0);
   const [phone, setPhone] = useState(false);
   const [cursor, setCursor] = useState<{ x: number; y: number; down: boolean } | null>(null);
@@ -76,7 +79,7 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
       const box = el.getBoundingClientRect(), r = target.getBoundingClientRect();
       const to = { x: r.left - box.left + Math.min(r.width * 0.5, 60), y: r.top - box.top + r.height * 0.55 };
       const from = at, dist = Math.hypot(to.x - from.x, to.y - from.y);
-      const length = Math.min(1500, Math.max(650, 420 + dist * 0.85));
+      const length = Math.min(1000, Math.max(450, 300 + dist * 0.55));
       const bow = Math.min(36, dist * 0.08);
       let elapsed = 0, last = performance.now();
       const step = (now: number) => {
@@ -96,9 +99,9 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
       const t = target(el);
       if (!t) return false;
       await moveTo(t);
-      await wait(320);
+      await wait(200);
       setCursor({ ...at, down: true });
-      await wait(140);
+      await wait(120);
       setCursor({ ...at, down: false });
       if (real) t.click();
       return true;
@@ -106,82 +109,72 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
     const scrollWindow = async (share: number) => {
       const w = el.querySelector<HTMLElement>("[data-window]");
       w?.scrollTo({ top: (w.scrollHeight - w.clientHeight) * share, behavior: "smooth" });
-      await wait(900);
+      await wait(650);
     };
-    const open = async (id: string | undefined) => { if (id) { setClosing(false); setWindowId(id); await wait(450); } };
+    const open = async (id: string | undefined) => { if (id) { setClosing(false); setWindowId(id); await wait(380); } };
     const close = async () => {
       await click((r) => r.querySelector<HTMLElement>("[data-window] [aria-label='Close dialog']"));
       setClosing(true); await wait(260); setWindowId(null); setClosing(false);
     };
     const inWindow: Target = (r) => byText(r.querySelector("[data-window]") ?? r, (s) => s === "Approve & schedule");
 
+    const setSay = (n: number, text: string) => setSayState({ n, title: STEPS[n - 1], text });
     const desk = async () => {
-      setSay(`${countOpenSlots({ ...week, posts: others })} empty times in Alex's week`);
-      await wait(2200);
-      setSay("Fill them from this week's newsletter");
+      setSay(1, `Queue Pilot reads your Buffer week and finds the times with no post: ${countOpenSlots({ ...week, posts: others })} here.`);
+      await wait(2000);
+      setSay(2, "Your AI writes a post for each empty time from your latest newsletter issue.");
       await click((r) => byText(r, (s) => s === "Fill next week"));
-      await wait(500);
-      for (let i = 0; i < drafts.length && alive; i++) {
-        setSay(`Writing from This Week in AI 41 and checking it against Alex's rules · ${i + 1} of ${drafts.length}`);
-        setShown(i + 1);
-        await wait(950);
-      }
-      setSay(blocked ? `${drafts.length - 1} ready to approve. 1 would fail in Buffer` : `${drafts.length} ready to approve`);
-      await wait(2400);
-      setSay("Open a draft to see why it passed");
+      await wait(350);
+      for (let i = 0; i < drafts.length && alive; i++) { setShown(i + 1); await wait(650); }
+      await wait(900);
+      setSay(3, "Each draft is checked against your rules, the quotes in your source, and what Buffer accepts.");
       await click(draftCard(first?.text ?? ""));
       await open(first?.id);
-      setSay("It passed Alex's rules and fits LinkedIn");
-      await wait(2600);
-      setSay("Every quote is matched to the newsletter");
+      await wait(1800);
+      setSay(3, "This one passed your rules, and its quote matches the newsletter word for word.");
       await scrollWindow(0.55);
-      await wait(2400);
-      await scrollWindow(1);
-      setSay("Alex approves it");
-      await click(inWindow, true);
-      await wait(1600);
+      await wait(2200);
       await close();
-      await wait(600);
+      await wait(350);
       if (blocked) {
-        setSay("This one is marked: it would fail");
+        setSay(4, `A post that would fail is held back with the reason: ${blockedReason}`);
         await click(draftCard(blocked.text));
         await open(blocked.id);
-        setSay(`It can't go out: ${blockedReason}`);
-        await wait(3400);
+        await wait(2600);
         await close();
-        await wait(500);
+        await wait(350);
       }
-      setSay("Approve the rest in one go");
+      setSay(5, "Approve one draft, or every ready one at once. Approve is what schedules them in Buffer.");
       await click((r) => byText(r, (s) => /^Approve \d/.test(s)), true);
-      await wait(700);
+      await wait(450);
       await click((r) => byText(r, (s) => s.startsWith("Schedule ")), true);
-      setSay("Scheduled in Buffer, by Alex's own Approve");
-      await wait(3200);
+      await wait(2400);
     };
     const handset = async () => {
+      setSay(3, "Each draft is checked against your rules, the quotes in your source, and what Buffer accepts.");
       await open(first?.id);
-      setSay("Written from This Week in AI 41, checked against Alex's rules");
-      await wait(3000);
-      setSay("Every quote is matched to the newsletter");
+      await wait(2000);
+      setSay(3, "This one passed your rules, and its quote matches the newsletter word for word.");
       await scrollWindow(0.55);
-      await wait(2600);
-      await scrollWindow(1);
-      setSay("Alex approves it");
-      await click(inWindow, true);
       await wait(2000);
       if (blocked) {
+        setSay(4, `A post that would fail is held back with the reason: ${blockedReason}`);
         await open(blocked.id);
-        setSay(`This one can't go out: ${blockedReason}`);
-        await wait(3600);
+        await wait(2600);
       }
+      setSay(5, "Approve one draft, or every ready one at once. Approve is what schedules them in Buffer.");
+      await open(first?.id);
+      await scrollWindow(1);
+      await click(inWindow, true);
+      await wait(1600);
     };
     const play = async () => {
       while (alive) {
         setShown(isPhone ? drafts.length : 0); setWindowId(null); setRun((n) => n + 1); setCursor(null);
-        await wait(700);
+        await wait(400);
         await (isPhone ? handset() : desk());
         setCursor(null);
-        await wait(1200);
+        await wait(800);
       }
     };
     const seen = new IntersectionObserver(([e]) => { visible.current = e.isIntersecting; });
@@ -213,7 +206,11 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
         {stopped ? <Play size={14} strokeWidth={2} aria-hidden="true" /> : <Pause size={14} strokeWidth={2} aria-hidden="true" />}
         {stopped ? "Play" : "Pause"}
       </button>
-      {say && <p key={say} className={phone ? styles.phoneSay : styles.say} aria-hidden="true">{say}</p>}
+      {say && (
+        <p key={`${say.n}-${say.text}`} className={phone ? styles.phoneSay : styles.say} aria-hidden="true">
+          <span className={styles.stepNo}>{say.n}/{STEPS.length}</span><b>{say.title}</b><span className={styles.stepText}>{say.text}</span>
+        </p>
+      )}
       {cursor && (
         <svg className={styles.cursor} data-down={cursor.down || undefined} style={{ transform: `translate(${cursor.x}px, ${cursor.y}px)` }} viewBox="0 0 11 17" shapeRendering="crispEdges" aria-hidden="true">
           {POINTER}

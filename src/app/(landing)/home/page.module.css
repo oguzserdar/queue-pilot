@@ -143,4 +143,7 @@
 .liveShot.cardShot { padding: 0 }
 .liveShot.cardShot > section { margin: 0; border: 0; box-shadow: none }
 /* The live week is taller than the screenshot: it stops inside the hero and fades out instead of being cut. */
-.liveShot.heroShot { margin-bottom: 0; max-height: 620px; -webkit-mask-image: linear-gradient(#000 78%, transparent); mask-image: linear-gradient(#000 78%, transparent) }
+.liveShot.heroShot { margin-bottom: 0; max-height: 620px }
+/* The screen stays solid: it fades into its own white at the bottom, so the dot field behind can never show through it. */
+.liveShot.heroShot::after { content: ""; position: absolute; inset: auto 0 0; height: 120px; z-index: 8; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface) 85%) }
