@@ -43,7 +43,7 @@ const faq = [
   { title: "Is Queue Pilot made by Buffer?", content: "No. It is an independent open-source app built on the Buffer API for Buffer Commit. You sign in with your own Buffer account." },
   { title: "Can I stop it?", content: "Yes. In Settings you can remove an AI app, sign out your other browsers, or delete your account and everything Queue Pilot kept." },
   { title: "Does it work with Telegram, Discord or videos?", content: "Yes. After Buffer publishes a post, Queue Pilot can post the same text in your Telegram channel and Discord channel. It can also draft from YouTube videos through their transcripts, read with Supadata, and your AI can search the web and read pages through Exa. On your own copy, add those two keys in /admin." },
-  { title: "Can I run my own copy?", content: "Yes. Queue Pilot is MIT licensed. Deploy it to Vercel or run it with Docker, using your own Buffer app keys. Your copy keeps its data in your own database. The README has the steps." },
+  { title: "Can I run my own copy?", content: <>Yes. Queue Pilot is MIT licensed. Deploy it to Vercel or run it with Docker, using your own Buffer app keys. Your copy keeps its data in your own database. The <a href={`${REPO}#readme`}>README</a> has the steps.</> },
 ];
 
 /** The public landing page: sections on one wrapper, Arc controls as Arc ships them. */
