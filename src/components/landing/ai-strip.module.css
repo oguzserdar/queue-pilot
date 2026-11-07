@@ -1,0 +1,17 @@
+.strip { display: grid; gap: 10px; width: 100%; max-width: 520px; min-width: 0 }
+.label { margin: 0; font-size: 13px; color: var(--text-muted) }
+/* The ends fade out, so marks drift in and out instead of being cut by a hard edge. */
+.window { overflow: hidden; min-width: 0;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+          mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent) }
+.track { display: flex; width: max-content; animation: slide 36s linear infinite }
+@keyframes slide { to { transform: translateX(-50%) } }
+.row { list-style: none; margin: 0; padding: 0 28px 0 0; display: flex; gap: 28px }
+.row li { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--text-secondary); white-space: nowrap }
+.mark { width: 18px; height: 18px; flex: none; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; color: var(--foreground) }
+@media (prefers-reduced-motion: reduce) {
+  .window { -webkit-mask-image: none; mask-image: none }
+  .track { animation: none; width: auto }
+  .track > :last-child { display: none }
+  .row { flex-wrap: wrap; gap: 10px 20px; padding: 0 }
+}

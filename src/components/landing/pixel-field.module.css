@@ -1,0 +1,3 @@
+/* Fills its positioned parent behind the content; the canvas color is the pixel color. */
+.field { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; image-rendering: pixelated; color: color-mix(in oklab, var(--accent) 14%, var(--background)) }
+.field[data-placement="band"] { top: auto; height: calc(var(--section, 104px) * 1.4 - 24px); color: color-mix(in oklab, var(--accent) 45%, var(--qp-night, oklch(0.24 0.06 357))) }

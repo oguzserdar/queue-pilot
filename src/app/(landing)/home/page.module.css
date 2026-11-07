@@ -1,0 +1,146 @@
+/* One column for every section: --page wide, --gutter at the sides, --section between blocks.
+   Header, hero, sections, band and footer all use .wrap, so their left edges line up at every width. */
+.page { --page: 1240px; --gutter: clamp(20px, 4vw, 48px); --section: clamp(64px, 7vw, 104px); --head-gap: 32px;
+  --h1: clamp(40px, 1.5rem + 2.6vw, 58px); --h2: clamp(30px, 3vw, 42px); --qp-night: oklch(0.26 0.07 357);
+  min-height: 100dvh; background: var(--background); color: var(--foreground); font-size: 16px; line-height: 1.55 }
+.wrap { max-width: var(--page); margin: 0 auto; padding-inline: var(--gutter) }
+/* Links drawn as Arc buttons keep Arc's look: no browser underline. */
+.page a { text-decoration: none }
+.page :is(h1, h2, h3):not(.shot *) { font-weight: 650; letter-spacing: -0.015em; text-wrap: balance; margin: 0 }
+.page h2:not(.shot *) { font-size: var(--h2); line-height: 1.06 }
+.page h3:not(.shot *) { font-size: 19px; line-height: 1.3 }
+.copy { display: grid; gap: 14px; align-content: start }
+.copy p { color: var(--text-secondary); max-width: 40ch; font-size: 17px; margin: 0 }
+.meta { font-size: 13px; color: var(--text-muted) }
+
+/* Header: one line, 72px. */
+.header { border-bottom: 1px solid var(--border-subtle) }
+.headerRow { height: 72px; display: flex; align-items: center; gap: 32px }
+.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; text-decoration: none; color: var(--foreground) }
+.nav { display: flex; gap: 24px; font-size: 15px }
+.nav a { color: var(--text-secondary); text-decoration: none }
+.headerActions { margin-left: auto; display: flex; align-items: center; gap: 20px }
+.quiet { font-size: 15px; color: var(--text-secondary); text-decoration: none }
+@media (hover: hover) and (pointer: fine) { .nav a:hover, .quiet:hover { color: var(--foreground) } }
+@media (max-width: 900px) { .headerRow > .nav { display: none } }
+@media (max-width: 520px) { .quiet { display: none } }
+
+/* Hero: copy left, the Pilot on its week right. The Pilot's middle sits on the middle of the four-line headline. */
+.hero { position: relative; isolation: isolate; overflow: hidden }
+.heroGrid { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 64px; align-items: start; padding-block: clamp(48px, 6vw, 88px) clamp(56px, 7vw, 104px) }
+.heroCopy { display: grid; gap: 24px; justify-items: start; min-width: 0 }
+.heroCopy h1 { font-size: var(--h1); line-height: 1.04; letter-spacing: -0.03em }
+.lede { margin: 0; font-size: clamp(18px, 1.3vw, 20px); line-height: 1.5; color: var(--text-secondary); max-width: 40ch; text-wrap: pretty }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px }
+.heroCopy .ctas { margin-bottom: 8px }
+.heroMedia > canvas { display: none; inset: auto; top: -24px; left: calc(var(--gutter) * -1); width: calc(100% + var(--gutter) * 2); height: calc(100% + 24px + clamp(56px, 7vw, 104px)) }
+.heroMedia > :not(canvas) { position: relative; z-index: 1 }
+.heroMedia { position: relative; --pw: clamp(141px, 16.5vw, 194px); min-width: 0; margin-top: calc(var(--h1) * 2.08 - var(--pw) / 2) }
+@media (max-width: 1000px) {
+  .heroGrid { grid-template-columns: minmax(0, 1fr); gap: 48px }
+  .heroMedia { margin-top: 0 }
+  /* One column: the section's dots give way to the picture's own, so none sit behind the headline or text. */
+  .hero > canvas { display: none }
+  .heroMedia > canvas { display: block }
+}
+
+/* Sections. */
+.section { padding-block: var(--section); border-top: 1px solid var(--border-subtle) }
+.tinted { background: var(--surface-muted) }
+/* A section heading and its content, always --head-gap apart. */
+.stack { display: grid; gap: var(--head-gap) }
+.split { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 64px; align-items: start }
+@media (max-width: 1000px) { .split { grid-template-columns: minmax(0, 1fr); gap: var(--head-gap) } }
+
+/* Before and after: two equal panels, each holding literal pieces of the product. */
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px }
+@media (max-width: 900px) { .pair { grid-template-columns: minmax(0, 1fr) } }
+.panel { display: grid; align-content: start; gap: 12px; padding: 24px; background: var(--surface); border-radius: var(--radius-surface); box-shadow: 0 0 0 1px var(--border) }
+.panelLabel { margin: 0; font-size: 14px; font-weight: 600; color: var(--accent) }
+.panelNote { margin: 4px 0 0; font-size: 15px; color: var(--text-secondary) }
+.draft, .message { display: grid; gap: 6px; justify-items: start; padding: 14px 16px; border-radius: var(--radius-panel); background: var(--surface-muted) }
+.draft p, .message p { margin: 0; font-size: 16px }
+.draft mark { background: var(--qp-success-wash); color: inherit; border-radius: 4px; padding: 0 }
+.checks { list-style: none; margin: 0; padding: 0; display: grid }
+.checks li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; font-size: 15px; border-bottom: 1px solid var(--border-subtle) }
+.checks li:last-child { border-bottom: 0 }
+
+/* What your AI gets: one real chat, and under the answer what Queue Pilot added to it. */
+.chat { margin: 0; display: grid; gap: 12px; padding: 24px; border-radius: var(--radius-surface); background: var(--surface-muted) }
+.chat figcaption { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600 }
+.askMark { width: 18px; height: 18px; flex: none; background: var(--foreground); -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat }
+.you { justify-self: end; margin: 0; max-width: 85%; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--foreground); color: var(--background); font-size: 16px; line-height: 1.45 }
+.qp { margin: 0; max-width: 92%; padding: 12px 14px; border-radius: 16px 16px 16px 4px; background: var(--surface); box-shadow: 0 0 0 1px var(--border); font-size: 16px; line-height: 1.45 }
+.chat .checks { margin-top: 4px; padding: 4px 16px; border-radius: var(--radius-panel); background: var(--surface) }
+.addLabel { flex: none; font-size: 13px; font-weight: 600; color: var(--accent) }
+.checks li.quiet { color: var(--text-secondary); font-size: 14px }
+
+/* The learning loop: four stops in the order they happen. */
+.loop { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; counter-reset: step }
+@media (max-width: 1100px) { .loop { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+@media (max-width: 600px) { .loop { grid-template-columns: minmax(0, 1fr) } }
+.step { counter-increment: step; display: grid; align-content: start; justify-items: start; gap: 8px; padding: 20px; background: var(--surface); border-radius: var(--radius-surface); box-shadow: 0 0 0 1px var(--border) }
+.step::before { content: counter(step); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--accent-subtle); color: var(--accent); font-size: 14px; font-weight: 650 }
+.step p { margin: 0; font-size: 16px; line-height: 1.45 }
+.step del { color: var(--text-muted); text-decoration-color: var(--danger) }
+.step ins { text-decoration: none; background: var(--qp-success-wash); border-radius: 4px; padding: 0 2px }
+.step b { font-size: 17px }
+/* The step's pixel picture sits on top, above the number, edge to edge inside the card's padding. */
+.stepArt { order: -1; width: 100%; height: auto; aspect-ratio: 3 / 2; border-radius: var(--radius-control); background: var(--background); margin-bottom: 4px }
+.offer { box-shadow: 0 0 0 2px var(--accent) }
+.offer::before { background: var(--accent); color: var(--accent-foreground) }
+.hint { font-size: 14px; color: var(--text-secondary) }
+.check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary) }
+
+/* Closing band: full width, the brand's night colour, pixels rising from the bottom. */
+.band { position: relative; isolation: isolate; background: var(--qp-night); color: oklch(0.98 0.004 357) }
+.bandInner { position: relative; z-index: 1; display: grid; gap: 16px; justify-items: start; padding-block: var(--section) calc(var(--section) * 1.4) }
+.band h2 { max-width: 20ch }
+.band p { margin: 0; max-width: 46ch; font-size: 18px; color: oklch(0.9 0.01 357) }
+.band .ctas { margin-top: 12px; align-items: center; gap: 20px }
+.bandLink { color: oklch(0.92 0.01 357); font-size: 16px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px }
+/* The still Pilot stands on the band's top edge, at the left of the column. */
+.band > .wrap[aria-hidden] { position: relative; z-index: 1; height: 0 }
+
+/* Footer: one row on the same wrapper. */
+.footer { border-top: 1px solid var(--border-subtle) }
+.footerRow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; padding-block: 32px }
+.fine { color: var(--text-muted); font-size: 14px }
+.footerRow .nav { margin-left: auto; flex-wrap: wrap; gap: 8px 24px }
+
+/* The two rule strengths: a ruled list, the product's own badge on each, the example rule in the voice of a playbook. */
+.strengths { margin: 4px 0; display: grid; border-top: 1px solid var(--border-subtle) }
+.strengths > div { display: grid; gap: 6px; padding: 14px 0; border-bottom: 1px solid var(--border-subtle) }
+.strengths dt { margin: 0 }
+.strengths dd { margin: 0; color: var(--text-secondary); font-size: 16px; line-height: 1.5; max-width: 44ch }
+.strengths .example { color: var(--foreground); font-weight: 600 }
+
+/* On wide screens the enforcement copy runs longer than the chat, so the chat sits at the column's middle, not its top. */
+@media (min-width: 1001px) { .split > .chat { align-self: center } }
+
+/* v2: the hero stacks copy over one real screen; every product picture is a real capture in the same frame. */
+.heroStack { position: relative; z-index: 1; display: grid; gap: clamp(40px, 5vw, 64px); padding-block: clamp(48px, 6vw, 88px) 0 }
+.heroStack .heroCopy h1 { max-width: 16ch }
+/* Copy left, the Pilot right and bigger than before; the real screen spans both columns below. */
+@media (min-width: 901px) { .heroStack { grid-template-columns: minmax(0, 1fr) auto } .heroStack > figure { grid-column: 1 / -1 } }
+.heroPilot { --pw: clamp(180px, 20vw, 260px); align-self: center; padding-right: clamp(0px, 4vw, 64px) }
+/* Alone in the hero it stands on nothing, so it drops the overlap it keeps when standing on the example week. */
+.heroPilot > div { margin-bottom: 0 }
+@media (max-width: 900px) { .heroPilot { display: none } }
+.shot { margin: 0; border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 24px 60px -24px oklch(0.35 0.08 357 / 0.28) }
+.shot img { display: block; width: 100%; height: auto }
+.heroShot { margin-bottom: calc(var(--section) * -0.6); position: relative; z-index: 1 }
+.strip { padding-block: calc(var(--section) * 0.6 + 32px) 32px }
+.cardShot { align-self: center }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; counter-reset: flow }
+.flow li { counter-increment: flow; display: grid; gap: 6px; align-content: start }
+.flow li::before { content: counter(flow); display: grid; place-items: center; width: 28px; height: 28px; margin-bottom: 6px; border-radius: 8px; background: var(--accent); color: var(--accent-foreground); font-size: 14px; font-weight: 650 }
+.flow b { font-size: 18px }
+.flow p { margin: 0; color: var(--text-secondary); font-size: 16px; max-width: 34ch }
+@media (max-width: 800px) { .flow { grid-template-columns: minmax(0, 1fr); gap: 20px } }
+/* Live: the real component in the same frame; it brings its own padding, so the frame only clips and edges it. */
+.liveShot { padding: clamp(16px, 2.5vw, 32px); text-align: left }
+.liveShot.cardShot { padding: 0 }
+.liveShot.cardShot > section { margin: 0; border: 0; box-shadow: none }
+/* The live week is taller than the screenshot: it stops inside the hero and fades out instead of being cut. */
+.liveShot.heroShot { margin-bottom: 0; max-height: 620px; -webkit-mask-image: linear-gradient(#000 78%, transparent); mask-image: linear-gradient(#000 78%, transparent) }

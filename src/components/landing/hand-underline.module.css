@@ -1,0 +1,5 @@
+/* The drawing layer sits at the nearest positioned box; the strokes are placed against its own corner, so where it lands does not matter. */
+.pad { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none }
+.pad path { fill: none; stroke: var(--accent); stroke-linecap: round }
+
+@keyframes draw { to { stroke-dashoffset: 0 } }
