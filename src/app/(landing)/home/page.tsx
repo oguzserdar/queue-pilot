@@ -8,6 +8,7 @@ import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
 import { HandUnderline } from "@/components/landing/hand-underline";
 import { LiveSameFix, LiveWeek } from "@/components/landing/live-screens";
+import { SetupScene } from "@/components/landing/setup-scene";
 import { demoWeek } from "@/lib/demo-data";
 import { countOpenSlots } from "@/lib/week-model";
 import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
@@ -51,8 +52,13 @@ function demoWeekProps() {
 }
 
 /** `?live=1` draws the app's real components in place of the three screenshots, to compare the two. */
-export default async function HomePage({ searchParams }: { searchParams: Promise<{ live?: string }> }) {
-  const live = (await searchParams).live === "1";
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ live?: string; setup?: string }> }) {
+  const params = await searchParams;
+  const live = params.live === "1";
+  // `?setup=gif` and `?setup=pixel` show the other two versions of the setup pictures, to compare with the stills.
+  const setup = params.setup === "gif" || params.setup === "pixel" ? params.setup : "still";
+  const stepArt = (n: 1 | 2 | 3 | 4) => setup === "pixel" ? <SetupScene step={(n - 1) as 0 | 1 | 2 | 3} className={s.stepArt} />
+    : <Image className={s.stepArt} src={`/landing/setup/step-${n}.${setup === "gif" ? "gif" : "png"}`} alt="" width={1920} height={1280} unoptimized={setup === "gif"} sizes="(max-width: 900px) 100vw, 300px" />;
   return (
     <div className={s.page}>
       <header className={s.header}>
@@ -140,10 +146,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               <p><a href={REPO}>Code, changelog and issues on GitHub</a></p>
             </div>
             <ol className={s.loop}>
-              <li className={s.step}><Image className={s.stepArt} src="/landing/setup/step-1.png" alt="" width={1920} height={1280} sizes="(max-width: 900px) 100vw, 300px" /><span className={s.meta}>Buffer</span><p>Create an app client in Buffer under Settings, API, App Clients, with your address as its redirect.</p></li>
-              <li className={s.step}><Image className={s.stepArt} src="/landing/setup/step-2.png" alt="" width={1920} height={1280} sizes="(max-width: 900px) 100vw, 300px" /><span className={s.meta}>Database</span><p>Create a Postgres database and fill in the values from <code>.env.example</code>. Each line says how.</p></li>
-              <li className={s.step}><Image className={s.stepArt} src="/landing/setup/step-3.png" alt="" width={1920} height={1280} sizes="(max-width: 900px) 100vw, 300px" /><span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every start.</p></li>
-              <li className={s.step}><Image className={s.stepArt} src="/landing/setup/step-4.png" alt="" width={1920} height={1280} sizes="(max-width: 900px) 100vw, 300px" /><span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim the deployment with your setup code.</p></li>
+              <li className={s.step}>{stepArt(1)}<span className={s.meta}>Buffer</span><p>Create an app client in Buffer under Settings, API, App Clients, with your address as its redirect.</p></li>
+              <li className={s.step}>{stepArt(2)}<span className={s.meta}>Database</span><p>Create a Postgres database and fill in the values from <code>.env.example</code>. Each line says how.</p></li>
+              <li className={s.step}>{stepArt(3)}<span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every start.</p></li>
+              <li className={s.step}>{stepArt(4)}<span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim the deployment with your setup code.</p></li>
             </ol>
           </div>
         </section>

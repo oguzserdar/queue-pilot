@@ -137,7 +137,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
     {/* Confirms a change after it happens; errors stay next to the button that caused them. */}
     <ToastStack />
     {/* The demo only: after a few clicks, ask the visitor to try it on their own Buffer. */}
-    {!account && signInOpen ? <DemoNudge /> : null}
+    {!account ? <DemoNudge /> : null}
     </ToastStackProvider>
     </MotionConfig>
   );
