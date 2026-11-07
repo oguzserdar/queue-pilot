@@ -27,3 +27,10 @@ it("never mistakes a window duration for an allowance", () => {
  expect(remainingOf("30d", 14771)).toBe("14,771 remaining per 30 days");
  expect(remainingOf("110-in-15min", 98)).toBe("98 of 110 per 15 minutes");
 });
+
+it("reads a window stored by its length (quota and seconds from RateLimit-Policy)", () => {
+  expect([quotaOf("120/900s"), windowOf("120/900s")]).toEqual(["120", "15 minutes"]);
+  expect(windowOf("600/86400s")).toBe("day");
+  expect(windowOf("3000/2592000s")).toBe("30 days");
+  expect(remainingOf("19000/2592000s", 18120)).toBe("18,120 of 19,000 per 30 days");
+});

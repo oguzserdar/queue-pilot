@@ -24,6 +24,7 @@ import { eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { bufferAllowance, bufferReservation, requestCount } from "../../db/schema";
 import type { RateLimitWindow } from "./client";
+import { windowOfKey } from "./rate-limit-window";
 
 /** Requests left in a window at which assistant calls and background jobs stop, leaving the rest to the person's app. */
 export const TOOL_RESERVE = 15;
@@ -156,7 +157,25 @@ export async function releaseRequest(id: string, windows: RateLimitWindow[], now
         const missing = (await tx.select({ policy: bufferAllowance.policy }).from(bufferAllowance).where(gt(bufferAllowance.resetAt, at))).map((r) => r.policy).filter((p) => !reported.has(p));
         if (missing.length) await tx.update(bufferAllowance).set({ remaining: sql`greatest(${bufferAllowance.remaining} - 1, 0)` }).where(inArray(bufferAllowance.policy, missing));
       }
+      // Buffer changes a window's quota (and so its name) as the app gains authorized users. A reading keyed by window
+      // length replaces what is stored for that window: rows from before windows were keyed by length, and a row
+      // with the old quota last seen before this request started. A row seen after it is newer than this answer,
+      // which then leaves that window alone.
+      const keyed = windows.filter((w) => w.windowSeconds !== undefined);
+      const stale = new Set<string>();
+      if (keyed.length && held) {
+        const stored = await tx.select({ policy: bufferAllowance.policy, observedAt: bufferAllowance.observedAt }).from(bufferAllowance);
+        for (const row of stored) {
+          const length = windowOfKey(row.policy);
+          if (length === null) { await tx.delete(bufferAllowance).where(eq(bufferAllowance.policy, row.policy)); continue; }
+          const reading = keyed.find((w) => w.windowSeconds === length);
+          if (!reading || reading.policy === row.policy) continue;
+          if (row.observedAt.getTime() <= held.startedAt.getTime()) await tx.delete(bufferAllowance).where(eq(bufferAllowance.policy, row.policy));
+          else stale.add(reading.policy);
+        }
+      }
       for (const w of windows) {
+        if (stale.has(w.policy)) continue;
         // A window may rise only from a request that started after its stored reset; anything older can only lower it.
         const rolled = held ? sql`${bufferAllowance.resetAt} <= ${held.startedAt.toISOString()}::timestamptz` : sql`false`;
         await tx.insert(bufferAllowance).values({ policy: w.policy, remaining: w.remaining, resetAt: new Date(now + w.resetSeconds * 1000), observedAt: at })

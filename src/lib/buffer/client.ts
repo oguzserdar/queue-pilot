@@ -6,6 +6,7 @@
  * so a page never stalls waiting for a window that will not reopen in time.
  */
 import { releaseRequest, reserveRequest } from "./budget";
+import { windowKey } from "./rate-limit-window";
 
 export const API_URL = "https://api.buffer.com";
 
@@ -25,17 +26,36 @@ export class BufferRateLimitedError extends BufferApiError {
   }
 }
 
-/** One window from Buffer's RateLimit header, e.g. "100-in-15min";r=98;t=897. */
-export type RateLimitWindow = { policy: string; remaining: number; resetSeconds: number };
+/**
+ * One window from Buffer's RateLimit header, e.g. "100-in-15min";r=98;t=897. Buffer names a policy after its quota, so
+ * the name changes when the quota does (as an app gains authorized users); its guide says to match a policy by its
+ * window length instead (developers.buffer.com/guides/api-limits). When RateLimit-Policy gives the quota and window,
+ * `policy` is "<quota>/<window>s" and `windowSeconds` identifies the window; otherwise it is Buffer's name.
+ */
+export type RateLimitWindow = { policy: string; remaining: number; resetSeconds: number; windowSeconds?: number };
 
-/** Parses every window in a RateLimit header; unknown or malformed entries are skipped. */
-export function parseRateLimit(header: string | null): RateLimitWindow[] {
+/**
+ * Parses every window in a RateLimit header; unknown or malformed entries are skipped.
+ *
+ * @param header - The RateLimit header
+ * @param policyHeader - The RateLimit-Policy header, which gives each named policy's quota (q) and window length (w)
+ */
+export function parseRateLimit(header: string | null, policyHeader: string | null = null): RateLimitWindow[] {
   if (!header) return [];
+  const policies = new Map<string, { q: number; w: number }>();
+  for (const entry of (policyHeader ?? "").split(/,(?=\s*")/)) {
+    const name = entry.match(/"([^"]+)"/)?.[1];
+    const q = entry.match(/;\s*q=(\d+)/)?.[1];
+    const w = entry.match(/;\s*w=(\d+)/)?.[1];
+    if (name && q !== undefined && w !== undefined) policies.set(name, { q: Number(q), w: Number(w) });
+  }
   return header.split(/,(?=\s*")/).flatMap((entry) => {
-    const policy = entry.match(/"([^"]+)"/)?.[1];
+    const name = entry.match(/"([^"]+)"/)?.[1];
     const r = entry.match(/;\s*r=(\d+)/)?.[1];
     const t = entry.match(/;\s*t=(\d+)/)?.[1];
-    return policy && r !== undefined && t !== undefined ? [{ policy, remaining: Number(r), resetSeconds: Number(t) }] : [];
+    if (!name || r === undefined || t === undefined) return [];
+    const p = policies.get(name);
+    return [p ? { policy: windowKey(p.q, p.w), remaining: Number(r), resetSeconds: Number(t), windowSeconds: p.w } : { policy: name, remaining: Number(r), resetSeconds: Number(t) }];
   });
 }
 
@@ -95,7 +115,7 @@ export async function bufferQuery<T>(token: string, query: string, variables?: R
       await releaseRequest(ticket, [], now());
       throw e;
     }
-    const windows = parseRateLimit(res.headers.get("ratelimit"));
+    const windows = parseRateLimit(res.headers.get("ratelimit"), res.headers.get("ratelimit-policy"));
     await releaseRequest(ticket, windows, now());
     if (windows.length) opts.onRateLimit?.(windows);
     if (res.status === 429) {
