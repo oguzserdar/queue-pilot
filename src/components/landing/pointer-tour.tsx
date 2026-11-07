@@ -52,7 +52,12 @@ function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect,
   // Hang the popover off the pointer's side that has room: on the right half it opens down and to the left of the
   // pointer, on the left half down and to the right.
   const x = Math.max(EDGE, Math.min(tip.x > box.width / 2 ? tip.x - POP_W + 24 : tip.x - 8, box.width - POP_W - EDGE));
-  const below = Math.max(part.bottom - box.top + PAD + 8, tip.y + 46);
+  // First choice: just under the part, beside the pointer rather than under it, so it sits close to the words.
+  const under = part.bottom - box.top + PAD + 8;
+  const onRight = tip.x > box.width / 2;
+  const besideX = onRight ? tip.x - 6 - POP_W : tip.x + 30;
+  if (besideX >= EDGE && besideX + POP_W <= box.width - EDGE && under + h <= box.height - EDGE) return { side: "below", x: besideX, y: under, w: POP_W };
+  const below = Math.max(under, tip.y + 46);
   if (below + h <= box.height - EDGE) return { side: "below", x, y: below, w: POP_W };
   const right = Math.max(part.right - box.left + PAD + 2, tip.x + 26);
   const mid = Math.max(EDGE, Math.min(part.top - box.top + part.height / 2 - h / 2, box.height - h - EDGE));
