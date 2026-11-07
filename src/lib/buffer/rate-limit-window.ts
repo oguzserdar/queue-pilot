@@ -12,3 +12,14 @@ export function windowOfKey(key: string): number | null {
   const m = key.match(/^\d+\/(\d+)s$/);
   return m ? Number(m[1]) : null;
 }
+
+/**
+ * The window length in seconds of a policy stored under Buffer's name, such as "600-in-1day" or "150-in-15min", or
+ * null when the name does not say. Used only to retire such a row once a reading keyed by length covers its window.
+ */
+export function lengthOfName(name: string): number | null {
+  const m = name.match(/-in-(\d+)(m|min|minutes?|h|hours?|d|days?)$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return m[2].startsWith("m") ? n * 60 : m[2].startsWith("h") ? n * 3_600 : n * 86_400;
+}

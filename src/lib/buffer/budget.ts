@@ -24,7 +24,7 @@ import { eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { bufferAllowance, bufferReservation, requestCount } from "../../db/schema";
 import type { RateLimitWindow } from "./client";
-import { windowOfKey } from "./rate-limit-window";
+import { lengthOfName, windowOfKey } from "./rate-limit-window";
 
 /** Requests left in a window at which assistant calls and background jobs stop, leaving the rest to the person's app. */
 export const TOOL_RESERVE = 15;
@@ -158,7 +158,7 @@ export async function releaseRequest(id: string, windows: RateLimitWindow[], now
         if (missing.length) await tx.update(bufferAllowance).set({ remaining: sql`greatest(${bufferAllowance.remaining} - 1, 0)` }).where(inArray(bufferAllowance.policy, missing));
       }
       // Buffer changes a window's quota (and so its name) as the app gains authorized users. A reading keyed by window
-      // length replaces what is stored for that window: rows from before windows were keyed by length, and a row
+      // length replaces what is stored for that same window: a row from before windows were keyed by length, and a row
       // with the old quota last seen before this request started. A row seen after it is newer than this answer,
       // which then leaves that window alone.
       const keyed = windows.filter((w) => w.windowSeconds !== undefined);
@@ -167,7 +167,13 @@ export async function releaseRequest(id: string, windows: RateLimitWindow[], now
         const stored = await tx.select({ policy: bufferAllowance.policy, observedAt: bufferAllowance.observedAt }).from(bufferAllowance);
         for (const row of stored) {
           const length = windowOfKey(row.policy);
-          if (length === null) { await tx.delete(bufferAllowance).where(eq(bufferAllowance.policy, row.policy)); continue; }
+          if (length === null) {
+            // A row stored under Buffer's name is retired only by a keyed reading of the same window; until then it
+            // keeps protecting that window (a partial answer must not erase a nearly spent daily allowance).
+            const named = lengthOfName(row.policy);
+            if (named !== null && keyed.some((w) => w.windowSeconds === named)) await tx.delete(bufferAllowance).where(eq(bufferAllowance.policy, row.policy));
+            continue;
+          }
           const reading = keyed.find((w) => w.windowSeconds === length);
           if (!reading || reading.policy === row.policy) continue;
           if (row.observedAt.getTime() <= held.startedAt.getTime()) await tx.delete(bufferAllowance).where(eq(bufferAllowance.policy, row.policy));

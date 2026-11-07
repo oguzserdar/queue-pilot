@@ -62,4 +62,13 @@ describe("a window whose quota changes", () => {
     await answer(T0 + 1_000, headers(120, 24));
     expect((await currentAllowance(T0 + 2_000))!.windows.map((w) => w.policy)).toEqual(["120/900s"]);
   });
+
+  it("keeps a window stored under Buffer's name when the keyed answer does not cover that window", async () => {
+    // The daily window was saved by name with 12 left; an answer keys only the 15-minute window.
+    await releaseRequest(await reserveRequest(T0), [{ policy: "600-in-1day", remaining: 12, resetSeconds: 3_600 }], T0);
+    await answer(T0 + 1_000, headers(120, 24));
+    const daily = (await currentAllowance(T0 + 2_000))!.windows.find((w) => w.policy === "600-in-1day");
+    expect(daily?.remaining).toBeLessThanOrEqual(12);
+    await expect(withBudget("list_tags", "u1", () => reserveRequest(T0 + 3_000))).rejects.toThrow();
+  });
 });

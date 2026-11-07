@@ -128,9 +128,16 @@ describe("limits", () => {
     expect(res.waitUntil).toEqual(retry);
   });
 
-  it("reports Buffer's own refusal as refused, not uncertain, and goes on", async () => {
+  it("keeps an HTTP 200 error as uncertain: it can carry an internal error after the write", async () => {
+    const { q } = fake(() => new BufferApiError("Internal server error", 200));
+    const res = await approveDrafts("t", ["d1"], [post({})], now, wrote, q, async () => ({ name: "", result: "pass", detail: "" }));
+    expect(res.uncertain).toEqual(["d1"]);
+    expect(res.refused[0].reason).toContain("could not be confirmed");
+  });
+
+  it("reports a 4xx refusal as refused, not uncertain, and goes on", async () => {
     let n = 0;
-    const { q } = fake(() => (n++ === 0 ? new BufferApiError("Post cannot be scheduled", 200, "INVALID_INPUT") : { editPost: { __typename: "PostActionSuccess" } }));
+    const { q } = fake(() => (n++ === 0 ? new BufferApiError("Post cannot be scheduled", 400) : { editPost: { __typename: "PostActionSuccess" } }));
     const res = await approveDrafts("t", ["d1", "d2"], [post({}), post({ id: "d2" })], now, wrote, q, async () => ({ name: "", result: "pass", detail: "" }));
     expect(res.approved).toEqual(["d2"]);
     expect(res.refused).toEqual([{ id: "d1", reason: "Post cannot be scheduled" }]);

@@ -73,8 +73,9 @@ export async function approveDrafts(
         for (const rest of batch.slice(i)) refused.push({ id: rest, reason: notSentReason(wait).replace("writing this draft", "scheduling this draft") });
         return { approved, refused, ...(uncertain.length ? { uncertain } : {}), waitUntil: wait.retryAt };
       }
-      if (e instanceof BufferApiError && e.status < 500) {
-        // Buffer's own refusal: nothing was scheduled.
+      if (e instanceof BufferApiError && e.status >= 400 && e.status < 500) {
+        // An HTTP refusal: nothing was scheduled. A 200 with errors can carry an internal error after the write, so it
+        // stays uncertain below.
         refused.push({ id, reason: e.message || "Buffer refused to schedule this draft." });
         continue;
       }
