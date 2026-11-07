@@ -1,7 +1,6 @@
-/* The pixel hero: the drawing, then one line saying which step it shows. Nothing is laid over the picture. */
+/* The pixel hero: the drawing, then one line saying which step it shows. Nothing is laid over the picture, and no frame is drawn around it. */
 .hero { margin: 0; display: grid; gap: 14px }
-.canvas { display: block; width: 100%; height: auto; aspect-ratio: 192 / 96; image-rendering: pixelated; border-radius: 14px;
-  box-shadow: 0 0 0 1px var(--border), 0 24px 60px -24px oklch(0.35 0.08 357 / 0.28) }
+.canvas { display: block; width: 100%; height: auto; aspect-ratio: 192 / 96; image-rendering: pixelated }
 /* One line: a small step chip, then the step's title and sentence, centred on the same axis. */
 .caption { display: flex; align-items: center; gap: 10px; min-height: 2.9em }
 .n { flex: none; padding: 3px 9px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 12%, transparent); color: var(--accent);

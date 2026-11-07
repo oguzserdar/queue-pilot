@@ -5,8 +5,8 @@ import type { WeekModel } from "@/lib/week-model";
 import { HERO_LOOP, HERO_SIZE, STEP_AT, drawHero, layoutWeek } from "./pixel-hero-scene";
 import styles from "./pixel-hero.module.css";
 
-/** The scene is timed for 20 seconds; it plays faster than that so something always moves. */
-const SPEED = 1.45;
+/** Real time: the scene is timed so every step gets about the same few seconds. */
+const SPEED = 1;
 
 const STEPS = [
   { title: "Your empty times", text: "Queue Pilot reads your Buffer week and finds the times with no post." },

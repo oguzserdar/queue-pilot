@@ -1,15 +1,15 @@
 /**
  * The homepage hero as pixel art: Alex's demo week drawn on a 192x96 grid that CSS scales up crisp. The same five
- * steps as the walkthrough play on one 20-second loop: the empty times blink, drafts land from the newsletter, each
+ * steps as the walkthrough play on one 14-second loop: the empty times blink, drafts land from the newsletter, each
  * is checked and a quote is matched to its source, the post that would fail turns red, and the cursor approves the
  * rest. Every frame is drawn whole from the time t, so the loop is seamless and any moment can be drawn on its own.
  */
 import type { WeekModel } from "@/lib/week-model";
 
 export const HERO_SIZE = { width: 192, height: 96 } as const;
-export const HERO_LOOP = 20;
+export const HERO_LOOP = 14;
 /** When each step starts, in seconds into the loop: empty times, drafts, checks, the failing post, approve. */
-export const STEP_AT = [0, 2.2, 6, 10, 13] as const;
+export const STEP_AT = [0, 1.6, 4.4, 7.2, 10] as const;
 
 const W = HERO_SIZE.width, H = HERO_SIZE.height;
 const C = {
@@ -72,10 +72,10 @@ function badge(g: G, x: number, y: number, good: boolean) {
 export function drawHero(g: G, cards: Card[], time: number) {
   const t = time % HERO_LOOP;
   const drafts = cards.filter((c) => c.status === "draft").sort((a, b) => a.draftIndex - b.draftIndex);
-  const landAt = (i: number) => 2.6 + i * 0.6;
-  const checkAt = (i: number) => 6.3 + i * 0.45;
-  const approveAt = 14.4;
-  const doneAt = (i: number) => approveAt + 0.3 + i * 0.25;
+  const landAt = (i: number) => 1.9 + i * 0.45;
+  const checkAt = (i: number) => 4.5 + i * 0.3;
+  const approveAt = 11.2;
+  const doneAt = (i: number) => approveAt + 0.25 + i * 0.15;
 
   // The field: denser toward the right, like the homepage.
   px(g, 0, 0, W, H, C.white);
@@ -149,8 +149,11 @@ export function drawHero(g: G, cards: Card[], time: number) {
 
   // Step three: the quote check, shown on the first draft: the line in the draft beside the line in the source.
   const first = drafts.find((d) => !d.blocked);
-  if (first && t >= 8 && t < 10) {
-    const k = clamp((t - 8) / 0.25), pw = 70, ph = 30;
+  if (first && t >= 5.8 && t < STEP_AT[3]) {
+    const k = clamp((t - 5.8) / 0.25), pw = 70, ph = 30;
+    // The board behind the panel goes soft the pixel way: an ordered dither of white over it, like a blur.
+    for (let yy = BOARD.y + 1; yy < BOARD.y + BOARD.h - 1; yy++) for (let xx = BOARD.x + 1; xx < BOARD.x + BOARD.w - 1; xx++)
+      if (threshold(xx, yy) < 0.6 * k) px(g, xx, yy, 1, 1, C.white);
     const x = Math.min(first.x + 4, BOARD.x + BOARD.w - pw - 4), y = first.y + CARD_H + 2 - Math.round((1 - k) * 3);
     px(g, x + 2, y + ph, pw - 4, 2, C.shadow);
     box(g, x, y, pw, ph, C.white);
@@ -165,7 +168,7 @@ export function drawHero(g: G, cards: Card[], time: number) {
 
   // Step five: the pointer comes in from the corner, settles on Approve, presses.
   if (t >= STEP_AT[4] && t < HERO_LOOP - 1.5) {
-    const k = clamp((t - STEP_AT[4] - 0.2) / 0.9), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+    const k = clamp((t - STEP_AT[4] - 0.1) / 0.9), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
     const fx = 176, fy = 96, tx = btn.x + 20, ty = btn.y + 5;
     pointer(g, fx + (tx - fx) * e, fy + (ty - fy) * e - Math.sin(k * Math.PI) * 6, pressed);
   }

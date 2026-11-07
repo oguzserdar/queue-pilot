@@ -100,7 +100,7 @@ export default function HomePage() {
             </div>
             <ol className={s.flow}>
               <li><b>Ask your AI</b><p>&ldquo;Fill next week from my newsletter.&rdquo; In Claude, ChatGPT, Grok or any MCP app.</p></li>
-              <li><b>Queue Pilot checks each draft</b><p>Quotes against your source, then your rules. A draft that breaks a blocking rule is not saved.</p></li>
+              <li><b>Queue Pilot checks each draft</b><p>Quotes against your source, then your rules. A blocking rule stops the save.</p></li>
               <li><b>You approve</b><p>Drafts wait in Buffer. Approve them in Queue Pilot, in Buffer or in your AI chat.</p></li>
             </ol>
             <figure className={[s.shot, s.liveShot].join(" ")}>
@@ -139,10 +139,10 @@ export default function HomePage() {
               <p><a href={REPO}>Code, changelog and issues on GitHub</a></p>
             </div>
             <ol className={s.loop}>
-              <li className={s.step}><SetupScene step={0} className={s.stepArt} /><span className={s.meta}>Buffer</span><p>Create an app client in Buffer under Settings, API, App Clients, with your address as its redirect.</p></li>
-              <li className={s.step}><SetupScene step={1} className={s.stepArt} /><span className={s.meta}>Database</span><p>Create a Postgres database and fill in the values from <code>.env.example</code>. Each line says how.</p></li>
+              <li className={s.step}><SetupScene step={0} className={s.stepArt} /><span className={s.meta}>Buffer</span><p>Add an app client in Buffer's API settings, with your address as its redirect.</p></li>
+              <li className={s.step}><SetupScene step={1} className={s.stepArt} /><span className={s.meta}>Database</span><p>Create a Postgres database, then fill in <code>.env.example</code>. Each line says how.</p></li>
               <li className={s.step}><SetupScene step={2} className={s.stepArt} /><span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every start.</p></li>
-              <li className={s.step}><SetupScene step={3} className={s.stepArt} /><span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim the deployment with your setup code.</p></li>
+              <li className={s.step}><SetupScene step={3} className={s.stepArt} /><span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim it with your setup code.</p></li>
             </ol>
           </div>
         </section>
