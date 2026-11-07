@@ -23,16 +23,15 @@ function tipAfter(el: HTMLElement, box: DOMRect) {
 }
 
 /**
- * Puts the popover beside the pointer, to its right, and never over the part being explained: with no room on the
- * right it opens just below that part, and above it when below would run out of the frame.
+ * Puts the popover just below the highlighted part, never on it, so the eye reads the part first and the note
+ * second; above it when below would run out of the frame. It lines up with the pointer, kept inside the frame.
  */
 function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect): Place {
   const POP_W = Math.min(POP_WIDE, box.width - 16);
-  if (tip.x + 34 + POP_W <= box.width - 8) return { side: "right", x: tip.x + 34, y: Math.max(4, Math.min(tip.y - 2, box.height - POP_H - 8)), w: POP_W };
-  const x = Math.max(8, Math.min(tip.x - 40, box.width - POP_W - 8));
-  const below = Math.max(part.bottom - box.top, tip.y + 46) + 10;
+  const x = Math.max(8, Math.min(tip.x - 24, box.width - POP_W - 8));
+  const below = Math.max(part.bottom - box.top + PAD + 8, tip.y + 46);
   if (below + POP_H <= box.height - 4) return { side: "below", x, y: below, w: POP_W };
-  return { side: "above", x, y: part.top - box.top - 10, w: POP_W };
+  return { side: "above", x, y: part.top - box.top - PAD - 8, w: POP_W };
 }
 
 /** Finds the innermost element whose own text matches, so the pointer lands on the label, not its whole section. */
