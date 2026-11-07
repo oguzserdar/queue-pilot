@@ -148,15 +148,16 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className={s.band} aria-labelledby="start-title">
+        <section className={s.band} aria-labelledby="start-title" data-pilot-scope="">
           <PixelField placement="band" />
           <div className={[s.wrap, s.bandInner].join(" ")}>
             <h2 id="start-title">Fill next week from what you already shipped</h2>
             <p>Sign in with Buffer, connect your AI, and ask it to fill next week from your newsletter, blog or videos.</p>
             <div className={s.ctas}>
-              <LinkButton href={SIGN_IN} kind="secondary">Sign in with Buffer</LinkButton>
-              <a className={s.bandLink} href={DEMO}>Try the demo</a>
+              <LinkButton href={SIGN_IN} kind="secondary" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
+              <a className={s.bandLink} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
             </div>
+            <PilotWeek week={false} tone="light" className={s.bandPilot} />
           </div>
         </section>
       </main>

@@ -41,3 +41,10 @@
 @media (prefers-reduced-motion: reduce) { .slot[data-fresh] { animation: none } .pilot svg { transition: none } }
 /* Phones: three days at a readable size rather than five cut-off columns. */
 @media (max-width: 520px) { .days { grid-template-columns: repeat(3, minmax(0, 1fr)) } .day:nth-child(n + 4) { display: none } }
+
+/* The light Pilot, for dark sections: a white body, night-coloured eyes, and a white speech bubble. */
+.root[data-tone="light"] .shell { fill: oklch(0.98 0.004 357) }
+.root[data-tone="light"] .belly { fill: oklch(0.88 0.03 357) }
+.root[data-tone="light"] .eye { fill: var(--qp-night, oklch(0.24 0.06 357)) }
+.root[data-tone="light"] .say { background: oklch(0.98 0.004 357); color: var(--qp-night, oklch(0.24 0.06 357)) }
+.root[data-tone="light"] .say::after { border-top-color: oklch(0.98 0.004 357) }

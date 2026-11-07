@@ -27,7 +27,7 @@ const DAYS: { day: string; slots: Slot[] }[] = [
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /** `week={false}` draws the Pilot alone, without the example week, for a hero that shows the real app below it. */
-export function PilotWeek({ week = true, className }: { week?: boolean; className?: string } = {}) {
+export function PilotWeek({ week = true, className, tone }: { week?: boolean; className?: string; tone?: "light" } = {}) {
   const [states, setStates] = useState<SlotState[]>(() => DAYS.flatMap((d) => d.slots.map((s) => s.state)));
   const [line, setLine] = useState("");
   // The full line, set once, for screen readers; the typed bubble is hidden from them.
@@ -78,7 +78,9 @@ export function PilotWeek({ week = true, className }: { week?: boolean; classNam
     addEventListener("pointermove", onMove, { passive: true });
 
     // A button with a line: look at it and say the line.
-    const targets = [...document.querySelectorAll("[data-pilot-say]")];
+    // A Pilot inside a [data-pilot-scope] section answers only that section's buttons; the hero Pilot answers the rest.
+    const own = root.current?.closest("[data-pilot-scope]");
+    const targets = own ? [...own.querySelectorAll("[data-pilot-say]")] : [...document.querySelectorAll("[data-pilot-say]")].filter((t) => !t.closest("[data-pilot-scope]"));
     const enter = (e: Event) => { const el = e.currentTarget as HTMLElement; look.current = el; void speak(el.dataset.pilotSay ?? ""); };
     const leave = () => { look.current = null; };
     // Keyboard focus counts as pointing, so the lines are not mouse-only.
@@ -134,7 +136,7 @@ export function PilotWeek({ week = true, className }: { week?: boolean; classNam
 
   let index = 0;
   return (
-    <div className={[styles.root, className].filter(Boolean).join(" ")} ref={root}>
+    <div className={[styles.root, className].filter(Boolean).join(" ")} ref={root} data-tone={tone}>
       <div ref={pilot} className={styles.pilot}>
         <span className={styles.say} data-show={talking || undefined} aria-hidden="true">{line}</span>
         <span className={styles.sr} role="status">{announce}</span>

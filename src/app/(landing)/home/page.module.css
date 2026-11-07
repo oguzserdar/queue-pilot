@@ -98,6 +98,10 @@
 .band h2 { max-width: 20ch }
 .band p { margin: 0; max-width: 46ch; font-size: 18px; color: oklch(0.9 0.01 357) }
 .band .ctas { margin-top: 12px; align-items: center; gap: 20px }
+/* The light Pilot stands on the band's right, facing the buttons; phones leave it out. */
+.bandPilot { --pw: clamp(150px, 15vw, 210px); position: absolute; right: clamp(16px, 8vw, 140px); top: 50%; translate: 0 -62% }
+.bandPilot > div { margin-bottom: 0 }
+@media (max-width: 900px) { .bandPilot { display: none } }
 .bandLink { color: oklch(0.92 0.01 357); font-size: 16px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px }
 /* The still Pilot stands on the band's top edge, at the left of the column. */
 .band > .wrap[aria-hidden] { position: relative; z-index: 1; height: 0 }
