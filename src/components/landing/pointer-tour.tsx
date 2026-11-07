@@ -35,10 +35,11 @@ function tipAfter(el: HTMLElement, box: DOMRect) {
   const lines = linesOf(el);
   const end = lines[lines.length - 1] ?? el.getBoundingClientRect();
   const buttons = [...el.querySelectorAll<HTMLElement>("button, a")].map((b) => b.getBoundingClientRect()).filter((b) => b.width > 0);
-  const last = buttons[buttons.length - 1];
+  // A part that ends in a row of buttons: rest on the first one, the main action, near its right end.
+  const first = buttons[0], last = buttons[buttons.length - 1];
   const onButton = last && last.right >= end.right - 2;
-  const x = onButton ? last.left + last.width * 0.55 : end.right + 6;
-  const y = onButton ? last.top + last.height * 0.45 : end.top + end.height * 0.3;
+  const x = onButton ? first.left + first.width * 0.72 : end.right + 6;
+  const y = onButton ? first.top + first.height * 0.45 : end.top + end.height * 0.3;
   return { x: Math.min(x - box.left, box.width - 34), y: Math.min(y - box.top, box.height - 50) };
 }
 
@@ -60,7 +61,7 @@ function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect,
   if (besideX >= EDGE && besideX + POP_W <= box.width - EDGE && under + h <= box.height - EDGE) return { side: "below", x: besideX, y: under, w: POP_W };
   const below = Math.max(under, tip.y + 46);
   if (below + h <= box.height - EDGE) return { side: "below", x, y: below, w: POP_W };
-  const right = Math.max(part.right - box.left + PAD + 2, tip.x + 26);
+  const right = Math.max(part.right - box.left + PAD + 2, tip.x + 38);
   // Beside the part: as wide as the room allows (up to 400px) so it wraps to fewer lines, its top level with the
   // part, and only lifted as far as the frame's bottom edge needs.
   const sideW = Math.min(400, box.width - EDGE - right);
