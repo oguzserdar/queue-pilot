@@ -17,8 +17,8 @@
 .pop { position: absolute; z-index: 7; width: 248px; display: grid; gap: 2px; padding: 9px 12px 10px; border-radius: 8px;
   background: var(--foreground); color: var(--background); font: 400 13.5px/1.4 var(--font-body); pointer-events: none;
   box-shadow: 0 8px 24px -8px oklch(0.2 0.05 357 / .4); animation: pop 180ms cubic-bezier(0.23, 1, 0.32, 1) both }
-.pop[data-side="right"] { translate: 0 -50%; transform-origin: left center }
-.pop[data-side="left"] { translate: 0 -50%; transform-origin: right center }
+.pop[data-side="right"] { transform-origin: left top }
+.pop[data-side="left"] { transform-origin: right top }
 .pop[data-side="below"] { transform-origin: 24px top }
 .pop[data-side="above"] { translate: 0 -100%; transform-origin: 24px bottom }
 .pop b { font-weight: 650 }

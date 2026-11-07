@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { WeekModel } from "@/lib/week-model";
 import { BOARD, HERO_LOOP, HERO_SIZE, STEP_AT, drawHero, drawQuote, layoutWeek, stepAnchor } from "./pixel-hero-scene";
 import styles from "./pixel-hero.module.css";
-import { TimerRing } from "./timer-ring";
+import { TimerPointer } from "./pointer-tour";
 
 
 const STEPS = [
@@ -82,10 +82,14 @@ export function PixelHero({ week }: { week: WeekModel }) {
         {/* Marks exactly where the board is, so the page's dots come right up to its edge. */}
         <div className={styles.frame} data-field-frame="" data-field-cells={BOARD.w} style={{ left: `${(BOARD.x / HERO_SIZE.width) * 100}%`, top: `${(BOARD.y / HERO_SIZE.height) * 100}%`, width: `${(BOARD.w / HERO_SIZE.width) * 100}%`, height: `${(BOARD.h / HERO_SIZE.height) * 100}%` }} />
         <canvas ref={top} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.top} aria-hidden="true" />
+        {/* Our pointer rests on the part each step is about, and fills up as the step's timer; full means next step. */}
+        <div className={styles.pointer} style={{ left: `${(anchor.x / HERO_SIZE.width) * 100}%`, top: `${(anchor.y / HERO_SIZE.height) * 100}%` }} aria-hidden="true">
+          <TimerPointer ms={onScreen ? READ[step] * 1000 : null} run={step} />
+        </div>
         {/* The step's words sit on the board, beside the part they are about, like the pointer tour's popovers. */}
         <div key={step} className={styles.pop} data-place={anchor.place} data-edge={anchor.x > HERO_SIZE.width * 0.62 ? "right" : anchor.x < HERO_SIZE.width * 0.3 ? "left" : undefined}
           style={{ left: `${(anchor.x / HERO_SIZE.width) * 100}%`, top: `${(anchor.y / HERO_SIZE.height) * 100}%` }} aria-hidden="true">
-          <span className={styles.head}><span className={styles.n}>{step + 1}/{STEPS.length}</span><TimerRing key={step} ms={READ[step] * 1000} paused={!onScreen} /></span>
+          <span className={styles.n}>{step + 1}/{STEPS.length}</span>
           <b>{STEPS[step].title}</b>
           <span>{STEPS[step].text}</span>
         </div>

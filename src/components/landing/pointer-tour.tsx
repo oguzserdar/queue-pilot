@@ -10,21 +10,16 @@ type Side = "right" | "left" | "above" | "below";
 type Place = { side: Side; x: number; y: number; w: number };
 
 const POP_WIDE = 248, POP_H = 76, GAP = 12, PAD = 6;
-/** Picks the first side with room inside the frame: the stop's own preference, then right, left, below, above. */
-function placeBeside(r: DOMRect, box: DOMRect, prefer?: Side): Place {
-  // On a phone the card is narrow: the popover takes the card's width less a margin, and opens above or below.
+/**
+ * Puts the popover right beside the pointer, never on it: to its right, or to its left when the right has no room,
+ * with its top at the pointer's tip, nudged up when it would run past the frame's bottom.
+ */
+function placeBeside(tip: { x: number; y: number }, box: DOMRect): Place {
   const POP_W = Math.min(POP_WIDE, box.width - 16);
-  const x0 = r.left - box.left, x1 = r.right - box.left, y0 = r.top - box.top, y1 = r.bottom - box.top;
-  const cy = (y0 + y1) / 2, clampX = (x: number) => Math.max(8, Math.min(box.width - POP_W - 8, x));
-  const fits: Record<Side, boolean> = {
-    right: x1 + GAP + POP_W <= box.width - 8, left: x0 - GAP - POP_W >= 8,
-    below: y1 + GAP + POP_H <= box.height - 4, above: y0 - GAP - POP_H >= 4,
-  };
-  const order: Side[] = [...(prefer ? [prefer] : []), "right", "left", "below", "above"];
-  const side = order.find((o) => fits[o]) ?? "below";
-  if (side === "right") return { side, x: x1 + GAP, y: cy, w: POP_W };
-  if (side === "left") return { side, x: x0 - GAP - POP_W, y: cy, w: POP_W };
-  return { side, x: clampX(x0), y: side === "below" ? y1 + GAP : y0 - GAP, w: POP_W };
+  const right = tip.x + 34 + POP_W <= box.width - 8;
+  const x = right ? tip.x + 34 : Math.max(8, tip.x - POP_W - 6);
+  const y = Math.max(4, Math.min(tip.y - 2, box.height - POP_H - 8));
+  return { side: right ? "right" : "left", x, y, w: POP_W };
 }
 
 /** Finds the innermost element whose own text matches, so the pointer lands on the label, not its whole section. */
@@ -47,10 +42,10 @@ const EDGE = cells("o", styles.edge);
  * The pointer is its own timer: its body starts pale and fills with crimson from the tip down over `ms`; when it is
  * full, the next stop comes. `run` restarts the fill.
  */
-function TimerPointer({ ms, run }: { ms: number | null; run: number }) {
+export function TimerPointer({ ms, run, className }: { ms: number | null; run: number; className?: string }) {
   const clip = useId().replace(/:/g, "");
   return (
-    <svg viewBox="0 0 11 17" shapeRendering="crispEdges">
+    <svg viewBox="0 0 11 17" shapeRendering="crispEdges" className={className}>
       <clipPath id={clip}>
         <rect key={run} x="0" y="0" width="11" height={ms ? 0 : 17}>
           {ms ? <animate attributeName="height" from="0" to="17" dur={`${ms}ms`} fill="freeze" /> : null}
@@ -104,14 +99,14 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
         const target = STOPS[i].find(el);
         if (target) {
           const box = el.getBoundingClientRect(), r = target.getBoundingClientRect();
-          const to = { x: r.left - box.left + Math.min(r.width * 0.5, 40), y: r.top - box.top + r.height * 0.6 };
+          // Aim inside the part, and keep the whole pointer (30 by 46) inside the frame so its edge never cuts it off.
+          const to = { x: Math.min(r.left - box.left + Math.min(r.width * 0.5, 40), box.width - 34), y: Math.min(r.top - box.top + Math.min(r.height * 0.5, 24), box.height - 50) };
           setSay(null);
           setSpot({ x: r.left - box.left - PAD, y: r.top - box.top - PAD, w: r.width + PAD * 2, h: r.height + PAD * 2 });
           if (still) { pos = to; setAt(to); } else await glide(to);
-          const lit = new DOMRect(r.left - PAD, r.top - PAD, r.width + PAD * 2, r.height + PAD * 2);
-          // Long enough to read the popover at an average 4 words a second, plus a moment to look; the ring shows it.
+          // Long enough to read the popover at an average 4 words a second, plus a moment to look; the pointer fills to show it.
           const ms = Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500);
-          setSay({ i, place: placeBeside(lit, box, STOPS[i].side), ms });
+          setSay({ i, place: placeBeside(to, box), ms });
           await wait(ms);
         }
         i = (i + 1) % STOPS.length;

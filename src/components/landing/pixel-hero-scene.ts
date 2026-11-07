@@ -143,12 +143,6 @@ export function drawHero(g: G, cards: Card[], time: number) {
     if (t >= checkAt(i)) badge(g, x + CARD_W - 5, y - 3, !c.blocked);
   }
 
-  // Step five: the pointer comes in from the corner, settles on Approve, presses.
-  if (t >= STEP_AT[4] && t < HERO_LOOP - 1.5) {
-    const k = clamp((t - STEP_AT[4] - 0.1) / 0.9), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-    const fx = 176, fy = H, tx = btn.x + 20, ty = btn.y + 5;
-    pointer(g, fx + (tx - fx) * e, fy + (ty - fy) * e - Math.sin(k * Math.PI) * 6, pressed);
-  }
 }
 
 /** When the quote panel is open, in seconds into the loop. The page blurs the board behind it while it is. */
