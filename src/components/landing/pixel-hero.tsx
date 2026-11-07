@@ -5,8 +5,8 @@ import type { WeekModel } from "@/lib/week-model";
 import { HERO_LOOP, HERO_SIZE, STEP_AT, drawHero, drawQuote, layoutWeek } from "./pixel-hero-scene";
 import styles from "./pixel-hero.module.css";
 
-/** Real time: the scene is timed so every step gets about the same few seconds. */
-const SPEED = 1;
+/** Plays at three quarters of the scene's timing, so each step gets close to four seconds to read. */
+const SPEED = 0.75;
 
 const STEPS = [
   { title: "Your empty times", text: "Queue Pilot reads your Buffer week and finds the times with no post." },
@@ -56,7 +56,7 @@ export function PixelHero({ week }: { week: WeekModel }) {
   }, [cards]);
   return (
     <figure className={styles.hero}>
-      <div className={styles.layers} data-blur={blur || undefined}>
+      <div className={styles.layers} data-blur={blur || undefined} data-field-frame="">
         <canvas ref={ref} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.canvas} aria-hidden="true" />
         <canvas ref={top} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.top} aria-hidden="true" />
       </div>
