@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Post } from "./buffer/queries";
 import { MAX_APPROVE, approveDrafts } from "./approve-drafts";
-import { BufferRateLimitedError } from "./buffer/client";
+import { BufferApiError, BufferRateLimitedError } from "./buffer/client";
+import { BufferAllowanceLowError } from "./buffer/budget";
 
 const wrote = new Set(["d1", "d2", "d3", "d4", "s1", "old"]);
 const now = new Date("2026-11-01T12:00:00Z");
@@ -110,6 +111,30 @@ describe("limits", () => {
     expect(res.refused[0].reason).toContain("request limit");
     // No further calls after the limit.
     expect(inputs).toHaveLength(2);
+    expect(res.uncertain).toBeUndefined();
+    expect(res.waitUntil).toEqual(new Date("2026-11-01T13:00:00Z"));
+  });
+
+  it("stops when Queue Pilot's own count refuses before sending, and reports nothing as uncertain", async () => {
+    const retry = new Date("2026-11-01T12:15:00Z");
+    const { q, inputs } = fake(() => new BufferAllowanceLowError(15, retry));
+    const posts = ["d1", "d2", "d3"].map((id) => post({ id }));
+    const res = await approveDrafts("t", ["d1", "d2", "d3"], posts, now, wrote, q, async () => ({ name: "", result: "pass", detail: "" }));
+    expect(inputs).toHaveLength(1);
+    expect(res.approved).toEqual([]);
+    expect(res.uncertain).toBeUndefined();
+    expect(res.refused.map((r) => r.id)).toEqual(["d1", "d2", "d3"]);
+    expect(res.refused.every((r) => r.reason.startsWith("Not sent:") && r.reason.includes("12:15 UTC"))).toBe(true);
+    expect(res.waitUntil).toEqual(retry);
+  });
+
+  it("reports Buffer's own refusal as refused, not uncertain, and goes on", async () => {
+    let n = 0;
+    const { q } = fake(() => (n++ === 0 ? new BufferApiError("Post cannot be scheduled", 200, "INVALID_INPUT") : { editPost: { __typename: "PostActionSuccess" } }));
+    const res = await approveDrafts("t", ["d1", "d2"], [post({}), post({ id: "d2" })], now, wrote, q, async () => ({ name: "", result: "pass", detail: "" }));
+    expect(res.approved).toEqual(["d2"]);
+    expect(res.refused).toEqual([{ id: "d1", reason: "Post cannot be scheduled" }]);
+    expect(res.uncertain).toBeUndefined();
   });
 
   it(`approves at most ${MAX_APPROVE} per press`, async () => {

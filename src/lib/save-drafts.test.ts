@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { OpenSlot } from "./open-slots";
 import { MAX_LIMIT_CHECKS, groupByChannel, saveDrafts } from "./save-drafts";
+import { BufferRateLimitedError } from "./buffer/client";
+import { BufferAllowanceLowError } from "./buffer/budget";
 
 const slot = (channelId: string, at: string, over: Partial<OpenSlot> = {}): OpenSlot => ({
   id: `${channelId}@${at}`,
@@ -40,8 +42,8 @@ describe("saveDrafts", () => {
     expect(res.saved).toHaveLength(4);
     // X has two slots, so two content items: [X Mon, LinkedIn Mon, Bluesky Tue] and [X Tue].
     expect(calls).toHaveLength(2);
-    // Plus one limit check per distinct (organization, time): Monday and Tuesday.
-    expect(res.requests).toBe(4);
+    // Plus one request for the limit checks: Monday and Tuesday, one alias each.
+    expect(res.requests).toBe(3);
     expect(calls[0].variables.input.posts.map((p: any) => p.channelId)).toEqual(["x", "li", "bs"]);
   });
 
@@ -152,11 +154,12 @@ describe("daily posting limits", () => {
     expect(res.saved).toHaveLength(1);
   });
 
-  it(`checks at most ${MAX_LIMIT_CHECKS} distinct times per save`, async () => {
+  it(`checks at most ${MAX_LIMIT_CHECKS} distinct times per save, all in one request`, async () => {
     const many = Array.from({ length: MAX_LIMIT_CHECKS + 3 }, (_, i) => slot("x", new Date(Date.UTC(2026, 10, 2 + i, 9)).toISOString()));
-    const { q, limitCalls } = fakeBuffer(ok);
+    const { q, limitCalls, limitRequests } = fakeBuffer(ok);
     await saveDrafts("t", { title: "w", drafts: many.map((x) => ({ slotId: x.id, text: "hi" })), open: many }, q);
     expect(limitCalls).toHaveLength(MAX_LIMIT_CHECKS);
+    expect(limitRequests).toHaveLength(1);
   });
 });
 
@@ -232,5 +235,44 @@ describe("saveDrafts when Buffer does not answer", () => {
     const { q, calls } = fakeBuffer(() => ({ createContentItem: { __typename: "InvalidInputError", message: "Text is required" } }));
     await saveDrafts("t", { title: "v1.4", drafts: [draft], open }, q);
     expect(calls.some((c) => c.query.includes("posts("))).toBe(false);
+  });
+});
+
+// Buffer's limit, or Queue Pilot's count of it, saying to wait ends the save: the next request would be refused the
+// same way. Drafts already saved stay saved; the rest are reported as not sent, with the time to try again.
+describe("when Buffer says to wait", () => {
+  const RETRY = new Date("2026-11-06T20:01:30Z");
+  const days = [0, 1, 2, 3, 4].map((d) => slot("x", new Date(Date.UTC(2026, 10, 2 + d, 9)).toISOString()));
+  const drafts = days.map((x) => ({ slotId: x.id, text: "hi" }));
+
+  it("stops at the limit check and sends no draft", async () => {
+    const { q, calls, limitRequests } = fakeBuffer(() => new BufferRateLimitedError(RETRY), () => new BufferRateLimitedError(RETRY));
+    const res = await saveDrafts("t", { title: "w", drafts, open: days }, q);
+    expect(limitRequests).toHaveLength(1);
+    expect(calls).toHaveLength(0);
+    expect(res.saved).toEqual([]);
+    expect(res.refused.map((r) => r.slotId)).toEqual(days.map((d) => d.id));
+    expect(res.refused.every((r) => r.reason.startsWith("Not sent:") && r.reason.includes("20:01 UTC"))).toBe(true);
+    expect(res.waitUntil).toEqual(RETRY);
+  });
+
+  it("keeps the drafts already saved and stops before the next write", async () => {
+    let writes = 0;
+    const { q, calls } = fakeBuffer((call) => ++writes === 1 ? ok(call) : new BufferRateLimitedError(RETRY));
+    const res = await saveDrafts("t", { title: "w", drafts, open: days }, q);
+    expect(calls).toHaveLength(2);
+    expect(res.saved.map((d) => d.slotId)).toEqual([days[0].id]);
+    expect(res.refused.map((r) => r.slotId)).toEqual(days.slice(1).map((d) => d.id));
+    expect(res.refused.every((r) => r.reason.startsWith("Not sent:"))).toBe(true);
+    expect(res.waitUntil).toEqual(RETRY);
+  });
+
+  it("stops the same way when Queue Pilot's own count refuses before sending", async () => {
+    const { q, calls } = fakeBuffer(() => new BufferAllowanceLowError(15, RETRY));
+    const res = await saveDrafts("t", { title: "w", drafts, open: days }, q);
+    expect(calls).toHaveLength(1);
+    expect(res.saved).toEqual([]);
+    expect(res.refused).toHaveLength(5);
+    expect(res.waitUntil).toEqual(RETRY);
   });
 });

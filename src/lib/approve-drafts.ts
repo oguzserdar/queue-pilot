@@ -4,14 +4,19 @@
  * approved; anything else is refused, so a crafted id cannot schedule someone else's post or a post that already went.
  * Buffer checks its posting limits when a post leaves draft and its own reason is passed back unchanged.
  */
-import { BufferRateLimitedError, bufferQuery } from "./buffer/client";
+import { BufferApiError, bufferQuery } from "./buffer/client";
+import { notSentReason, waitRefusal } from "./buffer/not-sent";
 import type { Post } from "./buffer/queries";
 import { imageLinkCheck } from "./image-check";
 import type { Check } from "./preflight";
 
 type Query = typeof bufferQuery;
 
-export type ApproveResult = { approved: string[]; refused: { id: string; reason: string }[]; uncertain?: string[] };
+/**
+ * `uncertain` lists drafts whose scheduling may have reached Buffer without an answer. `waitUntil` is set when Buffer's
+ * request limit stopped the batch before the rest were sent (null when the time is unknown); those are in `refused`.
+ */
+export type ApproveResult = { approved: string[]; refused: { id: string; reason: string }[]; uncertain?: string[]; waitUntil?: Date | null };
 
 /** At most this many drafts per press, so one request stays well inside a server time limit and Buffer's budget. */
 export const MAX_APPROVE = 25;
@@ -61,12 +66,19 @@ export async function approveDrafts(
       if (res.editPost.__typename === "PostActionSuccess") approved.push(id);
       else refused.push({ id, reason: res.editPost.message ?? "Buffer refused to schedule this draft." });
     } catch (e) {
-      if (e instanceof BufferRateLimitedError) {
-        // Every further call would be refused too: stop, and say which drafts are still waiting.
-        for (const rest of batch.slice(i)) refused.push({ id: rest, reason: "Buffer's request limit was reached; these are still drafts. Approve them again later." });
-        break;
+      const wait = waitRefusal(e);
+      if (wait) {
+        // Nothing was sent for this draft or the ones after it, and every further call would be refused too: stop,
+        // keep what was scheduled, and say which are still drafts and when to try again.
+        for (const rest of batch.slice(i)) refused.push({ id: rest, reason: notSentReason(wait).replace("writing this draft", "scheduling this draft") });
+        return { approved, refused, ...(uncertain.length ? { uncertain } : {}), waitUntil: wait.retryAt };
       }
-      // A transport failure does not prove Buffer rejected the mutation. Do not make its confirmation reusable.
+      if (e instanceof BufferApiError && e.status < 500) {
+        // Buffer's own refusal: nothing was scheduled.
+        refused.push({ id, reason: e.message || "Buffer refused to schedule this draft." });
+        continue;
+      }
+      // A network failure or server error does not prove Buffer rejected the mutation. Do not make its confirmation reusable.
       uncertain.push(id);
       refused.push({ id, reason: "Scheduling could not be confirmed. Check this post in Buffer before trying again." });
     }

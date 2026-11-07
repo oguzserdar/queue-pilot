@@ -52,7 +52,7 @@ const week: OpenSlot[] = [0, 1, 2, 3, 4].flatMap((d) =>
 );
 
 describe("a judge's first session", () => {
-  it("costs 17 Buffer requests, less than the 25 a day each signed-in person adds to the app's limit", async () => {
+  it("costs 13 Buffer requests, less than the 25 a day each signed-in person adds to the app's limit", async () => {
     const store = memorySnapshotStore();
     const { query, calls } = countingBuffer();
     const signIn = 1; // Better Auth's getUserInfo asks Buffer for the account once (src/lib/auth.ts).
@@ -84,7 +84,7 @@ describe("a judge's first session", () => {
     const refresh = await spent(() => refreshSnapshot("judge", "t", { store, query, now: () => at(10) }, { force: true }));
 
     const total = signIn + calls.length;
-    expect({ firstPage, browsing, writeWeek, edit, refresh, total }).toEqual({ firstPage: 2, browsing: 0, writeWeek: 11, edit: 2, refresh: 1, total: 17 });
+    expect({ firstPage, browsing, writeWeek, edit, refresh, total }).toEqual({ firstPage: 2, browsing: 0, writeWeek: 7, edit: 2, refresh: 1, total: 13 });
     expect(total).toBeLessThan(25);
   });
 });

@@ -7,7 +7,9 @@
  */
 import { BufferApiError, bufferQuery } from "./buffer/client";
 import { tooLong } from "./char-limits";
-import { DAILY_LIMITS_QUERY as LIMITS, type LimitStatus } from "./buffer/posting-limits";
+import { type LimitStatus } from "./buffer/posting-limits";
+import { notSentReason, waitRefusal, type WaitRefusal } from "./buffer/not-sent";
+import { MAX_ALIASES } from "./buffer/queries";
 import type { OpenSlot } from "./open-slots";
 
 type Query = typeof bufferQuery;
@@ -16,7 +18,11 @@ export type DraftInput = { slotId: string; text: string };
 /** postId is Buffer's id for the draft, null when Buffer did not say; text is exactly what was saved, for reading edits back. */
 export type SavedDraft = { slotId: string; channel: string; local: string; postId: string | null; network: string; text: string };
 export type RefusedDraft = { slotId: string; reason: string };
-export type SaveResult = { saved: SavedDraft[]; refused: RefusedDraft[]; requests: number };
+/**
+ * `waitUntil` is set when Buffer's request limit stopped the run before every draft was written: the drafts it stopped
+ * are in `refused` with a reason saying nothing was sent, and can be tried again then (null when the time is unknown).
+ */
+export type SaveResult = { saved: SavedDraft[]; refused: RefusedDraft[]; requests: number; waitUntil?: Date | null };
 
 const CONTENT_ITEM = `mutation ($input: CreateContentItemInput!) {
   createContentItem(input: $input) {
@@ -35,37 +41,43 @@ const CREATE_POST = `mutation ($input: CreatePostInput!) {
 }`;
 
 
-/** At most this many limit checks per save; each is one request (one intended time, one organization). */
+/** At most this many intended times are checked per save; all of them go in one request, one alias each. */
 export const MAX_LIMIT_CHECKS = 12;
-
 
 /**
  * Asks Buffer whether adding a post at each slot's time would go over the network's daily limit
  * (developers.buffer.com/reference.md, dailyPostingLimits: one intended time per call, channels from one
- * organization; X uses the busiest rolling 24 hours). Returns the slots that would. A failed check blocks nothing:
- * Buffer still enforces the limit when the post is due.
+ * organization; X uses the busiest rolling 24 hours). Every (organization, time) pair is one aliased field of a
+ * single request, as Buffer's guide allows several fields and up to 30 aliases in one query. Returns the slots that
+ * would go over. A failed check blocks nothing (Buffer still enforces the limit when the post is due), except a wait
+ * refusal, which is returned so the save stops before writing.
  */
-async function slotsAtLimit(token: string, items: { slot: OpenSlot }[], q: Query): Promise<{ atLimit: Map<string, LimitStatus>; requests: number }> {
+async function slotsAtLimit(token: string, items: { slot: OpenSlot }[], q: Query): Promise<{ atLimit: Map<string, LimitStatus>; requests: number; wait: WaitRefusal | null }> {
   const groups = new Map<string, OpenSlot[]>();
   for (const { slot } of items) {
     const key = `${slot.organizationId}|${slot.at}`;
     groups.set(key, [...(groups.get(key) ?? []), slot]);
   }
   const atLimit = new Map<string, LimitStatus>();
-  let requests = 0;
-  for (const slots of [...groups.values()].slice(0, MAX_LIMIT_CHECKS)) {
-    try {
-      requests++;
-      const res = await q<{ dailyPostingLimits: LimitStatus[] }>(token, LIMITS, { input: { channelIds: [...new Set(slots.map((s) => s.channelId))], date: slots[0].at } });
-      for (const st of res.dailyPostingLimits) {
+  const checked = [...groups.values()].slice(0, Math.min(MAX_LIMIT_CHECKS, MAX_ALIASES));
+  if (!checked.length) return { atLimit, requests: 0, wait: null };
+  const decl = checked.map((_, i) => `$i${i}: DailyPostingLimitsInput!`).join(", ");
+  const fields = checked.map((_, i) => `l${i}: dailyPostingLimits(input: $i${i}) { channelId isAtLimit limit scheduled sent }`).join(" ");
+  const vars = Object.fromEntries(checked.map((slots, i) => [`i${i}`, { channelIds: [...new Set(slots.map((s) => s.channelId))], date: slots[0].at }]));
+  try {
+    const res = await q<Record<string, LimitStatus[] | undefined>>(token, `query (${decl}) { ${fields} }`, vars);
+    checked.forEach((slots, i) => {
+      for (const st of res[`l${i}`] ?? []) {
         if (!st.isAtLimit) continue;
         for (const s of slots) if (s.channelId === st.channelId) atLimit.set(s.id, st);
       }
-    } catch {
-      // The pre-check is advisory; see above.
-    }
+    });
+  } catch (e) {
+    const wait = waitRefusal(e);
+    if (wait) return { atLimit, requests: 1, wait };
+    // Otherwise the pre-check is advisory; see above.
   }
-  return { atLimit, requests };
+  return { atLimit, requests: 1, wait: null };
 }
 
 /** One Buffer post input for a slot, always a draft and marked as written with AI. */
@@ -170,6 +182,10 @@ export async function saveDrafts(
 
   ready.sort((a, b) => a.slot.at.localeCompare(b.slot.at));
   const limits = await slotsAtLimit(token, ready, q);
+  if (limits.wait) {
+    const reason = notSentReason(limits.wait);
+    return { saved: [], refused: [...refused, ...ready.map((r) => ({ slotId: r.slot.id, reason }))], requests: limits.requests, waitUntil: limits.wait.retryAt };
+  }
   const allowed = ready.filter((r) => {
     const st = limits.atLimit.get(r.slot.id);
     if (!st) return true;
@@ -191,7 +207,17 @@ export async function saveDrafts(
     }
   };
 
-  for (const group of groupByChannel(allowed)) {
+  let wait: WaitRefusal | null = null;
+  const groups = groupByChannel(allowed);
+  /** Ends the run: this group's unsent drafts and every later group are reported as not sent. */
+  const stopAt = (w: WaitRefusal, unsent: { slot: OpenSlot }[], gi: number) => {
+    wait = w;
+    const reason = notSentReason(w);
+    refused.push(...[...unsent, ...groups.slice(gi + 1).flat()].map((g) => ({ slotId: g.slot.id, reason })));
+  };
+
+  for (const [gi, group] of groups.entries()) {
+    if (wait) break;
     if (useContentItems) {
       try {
         requests++;
@@ -211,6 +237,8 @@ export async function saveDrafts(
           continue;
         }
       } catch (e) {
+        const w = waitRefusal(e);
+        if (w) { stopAt(w, group, gi); break; }
         if (outcomeUnknown(e) && !contentItemUnavailable(e)) {
           requests++;
           settleUnknown(await readBack(token, group, q), group);
@@ -223,13 +251,15 @@ export async function saveDrafts(
         useContentItems = false;
       }
     }
-    for (const g of group) {
+    for (const [i, g] of group.entries()) {
       try {
         requests++;
         const res = await q<{ createPost: { __typename: string; message?: string; post?: { id: string } } }>(token, CREATE_POST, { input: postInput(g.slot, g.text) });
         if (res.createPost.__typename === "PostActionSuccess") saved.push({ slotId: g.slot.id, channel: g.slot.channel, local: g.slot.local, postId: res.createPost.post?.id ?? null, network: g.slot.service, text: g.text });
         else refused.push({ slotId: g.slot.id, reason: res.createPost.message ?? "Buffer refused this draft." });
       } catch (e) {
+        const w = waitRefusal(e);
+        if (w) { stopAt(w, group.slice(i), gi); break; }
         if (outcomeUnknown(e)) {
           requests++;
           settleUnknown(await readBack(token, [g], q), [g]);
@@ -238,5 +268,6 @@ export async function saveDrafts(
     }
   }
 
-  return { saved, refused, requests };
+  const stopped = wait as WaitRefusal | null;
+  return { saved, refused, requests, ...(stopped ? { waitUntil: stopped.retryAt } : {}) };
 }

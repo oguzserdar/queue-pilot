@@ -59,8 +59,10 @@ describe("Buffer fields we query", () => {
 /** Runs a real write path against a fake Buffer and returns every GraphQL input object it sent. */
 async function sentInputs(run: (q: any) => Promise<unknown>): Promise<{ query: string; input: Record<string, unknown> }[]> {
   const sent: { query: string; input: Record<string, unknown> }[] = [];
-  const q = async (_t: string, query: string, variables?: { input?: Record<string, unknown> }) => {
-    if (variables?.input) sent.push({ query, input: variables.input });
+  const q = async (_t: string, query: string, variables?: Record<string, unknown>) => {
+    if (variables?.input) sent.push({ query, input: variables.input as Record<string, unknown> });
+    // Aliased fields carry one input each ($i0, $i1, ...): every one is checked like a single input.
+    for (const [k, v] of Object.entries(variables ?? {})) if (/^i\d+$/.test(k)) sent.push({ query, input: v as Record<string, unknown> });
     if (query.includes("dailyPostingLimits")) return { dailyPostingLimits: [] };
     if (query.includes("createContentItem")) return { createContentItem: { __typename: "CreateContentItemSuccess" } };
     if (query.includes("editPost")) return { editPost: { __typename: "PostActionSuccess" } };
