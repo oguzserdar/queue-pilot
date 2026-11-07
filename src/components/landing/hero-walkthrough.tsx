@@ -36,6 +36,8 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
   const [windowId, setWindowId] = useState<string | null>(null);
   const [say, setSay] = useState("");
   const [run, setRun] = useState(0);
+  // Phones get the story told in one draft window, which fits their width; the whole week does not.
+  const [phone, setPhone] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const cursor = useRef<HTMLDivElement>(null);
   const paused = useRef(false);
@@ -43,6 +45,8 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
 
   useEffect(() => {
     const el = root.current;
+    const isPhone = matchMedia("(max-width: 720px)").matches;
+    setPhone(isPhone);
     if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let alive = true;
     const wait = async (ms: number) => {
@@ -68,7 +72,15 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
       const w = el.querySelector<HTMLElement>("[data-window]");
       w?.scrollTo({ top: (w.scrollHeight - w.clientHeight) * share, behavior: "smooth" });
     };
-    const beats: Beat[] = [
+    const inWindow: Target = (r) => byText(r.querySelector<HTMLElement>("[data-window]") ?? r, (s) => s === "Approve & schedule");
+    const phoneBeats: Beat[] = [
+      { say: "Written from This Week in AI 41, checked against Alex's rules", point: () => null, then: () => setWindowId(first?.id ?? null), wait: 2600 },
+      { say: "Every quote is matched to the newsletter", point: () => null, then: () => scrollWindow(0.55), wait: 2600 },
+      { point: () => null, then: () => scrollWindow(1), wait: 800 },
+      { say: "Alex approves it", point: inWindow, click: "real", wait: 1800 },
+      ...(blocked ? [{ say: `This one can't go out: ${blockedReason}`, point: () => null, then: () => setWindowId(blocked.id), wait: 3400 }] : []),
+    ];
+    const deskBeats: Beat[] = [
       { say: `${countOpenSlots({ ...week, posts: others })} empty times in Alex's week`, wait: 1200 },
       { say: "Fill next week, from This Week in AI", point: (r) => byText(r, (s) => s === "Fill next week"), click: "press", wait: 300 },
       ...drafts.map((d, i): Beat => ({ say: `Writing from the newsletter, checking each against Alex's rules · ${i + 1} of ${drafts.length}`, wait: 0, point: () => null, then: () => setShown(i + 1) })),
@@ -77,11 +89,12 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
       // The window is taller than the hero, so it scrolls like a person would: to the source quotes, then to Approve.
       { say: "and quotes the newsletter it came from", point: () => null, then: () => scrollWindow(0.55), wait: 2200 },
       { point: () => null, then: () => scrollWindow(1), wait: 700 },
-      { say: "Alex approves this one", point: (r) => byText(r.querySelector("[data-window]") as HTMLElement ?? r, (s) => s === "Approve & schedule"), click: "real", wait: 1400 },
+      { say: "Alex approves this one", point: inWindow, click: "real", wait: 1400 },
       ...(blocked ? [{ say: `This one can't go out: ${blockedReason}`, point: draftCard(blocked.text), click: "press" as const, then: () => setWindowId(blocked.id), wait: 2800 }] : []),
       { say: "Approve the rest in one go", point: (r) => { setWindowId(null); return byText(r, (s) => /^Approve \d/.test(s)); }, click: "real", wait: 500 },
       { say: "Scheduled in Buffer, by Alex's own Approve", point: (r) => byText(r, (s) => s.startsWith("Schedule ")), click: "real", wait: 2600 },
     ];
+    const beats = isPhone ? phoneBeats : deskBeats;
     const play = async () => {
       while (alive) {
         setShown(0); setWindowId(null); setRun((n) => n + 1);
@@ -115,19 +128,22 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
   }, []);
 
   const current = { ...week, posts: [...others, ...drafts.slice(0, shown)] };
+  const draftWindow = (id: string) => (
+    <div key={id} className={phone ? styles.phoneWindow : styles.window} data-window>
+      <WeekView key={`${run}-${id}`} {...props} week={week} showDraft={id} />
+    </div>
+  );
   return (
     <div ref={root} className={styles.root} onPointerEnter={() => { paused.current = true; }} onPointerLeave={() => { paused.current = false; }}>
       <div className={styles.stage} inert>
         <ToastStackProvider>
-          <WeekView key={run} {...props} week={current} />
-          {windowId && (
-            <div key={windowId} className={styles.window} data-window>
-              <WeekView key={`${run}-${windowId}`} {...props} week={week} showDraft={windowId} />
-            </div>
-          )}
+          {phone ? draftWindow(windowId ?? first?.id ?? "") : <>
+            <WeekView key={run} {...props} week={current} />
+            {windowId && draftWindow(windowId)}
+          </>}
         </ToastStackProvider>
       </div>
-      {say && <p key={say} className={styles.say} aria-hidden="true">{say}</p>}
+      {say && <p key={say} className={phone ? styles.phoneSay : styles.say} aria-hidden="true">{say}</p>}
       <div ref={cursor} className={styles.cursor} aria-hidden="true">
         <svg viewBox="0 0 16 20" width="18" height="22"><path d="M1 1 L1 15 L5 11.5 L8 18 L10.5 17 L7.6 10.6 L13 10.6 Z" fill="#1C1A1F" stroke="#fff" strokeWidth="1.2" strokeLinejoin="round" /></svg>
       </div>

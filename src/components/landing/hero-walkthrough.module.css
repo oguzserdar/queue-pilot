@@ -16,4 +16,9 @@
   transition: transform .7s cubic-bezier(.45, 0, .2, 1), opacity .2s ease }
 .cursor svg { display: block; transition: transform .12s ease; transform-origin: 2px 2px; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / .25)) }
 .cursor[data-press] svg { transform: scale(.82) }
-@media (max-width: 600px) { .say { left: 12px; right: 12px; top: 12px } }
+/* Phones: the narration sits above one draft window, both in the page flow, so nothing covers anything. */
+.root:has(.phoneWindow) { display: flex; flex-direction: column-reverse; gap: 12px }
+.phoneWindow { position: relative; max-height: 460px; overflow: hidden; background: var(--surface); border-radius: var(--radius-surface);
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-floating) }
+.phoneSay { margin: 0; align-self: flex-start; background: var(--foreground); color: var(--background); font: 600 14px/1.35 var(--font-body);
+  padding: 9px 14px; border-radius: var(--radius-panel); animation: line .25s ease }
