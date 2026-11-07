@@ -192,7 +192,7 @@ export default function HomePage() {
         </section>
 
         <section className={[s.section, s.tinted].join(" ")} id="run-your-own" aria-labelledby="oss-title">
-          <div className={[s.wrap, s.split].join(" ")}>
+          <div className={[s.wrap, s.stack].join(" ")}>
             <div className={s.copy}>
               <h2 id="oss-title">Open source. Run your own copy.</h2>
               <p>Queue Pilot is MIT licensed. This site is one deployed copy. Yours keeps its data in your own database and signs in with your own Buffer app.</p>
