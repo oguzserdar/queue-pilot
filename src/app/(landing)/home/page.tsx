@@ -43,7 +43,7 @@ const faq = [
   { title: "Is Queue Pilot made by Buffer?", content: "No. It is an independent open-source app built on the Buffer API for Buffer Commit. You sign in with your own Buffer account." },
   { title: "Can I stop it?", content: "Yes. In Settings you can remove an AI app, sign out your other browsers, or delete your account and everything Queue Pilot kept." },
   { title: "Does it work with Telegram, Discord or videos?", content: "Yes. After Buffer publishes a post, Queue Pilot can post the same text in your Telegram channel and Discord channel. It can also draft from YouTube videos through their transcripts, read with Supadata, and your AI can search the web and read pages through Exa. On your own copy, add those two keys in /admin." },
-  { title: "Can I run my own copy?", content: <>Yes. Queue Pilot is MIT licensed. Deploy it to Vercel or run it with Docker, using your own Buffer app keys. Your copy keeps its data in your own database. The <a href={`${REPO}#readme`}>README</a> has the steps.</> },
+  { title: "Can I run my own copy?", content: <>Yes. Queue Pilot is MIT licensed. Deploy it to Vercel or run it with Docker, using your own Buffer app keys. Your copy keeps its data in your own database. The <a href={`${REPO}#readme`} target="_blank" rel="noopener noreferrer">README</a> has the steps.</> },
 ];
 
 /** The public landing page: sections on one wrapper, Arc controls as Arc ships them. */
@@ -64,7 +64,7 @@ export default function HomePage() {
             <a href="#how">How it works</a>
             <a href="#questions">Questions</a>
             <a href="#run-your-own">Run your own</a>
-            <a href={REPO}>GitHub</a>
+            <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
           </nav>
           <div className={s.headerActions}>
             <a className={s.quiet} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
@@ -137,7 +137,7 @@ export default function HomePage() {
             <div className={s.copy}>
               <h2 id="oss-title">Open source. Run your own copy.</h2>
               <p>Queue Pilot is MIT licensed. This site is one deployed copy. Yours keeps its data in your own database and signs in with your own Buffer app.</p>
-              <p><a href={REPO}>Code, changelog and issues on GitHub</a></p>
+              <p><a href={REPO} target="_blank" rel="noopener noreferrer">Code, changelog and issues on GitHub</a></p>
             </div>
             <ol className={s.loop}>
               <li className={s.step}><SetupScene step={0} className={s.stepArt} /><span className={s.meta}>Buffer</span><p>Add an app client in Buffer's API settings, with your address as its redirect.</p></li>
@@ -167,9 +167,9 @@ export default function HomePage() {
           <span className={s.brand}><Image src="/icon.svg" alt="" width={22} height={22} />Queue Pilot</span>
           <span className={s.fine}>Not made by Buffer. An entry in Buffer Commit. MIT licensed.</span>
           <nav className={s.nav} aria-label="Footer">
-            <a href={`${REPO}#how-it-uses-buffers-api`}>How it uses the Buffer API</a>
-            <a href={`${REPO}/blob/main/CHANGELOG.md`}>Changelog</a>
-            <a href={REPO}>GitHub</a>
+            <a href={`${REPO}#how-it-uses-buffers-api`} target="_blank" rel="noopener noreferrer">How it uses the Buffer API</a>
+            <a href={`${REPO}/blob/main/CHANGELOG.md`} target="_blank" rel="noopener noreferrer">Changelog</a>
+            <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
           </nav>
         </div>
       </footer>
