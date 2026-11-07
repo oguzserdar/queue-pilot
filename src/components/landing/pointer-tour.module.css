@@ -11,6 +11,7 @@
   /* Stepped corners, two 3px steps each, so the popover matches the pixel pointer. */
   clip-path: polygon(0 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 6px), 0 calc(100% - 6px)); font: 400 14px/1.4 var(--font-body); animation: pop .22s ease-out both }
 .pop[data-side="left"] { left: auto; right: 4px }
+.pop[data-up] { top: auto; bottom: 8px }
 .pop b { font-weight: 650; font-size: 14px }
 .pop span { opacity: .82 }
 @keyframes pop { from { opacity: 0; transform: translateY(4px) scale(.98) } }

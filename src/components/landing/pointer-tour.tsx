@@ -30,7 +30,7 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 export function PointerTour({ stops: STOPS, children, className }: { stops: TourStop[]; children: ReactNode; className?: string }) {
   const root = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
-  const [say, setSay] = useState<{ i: number; side: "left" | "right" } | null>(null);
+  const [say, setSay] = useState<{ i: number; side: "left" | "right"; up: boolean } | null>(null);
   useEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -63,7 +63,8 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
           const to = { x: r.left - box.left + Math.min(r.width * 0.5, 40), y: r.top - box.top + r.height * 0.6 };
           setSay(null);
           if (still) { pos = to; setAt(to); } else await glide(to);
-          setSay({ i, side: to.x > el.clientWidth * 0.55 ? "left" : "right" });
+          // Near the bottom the popover opens above the pointer, so the frame never cuts it off.
+          setSay({ i, side: to.x > el.clientWidth * 0.55 ? "left" : "right", up: to.y > el.clientHeight - 170 });
           // Long enough to read the popover at an average 4 words a second, plus a moment to look.
           await wait(Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500));
         }
@@ -95,7 +96,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
         <div className={styles.pointer} style={{ transform: `translate(${at.x}px, ${at.y}px)` }} aria-hidden="true">
           <svg viewBox="0 0 11 17" shapeRendering="crispEdges">{POINTER}</svg>
           {stop && (
-            <div key={say?.i} className={styles.pop} data-side={say?.side}>
+            <div key={say?.i} className={styles.pop} data-side={say?.side} data-up={say?.up || undefined}>
               <b>{stop.title}</b>
               <span>{stop.text}</span>
             </div>

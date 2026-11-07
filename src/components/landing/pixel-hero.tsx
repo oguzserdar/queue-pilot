@@ -40,7 +40,11 @@ export function PixelHero({ week }: { week: WeekModel }) {
   const [blur, setBlur] = useState(false);
   const cards = useMemo(() => layoutWeek(week), [week]);
   const [step, setStep] = useState(0);
-  const anchor = useMemo(() => stepAnchor(cards, step), [cards, step]);
+  // A popover in the lower half opens upward, so it never runs past the board's bottom edge.
+  const anchor = useMemo(() => {
+    const a = stepAnchor(cards, step);
+    return a.y > HERO_SIZE.height * 0.55 ? { ...a, place: "above" as const } : a;
+  }, [cards, step]);
   useEffect(() => {
     const g = ref.current?.getContext("2d"), q = top.current?.getContext("2d");
     if (!ref.current || !g || !q) return;

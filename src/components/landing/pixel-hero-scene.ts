@@ -198,7 +198,7 @@ export function stepAnchor(cards: Card[], step: number): StepAnchor {
     case 1: return { x: last.x + CARD_W / 2, y: last.y, place: "above" };
     // Above the first draft's tick, since the quote panel opens below it.
     case 2: return { x: first.x + CARD_W - 2, y: first.y - 3, place: "above" };
-    case 3: return { x: blocked.x + CARD_W - 2, y: blocked.y + CARD_H, place: "below" };
+    case 3: return { x: blocked.x + CARD_W - 2, y: blocked.y - 3, place: "above" };
     default: return { x: 166, y: 19, place: "below" };
   }
 }
