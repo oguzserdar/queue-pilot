@@ -18,7 +18,7 @@ import { requireMcpAuth } from "@better-auth/mcp";
 import { McpServer, createMcpHandler } from "@modelcontextprotocol/server";
 import { getAuth, mcpResource } from "@/lib/auth";
 import { bufferAccessToken } from "@/lib/buffer-token";
-import { refreshSnapshot } from "@/lib/buffer/snapshot";
+import { refreshSnapshot, type Snapshot } from "@/lib/buffer/snapshot";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { postsBetween } from "@/lib/posts-between";
 import { deliveriesFromBuffer } from "@/lib/delivery-model";
@@ -47,7 +47,7 @@ import { BufferApiError, BufferRateLimitedError } from "@/lib/buffer/client";
 import { BufferAllowanceLowError, BufferAllowanceUnknownError, currentAllowance, withBudget } from "@/lib/buffer/budget";
 import { getTemplate, listTemplates, placeholdersIn, searchTemplates } from "@/lib/buffer/templates";
 import { createSnippet, deleteSnippet, listSnippets, SnippetsNotAllowedError, SnippetsNotEnabledError, updateSnippet } from "@/lib/buffer/snippets";
-import { channelSettings, listTeamMembers, postingState, postTextLimit } from "@/lib/buffer/workspace";
+import { channelSettings, listTeamMembers, postingState, postTextLimit, readPostWithTeam, type TeamMember } from "@/lib/buffer/workspace";
 import { createIdea, IDEA_SERVICES, listIdeaGroups, listIdeas, MAX_IDEA_TEXT, MAX_IDEA_TITLE } from "@/lib/buffer/ideas";
 import { createTag, deleteTag, listTags, MAX_TAG_NAME, setDraftTags, updateTag } from "@/lib/buffer/tags";
 import { postingLimits } from "@/lib/buffer/posting-limits";
@@ -66,19 +66,46 @@ import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
 type Auth = NonNullable<Awaited<ReturnType<typeof getAuth>>>;
 
 /** The signed-in user's Buffer account: token, channels and organizations. */
-async function bufferFor(auth: Auth, userId: string, opts: { force?: boolean } = {}) {
+/** What a tool reads from the saved Buffer copy. */
+type BufferView = ReturnType<typeof viewOf>;
+const viewOf = (accessToken: string, snap: Snapshot) => ({ accessToken, rateLimit: snap.rateLimit ?? [], organizationIds: snap.data.organizationIds ?? [], timeZone: snap.data.channels[0]?.timezone || snap.data.timezone || "UTC", channels: snap.data.channels, posts: snap.data.posts, fetchedAt: snap.fetchedAt, range: knownRange(snap.data, new Date()) });
+
+/**
+ * The person's Buffer copy for one tool call.
+ *
+ * - Default: refreshed when older than a page's refresh window. For tools whose answer is the queue itself.
+ * - `force`: refreshed unless under 30 seconds old. For writes that decide on posts or channels in the copy.
+ * - `stored`: the saved copy at any age, for tools that only check an id against it and then ask Buffer directly,
+ *   which re-checks the person's access. Buffer's guide: "If you already stored the ID, use it"
+ *   (developers.buffer.com/guides/efficient-api-usage). With no copy, or when `stored` is a check the copy fails (a
+ *   post or organization newer than the copy), it refreshes once as `force` does.
+ */
+async function bufferFor(auth: Auth, userId: string, opts: { force?: boolean; stored?: true | ((b: BufferView) => boolean) } = {}): Promise<BufferView> {
   const accessToken = await bufferAccessToken(auth, userId);
   const store = postgresSnapshotStore();
+  if (opts.stored) {
+    const last = await store.get(userId);
+    if (last) {
+      const view = viewOf(accessToken, last);
+      if (opts.stored === true || opts.stored(view)) return view;
+    }
+  }
+  const force = opts.force || !!opts.stored;
   // Reads may fall back to the last copy when Buffer cannot be reached. Writes (force) never do: they must decide
   // on current data.
-  const snap = await refreshSnapshot(userId, accessToken, { store }, opts).catch(async (e) => {
-    const last = opts.force ? null : await store.get(userId);
+  const snap = await refreshSnapshot(userId, accessToken, { store }, { force }).catch(async (e) => {
+    const last = force ? null : await store.get(userId);
     if (!last) throw e;
     return last;
   });
   if (!snap) throw new Error("Could not read your Buffer account yet; try again in a minute");
-  return { accessToken, rateLimit: snap.rateLimit ?? [], organizationIds: snap.data.organizationIds ?? [], timeZone: snap.data.channels[0]?.timezone || snap.data.timezone || "UTC", channels: snap.data.channels, posts: snap.data.posts, fetchedAt: snap.fetchedAt, range: knownRange(snap.data, new Date()) };
+  return viewOf(accessToken, snap);
 }
+
+/** For `stored`: the copy has this post. */
+const hasPost = (postId: string | undefined) => (b: BufferView) => !postId || b.posts.some((p) => p.id === postId);
+/** For `stored`: the copy has this organization, or the tool was not given one. */
+const hasOrg = (organizationId: string | undefined) => (b: BufferView) => !organizationId || b.organizationIds.includes(organizationId);
 
 /** Applies a change Buffer just accepted to the saved copy, so the next read shows it without another Buffer call. */
 async function patchSnapshot(userId: string, change: (posts: Post[]) => Post[]): Promise<void> {
@@ -340,7 +367,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     },
     async ({ postId, contentItemId }) => {
       if (!postId === !contentItemId) return { ...text("Pass either postId or contentItemId."), isError: true };
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: hasPost(postId) });
       let subject: NoteSubject;
       if (postId) {
         if (!b.posts.some((p) => p.id === postId)) return { ...text("No such post in the user's queue. Use a post id from show_next_week."), isError: true };
@@ -380,19 +407,26 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     },
     async ({ postId, contentItemId, text: note, mention }) => {
       if (!postId === !contentItemId) return { ...text("Not added: pass either postId or contentItemId."), isError: true };
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasPost(postId) });
       let subject: NoteSubject;
       let scope: { channelId: string } | { organizationId: string };
+      // Teammates already read with the post, so a mention costs no extra request.
+      let teammates: TeamMember[] | null = null;
       if (postId) {
         const post = b.posts.find((p) => p.id === postId);
         if (!post) return { ...text("Not added: no such post in the user's queue. Use a post id from show_next_week."), isError: true };
         if (!(await wroteIds(userId, postId)).has(postId)) return { ...text("Not added: notes can be added only to drafts this app wrote."), isError: true };
-        // The saved copy may be up to 30 seconds old, so ask Buffer now, as edits and tags do: an approved post is left alone.
-        const [now] = await readPostsNow(b.accessToken, [postId]);
+        // The saved copy only proves the post is the person's; ask Buffer now whether it is still a draft (an approved
+        // post is left alone), and when the note mentions someone, read that channel's teammates in the same request.
+        const live = mention?.length
+          ? await readPostWithTeam(b.accessToken, postId, post.channelId)
+          : { post: (await readPostsNow(b.accessToken, [postId]))[0] ?? null, members: null };
+        const now = live.post;
         if (!now) return { ...text("Not added: this post is no longer in Buffer."), isError: true };
         if (now.status !== "draft") return { ...text("Not added: this post is no longer a draft (it was approved, scheduled or sent), so this app leaves it alone. The person can add a note in Buffer."), isError: true };
         subject = { postId };
-        scope = { channelId: post.channelId };
+        scope = { channelId: now.channelId };
+        teammates = live.members;
       } else {
         // Read now, as the content-item tools do: the item must be in one of the person's organizations and still a
         // channel-less draft. Once it became posts, notes belong on those posts.
@@ -406,7 +440,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       if (mention?.length) {
         // Only teammates who can read this post's notes (its channel) or the organization's, for a channel-less draft;
         // Buffer checks each mention again on write.
-        const members = (await listTeamMembers(b.accessToken, scope)).items;
+        const members = teammates ?? (await listTeamMembers(b.accessToken, scope)).items;
         const chosen = mention.map((id) => members.find((m) => m.id === id));
         const unknown = mention.filter((_, i) => !chosen[i]);
         if (unknown.length) return { ...text(`Not added: these accounts cannot be mentioned on this ${postId ? "channel" : "draft"}: ${unknown.join(", ")}. Read list_team_members with this ${postId ? "post's channelId" : "draft's organizationId"}.`), isError: true };
@@ -472,7 +506,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     },
     async ({ postId, contentItemId, noteId, text: note, mention }) => {
       if (!postId === !contentItemId) return { ...text("Not changed: pass either postId or contentItemId."), isError: true };
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasPost(postId) });
       try {
         const own = await findOwnNote(b, postId, contentItemId, noteId, "updateNote");
         if (!own.ok) return { ...text(`Not changed: ${own.reason}`), isError: true };
@@ -515,7 +549,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     },
     async ({ postId, contentItemId, noteId }) => {
       if (!postId === !contentItemId) return { ...text("Not deleted: pass either postId or contentItemId."), isError: true };
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasPost(postId) });
       try {
         const own = await findOwnNote(b, postId, contentItemId, noteId, "deleteNote");
         if (!own.ok) return { ...text(`Not deleted: ${own.reason}`), isError: true };
@@ -540,7 +574,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async () => {
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: true });
       const boards = await Promise.all(b.organizationIds.map(async (org) => ({ org, ...(await listIdeas(b.accessToken, org)) })));
       const all = boards.flatMap((x) => x.ideas);
       if (!all.length) return text("The ideas board is empty.");
@@ -567,7 +601,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     },
     async ({ title, text: body, services, column, organizationId }) => {
       if (!title?.trim() && !body?.trim()) return { ...text("Not saved: give a title or text."), isError: true };
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = organizationId ?? (b.organizationIds.length === 1 ? b.organizationIds[0] : undefined);
       if (!org || !b.organizationIds.includes(org)) return { ...text(`Not saved: choose one organizationId: ${b.organizationIds.join(", ") || "none found"}.`), isError: true };
       let groupId: string | undefined;
@@ -597,7 +631,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async () => {
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: true });
       const all = (await Promise.all(b.organizationIds.map((org) => listTags(b.accessToken, org)))).flat();
       if (!all.length) return text("No tags yet. The Free plan allows 3, a paid plan 250.");
       return text([`${all.length} tag${all.length === 1 ? "" : "s"}:`, ...all.map((t) => `- ${t.name}${t.isLocked ? " (locked)" : ""}`)].join("\n"));
@@ -630,7 +664,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ visibility, search, organizationId, cursor }) => {
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = pickOrg(b, organizationId);
       if (typeof org !== "string") return { ...text(`Not read: ${org.error}`), isError: true };
       // One Buffer page of 40 per answer (or, searching, pages until 40 matches), so an answer stays small enough for
@@ -656,7 +690,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ templateId }) => {
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: true });
       const t = await getTemplate(b.accessToken, templateId);
       if (!t) return { ...text("No template with that id, or the person cannot see it."), isError: true };
       const holes = placeholdersIn(t.body);
@@ -673,7 +707,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ organizationId, cursor }) => {
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = pickOrg(b, organizationId);
       if (typeof org !== "string") return { ...text(`Not read: ${org.error}`), isError: true };
       try {
@@ -701,7 +735,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ name, hashtags, snippetId, organizationId }) => {
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = pickOrg(b, organizationId);
       if (typeof org !== "string") return { ...text(`Not saved: ${org.error}`), isError: true };
       try {
@@ -724,7 +758,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     async ({ snippetId, organizationId }) => {
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = pickOrg(b, organizationId);
       if (typeof org !== "string") return { ...text(`Not deleted: ${org.error}`), isError: true };
       try {
@@ -753,7 +787,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ channelId, search, organizationId, cursor }) => {
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: (v) => hasOrg(organizationId)(v) && (!channelId || v.channels.some((c) => c.id === channelId)) });
       let scope: { channelId: string } | { organizationId: string };
       if (channelId) {
         if (!b.channels.some((c) => c.id === channelId)) return { ...text("No such channel. Read list_channels for the ids."), isError: true };
@@ -778,7 +812,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async ({ organizationId }) => {
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = pickOrg(b, organizationId);
       if (typeof org !== "string") return { ...text(`Not read: ${org.error}`), isError: true };
       const all = await channelSettings(b.accessToken, org);
@@ -803,7 +837,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     async ({ name, organizationId }) => {
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = organizationId ?? (b.organizationIds.length === 1 ? b.organizationIds[0] : undefined);
       if (!org || !b.organizationIds.includes(org)) return { ...text(`Not created: choose one organizationId: ${b.organizationIds.join(", ") || "none found"}.`), isError: true };
       const r = await createTag(b.accessToken, org, name.trim());
@@ -828,7 +862,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     },
     async ({ tag, name, color, organizationId }) => {
       if (!name && !color) return { ...text("Nothing to change: pass a new name or color."), isError: true };
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = pickOrg(b, organizationId);
       if (typeof org !== "string") return { ...text(`Not changed: ${org.error}`), isError: true };
       const current = (await listTags(b.accessToken, org)).find((t) => t.name === tag);
@@ -854,7 +888,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     async ({ tag, organizationId }) => {
-      const b = await bufferFor(auth, userId, { force: true });
+      const b = await bufferFor(auth, userId, { stored: hasOrg(organizationId) });
       const org = pickOrg(b, organizationId);
       if (typeof org !== "string") return { ...text(`Not deleted: ${org.error}`), isError: true };
       const current = (await listTags(b.accessToken, org)).find((t) => t.name === tag);
@@ -901,7 +935,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async () => {
-      const b = await bufferFor(auth, userId);
+      const b = await bufferFor(auth, userId, { stored: true });
       // The shared reading, updated by every Buffer answer, beats the one saved with the last sync.
       const fresh = await currentAllowance().catch(() => null);
       const reading = fresh && fresh.at > b.fetchedAt.getTime() ? { windows: fresh.windows, at: new Date(fresh.at) } : { windows: b.rateLimit, at: b.fetchedAt };

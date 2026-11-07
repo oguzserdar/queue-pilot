@@ -130,7 +130,8 @@ const openNotes = new Map<string, { text: string; type: string; createdAt: strin
 let serial = 0
 const channel: Channel = { id: "ch", name: "My channel", service: "linkedin", organizationId: "org", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [{ day: "mon", paused: false, times: ["09:00", "12:00"] }] }
 const judge = deciding((ids, state) => Object.fromEntries(ids.map((id) => [id, { type: "choice", choice: state.includes("broth") ? "fail" : "pass" }])))
-const buffer = fakeBuffer((call) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fakeAnswer(call: { query: string; variables: any }): unknown {
   const { query, variables } = call
   const account = { email: "a@example.com", timezone: "UTC", organizations: libFake.orgs.map((id) => ({ id })) }
   // A refresh asks for the account and each organization's channels and first page of posts in one request, one
@@ -208,6 +209,11 @@ const buffer = fakeBuffer((call) => {
     })
     posts.push(...added)
     return { createContentItem: { __typename: "CreateContentItemSuccess", content: { body: { posts: added } } } }
+  }
+  // A post read with its channel's teammates in one request (two top-level fields).
+  if (query.includes("post(input") && query.includes("team: selectableTeamMembers(")) {
+    const team = (fakeAnswer({ query: "selectableTeamMembers(", variables: { input: variables.team } }) as { selectableTeamMembers: unknown }).selectableTeamMembers
+    return { post: structuredClone(posts.find(p => p.id === variables.post.id)) ?? null, team }
   }
   if (query.includes("p0: post(input")) return Object.fromEntries(Object.entries(variables as Record<string, { id: string }>).map(([k, v]) => [`p${k.slice(1)}`, structuredClone(posts.find(p => p.id === v.id)) ?? null]))
   if (query.includes("post(input")) return { post: structuredClone(posts.find(p => p.id === variables.input.id)) }
@@ -298,7 +304,8 @@ const buffer = fakeBuffer((call) => {
   if (query.includes("selectableTeamMembers(")) return { selectableTeamMembers: { edges: [{ node: { id: "acc-1", name: "Sara", email: "sara@example.com", avatar: "", isLocked: false, urn: "urn:buffer:account:acc-1" } }], pageInfo: { hasNextPage: false, endCursor: null } } }
   if (query.includes("configuration(")) return { configuration: { channels: [{ channelId: channel.id, service: "linkedin", channelType: "profile", authorizationStatus: libFake.authorization, content: [{ configurationContentTypes: ["post"], rules: libFake.noLimit ? [] : [{ __typename: "LengthRule", property: "text", maxLength: libFake.maxLength }] }] }] } }
   throw new Error("Unexpected Buffer query")
-})
+}
+const buffer = fakeBuffer(fakeAnswer)
 
 const releaseXml = `<feed xmlns="http://www.w3.org/2005/Atom"><title>Releases</title><id>releases</id><updated>2026-10-29T12:00:00Z</updated><entry><id>v2</id><title>v2</title><updated>2026-10-29T12:00:00Z</updated><link href="https://example.com/releases/v2"/><content type="html">&lt;p&gt;CSV export is live. Includes archived rows.&lt;/p&gt;</content></entry></feed>`
 type Result = { content: { type: string, text: string }[], isError?: boolean }
@@ -848,7 +855,9 @@ describe("connector voice writes", () => {
       expect(notesFake.notes).toHaveLength(0)
       expect((await call("add_draft_note", { postId: "mine", text: "Thanks @Sara, checked.", mention: ["acc-1"] })).isError).not.toBe(true)
       expect(notesFake.annotations.at(-1)).toEqual([{ type: "mention", content: "@Sara", text: "@Sara", displayValue: "Sara", serviceEntityId: "urn:buffer:account:acc-1", indices: [7, 12] }])
-      expect(buffer.calls.find((c) => c.query.includes("selectableTeamMembers("))?.variables.input.scope).toEqual({ channelId: channel.id })
+      // Teammates come from the post's own channel, whether read alone or together with the live post.
+      const teamRead = buffer.calls.find((c) => c.query.includes("selectableTeamMembers("))!
+      expect((teamRead.variables.team ?? teamRead.variables.input).scope).toEqual({ channelId: channel.id })
     } finally {
       notesFake.notes = []; notesFake.annotations = []
     }
@@ -1897,3 +1906,60 @@ it("exposes exact evidence wording and repairs an existing owned draft without a
  expect((await call("update_draft", { ...args, expectedText: undefined })).isError).toBe(true);
  expect(sourceCalls.repair).not.toHaveBeenCalled();
 });
+
+// Buffer counts every request against the app's shared limit, and its guide says to use an id you already stored
+// instead of fetching channels again to check it (developers.buffer.com/guides/efficient-api-usage). These are the
+// requests one tool call sends when the saved copy is older than a page's refresh window.
+describe("Buffer requests per tool call", () => {
+  const mine: Post = { id: "mine", channelId: "ch", status: "draft", text: "Draft mine", dueAt: "2026-11-03T09:00:00Z", sentAt: null, externalLink: null, error: null, via: "api" }
+  const sent = () => buffer.calls.length
+  /** Saves a copy, lets it age past the page refresh window, and returns how many requests `step` then sends. */
+  async function cost(step: () => Promise<Result>) {
+    await call("show_next_week")
+    vi.setSystemTime(new Date("2026-10-29T12:06:00Z"))
+    const before = sent()
+    const r = await step()
+    expect(r.isError, answer(r)).not.toBe(true)
+    return sent() - before
+  }
+  beforeEach(() => {
+    posts = [structuredClone(mine)]
+    written.set("person-a", [{ postId: "mine" } as Written])
+    notesFake.notes = [{ postId: "mine", node: { id: "n-mine", text: "Old", authorId: "me", author: { id: "me", name: "Me" }, allowedActions: ["updateNote", "deleteNote"], createdAt: "2026-11-04T09:00:00Z", updatedAt: "2026-11-04T09:00:00Z" } }]
+    notesFake.writes = []
+    tagsFake.tags = [{ id: "tag-1", name: "Releases", color: "#000", isLocked: false }]
+  })
+  afterEach(() => { notesFake.notes = []; tagsFake.tags = [] })
+
+  it("reads teammates in one request", async () => {
+    expect(await cost(() => call("list_team_members", { channelId: "ch" }))).toBe(1)
+  })
+  it("reads a post's notes in one request", async () => {
+    expect(await cost(() => call("list_draft_notes", { postId: "mine" }))).toBe(1)
+  })
+  it("reads tags in one request", async () => {
+    expect(await cost(() => call("list_tags"))).toBe(1)
+  })
+  it("creates a tag in one request", async () => {
+    expect(await cost(() => call("create_tag", { name: "Launch" }))).toBe(1)
+  })
+  it("adds a note with a mention in two requests: the live post with its teammates, then the note", async () => {
+    expect(await cost(() => call("add_draft_note", { postId: "mine", text: "Thanks @Sara", mention: ["acc-1"] }))).toBe(2)
+  })
+  it("edits a note in two requests: its thread, then the edit", async () => {
+    expect(await cost(() => call("update_draft_note", { postId: "mine", noteId: "n-mine", text: "New" }))).toBe(2)
+  })
+  it("deletes a note in two requests: its thread, then the delete", async () => {
+    expect(await cost(() => call("delete_draft_note", { postId: "mine", noteId: "n-mine" }))).toBe(2)
+  })
+  it("refreshes once when the post is newer than the saved copy, then adds the note", async () => {
+    await call("show_next_week")
+    posts.push({ ...structuredClone(mine), id: "newer" })
+    written.set("person-a", [{ postId: "mine" } as Written, { postId: "newer" } as Written])
+    vi.setSystemTime(new Date("2026-10-29T12:06:00Z"))
+    const before = sent()
+    const r = await call("add_draft_note", { postId: "newer", text: "Looks good" })
+    expect(r.isError, answer(r)).not.toBe(true)
+    expect(sent() - before).toBe(3)
+  })
+})
