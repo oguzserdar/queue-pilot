@@ -48,7 +48,9 @@ function tipAfter(el: HTMLElement, box: DOMRect) {
  */
 function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect): Place {
   const POP_W = Math.min(POP_WIDE, box.width - 16);
-  const x = Math.max(8, Math.min(tip.x - 24, box.width - POP_W - 8));
+  // Hang the popover off the pointer's side that has room: on the right half it opens down and to the left of the
+  // pointer, on the left half down and to the right, with a clear margin from the frame's edges.
+  const x = Math.max(16, Math.min(tip.x > box.width / 2 ? tip.x - POP_W + 24 : tip.x - 8, box.width - POP_W - 16));
   const below = Math.max(part.bottom - box.top + PAD + 8, tip.y + 46);
   if (below + POP_H <= box.height - 4) return { side: "below", x, y: below, w: POP_W };
   const right = Math.max(part.right - box.left + PAD + 2, tip.x + 26);
