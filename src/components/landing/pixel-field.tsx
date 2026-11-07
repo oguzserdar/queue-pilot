@@ -9,7 +9,7 @@ import styles from "./pixel-field.module.css";
  * Any element inside the same parent marked `data-field-frame` gets a clean border of empty cells around it, snapped to
  * the grid, so a picture sits inside the pattern like a framed cut-out instead of being laid over it.
  */
-const FRAME_GAP = 4; // cells of clear space between a framed element and the dots
+const FRAME_GAP = 2; // cells of clear space between a framed element and the dots
 const PIXEL = 4;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 const threshold = (x: number, y: number) => BAYER[(y & 3) * 4 + (x & 3)];

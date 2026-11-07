@@ -55,8 +55,8 @@ export function PixelHero({ week }: { week: WeekModel }) {
     return () => { cancelAnimationFrame(frame); seen.disconnect(); };
   }, [cards]);
   return (
-    <figure className={styles.hero}>
-      <div className={styles.layers} data-blur={blur || undefined} data-field-frame="">
+    <figure className={styles.hero} data-field-frame="">
+      <div className={styles.layers} data-blur={blur || undefined}>
         <canvas ref={ref} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.canvas} aria-hidden="true" />
         <canvas ref={top} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.top} aria-hidden="true" />
       </div>
