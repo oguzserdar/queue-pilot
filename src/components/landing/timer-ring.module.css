@@ -4,7 +4,7 @@
 .fill { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke: currentColor; stroke-dasharray: 100; stroke-dashoffset: 100;
   animation: fill var(--ms, 4000ms) linear forwards }
 .ring[data-paused] .fill { animation-play-state: paused }
-.ring[data-tone="light"] { color: var(--background) }
+.ring[data-tone="light"] { color: #fff }
 .ring[data-tone="dark"] { color: var(--accent) }
 @keyframes fill { to { stroke-dashoffset: 0 } }
 @media (prefers-reduced-motion: reduce) { .fill { animation: none; stroke-dashoffset: 0; opacity: .5 } }

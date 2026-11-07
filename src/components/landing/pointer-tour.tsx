@@ -123,7 +123,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
       {at && (
         <div className={styles.pointer} style={{ transform: `translate(${at.x}px, ${at.y}px)` }} aria-hidden="true">
           <svg viewBox="0 0 11 17" shapeRendering="crispEdges">{POINTER}</svg>
-          {say && <span className={styles.timer}><TimerRing key={say.i} ms={say.ms} paused={paused} tone="dark" /></span>}
+          {say && <span className={styles.timer}><TimerRing key={say.i} ms={say.ms} paused={paused} tone="light" /></span>}
         </div>
       )}
       {stop && say && (
