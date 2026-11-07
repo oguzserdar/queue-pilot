@@ -11,9 +11,9 @@
 /* Top right of the screen, where the week's header leaves room and the hero's fade never reaches. */
 .say { position: absolute; z-index: 4; right: 20px; top: 20px; max-width: min(420px, calc(100% - 40px)); margin: 0;
   background: var(--foreground); color: var(--background); font: 600 14px/1.35 var(--font-body); padding: 9px 14px;
-  border-radius: var(--radius-panel); box-shadow: var(--shadow-floating); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none }
+  border-radius: var(--radius-panel); box-shadow: var(--shadow-floating); text-wrap: balance; pointer-events: none }
 .cursor { position: absolute; z-index: 5; top: 0; left: 0; opacity: 0; pointer-events: none; transform: translate(70%, 70%);
   transition: transform .7s cubic-bezier(.45, 0, .2, 1), opacity .2s ease }
 .cursor svg { display: block; transition: transform .12s ease; transform-origin: 2px 2px; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / .25)) }
 .cursor[data-press] svg { transform: scale(.82) }
-@media (max-width: 600px) { .say { white-space: normal; left: 12px; right: 12px; top: 12px } }
+@media (max-width: 600px) { .say { left: 12px; right: 12px; top: 12px } }

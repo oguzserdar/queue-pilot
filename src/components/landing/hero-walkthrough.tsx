@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { ToastStackProvider } from "@/registry/components/toast-stack/toast-stack";
 import { WeekView } from "@/components/week-view";
+import { countOpenSlots } from "@/lib/week-model";
 import styles from "./hero-walkthrough.module.css";
 
 type WeekProps = ComponentProps<typeof WeekView>;
@@ -68,7 +69,7 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
       w?.scrollTo({ top: (w.scrollHeight - w.clientHeight) * share, behavior: "smooth" });
     };
     const beats: Beat[] = [
-      { say: `${drafts.length} empty times in Alex's week`, wait: 1200 },
+      { say: `${countOpenSlots({ ...week, posts: others })} empty times in Alex's week`, wait: 1200 },
       { say: "Fill next week, from This Week in AI", point: (r) => byText(r, (s) => s === "Fill next week"), click: "press", wait: 300 },
       ...drafts.map((d, i): Beat => ({ say: `Writing from the newsletter, checking each against Alex's rules · ${i + 1} of ${drafts.length}`, wait: 0, point: () => null, then: () => setShown(i + 1) })),
       { say: blocked ? `${drafts.length - 1} ready to approve · 1 would fail in Buffer` : `${drafts.length} ready to approve`, wait: 1400 },
@@ -120,7 +121,7 @@ export function HeroWalkthrough({ week, ...props }: WeekProps & { week: NonNulla
         <ToastStackProvider>
           <WeekView key={run} {...props} week={current} />
           {windowId && (
-            <div className={styles.window} data-window>
+            <div key={windowId} className={styles.window} data-window>
               <WeekView key={`${run}-${windowId}`} {...props} week={week} showDraft={windowId} />
             </div>
           )}
