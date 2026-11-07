@@ -127,7 +127,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className={s.section} id="questions" aria-labelledby="faq-title">
+        <section className={[s.section, s.faq].join(" ")} id="questions" aria-labelledby="faq-title">
           <div className={[s.wrap, s.split].join(" ")}>
             <div className={s.copy}>
               <h2 id="faq-title">Questions</h2>

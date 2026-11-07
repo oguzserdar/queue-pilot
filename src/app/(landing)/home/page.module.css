@@ -161,3 +161,7 @@
 /* The pixel hero sits in the dot field: the canvas is clear around its board, so the pattern runs on unbroken. */
 .heroArt { position: relative; z-index: 1 }
 @media (min-width: 901px) { .heroStack > .heroArt { grid-column: 1 / -1 } }
+
+/* Links inside an answer look like links: the page drops underlines on its own nav and buttons, not here. */
+.faq a { color: var(--foreground); text-decoration: underline; text-decoration-color: var(--text-muted); text-underline-offset: 3px; overflow-wrap: anywhere }
+.faq a:hover { text-decoration-color: currentColor }
