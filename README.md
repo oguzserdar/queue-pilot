@@ -103,20 +103,20 @@ When Buffer sends a post, Queue Pilot can copy it to your Telegram channel and y
 - **Only its own drafts.** It approves, edits or deletes a single draft only when it wrote that draft. Deleting a whole content item, which you confirm first, removes the posts in it.
 - **One saved copy per person.** Channels, posting times and posts from 7 days back to 14 days ahead. Screens and the connector read the copy, so browsing costs no requests.
 - **Every request is counted.** All Queue Pilot users share one Buffer allowance, so each request is counted before it's sent, across every server. Assistant and background requests pause at 15 left in a known window. When the allowance isn't known yet, they go one at a time until Buffer reports it.
-- **Polling, not webhooks.** Buffer has no webhooks, so the copy refreshes when it is older than 5 minutes, from the Refresh button, and once a day.
-- **Within Buffer's limits.** Each app gets 500 requests a day plus 25 for every person who signs in ([API limits](https://developers.buffer.com/guides/api-limits)). A whole first session costs 21:
+- **Polling, not webhooks.** Buffer has no webhooks, so the copy refreshes when it is older than 5 minutes, from the Refresh button, and once a day. A refresh is one request: the account, channels and posts together. Tools that only need an ID, like looking up teammates, use the saved copy instead.
+- **Within Buffer's limits.** Each app gets 500 requests a day plus 25 for every person who signs in, and 15,000 every 30 days plus 100 per person ([API limits](https://developers.buffer.com/guides/api-limits)). In our test with 3 channels and 15 drafts, a whole first session costs 13:
 
 | Step | Requests |
 |---|---|
 | Sign in | 1 |
-| First page | 3 |
+| First page | 2 |
 | Browsing every screen | 0 |
-| Write a week (15 drafts) | 13 |
-| Edit one draft | 1 |
-| Refresh | 3 |
-| **First session** | **21** |
+| Write a week (15 drafts) | 7 |
+| Edit one draft | 2 |
+| Refresh | 1 |
+| **First session** | **13** |
 
-Measured by `src/lib/session-cost.test.ts`, which runs the real code against a fake Buffer that counts every call.
+Measured by `src/lib/session-cost.test.ts`, which runs the real code against a fake Buffer that counts every call. Sign-in is counted as 1. On the live site on 7 Nov, looking up teammates took 1 request, down from 4.
 
 Building your own MCP server on Buffer? [Giving an AI safe write access to Buffer](docs/agent-write-tools.md) lists every Buffer write Queue Pilot exposes to an AI, the rule each one follows, and the test that proves it. [What I learned](docs/buffer-api-notes.md) covers sign-in, rate limits and writing drafts.
 
