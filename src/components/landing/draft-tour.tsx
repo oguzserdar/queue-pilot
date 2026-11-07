@@ -10,14 +10,19 @@ import styles from "./pointer-tour.module.css";
 /** The smallest element whose text passes the test: a whole block, found by what it says. */
 const block = (test: (s: string) => boolean) => (r: HTMLElement) => byText(r, test);
 
+/** The first element carrying a CSS module class that ends in `_name`, outside folded parts: the app's own blocks. */
+const part = (name: string) => (r: HTMLElement) =>
+  [...r.querySelectorAll<HTMLElement>(`[class*="_${name}"]`)].find((el) =>
+    [...el.classList].some((c) => c.endsWith(`_${name}`)) && !el.closest("details:not([open])"));
+
 const STOPS: TourStop[] = [
-  { find: block((s) => s.startsWith("Gemini 4 Carbon ranks") && s.includes("This Week in AI")), title: "A draft in your Buffer week",
+  { find: part("postText"), title: "A draft in your Buffer week",
     text: "Your AI wrote it for an empty LinkedIn time. It waits in Buffer as a draft." },
-  { find: block((s) => s.startsWith("In this draft") && s.includes("From the source")), title: "Quotes match the source",
+  { find: part("pair"), title: "Quotes match the source",
     text: "Each quote is matched word for word to the page it came from." },
-  { find: block((s) => s.startsWith("Checks") && s.includes("rules set")), title: "Checked before Buffer",
+  { find: part("checks"), title: "Checked before Buffer",
     text: "Your playbook rules, and whether this channel can take the post right now." },
-  { find: block((s) => s.startsWith("Notes") && s.includes("Alex Rivera") && !s.includes("Checks")), title: "Notes from your team",
+  { find: part("notes"), title: "Notes from your team",
     text: "Teammates leave notes on the draft. Type @ to mention someone." },
   { find: (r) => byText(r, (s) => s === "Edit"), title: "Change it, then approve",
     text: "Edit here or in Buffer. Approving is what schedules it." },
