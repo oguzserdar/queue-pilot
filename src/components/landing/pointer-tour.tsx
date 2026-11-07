@@ -10,27 +10,49 @@ type Side = "right" | "left" | "above" | "below";
 type Place = { side: Side; x: number; y: number; w: number };
 
 const POP_WIDE = 248, POP_H = 76, GAP = 12, PAD = 6;
-/**
- * Where the pointer rests: just after the last word of the part it explains, so the words themselves stay readable.
- * Kept inside the frame (the pointer is 30 by 46).
- */
-function tipAfter(el: HTMLElement, box: DOMRect) {
+/** The visible lines of text inside a part: only lines that sit within the part's own box, so hidden or floating
+ * pieces (a tooltip, a screen-reader label) never pull the pointer away. */
+function linesOf(el: HTMLElement) {
+  const box = el.getBoundingClientRect();
   const range = document.createRange();
   range.selectNodeContents(el);
-  const lines = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
-  const end = lines[lines.length - 1] ?? el.getBoundingClientRect();
-  return { x: Math.min(end.right - box.left + 6, box.width - 34), y: Math.min(end.top - box.top + end.height * 0.3, box.height - 50) };
+  return [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0 && r.top >= box.top - 1 && r.bottom <= box.bottom + 1 && r.left >= box.left - 1 && r.right <= box.right + 1);
+}
+
+/** The box around a part's visible text, so a short line or a row of buttons leaves room beside it. */
+function tightOf(el: HTMLElement) {
+  const lines = linesOf(el);
+  if (!lines.length) return el.getBoundingClientRect();
+  const l = Math.min(...lines.map((r) => r.left)), t = Math.min(...lines.map((r) => r.top));
+  return new DOMRect(l, t, Math.max(...lines.map((r) => r.right)) - l, Math.max(...lines.map((r) => r.bottom)) - t);
 }
 
 /**
- * Puts the popover just below the highlighted part, never on it, so the eye reads the part first and the note
- * second; above it when below would run out of the frame. It lines up with the pointer, kept inside the frame.
+ * Where the pointer rests: just after the last word of the part, so the words stay readable; on its last button
+ * when the part ends in one. Kept inside the frame (the pointer is 30 by 46).
+ */
+function tipAfter(el: HTMLElement, box: DOMRect) {
+  const lines = linesOf(el);
+  const end = lines[lines.length - 1] ?? el.getBoundingClientRect();
+  const buttons = [...el.querySelectorAll<HTMLElement>("button, a")].map((b) => b.getBoundingClientRect()).filter((b) => b.width > 0);
+  const last = buttons[buttons.length - 1];
+  const onButton = last && last.right >= end.right - 2;
+  const x = onButton ? last.left + last.width * 0.55 : end.right + 6;
+  const y = onButton ? last.top + last.height * 0.45 : end.top + end.height * 0.3;
+  return { x: Math.min(x - box.left, box.width - 34), y: Math.min(y - box.top, box.height - 50) };
+}
+
+/**
+ * Puts the popover beside the highlighted part, never on it: just below it; to its right when below has no room,
+ * clear of the pointer; above it as the last choice. It lines up with the pointer and stays inside the frame.
  */
 function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect): Place {
   const POP_W = Math.min(POP_WIDE, box.width - 16);
   const x = Math.max(8, Math.min(tip.x - 24, box.width - POP_W - 8));
   const below = Math.max(part.bottom - box.top + PAD + 8, tip.y + 46);
   if (below + POP_H <= box.height - 4) return { side: "below", x, y: below, w: POP_W };
+  const right = Math.max(part.right - box.left, tip.x + 30) + 14;
+  if (right + POP_W <= box.width - 8) return { side: "right", x: right, y: Math.max(4, Math.min(part.top - box.top + part.height / 2 - POP_H / 2, box.height - POP_H - 4)), w: POP_W };
   return { side: "above", x, y: part.top - box.top - PAD - 8, w: POP_W };
 }
 
@@ -121,7 +143,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
           if (still) { pos = to; setAt(to); } else await glide(to);
           // Long enough to read the popover at an average 4 words a second, plus a moment to look; the pointer fills to show it.
           const ms = Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500);
-          setSay({ i, place: placeBeside(to, r, box), ms });
+          setSay({ i, place: placeBeside(to, tightOf(target), box), ms });
           await wait(ms);
         }
         i = (i + 1) % STOPS.length;
