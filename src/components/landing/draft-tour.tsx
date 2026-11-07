@@ -74,7 +74,8 @@ export function DraftTour(props: ComponentProps<typeof WeekView>) {
           setSay(null);
           if (still) { pos = to; setAt(to); } else await glide(to);
           setSay({ i, side: to.x > el.clientWidth * 0.55 ? "left" : "right" });
-          await wait(3400);
+          // Long enough to read the popover at an average 4 words a second, plus a moment to look.
+          await wait(Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500));
         }
       }
     };
