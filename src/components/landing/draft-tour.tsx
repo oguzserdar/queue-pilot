@@ -26,13 +26,13 @@ export function DraftTour(props: ComponentProps<typeof WeekView>) {
 }
 
 const SAME_FIX: TourStop[] = [
-  { find: (r) => r.querySelector<HTMLElement>("del") ?? undefined, title: "Your edit in Buffer",
+  { find: (r) => r.querySelector<HTMLElement>("del") ?? undefined, side: "above", title: "Your edit in Buffer",
     text: "You cut the opening line and led with what happened." },
   { find: (r) => byText(r, (s) => s.startsWith("On Instagram")), title: "Spotted twice",
     text: "The same fix on two posts, so it is probably a habit worth keeping." },
   { find: (r) => byText(r, (s) => s.startsWith("Keep as a rule:")), title: "One rule for every AI",
     text: "Kept, it is checked on every draft, whichever AI writes it." },
-  { find: (r) => byText(r, (s) => s === "Keep as a rule"), title: "Your call",
+  { find: (r) => byText(r, (s) => s === "Not now"), title: "Your call",
     text: "Keep it, or Not now. Nothing changes until you choose." },
 ];
 

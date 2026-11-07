@@ -4,7 +4,33 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import styles from "./pointer-tour.module.css";
 
 /** One stop of the tour: how to find the part on the real draft window, and what to say about it. */
-export type TourStop = { find: (root: HTMLElement) => HTMLElement | undefined; title: string; text: string };
+export type TourStop = { find: (root: HTMLElement) => HTMLElement | undefined; title: string; text: string; side?: Side };
+type Side = "right" | "left" | "above" | "below";
+/** Where the popover opens: beside its target, never over it. */
+type Place = { side: Side; x: number; y: number };
+
+const POP_W = 248, POP_H = 76, GAP = 12;
+/** The box around a target's own text, not its whole block, so a short line leaves room beside it. */
+const tightRect = (el: HTMLElement) => {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const r = range.getBoundingClientRect();
+  return r.width > 0 ? r : el.getBoundingClientRect();
+};
+/** Picks the first side with room inside the frame: the stop's own preference, then right, left, below, above. */
+function placeBeside(r: DOMRect, box: DOMRect, prefer?: Side): Place {
+  const x0 = r.left - box.left, x1 = r.right - box.left, y0 = r.top - box.top, y1 = r.bottom - box.top;
+  const cy = (y0 + y1) / 2, clampX = (x: number) => Math.max(8, Math.min(box.width - POP_W - 8, x));
+  const fits: Record<Side, boolean> = {
+    right: x1 + GAP + POP_W <= box.width - 8, left: x0 - GAP - POP_W >= 8,
+    below: y1 + GAP + POP_H <= box.height - 4, above: y0 - GAP - POP_H >= 4,
+  };
+  const order: Side[] = [...(prefer ? [prefer] : []), "right", "left", "below", "above"];
+  const side = order.find((o) => fits[o]) ?? "below";
+  if (side === "right") return { side, x: x1 + GAP, y: cy };
+  if (side === "left") return { side, x: x0 - GAP - POP_W, y: cy };
+  return { side, x: clampX(x0), y: side === "below" ? y1 + GAP : y0 - GAP };
+}
 
 /** Finds the innermost element whose own text matches, so the pointer lands on the label, not its whole section. */
 export const byText = (root: HTMLElement, test: (s: string) => boolean) =>
@@ -30,7 +56,7 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2);
 export function PointerTour({ stops: STOPS, children, className }: { stops: TourStop[]; children: ReactNode; className?: string }) {
   const root = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
-  const [say, setSay] = useState<{ i: number; side: "left" | "right"; up: boolean } | null>(null);
+  const [say, setSay] = useState<{ i: number; place: Place } | null>(null);
   useEffect(() => {
     const el = root.current;
     if (!el) return;
@@ -59,12 +85,11 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
         current = i;
         const target = STOPS[i].find(el);
         if (target) {
-          const box = el.getBoundingClientRect(), r = target.getBoundingClientRect();
+          const box = el.getBoundingClientRect(), r = tightRect(target);
           const to = { x: r.left - box.left + Math.min(r.width * 0.5, 40), y: r.top - box.top + r.height * 0.6 };
           setSay(null);
           if (still) { pos = to; setAt(to); } else await glide(to);
-          // Near the bottom the popover opens above the pointer, so the frame never cuts it off.
-          setSay({ i, side: to.x > el.clientWidth * 0.55 ? "left" : "right", up: to.y > el.clientHeight - 170 });
+          setSay({ i, place: placeBeside(r, box, STOPS[i].side) });
           // Long enough to read the popover at an average 4 words a second, plus a moment to look.
           await wait(Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500));
         }
@@ -95,12 +120,12 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
       {at && (
         <div className={styles.pointer} style={{ transform: `translate(${at.x}px, ${at.y}px)` }} aria-hidden="true">
           <svg viewBox="0 0 11 17" shapeRendering="crispEdges">{POINTER}</svg>
-          {stop && (
-            <div key={say?.i} className={styles.pop} data-side={say?.side} data-up={say?.up || undefined}>
-              <b>{stop.title}</b>
-              <span>{stop.text}</span>
-            </div>
-          )}
+        </div>
+      )}
+      {stop && say && (
+        <div key={say.i} className={styles.pop} data-side={say.place.side} style={{ left: say.place.x, top: say.place.y }} aria-hidden="true">
+          <b>{stop.title}</b>
+          <span>{stop.text}</span>
         </div>
       )}
     </div>

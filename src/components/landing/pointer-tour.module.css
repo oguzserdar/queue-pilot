@@ -5,14 +5,15 @@
 .pointer svg { display: block; width: 22px; height: 34px; filter: drop-shadow(0 2px 2px rgb(0 0 0 / .3)) }
 .fill { fill: var(--accent) }
 .edge { fill: #fff }
-/* The popover sits beside the pointer, on whichever side has room: a dark card, the title, then one plain sentence. */
-.pop { position: absolute; top: 30px; left: 14px; width: max-content; max-width: min(280px, 70vw); display: grid; gap: 3px;
-  padding: 10px 13px 11px; background: var(--foreground); color: var(--background);
-  /* Stepped corners, two 3px steps each, so the popover matches the pixel pointer. */
-  clip-path: polygon(0 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 6px), 0 calc(100% - 6px)); font: 400 14px/1.4 var(--font-body); animation: pop .22s ease-out both }
-.pop[data-side="left"] { left: auto; right: 4px }
-.pop[data-up] { top: auto; bottom: 8px }
-.pop b { font-weight: 650; font-size: 14px }
+/* The popover opens beside its target, never over it: a small dark card that grows out of the side facing the target. */
+.pop { position: absolute; z-index: 7; width: 248px; display: grid; gap: 2px; padding: 9px 12px 10px; border-radius: 8px;
+  background: var(--foreground); color: var(--background); font: 400 13.5px/1.4 var(--font-body); pointer-events: none;
+  box-shadow: 0 8px 24px -8px oklch(0.2 0.05 357 / .4); animation: pop 180ms cubic-bezier(0.23, 1, 0.32, 1) both }
+.pop[data-side="right"] { translate: 0 -50%; transform-origin: left center }
+.pop[data-side="left"] { translate: 0 -50%; transform-origin: right center }
+.pop[data-side="below"] { transform-origin: 24px top }
+.pop[data-side="above"] { translate: 0 -100%; transform-origin: 24px bottom }
+.pop b { font-weight: 650 }
 .pop span { opacity: .82 }
-@keyframes pop { from { opacity: 0; transform: translateY(4px) scale(.98) } }
-@media (prefers-reduced-motion: reduce) { .pop { animation: none } }
+@keyframes pop { from { opacity: 0; transform: scale(.96) } }
+@media (prefers-reduced-motion: reduce) { .pop { animation-name: fade } @keyframes fade { from { opacity: 0 } } }
