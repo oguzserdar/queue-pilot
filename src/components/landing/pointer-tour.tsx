@@ -44,11 +44,14 @@ const EDGE = cells("o", styles.edge);
  */
 export function TimerPointer({ ms, run, className }: { ms: number | null; run: number; className?: string }) {
   const clip = useId().replace(/:/g, "");
+  const fill = useRef<SVGAnimateElement>(null);
+  // SVG animations count from the page's own start, so a fill added later would already be over: start it by hand.
+  useEffect(() => { if (ms) fill.current?.beginElement(); }, [ms, run]);
   return (
     <svg viewBox="0 0 11 17" shapeRendering="crispEdges" className={className}>
       <clipPath id={clip}>
-        <rect key={run} x="0" y="0" width="11" height={ms ? 0 : 17}>
-          {ms ? <animate attributeName="height" from="0" to="17" dur={`${ms}ms`} fill="freeze" /> : null}
+        <rect x="0" y="0" width="11" height={ms ? 0 : 17}>
+          {ms ? <animate key={run} ref={fill} attributeName="height" from="0" to="17" dur={`${ms}ms`} begin="indefinite" fill="freeze" /> : null}
         </rect>
       </clipPath>
       {cells("x", styles.pale)}
