@@ -21,4 +21,5 @@
 .pop > span:last-child { opacity: .84 }
 .n { font: 650 11.5px/1 var(--font-body); letter-spacing: .04em; color: color-mix(in oklab, var(--accent) 45%, var(--background)); font-variant-numeric: tabular-nums }
 @keyframes line { from { opacity: 0 } }
-@media (max-width: 600px) { .pop { max-width: 78%; font-size: 13.5px; padding: 8px 11px 9px } .pop b { font-size: 14px } }
+/* A phone's board is too short to hold a popover, so the same card sits under it, one fixed height so nothing jumps. */
+@media (max-width: 600px) { .pop { position: relative; left: auto !important; top: auto !important; translate: none !important; width: auto; max-width: none; min-height: 6.4em; margin-top: 10px; align-content: start } }
