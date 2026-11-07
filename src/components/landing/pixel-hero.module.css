@@ -8,11 +8,18 @@
 .top { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none }
 .layers > .canvas { transition: filter .3s ease, opacity .3s ease }
 .layers[data-blur] > .canvas { filter: blur(5px); opacity: .7 }
-/* One line: a small step chip, then the step's title and sentence, centred on the same axis. */
-.caption { display: flex; align-items: center; gap: 10px; min-height: 2.9em }
-.n { flex: none; padding: 4px 11px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 12%, transparent); color: var(--accent);
-  font: 650 14px/1.4 var(--font-body); font-variant-numeric: tabular-nums }
-.line { margin: 0; font: 400 clamp(17px, 1.5vw, 20px)/1.45 var(--font-body); color: var(--text-secondary); animation: line .3s ease both }
-.line b { color: var(--foreground); font-weight: 650 }
-@keyframes line { from { opacity: 0; transform: translateY(3px) } }
-@media (max-width: 600px) { .caption { align-items: flex-start } .n { margin-top: 1px } .line { font-size: 17px } }
+/* The step's words, on the board beside what they describe: a dark card with stepped pixel corners, like the tour's. */
+.pop { position: absolute; z-index: 3; width: max-content; max-width: min(300px, 62%); display: grid; gap: 3px; padding: 11px 14px 12px;
+  background: var(--foreground); color: var(--background); font: 400 15px/1.45 var(--font-body); pointer-events: none;
+  translate: -50% 10px; animation: line .3s ease both;
+  clip-path: polygon(0 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 6px), 0 calc(100% - 6px)) }
+.pop[data-place="above"] { translate: -50% calc(-100% - 10px) }
+.pop[data-edge="right"] { translate: calc(-100% + 24px) 10px }
+.pop[data-edge="right"][data-place="above"] { translate: calc(-100% + 24px) calc(-100% - 10px) }
+.pop[data-edge="left"] { translate: -24px 10px }
+.pop[data-edge="left"][data-place="above"] { translate: -24px calc(-100% - 10px) }
+.pop b { font-weight: 650; font-size: 15.5px }
+.pop > span:last-child { opacity: .84 }
+.n { font: 650 11.5px/1 var(--font-body); letter-spacing: .04em; color: color-mix(in oklab, var(--accent) 45%, var(--background)); font-variant-numeric: tabular-nums }
+@keyframes line { from { opacity: 0 } }
+@media (max-width: 600px) { .pop { max-width: 78%; font-size: 13.5px; padding: 8px 11px 9px } .pop b { font-size: 14px } }

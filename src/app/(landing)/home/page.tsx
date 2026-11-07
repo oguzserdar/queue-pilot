@@ -67,8 +67,8 @@ export default function HomePage() {
             <a href={REPO}>GitHub</a>
           </nav>
           <div className={s.headerActions}>
-            <a className={s.quiet} href={DEMO}>Try the demo</a>
-            <LinkButton href={SIGN_IN} kind="primary" size="md">Sign in with Buffer</LinkButton>
+            <a className={s.quiet} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
+            <LinkButton href={SIGN_IN} kind="primary" size="md" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
           </div>
         </div>
       </header>

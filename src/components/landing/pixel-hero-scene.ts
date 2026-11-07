@@ -179,3 +179,26 @@ export function drawQuote(g: G, cards: Card[], time: number) {
   }
   return true;
 }
+
+/** Where each step's popover points, in canvas pixels, and whether it opens above or below that point. */
+export type StepAnchor = { x: number; y: number; place: "above" | "below" };
+
+/**
+ * The part of the board each step is about: an empty time, the drafts landing, a passed check, the post that is held
+ * back, and the Approve button. The popover sits beside it so the words and the picture are read together.
+ */
+export function stepAnchor(cards: Card[], step: number): StepAnchor {
+  const drafts = cards.filter((c) => c.status === "draft").sort((a, b) => a.draftIndex - b.draftIndex);
+  const first = drafts.find((d) => !d.blocked) ?? drafts[0];
+  const blocked = drafts.find((d) => d.blocked) ?? first;
+  const last = drafts[drafts.length - 1] ?? first;
+  if (!first) return { x: W / 2, y: H / 2, place: "below" };
+  switch (step) {
+    case 0: return { x: first.x + CARD_W / 2, y: first.y + CARD_H, place: "below" };
+    case 1: return { x: last.x + CARD_W / 2, y: last.y, place: "above" };
+    // Above the first draft's tick, since the quote panel opens below it.
+    case 2: return { x: first.x + CARD_W - 2, y: first.y - 3, place: "above" };
+    case 3: return { x: blocked.x + CARD_W - 2, y: blocked.y + CARD_H, place: "below" };
+    default: return { x: 166, y: 19, place: "below" };
+  }
+}
