@@ -13,7 +13,7 @@ export const STEP_AT = [0, 1.6, 4.4, 7.2, 10] as const;
 
 const W = HERO_SIZE.width, H = HERO_SIZE.height;
 const C = {
-  ink: "#1C1A1F", crimson: "#8F2457", deep: "#6E1A43", shine: "#B8507F", pink: "#F3D6E2", dot: "#F7E1EA", shadow: "#EED3DE",
+  ink: "#1C1A1F", crimson: "#8F2457", deep: "#6E1A43", shine: "#B8507F", pink: "#F3D6E2", shadow: "#EED3DE",
   grey: "#E9E7EC", greyMid: "#D4D0D9", greyText: "#B9B4C0", white: "#FFFFFF",
   green: "#2E7D4F", greenWash: "#E3F3E8", red: "#C0392B", redWash: "#FBE4E1",
 } as const;
@@ -77,12 +77,8 @@ export function drawHero(g: G, cards: Card[], time: number) {
   const approveAt = 11.2;
   const doneAt = (i: number) => approveAt + 0.25 + i * 0.15;
 
-  // The field: denser toward the right, like the homepage.
-  px(g, 0, 0, W, H, C.white);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const d = clamp((x / W - 0.55) / 0.45) * 0.5;
-    if (d > threshold(x, y)) px(g, x, y, 1, 1, C.dot);
-  }
+  // No field of its own: around the board the canvas stays clear, so the page's dot pattern runs on behind it.
+  g.clearRect(0, 0, W, H);
 
   // The board: a window with the newsletter in its header, an Approve button, day columns and channel rows.
   px(g, BOARD.x + 2, BOARD.y + BOARD.h, BOARD.w - 4, 2, C.shadow);
@@ -147,13 +143,29 @@ export function drawHero(g: G, cards: Card[], time: number) {
     if (t >= checkAt(i)) badge(g, x + CARD_W - 5, y - 3, !c.blocked);
   }
 
+  // Step five: the pointer comes in from the corner, settles on Approve, presses.
+  if (t >= STEP_AT[4] && t < HERO_LOOP - 1.5) {
+    const k = clamp((t - STEP_AT[4] - 0.1) / 0.9), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+    const fx = 176, fy = 96, tx = btn.x + 20, ty = btn.y + 5;
+    pointer(g, fx + (tx - fx) * e, fy + (ty - fy) * e - Math.sin(k * Math.PI) * 6, pressed);
+  }
+}
+
+/** When the quote panel is open, in seconds into the loop. The page blurs the board behind it while it is. */
+export const QUOTE_AT = [5.8, 7.2] as const;
+
+/**
+ * Draws the quote check panel on its own layer, so the board underneath can be blurred like a page behind a modal.
+ * Clears the layer first; returns whether the panel is showing at this moment.
+ */
+export function drawQuote(g: G, cards: Card[], time: number) {
+  const t = time % HERO_LOOP;
+  g.clearRect(0, 0, W, H);
+  const first = cards.filter((c) => c.status === "draft").sort((a, b) => a.draftIndex - b.draftIndex).find((d) => !d.blocked);
   // Step three: the quote check, shown on the first draft: the line in the draft beside the line in the source.
-  const first = drafts.find((d) => !d.blocked);
-  if (first && t >= 5.8 && t < STEP_AT[3]) {
-    const k = clamp((t - 5.8) / 0.25), pw = 70, ph = 30;
-    // The board behind the panel goes soft the pixel way: an ordered dither of white over it, like a blur.
-    for (let yy = BOARD.y + 1; yy < BOARD.y + BOARD.h - 1; yy++) for (let xx = BOARD.x + 1; xx < BOARD.x + BOARD.w - 1; xx++)
-      if (threshold(xx, yy) < 0.6 * k) px(g, xx, yy, 1, 1, C.white);
+  if (!first || t < QUOTE_AT[0] || t >= QUOTE_AT[1]) return false;
+  {
+    const k = clamp((t - QUOTE_AT[0]) / 0.25), pw = 70, ph = 30;
     const x = Math.min(first.x + 4, BOARD.x + BOARD.w - pw - 4), y = first.y + CARD_H + 2 - Math.round((1 - k) * 3);
     px(g, x + 2, y + ph, pw - 4, 2, C.shadow);
     box(g, x, y, pw, ph, C.white);
@@ -165,11 +177,5 @@ export function drawHero(g: G, cards: Card[], time: number) {
     px(g, x + 16, y + 18, 30, 4, C.pink); px(g, x + 18, y + 19, 24, 2, C.crimson);
     badge(g, x + 58, y + 11, true);
   }
-
-  // Step five: the pointer comes in from the corner, settles on Approve, presses.
-  if (t >= STEP_AT[4] && t < HERO_LOOP - 1.5) {
-    const k = clamp((t - STEP_AT[4] - 0.1) / 0.9), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-    const fx = 176, fy = 96, tx = btn.x + 20, ty = btn.y + 5;
-    pointer(g, fx + (tx - fx) * e, fy + (ty - fy) * e - Math.sin(k * Math.PI) * 6, pressed);
-  }
+  return true;
 }

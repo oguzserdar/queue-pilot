@@ -78,7 +78,7 @@ export default function HomePage() {
           <div className={[s.wrap, s.heroStack].join(" ")}>
             <div className={s.heroCopy}>
               <h1 id="hero-title">Your Buffer week, written from <HandUnderline>your own work</HandUnderline>.</h1>
-              <p className={s.lede}>Any AI drafts posts from your newsletter. Queue Pilot checks each one against your rules before it reaches Buffer.</p>
+              <p className={s.lede}>Any AI drafts posts from what you publish: your newsletter, blog or videos. Queue Pilot checks each one against your rules before it reaches Buffer.</p>
               <div className={s.ctas}>
                 <LinkButton href={SIGN_IN} kind="primary" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
                 <LinkButton href={DEMO} kind="secondary" say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</LinkButton>
@@ -99,7 +99,7 @@ export default function HomePage() {
               <h2 id="how-title">How a draft reaches Buffer</h2>
             </div>
             <ol className={s.flow}>
-              <li><b>Ask your AI</b><p>&ldquo;Fill next week from my newsletter.&rdquo; In Claude, ChatGPT, Grok or any MCP app.</p></li>
+              <li><b>Ask your AI</b><p>&ldquo;Fill next week from my latest posts.&rdquo; In Claude, ChatGPT, Grok or any MCP app.</p></li>
               <li><b>Queue Pilot checks each draft</b><p>Quotes against your source, then your rules. A blocking rule stops the save.</p></li>
               <li><b>You approve</b><p>Drafts wait in Buffer. Approve them in Queue Pilot, in Buffer or in your AI chat.</p></li>
             </ol>

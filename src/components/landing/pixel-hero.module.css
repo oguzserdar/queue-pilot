@@ -1,6 +1,12 @@
 /* The pixel hero: the drawing, then one line saying which step it shows. Nothing is laid over the picture, and no frame is drawn around it. */
 .hero { margin: 0; display: grid; gap: 14px }
 .canvas { display: block; width: 100%; height: auto; aspect-ratio: 192 / 96; image-rendering: pixelated }
+/* The quote panel sits on its own layer; while it is open the board behind gets a real, smooth blur, as a page does
+   behind a modal, so the panel reads as the one thing to look at. */
+.layers { position: relative }
+.top { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none }
+.layers > .canvas { transition: filter .3s ease, opacity .3s ease }
+.layers[data-blur] > .canvas { filter: blur(5px); opacity: .7 }
 /* One line: a small step chip, then the step's title and sentence, centred on the same axis. */
 .caption { display: flex; align-items: center; gap: 10px; min-height: 2.9em }
 .n { flex: none; padding: 3px 9px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 12%, transparent); color: var(--accent);

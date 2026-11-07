@@ -148,6 +148,6 @@
 .liveShot.heroShot::after { content: ""; position: absolute; inset: auto 0 0; height: 120px; z-index: 8; pointer-events: none;
   background: linear-gradient(to bottom, transparent, var(--surface) 85%) }
 
-/* The pixel hero sits on the page's own white, above the dot field, so the field never shows through it. */
-.heroArt { position: relative; z-index: 1; background: var(--background); border-radius: 14px }
+/* The pixel hero sits in the dot field: the canvas is clear around its board, so the pattern runs on unbroken. */
+.heroArt { position: relative; z-index: 1 }
 @media (min-width: 901px) { .heroStack > .heroArt { grid-column: 1 / -1 } }
