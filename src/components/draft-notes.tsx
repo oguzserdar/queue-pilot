@@ -216,7 +216,7 @@ export function DraftNotes({ postId, preview }: { postId: string; preview?: Note
           )}
           {state.more && <p className={styles.muted}>Older notes are in Buffer.</p>}
           <div className={styles.composer} data-busy={busy === "add" || undefined}>
-            <textarea ref={composer} aria-label="Add a note" placeholder={source ? "Add a note. Type @ to mention a teammate" : "Add a note"} rows={1} className={styles.field} value={draft} maxLength={MAX_NOTE} {...addMentions.fieldProps}
+            <textarea ref={composer} aria-label="Add a note" placeholder={source ? "Add a note, or @ a teammate" : "Add a note"} rows={1} className={styles.field} value={draft} maxLength={MAX_NOTE} {...addMentions.fieldProps}
               onChange={(e) => { setDraft(e.target.value); grow(e.target); addMentions.track(e.target); }} onKeyDown={(e) => { if (!addMentions.onKeyDown(e)) sendKeys(e, add); }} />
             <button type="button" className={styles.send} aria-label="Send note" title="Send (⌘↵)" disabled={!draft.trim() || busy !== null} onClick={add}>
               <ArrowUp size={16} strokeWidth={2} aria-hidden="true" />

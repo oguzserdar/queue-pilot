@@ -48,6 +48,9 @@
 
 .composer { position: relative; }
 .composer .field { padding-right: 44px; }
+/* One line until the note itself needs more; the placeholder never wraps under the send button. */
+.composer .field { field-sizing: content; }
+.composer .field::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .send { position: absolute; right: 5px; bottom: 5px; display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: var(--qp-crimson); color: #fff; cursor: pointer; transition: opacity var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard); }
 .send:disabled { background: var(--surface-muted); color: var(--text-muted); cursor: default; }
 .send:not(:disabled):active { transform: scale(0.94); }

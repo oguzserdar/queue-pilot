@@ -71,7 +71,7 @@ describe("example matches the signed-in screens", () => {
     expect(example.teammates).toEqual([expect.objectContaining({ name: "Sam", locked: false })]);
     const html = renderToStaticMarkup(<DraftNotes postId="d1" preview={example} />);
     expect(html).toContain('role="combobox"');
-    expect(html).toContain("Type @ to mention a teammate");
+    expect(html).toContain("Add a note, or @ a teammate");
     // The note action module is mocked empty above, so any network call from the example would throw.
   });
 
