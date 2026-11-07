@@ -7,9 +7,10 @@ import { PilotWeek } from "@/components/landing/pilot-week";
 import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
 import { HandUnderline } from "@/components/landing/hand-underline";
-import { LiveSameFix, LiveWeek } from "@/components/landing/live-screens";
+import { LiveSameFix } from "@/components/landing/live-screens";
 import { SetupScene } from "@/components/landing/setup-scene";
 import { PixelHero } from "@/components/landing/pixel-hero";
+import { DraftTour } from "@/components/landing/draft-tour";
 import { demoWeek } from "@/lib/demo-data";
 import { countOpenSlots } from "@/lib/week-model";
 import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
@@ -104,7 +105,7 @@ export default function HomePage() {
               <li><b>You approve</b><p>Drafts wait in Buffer. Approve them in Queue Pilot, in Buffer or in your AI chat.</p></li>
             </ol>
             <figure className={[s.shot, s.liveShot].join(" ")}>
-              <LiveWeek {...demoWeekProps()} showDraft="d1" />
+              <DraftTour {...demoWeekProps()} showDraft="d1" />
             </figure>
           </div>
         </section>
