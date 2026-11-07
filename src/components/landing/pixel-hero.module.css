@@ -1,5 +1,5 @@
 /* The pixel hero: the drawing, then one line saying which step it shows. Nothing is laid over the picture, and no frame is drawn around it. */
-.hero { margin: 0 auto; width: 100%; max-width: 760px; display: grid; gap: 14px }
+.hero { margin: 0; display: grid; gap: 14px }
 .canvas { display: block; width: 100%; height: auto; aspect-ratio: 192 / 96; image-rendering: pixelated }
 /* The quote panel sits on its own layer; while it is open the board behind gets a real, smooth blur, as a page does
    behind a modal, so the panel reads as the one thing to look at. */
