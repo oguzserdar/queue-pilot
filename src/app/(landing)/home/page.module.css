@@ -141,7 +141,8 @@
 /* Live: the real component in the same frame; it brings its own padding, so the frame only clips and edges it. */
 .liveShot { padding: clamp(16px, 2.5vw, 32px); text-align: left }
 .liveShot.cardShot { padding: 0 }
-.liveShot.cardShot > section { margin: 0; border: 0; box-shadow: none }
+/* The card inside the frame drops its own edge, however deep it sits (the pointer tour wraps it), so only one shows. */
+.liveShot.cardShot section { margin: 0; border: 0; box-shadow: none }
 /* The live week is taller than the screenshot: it stops inside the hero and fades out instead of being cut. */
 .liveShot.heroShot { margin-bottom: 0; max-height: 620px }
 /* The screen stays solid: it fades into its own white at the bottom, so the dot field behind can never show through it. */

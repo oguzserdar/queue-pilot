@@ -26,7 +26,7 @@ export function DraftTour(props: ComponentProps<typeof WeekView>) {
 }
 
 const SAME_FIX: TourStop[] = [
-  { find: (r) => r.querySelector<HTMLElement>("del") ?? undefined, side: "above", title: "Your edit in Buffer",
+  { find: (r) => r.querySelector<HTMLElement>("del")?.closest("p") ?? undefined, side: "below", title: "Your edit in Buffer",
     text: "You cut the opening line and led with what happened." },
   { find: (r) => byText(r, (s) => s.startsWith("On Instagram")), title: "Spotted twice",
     text: "The same fix on two posts, so it is probably a habit worth keeping." },

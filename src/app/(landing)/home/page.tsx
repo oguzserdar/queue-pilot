@@ -79,7 +79,7 @@ export default function HomePage() {
           <div className={[s.wrap, s.heroStack].join(" ")}>
             <div className={s.heroCopy}>
               <h1 id="hero-title">Your Buffer week, written from <HandUnderline>your own work</HandUnderline>.</h1>
-              <p className={s.lede}>Any AI drafts posts from what you publish: your newsletter, blog or videos. Queue Pilot checks each one against your rules before it reaches Buffer.</p>
+              <p className={s.lede}>The AI you already use drafts posts from what you publish: your newsletter, blog or videos. Queue Pilot checks each one against your rules before it reaches Buffer.</p>
               <div className={s.ctas}>
                 <LinkButton href={SIGN_IN} kind="primary" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
                 <LinkButton href={DEMO} kind="secondary" say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</LinkButton>
