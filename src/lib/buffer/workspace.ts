@@ -46,26 +46,55 @@ export async function listTeamMembers(token: string, scope: { organizationId: st
 
 const MEMBERS_PAGE = "edges { node { id name email avatar isLocked urn } } pageInfo { hasNextPage endCursor }";
 
+/** Most pages of teammates read while looking for chosen people: Buffer counts up to 1,000 authorized users. */
+const FIND_PAGES = 10;
+
 /**
- * A post as Buffer has it now, and the teammates who can read notes on its channel, in one request: Buffer's guide
- * says one query may carry several top-level fields (developers.buffer.com/guides/efficient-api-usage). The channel
- * comes from the saved copy; when the live post is on another channel, its teammates are read again for that channel.
- * More pages of teammates continue as listTeamMembers does.
+ * The chosen teammates in one scope, reading pages only until every one is found or Buffer has no more. Picking
+ * someone does not authorize a mention: Buffer checks each mentioned account when the note is written.
+ *
+ * @param ids - Account ids (or URNs, with `by`) to find
+ * @param start - A first page already read, so it is not read again
+ * @param by - Match on the account id (connector tools) or the URN (the app's picker)
+ * @returns The members found, in the order asked; ids not found are left out
+ */
+export async function findTeamMembers(token: string, scope: { organizationId: string } | { channelId: string }, ids: string[], run: Run = bufferQuery, start?: { nodes: TeamMember[]; hasNextPage: boolean; endCursor: string | null }, by: "id" | "urn" = "id"): Promise<TeamMember[]> {
+  const found = new Map<string, TeamMember>();
+  const keep = (nodes: TeamMember[]) => { for (const m of nodes) if (ids.includes(m[by])) found.set(m[by], m); };
+  let page = start ?? null;
+  if (page) keep(page.nodes);
+  for (let i = page ? 1 : 0; i < FIND_PAGES && found.size < new Set(ids).size; i++) {
+    if (page && (!page.hasNextPage || !page.endCursor)) break;
+    const after = page?.endCursor ?? null;
+    const data = await run<{ selectableTeamMembers: { edges: { node: TeamMember }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } }>(token,
+      `query TeamMembers($input: SelectableTeamMembersInput!, $first: Int, $after: String) { selectableTeamMembers(input: $input, first: $first, after: $after) { ${MEMBERS_PAGE} } }`,
+      { input: { scope }, first: MEMBER_PAGE, after });
+    page = pageOf(data.selectableTeamMembers);
+    keep(page.nodes);
+  }
+  return ids.flatMap((id) => found.get(id) ?? []);
+}
+
+/**
+ * A post as Buffer has it now and, for a note that mentions people, the first page of its channel's teammates, in one
+ * request: Buffer's guide says one query may carry several top-level fields
+ * (developers.buffer.com/guides/efficient-api-usage). Nothing more is read for a post that is gone or no longer a
+ * draft, since the note is refused. The channel comes from the saved copy; when the live post is on another channel,
+ * the chosen people are looked up in that channel instead.
  *
  * @param channelId - The post's channel in the saved copy
- * @returns The post (null when Buffer no longer has it) and its channel's teammates
+ * @param chosen - Account ids the note mentions
+ * @returns The post (null when Buffer no longer has it) and the chosen teammates found on its channel
  */
-export async function readPostWithTeam(token: string, postId: string, channelId: string, run: Run = bufferQuery): Promise<{ post: Post | null; members: TeamMember[] }> {
+export async function readPostWithTeam(token: string, postId: string, channelId: string, chosen: string[], run: Run = bufferQuery): Promise<{ post: Post | null; members: TeamMember[] }> {
   type Conn = { edges: { node: TeamMember }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } };
   const data = await run<{ post: Post | null; team: Conn }>(token,
     `query PostWithTeam($post: PostInput!, $team: SelectableTeamMembersInput!, $first: Int) { post(input: $post) { ${POST_FIELDS} } team: selectableTeamMembers(input: $team, first: $first) { ${MEMBERS_PAGE} } }`,
     { post: { id: postId }, team: { scope: { channelId } }, first: MEMBER_PAGE });
   const post = data.post && data.post.id === postId ? data.post : null;
-  if (!post) return { post: null, members: [] };
-  if (post.channelId !== channelId) return { post, members: (await listTeamMembers(token, { channelId: post.channelId }, {}, run)).items };
-  const first = pageOf(data.team);
-  const rest = first.hasNextPage && first.endCursor ? (await listTeamMembers(token, { channelId }, { after: first.endCursor }, run)).items : [];
-  return { post, members: [...new Map([...first.nodes, ...rest].map((m) => [m.id, m])).values()] };
+  if (!post || post.status !== "draft") return { post, members: [] };
+  if (post.channelId !== channelId) return { post, members: await findTeamMembers(token, { channelId: post.channelId }, chosen, run) };
+  return { post, members: await findTeamMembers(token, { channelId }, chosen, run, pageOf(data.team)) };
 }
 
 /** Whether a channel's connection may use one feature now, with Buffer's reason when it may not. */

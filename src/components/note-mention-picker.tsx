@@ -76,7 +76,7 @@ export function useNoteMentions({ text, setText, picked, setPicked, field, sourc
   }
 
   function choose(t: NoteTeammate | undefined) {
-    if (!t || t.locked || !q || caret === null) return;
+    if (!t || !q || caret === null) return;
     const r = insertMention(text, q.start, caret, t.name);
     setText(r.text);
     setPicked([...picked, { urn: t.urn, name: t.name }]);
@@ -124,13 +124,13 @@ export function useNoteMentions({ text, setText, picked, setPicked, field, sourc
       {options.length > 0 && (
         <ul id={listId} role="listbox" aria-label="Teammates" className={styles.mentionList}>
           {options.map((t, i) => (
-            <li key={t.urn} id={optionId(i)} role="option" aria-selected={i === at} aria-disabled={t.locked || undefined} className={styles.mentionOption}
+            <li key={t.urn} id={optionId(i)} role="option" aria-selected={i === at} className={styles.mentionOption}
               onMouseDown={(e) => e.preventDefault()} onPointerMove={() => i !== at && setActive(i)} onClick={() => choose(t)}
-              title={t.locked ? "Locked in Buffer: this teammate has viewer access, so they cannot be mentioned." : undefined}>
+              title={t.locked ? "Locked in Buffer: they can read this note and be mentioned, but get no notification while locked." : undefined}>
               <Avatar name={t.name} src={t.avatar ?? undefined} size="sm" aria-hidden="true" />
               <span className={styles.mentionText}>
                 <span className={styles.author}>{t.name}</span>
-                <span className={styles.muted}>{t.locked ? "Locked in Buffer, cannot be mentioned" : t.email}</span>
+                <span className={styles.muted}>{t.locked ? "Locked in Buffer, gets no notification" : t.email}</span>
               </span>
             </li>
           ))}

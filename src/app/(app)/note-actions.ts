@@ -11,7 +11,7 @@
  */
 import { bufferForReading } from "@/lib/current-user";
 import { carryMentions, createPostNote, deletePostNote, listPostNotes, MAX_NOTE, mentionSpan, NotesNotAllowedError, placeMentions, updatePostNote, type BufferNote, type MentionAnnotation, type NoteMention, type NoteRefusal, type WantedMention } from "@/lib/buffer/notes";
-import { listTeamMembers, type TeamMember } from "@/lib/buffer/workspace";
+import { findTeamMembers, listTeamMembers, type TeamMember } from "@/lib/buffer/workspace";
 import type { NoteTeammate } from "@/lib/note-mention-picker";
 import { limit } from "@/lib/rate-limit";
 import { recordAction } from "@/lib/security-events";
@@ -64,11 +64,13 @@ const toTeammate = (m: TeamMember): NoteTeammate => ({ urn: m.urn, name: mention
 async function pickedMentions(token: string, channelId: string, text: string, urns: unknown, saved: NoteMention[]): Promise<{ ok: true; annotations: MentionAnnotation[] } | { ok: false; message: string }> {
   if (!Array.isArray(urns) || urns.length > 20 || urns.some((u) => typeof u !== "string" || !u || u.length > 200)) return { ok: false, message: "Pick each teammate again." };
   const wanted: WantedMention[] = [];
-  let members: TeamMember[] | null = null;
-  for (const urn of new Set(urns as string[])) {
+  const picked = [...new Set(urns as string[])];
+  const fresh = picked.filter((urn) => !saved.some((m) => m.urn === urn));
+  // Only the newly picked people are looked up, page by page until found, so a teammate past the first pages counts.
+  const members = fresh.length ? await findTeamMembers(token, { channelId }, fresh, undefined, undefined, "urn") : [];
+  for (const urn of picked) {
     const kept = saved.filter((m) => m.urn === urn);
     if (kept.length) { wanted.push(...kept.map((m) => ({ span: m.text, urn, displayValue: m.displayValue }))); continue; }
-    members ??= (await listTeamMembers(token, { channelId })).items;
     const member = members.find((m) => m.urn === urn);
     if (!member) return { ok: false, message: CANNOT_SEE };
     const span = mentionSpan(member);

@@ -47,7 +47,7 @@ import { BufferApiError, BufferRateLimitedError } from "@/lib/buffer/client";
 import { BufferAllowanceLowError, BufferAllowanceUnknownError, currentAllowance, withBudget } from "@/lib/buffer/budget";
 import { getTemplate, listTemplates, placeholdersIn, searchTemplates } from "@/lib/buffer/templates";
 import { createSnippet, deleteSnippet, listSnippets, SnippetsNotAllowedError, SnippetsNotEnabledError, updateSnippet } from "@/lib/buffer/snippets";
-import { channelSettings, listTeamMembers, postingState, postTextLimit, readPostWithTeam, type TeamMember } from "@/lib/buffer/workspace";
+import { channelSettings, findTeamMembers, listTeamMembers, postingState, postTextLimit, readPostWithTeam, type TeamMember } from "@/lib/buffer/workspace";
 import { createIdea, IDEA_SERVICES, listIdeaGroups, listIdeas, MAX_IDEA_TEXT, MAX_IDEA_TITLE } from "@/lib/buffer/ideas";
 import { createTag, deleteTag, listTags, MAX_TAG_NAME, setDraftTags, updateTag } from "@/lib/buffer/tags";
 import { postingLimits } from "@/lib/buffer/posting-limits";
@@ -419,7 +419,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         // The saved copy only proves the post is the person's; ask Buffer now whether it is still a draft (an approved
         // post is left alone), and when the note mentions someone, read that channel's teammates in the same request.
         const live = mention?.length
-          ? await readPostWithTeam(b.accessToken, postId, post.channelId)
+          ? await readPostWithTeam(b.accessToken, postId, post.channelId, mention)
           : { post: (await readPostsNow(b.accessToken, [postId]))[0] ?? null, members: null };
         const now = live.post;
         if (!now) return { ...text("Not added: this post is no longer in Buffer."), isError: true };
@@ -440,7 +440,8 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       if (mention?.length) {
         // Only teammates who can read this post's notes (its channel) or the organization's, for a channel-less draft;
         // Buffer checks each mention again on write.
-        const members = teammates ?? (await listTeamMembers(b.accessToken, scope)).items;
+        // Only the chosen people are looked up, page by page until found, so a teammate past the first pages counts.
+        const members = teammates ?? await findTeamMembers(b.accessToken, scope, mention);
         const chosen = mention.map((id) => members.find((m) => m.id === id));
         const unknown = mention.filter((_, i) => !chosen[i]);
         if (unknown.length) return { ...text(`Not added: these accounts cannot be mentioned on this ${postId ? "channel" : "draft"}: ${unknown.join(", ")}. Read list_team_members with this ${postId ? "post's channelId" : "draft's organizationId"}.`), isError: true };
@@ -513,7 +514,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         // Buffer replaces a note's mentions on every update, so each saved mention still named in the text is sent again.
         const requested: WantedMention[] = [];
         if (mention?.length) {
-          const members = (await listTeamMembers(b.accessToken, own.scope)).items;
+          const members = await findTeamMembers(b.accessToken, own.scope, mention);
           const chosen = mention.map((id) => members.find((m) => m.id === id));
           const unknown = mention.filter((_, i) => !chosen[i]);
           if (unknown.length) return { ...text(`Not changed: these accounts cannot be mentioned on this ${postId ? "channel" : "draft"}: ${unknown.join(", ")}. Read list_team_members with this ${postId ? "post's channelId" : "draft's organizationId"}.`), isError: true };
@@ -799,7 +800,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       }
       const r = await listTeamMembers(b.accessToken, scope, { search, after: cursor ?? null });
       if (!r.items.length && !r.more) return text(search ? "No teammate matches that." : "No teammates to pick.");
-      return text([`${r.items.length} teammate${r.items.length === 1 ? "" : "s"}${r.more ? " (partial list)" : ""}:`, ...r.items.map((m) => `- ${m.name ?? m.email} · ${m.email}${m.isLocked ? " (locked: viewer access only)" : ""} · account id ${m.id}`), ...moreLine(r.more, r.cursor, "teammates")].join("\n"));
+      return text([`${r.items.length} teammate${r.items.length === 1 ? "" : "s"}${r.more ? " (partial list)" : ""}:`, ...r.items.map((m) => `- ${m.name ?? m.email} · ${m.email}${m.isLocked ? " (locked in Buffer: can be mentioned, gets no notification while locked)" : ""} · account id ${m.id}`), ...moreLine(r.more, r.cursor, "teammates")].join("\n"));
     },
   );
 
