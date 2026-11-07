@@ -1,14 +1,15 @@
 /* The real draft window with a guided pointer. Nothing here can be clicked, and the window has nothing to close. */
 .root { position: relative }
-.screen :global([aria-label="Close dialog"]) { display: none }
+.noClose :global([aria-label="Close dialog"]) { display: none }
 .pointer { position: absolute; top: 0; left: 0; z-index: 6; pointer-events: none; will-change: transform }
 .pointer svg { display: block; width: 22px; height: 34px; filter: drop-shadow(0 2px 2px rgb(0 0 0 / .3)) }
 .fill { fill: var(--accent) }
 .edge { fill: #fff }
 /* The popover sits beside the pointer, on whichever side has room: a dark card, the title, then one plain sentence. */
 .pop { position: absolute; top: 30px; left: 14px; width: max-content; max-width: min(280px, 70vw); display: grid; gap: 3px;
-  padding: 10px 13px 11px; border-radius: 10px; background: var(--foreground); color: var(--background);
-  box-shadow: 0 10px 30px -10px oklch(0.2 0.05 357 / .45); font: 400 14px/1.4 var(--font-body); animation: pop .22s ease-out both }
+  padding: 10px 13px 11px; background: var(--foreground); color: var(--background);
+  /* Stepped corners, two 3px steps each, so the popover matches the pixel pointer. */
+  clip-path: polygon(0 6px, 3px 6px, 3px 3px, 6px 3px, 6px 0, calc(100% - 6px) 0, calc(100% - 6px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 3px) calc(100% - 6px), calc(100% - 3px) calc(100% - 3px), calc(100% - 6px) calc(100% - 3px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 6px), 0 calc(100% - 6px)); font: 400 14px/1.4 var(--font-body); animation: pop .22s ease-out both }
 .pop[data-side="left"] { left: auto; right: 4px }
 .pop b { font-weight: 650; font-size: 14px }
 .pop span { opacity: .82 }

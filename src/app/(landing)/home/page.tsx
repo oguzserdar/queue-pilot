@@ -7,10 +7,9 @@ import { PilotWeek } from "@/components/landing/pilot-week";
 import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
 import { HandUnderline } from "@/components/landing/hand-underline";
-import { LiveSameFix } from "@/components/landing/live-screens";
 import { SetupScene } from "@/components/landing/setup-scene";
 import { PixelHero } from "@/components/landing/pixel-hero";
-import { DraftTour } from "@/components/landing/draft-tour";
+import { DraftTour, SameFixTour } from "@/components/landing/draft-tour";
 import { demoWeek } from "@/lib/demo-data";
 import { countOpenSlots } from "@/lib/week-model";
 import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
@@ -43,6 +42,7 @@ const faq = [
   { title: "What can it change in my Buffer?", content: "It saves drafts, edits or deletes only drafts it made, and schedules a draft when you approve it. A post you wrote yourself is never touched." },
   { title: "Is Queue Pilot made by Buffer?", content: "No. It is an independent open-source app built on the Buffer API for Buffer Commit. You sign in with your own Buffer account." },
   { title: "Can I stop it?", content: "Yes. In Settings you can remove an AI app, sign out your other browsers, or delete your account and everything Queue Pilot kept." },
+  { title: "Does it work with Telegram, Discord or videos?", content: "Yes. After Buffer publishes a post, Queue Pilot can post the same text in your Telegram channel and Discord channel. It can also draft from YouTube videos through their transcripts, read with Supadata, and your AI can search the web and read pages through Exa. On your own copy, add those two keys in /admin." },
   { title: "Can I run my own copy?", content: "Yes. Queue Pilot is MIT licensed. Deploy it to Vercel or run it with Docker, using your own Buffer app keys. Your copy keeps its data in your own database. The README has the steps." },
 ];
 
@@ -117,7 +117,7 @@ export default function HomePage() {
               <p>Make the same edit in Buffer twice and Queue Pilot offers it as a rule, for every AI you use.</p>
             </div>
             <figure className={[s.shot, s.cardShot, s.liveShot].join(" ")}>
-              <LiveSameFix />
+              <SameFixTour />
             </figure>
           </div>
         </section>
