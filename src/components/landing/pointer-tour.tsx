@@ -11,15 +11,28 @@ type Place = { side: Side; x: number; y: number; w: number };
 
 const POP_WIDE = 248, POP_H = 76, GAP = 12, PAD = 6;
 /**
- * Puts the popover right beside the pointer, never on it: to its right, or to its left when the right has no room,
- * with its top at the pointer's tip, nudged up when it would run past the frame's bottom.
+ * Where the pointer rests: just after the last word of the part it explains, so the words themselves stay readable.
+ * Kept inside the frame (the pointer is 30 by 46).
  */
-function placeBeside(tip: { x: number; y: number }, box: DOMRect): Place {
+function tipAfter(el: HTMLElement, box: DOMRect) {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const lines = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+  const end = lines[lines.length - 1] ?? el.getBoundingClientRect();
+  return { x: Math.min(end.right - box.left + 6, box.width - 34), y: Math.min(end.top - box.top + end.height * 0.3, box.height - 50) };
+}
+
+/**
+ * Puts the popover beside the pointer, to its right, and never over the part being explained: with no room on the
+ * right it opens just below that part, and above it when below would run out of the frame.
+ */
+function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect): Place {
   const POP_W = Math.min(POP_WIDE, box.width - 16);
-  const right = tip.x + 34 + POP_W <= box.width - 8;
-  const x = right ? tip.x + 34 : Math.max(8, tip.x - POP_W - 6);
-  const y = Math.max(4, Math.min(tip.y - 2, box.height - POP_H - 8));
-  return { side: right ? "right" : "left", x, y, w: POP_W };
+  if (tip.x + 34 + POP_W <= box.width - 8) return { side: "right", x: tip.x + 34, y: Math.max(4, Math.min(tip.y - 2, box.height - POP_H - 8)), w: POP_W };
+  const x = Math.max(8, Math.min(tip.x - 40, box.width - POP_W - 8));
+  const below = Math.max(part.bottom - box.top, tip.y + 46) + 10;
+  if (below + POP_H <= box.height - 4) return { side: "below", x, y: below, w: POP_W };
+  return { side: "above", x, y: part.top - box.top - 10, w: POP_W };
 }
 
 /** Finds the innermost element whose own text matches, so the pointer lands on the label, not its whole section. */
@@ -103,13 +116,13 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
         if (target) {
           const box = el.getBoundingClientRect(), r = target.getBoundingClientRect();
           // Aim inside the part, and keep the whole pointer (30 by 46) inside the frame so its edge never cuts it off.
-          const to = { x: Math.min(r.left - box.left + Math.min(r.width * 0.5, 40), box.width - 34), y: Math.min(r.top - box.top + Math.min(r.height * 0.5, 24), box.height - 50) };
+          const to = tipAfter(target, box);
           setSay(null);
           setSpot({ x: r.left - box.left - PAD, y: r.top - box.top - PAD, w: r.width + PAD * 2, h: r.height + PAD * 2 });
           if (still) { pos = to; setAt(to); } else await glide(to);
           // Long enough to read the popover at an average 4 words a second, plus a moment to look; the pointer fills to show it.
           const ms = Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500);
-          setSay({ i, place: placeBeside(to, box), ms });
+          setSay({ i, place: placeBeside(to, r, box), ms });
           await wait(ms);
         }
         i = (i + 1) % STOPS.length;
