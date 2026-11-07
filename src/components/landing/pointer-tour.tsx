@@ -139,11 +139,13 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
           // Aim inside the part, and keep the whole pointer (30 by 46) inside the frame so its edge never cuts it off.
           const to = tipAfter(target, box);
           setSay(null);
-          setSpot({ x: r.left - box.left - PAD, y: r.top - box.top - PAD, w: r.width + PAD * 2, h: r.height + PAD * 2 });
+          // The bright window hugs the part's visible content, so the popover beside it never sits inside it.
+          const lit = tightOf(target);
+          setSpot({ x: lit.left - box.left - PAD, y: lit.top - box.top - PAD, w: lit.width + PAD * 2, h: lit.height + PAD * 2 });
           if (still) { pos = to; setAt(to); } else await glide(to);
           // Long enough to read the popover at an average 4 words a second, plus a moment to look; the pointer fills to show it.
           const ms = Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500);
-          setSay({ i, place: placeBeside(to, tightOf(target), box), ms });
+          setSay({ i, place: placeBeside(to, lit, box), ms });
           await wait(ms);
         }
         i = (i + 1) % STOPS.length;
