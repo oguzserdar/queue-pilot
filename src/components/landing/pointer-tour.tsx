@@ -5,7 +5,7 @@ import styles from "./pointer-tour.module.css";
 
 /** One stop of the tour: how to find the part on the real draft window, and what to say about it. */
 export type TourStop = { find: (root: HTMLElement) => HTMLElement | undefined; title: string; text: string; side?: Side };
-type Side = "right" | "left" | "above" | "below";
+type Side = "right" | "left" | "above" | "below" | "under";
 /** Where the popover opens: beside its target, never over it. */
 type Place = { side: Side; x: number; y: number; w: number };
 
@@ -126,6 +126,8 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
   const root = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const [say, setSay] = useState<{ i: number; place: Place; ms: number } | null>(null);
+  // On a phone a short screen has no free corner, so each note becomes a caption under the screen; this is the room it keeps.
+  const [reserve, setReserve] = useState(0);
   // The spotlight: the part being explained stays bright, the rest of the screen fades back behind a soft wash.
   const [spot, setSpot] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   useEffect(() => {
@@ -167,17 +169,22 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
           // Long enough to read the popover at an average 4 words a second, plus a moment to look; the pointer fills to show it.
           const ms = Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500);
           // The popover's real height at a given width, measured off-screen, so placement never runs past an edge.
-          const heightAt = (w: number) => {
+          const heightOf = (k: number, w: number) => {
             const probe = document.createElement("div");
             probe.className = styles.pop;
             probe.style.cssText = `visibility:hidden;left:0;top:0;width:${w}px;animation:none`;
             const b = document.createElement("b"), t = document.createElement("span");
-            b.textContent = STOPS[i].title; t.textContent = STOPS[i].text;
+            b.textContent = STOPS[k].title; t.textContent = STOPS[k].text;
             probe.append(b, t); el.append(probe);
             const h = probe.offsetHeight; probe.remove();
             return h;
           };
-          setSay({ i, place: placeBeside(to, lit, box, heightAt), ms });
+          // A phone-width screen this short has no spot that leaves the rest readable: say it as a caption under the
+          // screen instead, with room kept for the longest note so the page never jumps between stops.
+          const caption = box.width < 560 && box.height < 560;
+          const room = caption ? Math.max(...STOPS.map((_, k) => heightOf(k, box.width))) + 12 : 0;
+          setReserve((r) => (r === room ? r : room));
+          setSay({ i, place: caption ? { side: "under", x: 0, y: box.height + 12, w: box.width } : placeBeside(to, lit, box, (w) => heightOf(i, w)), ms });
           await wait(ms);
         }
         i = (i + 1) % STOPS.length;
@@ -202,7 +209,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
 
   const stop = say ? STOPS[say.i] : null;
   return (
-    <div ref={root} className={[styles.root, className].filter(Boolean).join(" ")}>
+    <div ref={root} className={[styles.root, className].filter(Boolean).join(" ")} style={reserve ? { marginBottom: reserve } : undefined}>
       <div className={styles.screen} inert>{children}</div>
       {spot && <div className={styles.spot} style={{ transform: `translate(${spot.x}px, ${spot.y}px)`, width: spot.w, height: spot.h }} aria-hidden="true" />}
       {at && (

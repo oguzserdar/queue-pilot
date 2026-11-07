@@ -21,6 +21,7 @@
 .pop[data-side="left"] { transform-origin: right top }
 .pop[data-side="below"] { transform-origin: 24px top }
 .pop[data-side="above"] { translate: 0 -100%; transform-origin: 24px bottom }
+.pop[data-side="under"] { transform-origin: 50% top }
 .pop b { font-weight: 650 }
 .pop span { opacity: .82 }
 @keyframes pop { from { opacity: 0; transform: scale(.96) } }
