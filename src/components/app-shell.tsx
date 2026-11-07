@@ -4,6 +4,7 @@ import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
 import Link from "next/link";
 
 import { SignInButton, SignInNotice } from "./sign-in-button";
+import { DemoNudge } from "./demo-nudge";
 
 import { MotionConfig } from "motion/react";
 import { usePathname } from "next/navigation";
@@ -118,7 +119,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
                 {/* The same status card as a signed-in account, describing the example one. */}
                 <div className={`${styles.syncRow} ${styles.statusCard}`}>
                   <ChannelStatus channels={exampleChannels.map(c => ({ ...c, name: c.handle }))} />
-                  <span className={styles.statusNote}>Example account: Alex Rivera</span>
+                  <span className={styles.statusNote}>Demo account: Alex Rivera</span>
                 </div>
                 {signInOpen ? <SignInButton variant="primary" size="md" className={styles.signIn} /> : <span className={`${styles.aiNote} ${styles.who}`}>Sign in with Buffer opens shortly.</span>}
               </>
@@ -127,7 +128,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
         </aside>
         <div className={styles.column}>
           {account ? <SyncBanner /> : (
-            <div className={styles.demo}>Example account: Alex writes This Week in AI, a Sunday newsletter on AI model releases and agents. Sign in with Buffer to see your own queue.</div>
+            <div className={styles.demo}>Demo: Alex writes This Week in AI, a Sunday newsletter on AI model releases and agents. This is the app itself with sample data. Sign in with Buffer to see your own queue, or <a href="/demo/leave">leave the demo</a>.</div>
           )}
           <main className={styles.main}><SignInNotice />{children}</main>
         </div>
@@ -135,6 +136,8 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
     </MaybeSync>
     {/* Confirms a change after it happens; errors stay next to the button that caused them. */}
     <ToastStack />
+    {/* The demo only: after a few clicks, ask the visitor to try it on their own Buffer. */}
+    {!account ? <DemoNudge /> : null}
     </ToastStackProvider>
     </MotionConfig>
   );
