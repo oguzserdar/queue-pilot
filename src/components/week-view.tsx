@@ -103,7 +103,10 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
   const needsCheck = (id: string) => live && (readiness[id]?.state === "check" || readiness[id]?.state === "breaks");
   const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !needsCheck(p.id) && !approved.has(p.id));
   const blocked = drafts.filter((p) => worstTone(p) === "danger");
+  // The title counts what Approve can act on; a post that would fail is named apart, so the two numbers always agree.
+  const held = blocked.filter((p) => p.ours !== false && !approved.has(p.id)).length;
   const waiting = drafts.filter((p) => p.ours !== false && !approved.has(p.id)).length;
+  const toApprove = waiting - drafts.filter((p) => p.ours !== false && !approved.has(p.id) && worstTone(p) === "danger").length;
 
 
   // The empty slot whose composer is open.
@@ -353,7 +356,8 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               ? "Next week"
               : drafts.length > 0
               ? `Next week: ${[
-                  waiting && `${waiting} draft${waiting === 1 ? "" : "s"} to approve`,
+                  toApprove && `${toApprove} draft${toApprove === 1 ? "" : "s"} to approve`,
+                  held && `${held} held back`,
                   drafts.length - waiting && `${drafts.length - waiting} approved`,
                   open ? `${open} empty slot${open === 1 ? "" : "s"}` : "every slot filled",
                 ].filter(Boolean).join(", ")}`

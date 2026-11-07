@@ -33,3 +33,11 @@ describe("approval selection", () => {
     expect(html).not.toContain("Approve 2 drafts")
   })
 })
+
+describe("the week's title", () => {
+  it("counts only drafts that can be approved, and names the held-back post apart, so it matches the Approve button", () => {
+    const html = renderToStaticMarkup(<WeekView week={demoWeek} />)
+    const approveButton = html.match(/Approve (\d+) drafts?/)?.[1]
+    expect(html).toContain(`Next week: ${approveButton} drafts to approve, 1 held back`)
+  })
+})
