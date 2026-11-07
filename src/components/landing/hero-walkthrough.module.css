@@ -1,24 +1,43 @@
 /* The stage holds the real screens; the cursor and the narration sit above it and never take clicks. */
 .root { position: relative }
 .stage { position: relative }
-.window { position: absolute; z-index: 3; top: 72px; left: 50%; width: min(600px, calc(100% - 32px)); max-height: 420px; overflow: hidden; transform: translateX(-50%);
-  background: var(--surface); border-radius: var(--radius-surface); box-shadow: 0 0 0 1px var(--border), var(--shadow-floating);
-  animation: rise .28s cubic-bezier(.23, 1, .32, 1) }
-@keyframes rise { from { opacity: 0; transform: translate(-50%, 8px) scale(.97) } }
-/* The narration changes in place: each new line fades up. */
-.say { animation: line .25s ease }
-@keyframes line { from { opacity: 0; transform: translateY(3px) } }
+
+/* A draft opens as the app's dialog does: the week behind dims and blurs, the window rises on a spring. */
+.backdrop { position: absolute; z-index: 2; inset: 0; background: color-mix(in oklab, var(--foreground) 22%, transparent);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: dim .28s ease both }
+.backdrop[data-closing] { animation: undim .24s ease both }
+@keyframes dim { from { opacity: 0 } }
+@keyframes undim { to { opacity: 0 } }
+.window { position: absolute; z-index: 3; top: 72px; left: 50%; width: min(600px, calc(100% - 32px)); max-height: 420px; overflow: hidden;
+  transform: translateX(-50%); background: var(--surface); border-radius: var(--radius-surface);
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-floating); animation: rise .42s cubic-bezier(.22, 1.2, .36, 1) both }
+.window[data-closing] { animation: sink .22s cubic-bezier(.4, 0, 1, 1) both }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 10px) scale(.96) } }
+@keyframes sink { to { opacity: 0; transform: translate(-50%, 6px) scale(.98) } }
+
+/* New drafts settle into their slot instead of popping in. */
+.stage [data-tone] { animation: land .45s cubic-bezier(.22, 1.2, .36, 1) both }
+@keyframes land { from { opacity: 0; transform: translateY(6px) scale(.97) } }
+
 /* Top right of the screen, where the week's header leaves room and the hero's fade never reaches. */
 .say { position: absolute; z-index: 4; right: 20px; top: 20px; max-width: min(420px, calc(100% - 40px)); margin: 0;
   background: var(--foreground); color: var(--background); font: 600 14px/1.35 var(--font-body); padding: 9px 14px;
-  border-radius: var(--radius-panel); box-shadow: var(--shadow-floating); text-wrap: balance; pointer-events: none }
-.cursor { position: absolute; z-index: 5; top: 0; left: 0; opacity: 0; pointer-events: none; transform: translate(70%, 70%);
-  transition: transform .7s cubic-bezier(.45, 0, .2, 1), opacity .2s ease }
-.cursor svg { display: block; transition: transform .12s ease; transform-origin: 2px 2px; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / .25)) }
-.cursor[data-press] svg { transform: scale(.82) }
+  border-radius: var(--radius-panel); box-shadow: var(--shadow-floating); text-wrap: balance; pointer-events: none; animation: line .3s ease }
+@keyframes line { from { opacity: 0; transform: translateY(3px) } }
+
+/* A pointer large enough to follow: crimson with a white edge and a soft shadow; it dips slightly when it presses. */
+.cursor { position: absolute; z-index: 6; top: 0; left: 0; width: 26px; height: 40px; overflow: visible; pointer-events: none;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / .3)); transform-origin: 0 0; animation: appear .2s ease-out both }
+.cursor .fill { fill: var(--accent) }
+.cursor .edge { fill: #fff }
+/* A press: the pointer dips by one pixel and darkens, then lets go. */
+.cursor[data-down] { margin-top: 2px }
+.cursor[data-down] .fill { fill: var(--accent-strong) }
+@keyframes appear { from { opacity: 0 } }
+
 /* Phones: the narration sits above one draft window, both in the page flow, so nothing covers anything. */
 .root:has(.phoneWindow) { display: flex; flex-direction: column-reverse; gap: 12px }
 .phoneWindow { position: relative; max-height: 460px; overflow: hidden; background: var(--surface); border-radius: var(--radius-surface);
-  box-shadow: 0 0 0 1px var(--border), var(--shadow-floating) }
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-floating); animation: line .3s ease }
 .phoneSay { margin: 0; align-self: flex-start; background: var(--foreground); color: var(--background); font: 600 14px/1.35 var(--font-body);
-  padding: 9px 14px; border-radius: var(--radius-panel); animation: line .25s ease }
+  padding: 9px 14px; border-radius: var(--radius-panel); animation: line .3s ease }
