@@ -9,7 +9,7 @@ type Side = "right" | "left" | "above" | "below";
 /** Where the popover opens: beside its target, never over it. */
 type Place = { side: Side; x: number; y: number; w: number };
 
-const POP_WIDE = 248, POP_H = 76, GAP = 12, PAD = 6;
+const POP_WIDE = 248, EDGE = 16, PAD = 6;
 /** The visible lines of text inside a part: only lines that sit within the part's own box, so hidden or floating
  * pieces (a tooltip, a screen-reader label) never pull the pointer away. */
 function linesOf(el: HTMLElement) {
@@ -44,18 +44,25 @@ function tipAfter(el: HTMLElement, box: DOMRect) {
 
 /**
  * Puts the popover beside the highlighted part, never on it: just below it; to its right when below has no room,
- * clear of the pointer; above it as the last choice. It lines up with the pointer and stays inside the frame.
+ * clear of the pointer; above it next. Every choice keeps 16px from the frame's edges, using the popover's real
+ * height `h` (it wraps to more lines on a phone), and when nothing fits cleanly it takes the side with most room.
  */
-function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect): Place {
-  const POP_W = Math.min(POP_WIDE, box.width - 16);
+function placeBeside(tip: { x: number; y: number }, part: DOMRect, box: DOMRect, h: number): Place {
+  const POP_W = Math.min(POP_WIDE, box.width - EDGE * 2);
   // Hang the popover off the pointer's side that has room: on the right half it opens down and to the left of the
-  // pointer, on the left half down and to the right, with a clear margin from the frame's edges.
-  const x = Math.max(16, Math.min(tip.x > box.width / 2 ? tip.x - POP_W + 24 : tip.x - 8, box.width - POP_W - 16));
+  // pointer, on the left half down and to the right.
+  const x = Math.max(EDGE, Math.min(tip.x > box.width / 2 ? tip.x - POP_W + 24 : tip.x - 8, box.width - POP_W - EDGE));
   const below = Math.max(part.bottom - box.top + PAD + 8, tip.y + 46);
-  if (below + POP_H <= box.height - 4) return { side: "below", x, y: below, w: POP_W };
+  if (below + h <= box.height - EDGE) return { side: "below", x, y: below, w: POP_W };
   const right = Math.max(part.right - box.left + PAD + 2, tip.x + 26);
-  if (right + POP_W <= box.width - 8) return { side: "right", x: right, y: Math.max(4, Math.min(part.top - box.top + part.height / 2 - POP_H / 2, box.height - POP_H - 4)), w: POP_W };
-  return { side: "above", x, y: part.top - box.top - PAD - 8, w: POP_W };
+  const mid = Math.max(EDGE, Math.min(part.top - box.top + part.height / 2 - h / 2, box.height - h - EDGE));
+  if (right + POP_W <= box.width - EDGE) return { side: "right", x: right, y: mid, w: POP_W };
+  const above = part.top - box.top - PAD - 8;
+  if (above - h >= EDGE) return { side: "above", x, y: above, w: POP_W };
+  // Nothing fits cleanly: whichever of below or above has more room, held inside the edges.
+  return box.height - below > above
+    ? { side: "below", x, y: Math.min(below, box.height - h - EDGE), w: POP_W }
+    : { side: "above", x, y: Math.max(above, h + EDGE), w: POP_W };
 }
 
 /** Finds the innermost element whose own text matches, so the pointer lands on the label, not its whole section. */
@@ -72,7 +79,7 @@ const POINTER_ROWS = [
 ];
 const cells = (want: string, className: string) => POINTER_ROWS.flatMap((row, y) => [...row].map((c, x) =>
   c === want ? <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} className={className} /> : null));
-const EDGE = cells("o", styles.edge);
+const OUTLINE = cells("o", styles.edge);
 
 /**
  * The pointer is its own timer: its body starts pale and fills with crimson from the tip down over `ms`; when it is
@@ -92,7 +99,7 @@ export function TimerPointer({ ms, run, className }: { ms: number | null; run: n
       </clipPath>
       {cells("x", styles.pale)}
       <g clipPath={`url(#${clip})`}>{cells("x", styles.fill)}</g>
-      {EDGE}
+      {OUTLINE}
     </svg>
   );
 }
@@ -147,7 +154,15 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
           if (still) { pos = to; setAt(to); } else await glide(to);
           // Long enough to read the popover at an average 4 words a second, plus a moment to look; the pointer fills to show it.
           const ms = Math.max(3500, `${STOPS[i].title} ${STOPS[i].text}`.split(/\s+/).length * 250 + 1500);
-          setSay({ i, place: placeBeside(to, lit, box), ms });
+          // Measure the popover's real height at its width before placing it, so it never runs past an edge.
+          const probe = document.createElement("div");
+          probe.className = styles.pop;
+          probe.style.cssText = `visibility:hidden;left:0;top:0;width:${Math.min(POP_WIDE, box.width - EDGE * 2)}px;animation:none`;
+          const b = document.createElement("b"), t = document.createElement("span");
+          b.textContent = STOPS[i].title; t.textContent = STOPS[i].text;
+          probe.append(b, t); el.append(probe);
+          const h = probe.offsetHeight; probe.remove();
+          setSay({ i, place: placeBeside(to, lit, box, h), ms });
           await wait(ms);
         }
         i = (i + 1) % STOPS.length;
