@@ -1,0 +1,44 @@
+# Every Monday: has X changed the ranking code the fill-week skill's X notes were checked against? A change opens (or
+# updates) one issue with the changed lines. A person verifies the numbers and updates the notes' date and commit in
+# a pull request; this job never edits them.
+name: X ranking check
+on:
+  schedule:
+    - cron: "41 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Compare with the pinned commit
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          node scripts/check-x-ranking.mjs > notice.md
+          code=$?
+          set -e
+          cat notice.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" = 2 ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; elif [ "$code" != 0 ]; then exit "$code"; fi
+      - name: Open or update the review issue
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title="X ranking code changed since the skill's notes were checked"
+          number=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$number" ]; then gh issue comment "$number" --body-file notice.md; else gh issue create --title "$title" --body-file notice.md; fi
