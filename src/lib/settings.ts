@@ -21,7 +21,7 @@ export const GROUPS = {
   buffer: { title: "Buffer app", help: "The app client people sign in with. From Settings, API in your Buffer account." },
   ai: { title: "Built-in AI", help: "This deployment's own AI key, used for people who have not connected their own AI. Its calls are billed to this key." },
   sources: { title: "Sources", help: "Optional services that bring in material to write from." },
-  copies: { title: "Copies to Telegram and Discord", help: "Optional. The shared bots that copy people's sent posts to their own Telegram channel or Discord server." },
+  copies: { title: "Telegram and Discord", help: "Optional. The shared bots that post to people's own Telegram channel or Discord server: copies of published Buffer posts, and posts written in Queue Pilot." },
 } as const;
 /** One /admin section. */
 export type GroupId = keyof typeof GROUPS;

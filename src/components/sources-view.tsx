@@ -118,9 +118,9 @@ function LiveSources({ channels, connectorUrl, sources, copies, discordResult, a
 
       <section aria-labelledby="copies" className={styles.block}>
         <div className={styles.blockHead}>
-          <h2 id="copies" className={styles.h2}>Copies to Telegram and Discord</h2>
+          <h2 id="copies" className={styles.h2}>Telegram and Discord</h2>
         </div>
-        <p className={styles.foot}>After Buffer publishes a post, Queue Pilot posts the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>
+        <p className={styles.foot}>Copy published Buffer posts: after Buffer publishes a post, Queue Pilot posts the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>
         <Copies copies={copies} discordResult={discordResult} />
         {copies.length > 0 && <AnnounceComposer recent={announcements} loadTargets={loadTargets} />}
       </section>
