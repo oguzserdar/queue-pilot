@@ -128,7 +128,7 @@ export async function sendCopy(
 }
 
 /**
- * Posts an post exactly as written: nothing cut, text over the limit refused before sending, so the preview
+ * Posts a message exactly as written: nothing cut, text over the limit refused before sending, so the preview
  * is always what lands. Returns the message id and, for a public channel, its username for a link.
  */
 export async function postText(token: string, chatId: number, text: string, doFetch: Fetch = fetch): Promise<{ messageId: number; username: string | null }> {

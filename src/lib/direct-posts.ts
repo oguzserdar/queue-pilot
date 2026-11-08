@@ -68,33 +68,48 @@ export type DirectPostStore = {
   follow(userId: string, postId: string, item: PostItem, sendAt: Date, now: Date, bufferPostId: string): Promise<boolean>;
   /** Turns one place of a follow-up off while it still waits. */
   unfollow(userId: string, postId: string, kind: PostKind, now: Date): Promise<void>;
-  /** Puts a claimed row back to wait until sendAt, before any call was made (its Buffer post is not out yet). */
-  defer(userId: string, postId: string, kind: PostKind, sendAt: Date, now: Date): Promise<void>;
+  /**
+   * Puts a claimed row back to wait, before any call was made (its Buffer post is not out yet): until `holdUntil`
+   * with its time unchanged, or at a new `sendAt` when Buffer moved the post later.
+   */
+  defer(userId: string, postId: string, kind: PostKind, when: { sendAt?: Date; holdUntil?: Date }, now: Date): Promise<void>;
+  /** After Telegram or Discord refused with "wait", the row waits until then and is sent again. */
+  retryLater(userId: string, postId: string, kind: PostKind, until: Date, now: Date): Promise<void>;
   /** This person's follow-up places still waiting, for these Buffer posts. */
   waitingFollowUps(userId: string, bufferPostIds: string[]): Promise<DirectPostRow[]>;
-  /** Of these Buffer post ids, the ones this person has a follow-up for that is not cancelled. */
-  followedBufferPosts(userId: string, bufferPostIds: string[]): Promise<Set<string>>;
+  /**
+   * The places of these Buffer posts a follow-up covers, as "bufferPostId|kind": waiting, sending or done. A cancelled
+   * place, or one that failed before any call (Buffer gone or late), does not count, so the automatic copy can send it.
+   */
+  followedPlaces(userId: string, bufferPostIds: string[]): Promise<Set<string>>;
   /** Changes the time or text of this person's scheduled destinations; returns the rows still scheduled. */
   reschedule(userId: string, postId: string, change: ScheduleChange, now: Date): Promise<DirectPostRow[]>;
   /** Cancels this person's scheduled destinations; returns how many were cancelled. */
   cancel(userId: string, postId: string, now: Date): Promise<number>;
   /**
    * Claims rows that are due: scheduled at or before now, or claimed earlier by a worker that died before calling
-   * Telegram or Discord. With `only`, just that post at that revision. Two workers never get the same row.
+   * Telegram or Discord. With `only`, just that post, at that revision or older (a place added later than the
+   * timer's revision waits for its own timer). Two workers never get the same row.
    */
   claimDue(now: Date, limit: number, only?: { postId: string; revision: number }): Promise<DueRow[]>;
   /** Marks a claimed row just before the call; false when it is no longer this run's to send. */
   startCall(userId: string, postId: string, kind: PostKind, now: Date): Promise<boolean>;
   /** This person's rows for one post, so a repeated submit returns what was recorded. */
   rows(userId: string, postId: string): Promise<DirectPostRow[]>;
-  /** Claims a failed destination again for a resend; the stored row when claimed, else null. */
+  /** Claims a failed destination of a post of its own again for a resend (never a follow-up); the row, else null. */
   reclaimFailed(userId: string, postId: string, kind: PostKind, now: Date): Promise<DirectPostRow | null>;
+  /** Records the result of a claimed row; a row no longer pending (taken over by another run) is left alone. */
   finish(userId: string, postId: string, kind: PostKind, result: { status: DirectPostStatus; link: string | null; error: string | null }, now: Date): Promise<void>;
   recent(userId: string, limit: number): Promise<DirectPostRow[]>;
 };
 
 export type DirectPostDeps = {
   store: DirectPostStore;
+  /**
+   * Checks, before any call, that the place can be posted to (still connected, bot set up). A refusal fails the row;
+   * any other error leaves it claimed, so it is tried again once the claim runs out.
+   */
+  ready?: (item: PostItem, userId: string) => Promise<void>;
   /** Posts the exact text; returns a link to the message when the destination has one. */
   post: (item: PostItem, userId: string) => Promise<{ link: string | null }>;
   /** True when the destination answered with a refusal, so nothing was posted. */
@@ -114,19 +129,59 @@ export const CLAIM_MS = 2 * 60_000;
 export const MAX_AHEAD_MS = 60 * 86_400_000;
 const UNSURE = "No answer in time, so it may have been sent. Check the channel.";
 
-async function deliver(userId: string, postId: string, item: PostItem, deps: DirectPostDeps): Promise<DirectPostResult | null> {
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** Seconds Telegram or Discord asked us to wait, when the refusal was a rate limit. */
+const waitSeconds = (e: unknown) => (e as { retryAfterSeconds?: number } | null)?.retryAfterSeconds;
+/** An error for the logs: never post text, and a bot token in a request URL is masked. */
+const forLog = (e: unknown) => message(e).replace(/bot\d+:[\w-]+/g, "bot<token>").slice(0, 300);
+
+/**
+ * Sends one claimed row. A refusal fails it, with the reason; a rate limit on a scheduled row waits and tries again;
+ * anything else after the call started may have landed, so it is "uncertain" and never resent.
+ */
+async function deliver(userId: string, postId: string, item: PostItem, deps: DirectPostDeps, scheduled = false): Promise<DirectPostResult | null> {
   const now = deps.now ?? (() => new Date());
+  const fail = async (error: string): Promise<DirectPostResult> => {
+    await deps.store.finish(userId, postId, item.kind, { status: "failed", link: null, error }, now());
+    return { kind: item.kind, label: item.label, status: "failed", link: null, error };
+  };
+  if (deps.ready) {
+    try {
+      await deps.ready(item, userId);
+    } catch (e) {
+      if (deps.refused(e)) return fail(message(e));
+      // Nothing was sent: the row stays claimed and the next run after the claim takes it again.
+      console.error(JSON.stringify({ event: "qp-direct-post-not-ready", userId, postId, kind: item.kind, message: forLog(e) }));
+      return null;
+    }
+  }
   if (!(await deps.store.startCall(userId, postId, item.kind, now()))) return null;
   let result: { status: DirectPostStatus; link: string | null; error: string | null };
   try {
     result = { status: "sent", link: (await deps.post(item, userId)).link, error: null };
   } catch (e) {
-    result = deps.refused(e)
-      ? { status: "failed", link: null, error: e instanceof Error ? e.message : String(e) }
-      : { status: "uncertain", link: null, error: UNSURE };
+    const wait = waitSeconds(e);
+    if (scheduled && deps.refused(e) && wait !== undefined) {
+      // Rate limited: Telegram or Discord said wait, so nothing was posted. Try again after that.
+      await deps.store.retryLater(userId, postId, item.kind, new Date(now().getTime() + Math.max(1, wait) * 1000), now());
+      return { kind: item.kind, label: item.label, status: "scheduled", link: null, error: null };
+    }
+    if (!deps.refused(e)) console.error(JSON.stringify({ event: "qp-direct-post-uncertain", userId, postId, kind: item.kind, message: forLog(e) }));
+    result = deps.refused(e) ? { status: "failed", link: null, error: message(e) } : { status: "uncertain", link: null, error: UNSURE };
   }
   await deps.store.finish(userId, postId, item.kind, result, now());
   return { kind: item.kind, label: item.label, ...result };
+}
+
+/** Checks the places of one post: at least one, and one message per kind. */
+function checkItems(items: PostItem[]): void {
+  if (!items.length) throw new Error("Choose at least one place to send it.");
+  if (new Set(items.map((i) => i.kind)).size !== items.length) throw new Error("Each place can get one message.");
+}
+
+/** How a stored row reads as a result now. */
+function toResult(row: DirectPostRow, now: Date): DirectPostResult {
+  return { kind: row.kind, label: row.label, status: shownStatus(row, now), link: row.link, error: row.error };
 }
 
 /**
@@ -151,8 +206,7 @@ export async function postIdFor(userId: string, key: string): Promise<string> {
  * @throws Error when two items name the same destination kind or none is given
  */
 export async function sendDirectPost(userId: string, key: string, items: PostItem[], deps: DirectPostDeps): Promise<{ postId: string; results: DirectPostResult[] }> {
-  if (!items.length) throw new Error("Choose at least one place to send it.");
-  if (new Set(items.map((i) => i.kind)).size !== items.length) throw new Error("Each place can get one message.");
+  checkItems(items);
   const now = deps.now ?? (() => new Date());
   const postId = await postIdFor(userId, key);
   const results: DirectPostResult[] = [];
@@ -162,7 +216,7 @@ export async function sendDirectPost(userId: string, key: string, items: PostIte
       if (r) { results.push(r); continue; }
     }
     const row = (await deps.store.rows(userId, postId)).find((r) => r.kind === item.kind);
-    if (row) results.push({ kind: row.kind, label: row.label, status: shownStatus(row, now()), link: row.link, error: row.error });
+    if (row) results.push(toResult(row, now()));
   }
   return { postId, results };
 }
@@ -200,8 +254,7 @@ export function sendTimeProblem(sendAt: Date, now: Date): string | null {
  * @throws Error when no destination is given, two name the same kind, or the time is not allowed
  */
 export async function scheduleDirectPost(userId: string, key: string, items: PostItem[], sendAt: Date, deps: DirectPostDeps): Promise<{ postId: string; revision: number; results: DirectPostResult[] }> {
-  if (!items.length) throw new Error("Choose at least one place to send it.");
-  if (new Set(items.map((i) => i.kind)).size !== items.length) throw new Error("Each place can get one message.");
+  checkItems(items);
   const now = deps.now ?? (() => new Date());
   const problem = sendTimeProblem(sendAt, now());
   if (problem) throw new Error(problem);
@@ -211,24 +264,24 @@ export async function scheduleDirectPost(userId: string, key: string, items: Pos
   return {
     postId,
     revision: Math.max(0, ...rows.map((r) => r.revision)),
-    results: rows.map((r) => ({ kind: r.kind, label: r.label, status: shownStatus(r, now()), link: r.link, error: r.error })),
+    results: rows.map((r) => toResult(r, now())),
   };
 }
 
 /**
- * When to look again at a Buffer post that is not out yet: at its new time if Buffer moved it later; every 5 minutes
- * for the first 2 hours past its time, then hourly; after a day, never (it is marked not sent).
+ * When to look again at a Buffer post that is not out yet. Moved later in Buffer: at its new time plus a minute.
+ * Otherwise every 5 minutes for the first 2 hours past the place's time, then hourly. A day past that time, whatever
+ * Buffer says or if Buffer cannot be read, never: it is marked not sent.
  *
- * @returns The next check, or null to give up
+ * @param sendAt - The place's own time (its Buffer post's time plus a minute); it does not move while waiting
+ * @returns The next check (`move` when the place's time changes to it), or null to give up
  */
-export function nextBufferCheck(state: BufferState, now: Date): Date | null {
-  if (state.state === "busy") return new Date(now.getTime() + 5 * 60_000);
-  if (state.state !== "waiting") return null;
-  const due = state.dueAt?.getTime();
-  if (due && due > now.getTime()) return new Date(due + 60_000);
-  const late = due ? now.getTime() - due : 0;
+export function nextBufferCheck(state: BufferState, now: Date, sendAt: Date): { at: Date; move: boolean } | null {
+  const due = state.state === "waiting" ? state.dueAt?.getTime() : undefined;
+  if (due && due + 60_000 > sendAt.getTime() && due > now.getTime()) return { at: new Date(due + 60_000), move: true };
+  const late = now.getTime() - sendAt.getTime();
   if (late > 24 * 3_600_000) return null;
-  return new Date(now.getTime() + (late < 2 * 3_600_000 ? 5 * 60_000 : 3_600_000));
+  return { at: new Date(now.getTime() + (late < 2 * 3_600_000 ? 5 * 60_000 : 3_600_000)), move: false };
 }
 
 /**
@@ -273,31 +326,42 @@ export async function runDue(deps: DirectPostDeps, opts: { limit?: number; only?
   const out: (DirectPostResult & { userId: string; postId: string; next?: Date })[] = [];
   // One Buffer read per followed post, however many places follow it.
   const checks = new Map<string, Promise<BufferState>>();
-  for (const row of due) {
-    if (row.bufferPostId) {
-      const key = `${row.userId}|${row.bufferPostId}`;
-      if (!checks.has(key)) checks.set(key, deps.bufferCheck ? deps.bufferCheck(row.userId, row.bufferPostId).catch((): BufferState => ({ state: "busy" })) : Promise.resolve({ state: "busy" }));
-      const state = await checks.get(key)!;
-      if (state.state === "gone") {
-        await deps.store.finish(row.userId, row.postId, row.kind, { status: "failed", link: null, error: state.reason }, now());
-        out.push({ kind: row.kind, label: row.label, status: "failed", link: null, error: state.reason, userId: row.userId, postId: row.postId });
-        continue;
-      }
-      if (state.state !== "sent") {
-        const next = nextBufferCheck(state, now());
-        if (!next) {
-          const reason = "Buffer had not published the post a day after its time, so this was not sent.";
-          await deps.store.finish(row.userId, row.postId, row.kind, { status: "failed", link: null, error: reason }, now());
-          out.push({ kind: row.kind, label: row.label, status: "failed", link: null, error: reason, userId: row.userId, postId: row.postId });
-        } else {
-          await deps.store.defer(row.userId, row.postId, row.kind, next, now());
-          out.push({ kind: row.kind, label: row.label, status: "scheduled", link: null, error: null, userId: row.userId, postId: row.postId, next });
-        }
-        continue;
-      }
+  const readBuffer = (row: DueRow) => {
+    const key = `${row.userId}|${row.bufferPostId}`;
+    if (!checks.has(key)) {
+      checks.set(key, deps.bufferCheck
+        ? deps.bufferCheck(row.userId, row.bufferPostId!).catch((e): BufferState => {
+            console.error(JSON.stringify({ event: "qp-follow-up-buffer-read-failed", userId: row.userId, postId: row.postId, message: forLog(e) }));
+            return { state: "busy" };
+          })
+        : Promise.resolve({ state: "busy" }));
     }
-    const r = await deliver(row.userId, row.postId, { kind: row.kind, target: row.target, label: row.label, text: row.text, guildId: row.guildId }, deps);
-    if (r) out.push({ ...r, userId: row.userId, postId: row.postId });
+    return checks.get(key)!;
+  };
+  for (const row of due) {
+    const tag = { userId: row.userId, postId: row.postId };
+    try {
+      if (row.bufferPostId) {
+        const state = await readBuffer(row);
+        if (state.state !== "sent") {
+          const next = state.state === "gone" ? null : nextBufferCheck(state, now(), row.sendAt ?? now());
+          if (!next) {
+            const error = state.state === "gone" ? state.reason : "Buffer had not published the post a day after its time, so this was not sent.";
+            await deps.store.finish(row.userId, row.postId, row.kind, { status: "failed", link: null, error }, now());
+            out.push({ kind: row.kind, label: row.label, status: "failed", link: null, error, ...tag });
+          } else {
+            await deps.store.defer(row.userId, row.postId, row.kind, next.move ? { sendAt: next.at } : { holdUntil: next.at }, now());
+            out.push({ kind: row.kind, label: row.label, status: "scheduled", link: null, error: null, ...tag, next: next.at });
+          }
+          continue;
+        }
+      }
+      const r = await deliver(row.userId, row.postId, { kind: row.kind, target: row.target, label: row.label, text: row.text, guildId: row.guildId }, deps, true);
+      if (r) out.push({ ...r, ...tag, ...(r.status === "scheduled" ? { next: new Date(now().getTime() + 60_000) } : {}) });
+    } catch (e) {
+      // One row's database error never stops the others; its claim runs out and the next run takes it again.
+      console.error(JSON.stringify({ event: "qp-direct-post-run-failed", ...tag, kind: row.kind, message: forLog(e) }));
+    }
   }
   return out;
 }
@@ -351,22 +415,28 @@ export function memoryDirectPostStore(): DirectPostStore {
       const r = rows.get(key(postId, kind));
       if (r && r.userId === userId && r.status === "scheduled") Object.assign(r, { status: "cancelled", revision: r.revision + 1, updatedAt: now });
     },
-    async defer(userId, postId, kind, sendAt, now) {
+    async defer(userId, postId, kind, when, now) {
       const r = rows.get(key(postId, kind));
-      if (r && r.userId === userId && r.status === "pending" && !r.callStartedAt) Object.assign(r, { status: "scheduled", sendAt, claimedUntil: null, updatedAt: now });
+      if (r && r.userId === userId && r.status === "pending" && !r.callStartedAt) Object.assign(r, { status: "scheduled", ...(when.sendAt ? { sendAt: when.sendAt } : {}), claimedUntil: when.holdUntil ?? null, updatedAt: now });
+    },
+    async retryLater(userId, postId, kind, until, now) {
+      const r = rows.get(key(postId, kind));
+      if (r && r.userId === userId && r.status === "pending") Object.assign(r, { status: "scheduled", claimedUntil: until, callStartedAt: null, updatedAt: now });
     },
     async waitingFollowUps(userId, bufferPostIds) {
       const want = new Set(bufferPostIds);
       return [...rows.values()].filter((r) => r.userId === userId && r.bufferPostId && want.has(r.bufferPostId) && r.status === "scheduled").map(out);
     },
-    async followedBufferPosts(userId, bufferPostIds) {
+    async followedPlaces(userId, bufferPostIds) {
       const want = new Set(bufferPostIds);
-      return new Set([...rows.values()].filter((r) => r.userId === userId && r.bufferPostId && want.has(r.bufferPostId) && r.status !== "cancelled").map((r) => r.bufferPostId!));
+      return new Set([...rows.values()]
+        .filter((r) => r.userId === userId && r.bufferPostId && want.has(r.bufferPostId) && r.status !== "cancelled" && !(r.status === "failed" && !r.callStartedAt))
+        .map((r) => `${r.bufferPostId}|${r.kind}`));
     },
     async reschedule(userId, postId, change, now) {
       const mine = [...rows.values()].filter((r) => r.userId === userId && r.postId === postId && r.status === "scheduled");
       for (const r of mine) {
-        if (change.sendAt) r.sendAt = change.sendAt;
+        if (change.sendAt) { r.sendAt = change.sendAt; r.claimedUntil = null; }
         const t = change.texts?.[r.kind];
         if (t !== undefined) r.text = t;
         r.revision += 1;
@@ -381,9 +451,9 @@ export function memoryDirectPostStore(): DirectPostStore {
     },
     async claimDue(now, limit, only) {
       const due = [...rows.values()].filter((r) =>
-        (!only || (r.postId === only.postId && r.revision === only.revision)) &&
-        ((r.status === "scheduled" && r.sendAt && r.sendAt <= now) || (r.status === "pending" && !r.callStartedAt && r.claimedUntil && r.claimedUntil < now)),
-      ).slice(0, limit);
+        (!only || (r.postId === only.postId && r.revision <= only.revision)) &&
+        ((r.status === "scheduled" && r.sendAt && r.sendAt <= now && (!r.claimedUntil || r.claimedUntil <= now)) || (r.status === "pending" && !r.callStartedAt && r.claimedUntil && r.claimedUntil < now)),
+      ).sort((a, b) => (a.sendAt?.getTime() ?? 0) - (b.sendAt?.getTime() ?? 0)).slice(0, limit);
       for (const r of due) Object.assign(r, { status: "pending", claimedUntil: new Date(now.getTime() + CLAIM_MS), updatedAt: now });
       return due.map((r) => ({ ...out(r), userId: r.userId }));
     },
@@ -398,13 +468,13 @@ export function memoryDirectPostStore(): DirectPostStore {
     },
     async reclaimFailed(userId, postId, kind, now) {
       const r = rows.get(key(postId, kind));
-      if (!r || r.userId !== userId || r.status !== "failed") return null;
+      if (!r || r.userId !== userId || r.status !== "failed" || r.bufferPostId) return null;
       Object.assign(r, { status: "pending", attempts: r.attempts + 1, callStartedAt: null, claimedUntil: new Date(now.getTime() + CLAIM_MS), updatedAt: now });
       return out(r);
     },
     async finish(userId, postId, kind, result, now) {
       const r = rows.get(key(postId, kind));
-      if (r && r.userId === userId) Object.assign(r, result, { updatedAt: now });
+      if (r && r.userId === userId && r.status === "pending") Object.assign(r, result, { updatedAt: now });
     },
     async recent(userId, limit) {
       return [...rows.values()].filter((r) => r.userId === userId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit).map(out);

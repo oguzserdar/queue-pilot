@@ -48,7 +48,7 @@ const EXAMPLE = {
   ],
   copies: [{ kind: "telegram" as const, label: "@thisweekinai" }],
   discordResult: null,
-  posts: [{ postId: "example-1", kind: "telegram" as const, label: "@thisweekinai", text: "This week's issue is out: three model releases and what changed for builders.", status: "sent" as const, link: null, error: null, at: "2026-11-06T16:00:00.000Z", sendAt: null, late: false }],
+  posts: [{ postId: "example-1", kind: "telegram" as const, label: "@thisweekinai", text: "This week's issue is out: three model releases and what changed for builders.", status: "sent" as const, link: null, error: null, at: "2026-11-06T16:00:00.000Z", sendAt: null, late: false, followsBuffer: false }],
 };
 
 /** Sources: the signed-in person's own, or the example account's on the same screen. */
@@ -262,7 +262,7 @@ function Copies({ copies, discordResult }: { copies: LiveCopy[]; discordResult: 
             <strong className={styles.brand}><ChannelIcon service="discord" size={18} />Discord</strong>
             <span className={styles.muted}>{dc ? dc.label : "A server where you can add bots"}</span>
           </div>
-          <span className={styles.does}>{dc ? "Gets copies of your sent posts" : "Adds the Queue Pilot bot; it posts in your posts channel"}</span>
+          <span className={styles.does}>{dc ? "Gets copies of your sent posts" : "Adds the Queue Pilot bot; it posts in your announcements channel"}</span>
           <span />
           {dc ? (
             <ConfirmButton variant="secondary" label="Disconnect" question="Disconnect Discord? Copies stop, and scheduled posts to it will not go out." confirmLabel="Disconnect Discord" pending={pending} onConfirm={() => stop("discord")} />

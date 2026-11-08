@@ -41,8 +41,9 @@ services:
     # Daily, at or after 17:00 UTC like vercel.json: copies of published Buffer posts and the overdue sweep. It runs
     # in the background so it never delays the 30-second check, and the day counts as done only when it succeeds,
     # so a failure, or a host that starts at 17:01, still gets that day's run. /tmp/echo-started holds when the
-    # current daily run began; a run older than 6 minutes (cut off by a restart) no longer blocks a new one.
-    entrypoint: ["sh", "-c", "while true; do curl -fsS -m 50 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/due || true; today=$$(date -u +%F); now=$$(date -u +%s); started=$$(cat /tmp/echo-started 2>/dev/null || echo 0); if [ $$(date -u +%H%M) -ge 1700 ] && [ \"$$(cat /tmp/echo-day 2>/dev/null)\" != \"$$today\" ] && [ $$((now - started)) -gt 360 ]; then echo $$now > /tmp/echo-started; (curl -fsS -m 300 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/echo && echo $$today > /tmp/echo-day; echo 0 > /tmp/echo-started) & fi; sleep 30; done"]
+    # current daily run began; a run older than 10 minutes (finished, failed, or cut off by a restart) no longer blocks a new
+    # one, so a failing run is retried every 10 minutes, not every 30 seconds.
+    entrypoint: ["sh", "-c", "while true; do curl -fsS -m 50 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/due || true; today=$$(date -u +%F); now=$$(date -u +%s); started=$$(cat /tmp/echo-started 2>/dev/null || echo 0); if [ $$(date -u +%H%M) -ge 1700 ] && [ \"$$(cat /tmp/echo-day 2>/dev/null)\" != \"$$today\" ] && [ $$((now - started)) -gt 600 ]; then echo $$now > /tmp/echo-started; (curl -fsS -m 300 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/echo && echo $$today > /tmp/echo-day) & fi; sleep 30; done"]
 
 volumes:
   db:

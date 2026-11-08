@@ -16,7 +16,7 @@ import * as discord from "@/lib/discord";
 import { followUpIdFor, resendFailed, scheduleDirectPost, sendDirectPost, sendTimeProblem, sentLate, shownStatus, type PostItem, type PostKind, type DirectPostStatus } from "@/lib/direct-posts";
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
-import { directPostDeps, startTimer } from "@/lib/direct-post-run";
+import { directPostDeps, startTimer, timerFailed } from "@/lib/direct-post-run";
 
 /** Where the person can post, as the composer shows it. */
 export type PostTargets = {
@@ -26,13 +26,35 @@ export type PostTargets = {
   problem?: string;
 };
 
-/** One place of a recent direct post, as Sources shows it. sendAt is set for a scheduled one; late when it went out more than five minutes after it. */
-export type DirectPostView = { postId: string; kind: PostKind; label: string; text: string; status: DirectPostStatus; link: string | null; error: string | null; at: string; sendAt: string | null; late: boolean };
+/**
+ * One place of a recent direct post, as Sources shows it. sendAt is set for a scheduled one; late when it went out
+ * more than five minutes after it. followsBuffer marks a follow-up, which is changed on its Buffer draft, not here.
+ */
+export type DirectPostView = { postId: string; kind: PostKind; label: string; text: string; status: DirectPostStatus; link: string | null; error: string | null; at: string; sendAt: string | null; late: boolean; followsBuffer: boolean };
 
-async function guildChannels(token: string, guildId: string) {
-  return discord.channelsWithAccess(token, guildId);
+const NAME: Record<PostKind, string> = { telegram: "Telegram", discord: "Discord" };
+
+/** Why a message cannot go to that place as written, or null. */
+function textProblem(kind: PostKind, text: string): string | null {
+  const max = kind === "telegram" ? telegram.TEXT_LIMIT : discord.CONTENT_LIMIT;
+  if (!text) return `Write the ${NAME[kind]} message, or leave ${NAME[kind]} out.`;
+  if (text.length > max) return `The ${NAME[kind]} message is ${text.length} characters; ${NAME[kind]} takes up to ${max}.`;
+  return null;
 }
 
+// Each panel or composer that opens lists the server's channels with the bot every person shares. Keep a list for a
+// minute (the promise, so opens at the same moment share one call; a failed call is not kept).
+const channelLists = new Map<string, { at: number; list: Promise<Awaited<ReturnType<typeof discord.channelsWithAccess>>> }>();
+function guildChannels(token: string, guildId: string) {
+  const hit = channelLists.get(guildId);
+  if (hit && Date.now() - hit.at < 60_000) return hit.list;
+  const list = discord.channelsWithAccess(token, guildId);
+  channelLists.set(guildId, { at: Date.now(), list });
+  list.catch(() => { if (channelLists.get(guildId)?.list === list) channelLists.delete(guildId); });
+  return list;
+}
+
+/** Where the signed-in person can post right now: their Telegram channel, and their Discord server's channels. */
 export async function postTargets(): Promise<PostTargets> {
   const userId = await signedInUserId();
   if (!userId) return { telegram: null, discord: null };
@@ -57,8 +79,11 @@ export async function postTargets(): Promise<PostTargets> {
 /** One post from the form. With sendAt (ISO), it is scheduled for that time instead of sent now. */
 export type SendPostInput = { key: string; sendAt?: string; telegram?: { text: string }; discord?: { channelId: string; text: string } };
 export type SendPostResult =
-  | { ok: true; results: { kind: PostKind; label: string; status: DirectPostStatus; link: string | null; error: string | null }[] }
+  | { ok: true; results: { kind: PostKind; label: string; status: DirectPostStatus; link: string | null; error: string | null }[]; note?: string }
   | { ok: false; message: string };
+
+/** Said when a post was saved but its Vercel timer did not start: the 30-second check or the daily job sends it. */
+const TIMER_NOTE = "Saved, but its timer did not start, so it may go out late, with the daily check.";
 
 /**
  * Checks the places a person chose and turns them into what gets sent: their connected Telegram channel, and a
@@ -72,15 +97,15 @@ async function placeItems(userId: string, input: { telegram?: { text: string } |
   if (input.telegram) {
     const text = String(input.telegram.text ?? "").trim();
     if (!tg || !tokens.telegram) return { ok: false, message: "Connect a Telegram channel first." };
-    if (!text) return { ok: false, message: "Write the Telegram message, or leave Telegram out." };
-    if (text.length > telegram.TEXT_LIMIT) return { ok: false, message: `The Telegram message is ${text.length} characters; Telegram takes up to ${telegram.TEXT_LIMIT}.` };
+    const problem = textProblem("telegram", text);
+    if (problem) return { ok: false, message: problem };
     items.push({ kind: "telegram", target: tg.target, label: tg.label, text });
   }
   if (input.discord) {
     const text = String(input.discord.text ?? "").trim();
     if (!dc || !dc.guildId || !tokens.discord) return { ok: false, message: "Add Queue Pilot to a Discord server first." };
-    if (!text) return { ok: false, message: "Write the Discord message, or leave Discord out." };
-    if (text.length > discord.CONTENT_LIMIT) return { ok: false, message: `The Discord message is ${text.length} characters; Discord takes up to ${discord.CONTENT_LIMIT}.` };
+    const problem = textProblem("discord", text);
+    if (problem) return { ok: false, message: problem };
     let channels;
     try { channels = await guildChannels(tokens.discord, dc.guildId); } catch (e) { return { ok: false, message: `Discord did not answer just now: ${e instanceof Error ? e.message : String(e)}` }; }
     const channel = channels.find((c) => c.id === String(input.discord!.channelId));
@@ -95,7 +120,7 @@ async function placeItems(userId: string, input: { telegram?: { text: string } |
 export async function sendPostAction(input: SendPostInput): Promise<SendPostResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof input?.key !== "string" || !/^[A-Za-z0-9-]{8,64}$/.test(input.key)) return { ok: false, message: "Open the post again and send it from there." };
+  if (!input || typeof input !== "object" || typeof input.key !== "string" || !/^[A-Za-z0-9-]{8,64}$/.test(input.key)) return { ok: false, message: "Open the post again and send it from there." };
   const sendAt = input.sendAt === undefined ? null : new Date(String(input.sendAt));
   if (sendAt) {
     const problem = sendTimeProblem(sendAt, new Date());
@@ -108,21 +133,21 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
   const { items } = built;
   if (!items.length) return { ok: false, message: "Choose at least one place to send it." };
 
+  const deps = directPostDeps(() => Promise.resolve(tokens));
   if (sendAt) {
-    const deps = directPostDeps(tokens);
+    // The post is saved first; a timer that does not start only makes it late, never lost or doubled.
     const scheduled = await scheduleDirectPost(userId, input.key, items, sendAt, deps);
+    let note: string | undefined;
     try {
       await startTimer(scheduled.postId, scheduled.revision, sendAt);
     } catch (e) {
-      // Without a timer the post would wait for the daily check, so it is not left half scheduled.
-      await deps.store.cancel(userId, scheduled.postId, new Date());
-      console.error(JSON.stringify({ event: "qp-direct-post-timer-failed", message: e instanceof Error ? e.message : String(e) }));
-      return { ok: false, message: "It could not be scheduled just now, so nothing was saved. Try again." };
+      timerFailed(scheduled.postId, scheduled.revision, e);
+      note = TIMER_NOTE;
     }
     revalidatePath("/sources");
-    return { ok: true, results: scheduled.results };
+    return { ok: true, results: scheduled.results, note };
   }
-  const { results } = await sendDirectPost(userId, input.key, items, directPostDeps(tokens));
+  const { results } = await sendDirectPost(userId, input.key, items, deps);
   if (results.some((r) => r.status === "sent" || r.status === "uncertain")) {
     await recordAction(userId, "direct_post_sent", { via: "app" }, { name: results.filter((r) => r.status !== "failed").map((r) => (r.kind === "telegram" ? "Telegram" : "Discord")).join(" and ") });
   }
@@ -136,10 +161,10 @@ export async function resendPostAction(postId: string, kind: PostKind): Promise<
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (typeof postId !== "string" || postId.length > 100 || (kind !== "telegram" && kind !== "discord")) return { ok: false, message: "Unknown post." };
   if (!(await limit("outbound", userId)).ok) return { ok: false, message: "Too many sends this hour. Try again later." };
-  const [dests, tokens] = await Promise.all([postgresEchoStore().destinations(userId), botTokens()]);
+  const tokens = await botTokens();
   if (!tokens[kind]) return { ok: false, message: "That bot is not set up on this deployment." };
-  const r = await resendFailed(userId, postId, kind, directPostDeps(tokens));
-  if (!r) return { ok: false, message: "Only a message Telegram or Discord refused can be sent again." };
+  const r = await resendFailed(userId, postId, kind, directPostDeps(() => Promise.resolve(tokens)));
+  if (!r) return { ok: false, message: "Only a message Telegram or Discord refused can be sent again. A follow-up is changed on its Buffer draft." };
   revalidatePath("/sources");
   return { ok: true, results: [r] };
 }
@@ -147,11 +172,14 @@ export async function resendPostAction(postId: string, kind: PostKind): Promise<
 /** What can change on a scheduled post: its time (ISO) and the text for each place. */
 export type ChangeScheduledInput = { sendAt?: string; telegram?: string; discord?: string };
 
-/** Changes a scheduled post's time or text before it goes out. The timer set for the old version sends nothing. */
-export async function changeScheduledPostAction(postId: string, change: ChangeScheduledInput): Promise<{ ok: true } | { ok: false; message: string }> {
+/**
+ * Changes a scheduled post's time or text before it goes out. The timer set for the old version sends nothing. A
+ * follow-up of a Buffer post is changed on its draft instead, since its time is the Buffer post's.
+ */
+export async function changeScheduledPostAction(postId: string, change: ChangeScheduledInput): Promise<{ ok: true; note?: string } | { ok: false; message: string }> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof postId !== "string" || postId.length > 100) return { ok: false, message: "Unknown post." };
+  if (typeof postId !== "string" || postId.length > 100 || !change || typeof change !== "object") return { ok: false, message: "Unknown post." };
   const sendAt = change.sendAt === undefined ? undefined : new Date(String(change.sendAt));
   if (sendAt) {
     const problem = sendTimeProblem(sendAt, new Date());
@@ -161,19 +189,22 @@ export async function changeScheduledPostAction(postId: string, change: ChangeSc
   for (const kind of ["telegram", "discord"] as const) {
     if (change[kind] === undefined) continue;
     const text = String(change[kind]).trim();
-    const max = kind === "telegram" ? telegram.TEXT_LIMIT : discord.CONTENT_LIMIT;
-    if (!text) return { ok: false, message: `Write the ${kind === "telegram" ? "Telegram" : "Discord"} message.` };
-    if (text.length > max) return { ok: false, message: `That is ${text.length} characters; ${kind === "telegram" ? "Telegram" : "Discord"} takes up to ${max}.` };
+    const problem = textProblem(kind, text);
+    if (problem) return { ok: false, message: problem };
     texts[kind] = text;
   }
-  const rows = await postgresDirectPostStore().reschedule(userId, postId, { sendAt, texts }, new Date());
+  if (!(await limit("outbound", userId)).ok) return { ok: false, message: "Too many changes this hour. Try again later." };
+  const store = postgresDirectPostStore();
+  if ((await store.rows(userId, postId)).some((r) => r.bufferPostId)) return { ok: false, message: "This one follows a Buffer post. Change it on that draft in Next week." };
+  const rows = await store.reschedule(userId, postId, { sendAt, texts }, new Date());
   if (!rows.length) return { ok: false, message: "It already went out or was cancelled, so it cannot be changed." };
   revalidatePath("/sources");
+  const revision = Math.max(...rows.map((r) => r.revision));
   try {
-    await startTimer(postId, Math.max(...rows.map((r) => r.revision)), rows[0].sendAt!);
+    await startTimer(postId, revision, rows[0].sendAt!);
   } catch (e) {
-    console.error(JSON.stringify({ event: "qp-direct-post-timer-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Saved, but its timer did not start, so it may go out late, with the daily check. Change it again to retry." };
+    timerFailed(postId, revision, e);
+    return { ok: true, note: TIMER_NOTE };
   }
   return { ok: true };
 }
@@ -183,7 +214,9 @@ export async function cancelScheduledPostAction(postId: string): Promise<{ ok: t
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (typeof postId !== "string" || postId.length > 100) return { ok: false, message: "Unknown post." };
-  const n = await postgresDirectPostStore().cancel(userId, postId, new Date());
+  const store = postgresDirectPostStore();
+  if ((await store.rows(userId, postId)).some((r) => r.bufferPostId)) return { ok: false, message: "This one follows a Buffer post. Turn it off on that draft in Next week." };
+  const n = await store.cancel(userId, postId, new Date());
   revalidatePath("/sources");
   return n ? { ok: true } : { ok: false, message: "It already went out or was cancelled." };
 }
@@ -195,7 +228,7 @@ export async function recentDirectPosts(): Promise<DirectPostView[]> {
   const now = new Date();
   return (await postgresDirectPostStore().recent(userId, 12)).map((r) => ({
     postId: r.postId, kind: r.kind, label: r.label, text: r.text, status: shownStatus(r, now), link: r.link, error: r.error, at: r.createdAt.toISOString(),
-    sendAt: r.sendAt?.toISOString() ?? null, late: sentLate(r),
+    sendAt: r.sendAt?.toISOString() ?? null, late: sentLate(r), followsBuffer: !!r.bufferPostId,
   }));
 }
 
@@ -218,42 +251,55 @@ export async function followUpFor(bufferPostId: string): Promise<{ places: Follo
   };
 }
 
-/** What to send where when a Buffer post goes out: a place left out (null) is turned off. */
-export type FollowUpInput = { telegram: { text: string } | null; discord: { channelId: string; text: string } | null };
+/**
+ * What to send where when a Buffer post goes out, per place: the text (and Discord channel) to send, null to turn the
+ * place off, or left out to keep it as it is (a place the panel could not load is never changed).
+ */
+export type FollowUpInput = { telegram?: { text: string } | null; discord?: { channelId: string; text: string } | null };
 
 /**
  * Sets which places follow one of the person's Buffer posts, with their text. Each goes out once Buffer has
- * published the post; a place turned off stops waiting.
+ * published the post; a place turned off stops waiting. A place already going out, sent or failed is not changed,
+ * and the answer says so.
  */
-export async function saveFollowUpAction(bufferPostId: string, input: FollowUpInput): Promise<{ ok: true } | { ok: false; message: string }> {
+export async function saveFollowUpAction(bufferPostId: string, input: FollowUpInput): Promise<{ ok: true; note?: string } | { ok: false; message: string }> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof bufferPostId !== "string" || bufferPostId.length > 100) return { ok: false, message: "Unknown post." };
+  if (typeof bufferPostId !== "string" || bufferPostId.length > 100 || !input || typeof input !== "object") return { ok: false, message: "Unknown post." };
   // The post must be one of this person's, from their own saved Buffer week, with a time.
   const post = (await postgresSnapshotStore().get(userId))?.data.posts.find((p) => p.id === bufferPostId);
   if (!post || !post.dueAt || post.status === "sent") return { ok: false, message: "Only a post that has not gone out yet, and has a time, can be followed." };
+  if (!(await limit("outbound", userId)).ok) return { ok: false, message: "Too many changes this hour. Try again later." };
   const tokens = await botTokens();
-  const built = await placeItems(userId, input, tokens);
+  const built = await placeItems(userId, { telegram: input.telegram || null, discord: input.discord || null }, tokens);
   if (!built.ok) return built;
   const store = postgresDirectPostStore();
   const id = await followUpIdFor(userId, bufferPostId);
   const at = new Date(Date.parse(post.dueAt) + 60_000);
   const now = new Date();
+  const unchanged: PostKind[] = [];
   for (const kind of ["telegram", "discord"] as const) {
+    if (input[kind] === undefined) continue;
     const item = built.items.find((i) => i.kind === kind);
-    if (item) await store.follow(userId, id, item, at, now, bufferPostId);
+    if (item) { if (!(await store.follow(userId, id, item, at, now, bufferPostId))) unchanged.push(kind); }
     else await store.unfollow(userId, id, kind, now);
   }
-  const waiting = (await store.rows(userId, id)).filter((r) => r.status === "scheduled");
+  const rows = await store.rows(userId, id);
+  // Turning off a place that is going out right now cannot stop it.
+  for (const kind of ["telegram", "discord"] as const) {
+    if (input[kind] === null && rows.some((r) => r.kind === kind && r.status === "pending")) unchanged.push(kind);
+  }
+  const waiting = rows.filter((r) => r.status === "scheduled");
+  let note = unchanged.length ? `${unchanged.map((k) => NAME[k]).join(" and ")} already went out or is going out now, so it was not changed.` : undefined;
   if (waiting.length) {
+    const revision = Math.max(...waiting.map((r) => r.revision));
     try {
-      await startTimer(id, Math.max(...waiting.map((r) => r.revision)), at);
+      await startTimer(id, revision, at);
     } catch (e) {
-      console.error(JSON.stringify({ event: "qp-direct-post-timer-failed", message: e instanceof Error ? e.message : String(e) }));
-      return { ok: false, message: "Saved, but its timer did not start, so it may go out late, with the daily check. Save again to retry." };
+      timerFailed(id, revision, e);
+      note = [note, TIMER_NOTE].filter(Boolean).join(" ");
     }
   }
   revalidatePath("/week");
-  return { ok: true };
+  return { ok: true, note };
 }
-

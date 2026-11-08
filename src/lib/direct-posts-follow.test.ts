@@ -36,7 +36,7 @@ describe("following a Buffer post", () => {
     await runDue(d);
     expect(sent.sort()).toEqual(["discord:New post is up on X.", "telegram:New post is up."]);
     expect(reads()).toBe(1);
-    expect(await d.store.followedBufferPosts("u1", ["bp1", "bp2"])).toEqual(new Set(["bp1"]));
+    expect(await d.store.followedPlaces("u1", ["bp1", "bp2"])).toEqual(new Set(["bp1|telegram", "bp1|discord"]));
   });
 
   it("waits while Buffer has not published, then sends", async () => {
@@ -54,14 +54,19 @@ describe("following a Buffer post", () => {
 
   it("follows a later time when the post was moved in Buffer", () => {
     const moved = plus(DUE, 3_600_000);
-    expect(nextBufferCheck({ state: "waiting", dueAt: moved }, plus(AT, 1_000))).toEqual(plus(moved, 60_000));
+    expect(nextBufferCheck({ state: "waiting", dueAt: moved }, plus(AT, 1_000), AT)).toEqual({ at: plus(moved, 60_000), move: true });
   });
 
-  it("checks every 5 minutes for 2 hours, then hourly, and gives up after a day", () => {
-    expect(nextBufferCheck({ state: "waiting", dueAt: DUE }, plus(DUE, 3_600_000))).toEqual(plus(DUE, 3_600_000 + 5 * 60_000));
-    expect(nextBufferCheck({ state: "waiting", dueAt: DUE }, plus(DUE, 3 * 3_600_000))).toEqual(plus(DUE, 4 * 3_600_000));
-    expect(nextBufferCheck({ state: "waiting", dueAt: DUE }, plus(DUE, 25 * 3_600_000))).toBeNull();
-    expect(nextBufferCheck({ state: "busy" }, DUE)).toEqual(plus(DUE, 5 * 60_000));
+  it("checks every 5 minutes for 2 hours, then hourly, and gives up a day after the place's time", () => {
+    expect(nextBufferCheck({ state: "waiting", dueAt: DUE }, plus(AT, 3_600_000), AT)).toEqual({ at: plus(AT, 3_600_000 + 5 * 60_000), move: false });
+    expect(nextBufferCheck({ state: "waiting", dueAt: DUE }, plus(AT, 3 * 3_600_000), AT)).toEqual({ at: plus(AT, 4 * 3_600_000), move: false });
+    expect(nextBufferCheck({ state: "waiting", dueAt: DUE }, plus(AT, 25 * 3_600_000), AT)).toBeNull();
+  });
+
+  it("gives up a day late even when Buffer cannot be read or gives no time", () => {
+    expect(nextBufferCheck({ state: "busy" }, plus(AT, 1_000), AT)).toEqual({ at: plus(AT, 1_000 + 5 * 60_000), move: false });
+    expect(nextBufferCheck({ state: "busy" }, plus(AT, 25 * 3_600_000), AT)).toBeNull();
+    expect(nextBufferCheck({ state: "waiting", dueAt: null }, plus(AT, 25 * 3_600_000), AT)).toBeNull();
   });
 
   it("sends nothing and says why when the post failed or was deleted in Buffer", async () => {

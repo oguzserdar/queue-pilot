@@ -109,11 +109,11 @@ describe("postgres follow-ups", () => {
     const s = postgresDirectPostStore();
     expect(await s.follow("u1", "fu1", tg, at, now, "bp1")).toBe(true);
     await s.unfollow("u1", "fu1", "telegram", now);
-    expect((await s.followedBufferPosts("u1", ["bp1"])).size).toBe(0);
+    expect((await s.followedPlaces("u1", ["bp1"])).size).toBe(0);
     expect(await s.follow("u1", "fu1", { ...tg, text: "Back on." }, at, now, "bp1")).toBe(true);
     const [row] = await s.rows("u1", "fu1");
     expect([row.status, row.text, row.revision, row.bufferPostId]).toEqual(["scheduled", "Back on.", 2, "bp1"]);
-    expect(await s.followedBufferPosts("u1", ["bp1", "bp9"])).toEqual(new Set(["bp1"]));
+    expect(await s.followedPlaces("u1", ["bp1", "bp9"])).toEqual(new Set(["bp1|telegram"]));
     await s.claimDue(new Date("2026-11-09T18:02:00Z"), 50, { postId: "fu1", revision: 2 });
     await s.startCall("u1", "fu1", "telegram", now);
     await s.finish("u1", "fu1", "telegram", { status: "sent", link: null, error: null }, now);
@@ -132,9 +132,65 @@ describe("postgres follow-ups", () => {
     await s.follow("u1", "fu3", tg, at, now, "bp3");
     await s.claimDue(new Date("2026-11-09T18:02:00Z"), 50, { postId: "fu3", revision: 0 });
     const later = new Date("2026-11-09T18:07:00Z");
-    await s.defer("u1", "fu3", "telegram", later, now);
+    await s.defer("u1", "fu3", "telegram", { sendAt: later }, now);
     const [row] = await s.rows("u1", "fu3");
     expect([row.status, row.sendAt?.toISOString(), row.callStartedAt]).toEqual(["scheduled", later.toISOString(), null]);
+  });
+});
+
+describe("postgres claims after review", () => {
+  const at = new Date("2026-11-09T18:01:00Z");
+  const tg = { kind: "telegram" as const, target: "-100", label: "News", text: "Up now." };
+  const dc = { kind: "discord" as const, target: "c1", label: "S #news", text: "Up.", guildId: "g1" };
+  const t = (iso: string) => new Date(iso);
+
+  it("does not take a held place before its hold ends, and keeps its time", async () => {
+    const s = postgresDirectPostStore();
+    await s.follow("u1", "rv1", tg, at, now, "bp1");
+    await s.claimDue(t("2026-11-09T18:02:00Z"), 50, { postId: "rv1", revision: 0 });
+    await s.defer("u1", "rv1", "telegram", { holdUntil: t("2026-11-09T18:07:00Z") }, now);
+    expect(await s.claimDue(t("2026-11-09T18:05:00Z"), 50, { postId: "rv1", revision: 9 })).toEqual([]);
+    const [row] = await s.claimDue(t("2026-11-09T18:08:00Z"), 50, { postId: "rv1", revision: 9 });
+    expect([row.postId, row.sendAt?.toISOString()]).toEqual(["rv1", at.toISOString()]);
+  });
+
+  it("lets a timer take every place at its revision or older", async () => {
+    const s = postgresDirectPostStore();
+    await s.follow("u1", "rv2", tg, at, now, "bp2");
+    await s.follow("u1", "rv2", tg, at, now, "bp2");
+    await s.follow("u1", "rv2", dc, at, now, "bp2");
+    const rows = await s.claimDue(t("2026-11-09T18:02:00Z"), 50, { postId: "rv2", revision: 1 });
+    expect(rows.map((r) => r.kind).sort()).toEqual(["discord", "telegram"]);
+  });
+
+  it("never lets a late finish overwrite a finished place", async () => {
+    const s = postgresDirectPostStore();
+    await s.claim("u1", "rv3", tg, now);
+    await s.startCall("u1", "rv3", "telegram", now);
+    await s.finish("u1", "rv3", "telegram", { status: "sent", link: "https://t.me/x/1", error: null }, now);
+    await s.finish("u1", "rv3", "telegram", { status: "failed", link: null, error: "late" }, now);
+    expect((await s.rows("u1", "rv3"))[0].status).toBe("sent");
+  });
+
+  it("never claims a failed follow-up for a resend", async () => {
+    const s = postgresDirectPostStore();
+    await s.follow("u1", "rv4", tg, at, now, "bp4");
+    await s.claimDue(t("2026-11-09T18:02:00Z"), 50, { postId: "rv4", revision: 0 });
+    await s.finish("u1", "rv4", "telegram", { status: "failed", link: null, error: "Deleted in Buffer." }, now);
+    expect(await s.reclaimFailed("u1", "rv4", "telegram", now)).toBeNull();
+    expect(await s.followedPlaces("u1", ["bp4"])).toEqual(new Set());
+  });
+
+  it("puts a rate-limited place back to wait and clears its call mark", async () => {
+    const s = postgresDirectPostStore();
+    await s.schedule("u1", "rv5", tg, at, now);
+    await s.claimDue(t("2026-11-09T18:02:00Z"), 50, { postId: "rv5", revision: 0 });
+    await s.startCall("u1", "rv5", "telegram", t("2026-11-09T18:02:00Z"));
+    await s.retryLater("u1", "rv5", "telegram", t("2026-11-09T18:03:00Z"), now);
+    const [row] = await s.rows("u1", "rv5");
+    expect([row.status, row.callStartedAt]).toEqual(["scheduled", null]);
+    expect(await s.claimDue(t("2026-11-09T18:02:30Z"), 50, { postId: "rv5", revision: 0 })).toEqual([]);
+    expect((await s.claimDue(t("2026-11-09T18:03:30Z"), 50, { postId: "rv5", revision: 0 })).map((r) => r.postId)).toEqual(["rv5"]);
   });
 });
 

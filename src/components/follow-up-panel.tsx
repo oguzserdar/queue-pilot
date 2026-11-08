@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { followUpFor, postTargets, saveFollowUpAction, type FollowUpPlace, type PostTargets } from "@/app/(app)/direct-post-actions";
 import { Button } from "@/registry/components/button/button";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
@@ -32,24 +32,32 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
   const [text, setText] = useState<Record<Kind, string>>({ telegram: draftText, discord: draftText });
   const [channelId, setChannelId] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [loading, startLoad] = useTransition();
+  // The draft's text only seeds a new place's box; a later change to it must not reload the panel and wipe edits.
+  const seed = useRef(draftText);
   const [saving, startSave] = useTransition();
   const { toast } = useToastStack();
 
   useEffect(() => {
     startLoad(async () => {
-      const [t, f] = await Promise.all([loaders.targets(), loaders.followUp(bufferPostId)]);
-      setTargets(t);
-      setSaved(f.places);
-      setDueAt(f.dueAt);
-      const tg = f.places.find((p) => p.kind === "telegram");
-      const dc = f.places.find((p) => p.kind === "discord");
-      setOn({ telegram: !!tg, discord: !!dc });
-      setText({ telegram: tg?.text ?? draftText, discord: dc?.text ?? draftText });
-      setChannelId(dc?.target ?? t.discord?.defaultId ?? null);
+      try {
+        const [t, f] = await Promise.all([loaders.targets(), loaders.followUp(bufferPostId)]);
+        setTargets(t);
+        setSaved(f.places);
+        setDueAt(f.dueAt);
+        const tg = f.places.find((p) => p.kind === "telegram");
+        const dc = f.places.find((p) => p.kind === "discord");
+        setOn({ telegram: !!tg, discord: !!dc });
+        setText({ telegram: tg?.text ?? seed.current, discord: dc?.text ?? seed.current });
+        setChannelId(dc?.target ?? t.discord?.defaultId ?? null);
+      } catch {
+        setFailed(true);
+      }
     });
-  }, [bufferPostId, draftText, loaders]);
+  }, [bufferPostId, loaders]);
 
+  if (failed) return <p className={styles.hint} role="status">Queue Pilot could not load the Telegram and Discord follow-up just now. Open the post again to retry.</p>;
   if (loading || !targets) return null;
   const places = (["telegram", "discord"] as const).filter((k) => targets[k]);
   if (!places.length) return null;
@@ -58,16 +66,21 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
   const doneKinds = new Set(saved.filter((p) => p.status !== "scheduled").map((p) => p.kind));
   const save = () =>
     startSave(async () => {
-      const r = await loaders.save(bufferPostId, {
-        telegram: on.telegram && targets.telegram ? { text: text.telegram } : null,
-        discord: on.discord && targets.discord && channelId ? { channelId, text: text.discord } : null,
-      });
-      if (!r.ok) { setNote(r.message); return; }
-      setNote(null);
-      const f = await loaders.followUp(bufferPostId);
-      setSaved(f.places);
-      const n = f.places.filter((p) => p.status === "scheduled").length;
-      toast({ type: "success", title: n ? `Set: ${n === 2 ? "Telegram and Discord" : NAME[f.places.find((p) => p.status === "scheduled")!.kind]} when Buffer publishes this.` : "Turned off." });
+      try {
+        // A place the panel could not load (left out) is never changed; null turns a loaded place off.
+        const r = await loaders.save(bufferPostId, {
+          ...(targets.telegram ? { telegram: on.telegram ? { text: text.telegram } : null } : {}),
+          ...(targets.discord ? { discord: on.discord && channelId ? { channelId, text: text.discord } : null } : {}),
+        });
+        if (!r.ok) { setNote(r.message); return; }
+        setNote(r.note ?? null);
+        const f = await loaders.followUp(bufferPostId);
+        setSaved(f.places);
+        const waiting = f.places.filter((p) => p.status === "scheduled").map((p) => NAME[p.kind]);
+        toast({ type: "success", title: waiting.length ? `Set: ${waiting.join(" and ")} when Buffer publishes this.` : "Turned off." });
+      } catch {
+        setNote("Queue Pilot did not answer, so the follow-up may not be saved. Save again.");
+      }
     });
 
   return (
@@ -76,6 +89,7 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
       <p className={styles.hint} suppressHydrationWarning>
         When Buffer publishes this{dueAt ? ` (${when(dueAt)})` : ""}, Queue Pilot sends it to the places you turn on, with the text below.
       </p>
+      {targets.problem && <p className={styles.bad} role="status">{targets.problem} Discord is left as it is.</p>}
       <div className={styles.places}>
         {places.map((k) => (
           <div key={k} className={styles.chip} data-on={on[k] || undefined}>

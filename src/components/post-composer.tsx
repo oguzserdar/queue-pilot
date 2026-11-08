@@ -85,9 +85,13 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
     setOpen(true);
     setResult(null);
     startLoad(async () => {
-      const t = await loadTargets();
-      setTargets(t);
-      setChannelId(t.discord?.defaultId ?? null);
+      try {
+        const t = await loadTargets();
+        setTargets(t);
+        setChannelId(t.discord?.defaultId ?? null);
+      } catch {
+        setTargets({ telegram: null, discord: null, problem: "Queue Pilot could not load your channels just now. Close this and try again." });
+      }
     });
   };
   const reset = () => { setOpen(false); setMessage(""); setOwn({ telegram: null, discord: null }); setTab("all"); setScheduled(false); setDay(undefined); setKey(crypto.randomUUID()); };
@@ -97,9 +101,8 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
   const limitFor = (k: Kind) => targets?.[k]?.limit ?? 0;
   const chosen = places.filter((k) => on[k]);
   const channel = targets?.discord?.channels.find((c) => c.id === channelId);
-  const picked = scheduled && day ? atLocal(day, time) : null;
-  const missing = scheduled && !!day && !picked;
-  const sendAt = picked;
+  const sendAt = scheduled && day ? atLocal(day, time) : null;
+  const missing = scheduled && !!day && !sendAt;
   const offset = sendAt ? repeatedOffset(sendAt) : null;
   const whenText = sendAt ? `${when(sendAt.toISOString())}${offset ? ` (${offset})` : ""}` : null;
   const problems = chosen.flatMap((k) => {
@@ -121,15 +124,22 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
 
   const send = () =>
     startSend(async () => {
-      const r = await sendPostAction({
-        key,
-        ...(sendAt ? { sendAt: sendAt.toISOString() } : {}),
-        ...(on.telegram && targets?.telegram ? { telegram: { text: textFor("telegram") } } : {}),
-        ...(on.discord && targets?.discord && channelId ? { discord: { channelId, text: textFor("discord") } } : {}),
-      });
+      let r: SendPostResult;
+      try {
+        r = await sendPostAction({
+          key,
+          ...(sendAt ? { sendAt: sendAt.toISOString() } : {}),
+          ...(on.telegram && targets?.telegram ? { telegram: { text: textFor("telegram") } } : {}),
+          ...(on.discord && targets?.discord && channelId ? { discord: { channelId, text: textFor("discord") } } : {}),
+        });
+      } catch {
+        // The form keeps its key, so pressing the button again never posts twice.
+        r = { ok: false, message: "Queue Pilot did not answer, so it may have gone out. Press the button again: it will not post twice." };
+      }
       setResult(r);
-      if (r.ok && r.results.every((x) => x.status === "sent")) toast({ type: "success", title: `Sent to ${r.results.map((x) => x.label).join(" and ")}.` });
-      if (r.ok && r.results.every((x) => x.status === "scheduled") && sendAt) toast({ type: "success", title: `Scheduled for ${when(sendAt.toISOString())}.` });
+      if (r.ok && r.note) toast({ type: "info", title: r.note });
+      else if (r.ok && r.results.every((x) => x.status === "sent")) toast({ type: "success", title: `Sent to ${r.results.map((x) => x.label).join(" and ")}.` });
+      else if (r.ok && r.results.every((x) => x.status === "scheduled") && sendAt) toast({ type: "success", title: `Scheduled for ${when(sendAt.toISOString())}.` });
     });
 
   return (
@@ -301,7 +311,12 @@ function Recent({ rows }: { rows: DirectPostView[] }) {
   const [editing, setEditing] = useState<{ postId: string; kind: Kind; text: string } | null>(null);
   const [moving, setMoving] = useState<{ postId: string; day: Date | undefined; time: string } | null>(null);
   const firstOfPost = (i: number) => rows.findIndex((x) => x.postId === rows[i].postId) === i;
-  const act = (fn: () => Promise<{ ok: true } | { ok: false; message: string }>) => start(async () => { const x = await fn(); setNote(x.ok ? null : x.message); if (x.ok) { setEditing(null); setMoving(null); } });
+  const act = (fn: () => Promise<{ ok: true; note?: string } | { ok: false; message: string }>) => start(async () => {
+    let x: { ok: true; note?: string } | { ok: false; message: string };
+    try { x = await fn(); } catch { x = { ok: false, message: "Queue Pilot did not answer. Try again." }; }
+    setNote(x.ok ? x.note ?? null : x.message);
+    if (x.ok) { setEditing(null); setMoving(null); }
+  });
   return (
     <div className={styles.recent}>
       <h3 className={styles.recentTitle}>Recent posts</h3>
@@ -321,7 +336,8 @@ function Recent({ rows }: { rows: DirectPostView[] }) {
               <span className={styles.excerpt}>{r.text}</span>
             )}
             <span suppressHydrationWarning>{resultWords(r)}</span>
-            {r.status === "scheduled" && !editing && !moving && (
+            {r.followsBuffer && <span className={styles.hint}>Follows a Buffer post: change it on that draft in Next week.</span>}
+            {r.status === "scheduled" && !r.followsBuffer && !editing && !moving && (
               <div className={styles.rowActions}>
                 <Button variant="ghost" size="sm" onClick={() => setEditing({ postId: r.postId, kind: r.kind, text: r.text })}>Edit text</Button>
                 {firstOfPost(i) && <Button variant="ghost" size="sm" onClick={() => setMoving({ postId: r.postId, day: r.sendAt ? new Date(r.sendAt) : undefined, time: r.sendAt ? new Date(r.sendAt).toTimeString().slice(0, 5) : "18:00" })}>Change time</Button>}
@@ -337,8 +353,8 @@ function Recent({ rows }: { rows: DirectPostView[] }) {
               </div>
             )}
             {r.link && <a className={styles.link} href={r.link} target="_blank" rel="noopener noreferrer">Open the message</a>}
-            {r.status === "failed" && (
-              <Button variant="ghost" size="sm" loading={pending} onClick={() => start(async () => { const x = await resendPostAction(r.postId, r.kind); setNote(x.ok ? null : x.message); })}>Send again</Button>
+            {r.status === "failed" && !r.followsBuffer && (
+              <Button variant="ghost" size="sm" loading={pending} onClick={() => act(() => resendPostAction(r.postId, r.kind))}>Send again</Button>
             )}
           </li>
         ))}

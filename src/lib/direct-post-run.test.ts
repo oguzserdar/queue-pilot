@@ -13,11 +13,11 @@ vi.mock("./telegram", async (orig) => ({ ...(await orig<typeof import("./telegra
 vi.mock("./discord", async (orig) => ({ ...(await orig<typeof import("./discord")>()), postText: async (_t: string, ch: string) => (calls.push(`dc:${ch}`), { messageId: "m1" }) }));
 
 const { directPostDeps } = await import("./direct-post-run");
-const { scheduleDirectPost, runDue } = await import("./direct-posts");
+const { scheduleDirectPost, runDue, sendDirectPost } = await import("./direct-posts");
 
 const AT = new Date("2026-11-08T18:00:00Z");
 function deps(now: Date) {
-  const d = directPostDeps({ telegram: "T", discord: "D" });
+  const d = directPostDeps(async () => ({ telegram: "T", discord: "D" }));
   return { ...d, now: () => now };
 }
 
@@ -53,5 +53,15 @@ describe("a scheduled post and its place", () => {
     const out = await runDue({ ...d, now: () => new Date(AT.getTime() + 1_000) });
     expect(calls).toEqual(["dc:a-chan"]);
     expect(out[0]).toMatchObject({ status: "sent", link: "https://discord.com/channels/server-a/a-chan/m1" });
+  });
+
+  it("never sends a Discord post that has no server recorded (written before servers were)", async () => {
+    calls.length = 0;
+    connected = [{ kind: "discord", target: "a-chan", guildId: "server-b" }];
+    const d = deps(new Date("2026-11-08T10:00:00Z"));
+    const { results } = await sendDirectPost("u1", "form-0004", [{ kind: "discord", target: "a-chan", label: "A #news", text: "Hi" }], d);
+    expect(calls).toEqual([]);
+    expect(results[0]).toMatchObject({ status: "failed" });
+    expect(results[0].error).toMatch(/before Queue Pilot recorded the Discord server/);
   });
 });

@@ -3,7 +3,7 @@
  * due run claims rows with FOR UPDATE SKIP LOCKED, so any number of workers can run at the same time and each row is
  * taken by one of them. Every statement a person's action runs is scoped to their user id.
  */
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "../db";
 import { directPostSend } from "../db/schema";
 import { CLAIM_MS, type PostKind, type DirectPostRow, type DirectPostStatus, type DirectPostStore, type DueRow } from "./direct-posts";
@@ -51,7 +51,7 @@ export function postgresDirectPostStore(): DirectPostStore {
         const text = change.texts?.[kind];
         const rows = await db()
           .update(directPostSend)
-          .set({ ...(change.sendAt ? { sendAt: change.sendAt } : {}), ...(text !== undefined ? { text } : {}), revision: sql`${directPostSend.revision} + 1`, updatedAt: now })
+          .set({ ...(change.sendAt ? { sendAt: change.sendAt, claimedUntil: null } : {}), ...(text !== undefined ? { text } : {}), revision: sql`${directPostSend.revision} + 1`, updatedAt: now })
           .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "scheduled")))
           .returning();
         out.push(...rows.map(toRow));
@@ -78,23 +78,34 @@ export function postgresDirectPostStore(): DirectPostStore {
         .set({ status: "cancelled", revision: sql`${directPostSend.revision} + 1`, updatedAt: now })
         .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "scheduled")));
     },
-    async defer(userId, postId, kind, sendAt, now) {
+    async defer(userId, postId, kind, when, now) {
+      // A held row keeps its time (the one-day limit counts from it) and is not due again before holdUntil.
       await db()
         .update(directPostSend)
-        .set({ status: "scheduled", sendAt, claimedUntil: null, updatedAt: now })
+        .set({ status: "scheduled", ...(when.sendAt ? { sendAt: when.sendAt } : {}), claimedUntil: when.holdUntil ?? null, updatedAt: now })
         .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending"), sql`${directPostSend.callStartedAt} is null`));
+    },
+    async retryLater(userId, postId, kind, until, now) {
+      // Only after Telegram or Discord refused with "wait": nothing was posted, so the call mark is cleared.
+      await db()
+        .update(directPostSend)
+        .set({ status: "scheduled", claimedUntil: until, callStartedAt: null, updatedAt: now })
+        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending")));
     },
     async waitingFollowUps(userId, bufferPostIds) {
       if (!bufferPostIds.length) return [];
       return (await db().select().from(directPostSend).where(and(eq(directPostSend.userId, userId), inArray(directPostSend.bufferPostId, bufferPostIds), eq(directPostSend.status, "scheduled")))).map(toRow);
     },
-    async followedBufferPosts(userId, bufferPostIds) {
+    async followedPlaces(userId, bufferPostIds) {
       if (!bufferPostIds.length) return new Set();
       const rows = await db()
-        .selectDistinct({ id: directPostSend.bufferPostId })
+        .select({ id: directPostSend.bufferPostId, kind: directPostSend.kind })
         .from(directPostSend)
-        .where(and(eq(directPostSend.userId, userId), inArray(directPostSend.bufferPostId, bufferPostIds), ne(directPostSend.status, "cancelled")));
-      return new Set(rows.map((r) => r.id!).filter(Boolean));
+        .where(and(
+          eq(directPostSend.userId, userId), inArray(directPostSend.bufferPostId, bufferPostIds), ne(directPostSend.status, "cancelled"),
+          sql`not (${directPostSend.status} = 'failed' and ${directPostSend.callStartedAt} is null)`,
+        ));
+      return new Set(rows.map((r) => `${r.id}|${r.kind}`));
     },
     async cancel(userId, postId, now) {
       const rows = await db()
@@ -106,12 +117,12 @@ export function postgresDirectPostStore(): DirectPostStore {
     },
     async claimDue(now, limit, only) {
       const until = new Date(now.getTime() + CLAIM_MS);
-      const onlyClause = only ? sql`and announcement_id = ${only.postId} and revision = ${only.revision}` : sql``;
+      const onlyClause = only ? sql`and announcement_id = ${only.postId} and revision <= ${only.revision}` : sql``;
       const res = await db().execute(sql`
         update qp_announcement_send s set status = 'pending', claimed_until = ${until}, updated_at = ${now}
         where (s.announcement_id, s.kind) in (
           select announcement_id, kind from qp_announcement_send
-          where ((status = 'scheduled' and send_at <= ${now})
+          where ((status = 'scheduled' and send_at <= ${now} and (claimed_until is null or claimed_until <= ${now}))
              or (status = 'pending' and call_started_at is null and claimed_until < ${now}))
             ${onlyClause}
           order by send_at nulls first
@@ -138,7 +149,7 @@ export function postgresDirectPostStore(): DirectPostStore {
       const [row] = await db()
         .update(directPostSend)
         .set({ status: "pending", attempts: sql`${directPostSend.attempts} + 1`, error: null, callStartedAt: null, claimedUntil: new Date(now.getTime() + CLAIM_MS), updatedAt: now })
-        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "failed")))
+        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "failed"), isNull(directPostSend.bufferPostId)))
         .returning();
       return row ? toRow(row) : null;
     },
@@ -146,7 +157,7 @@ export function postgresDirectPostStore(): DirectPostStore {
       await db()
         .update(directPostSend)
         .set({ status: result.status, link: result.link, error: result.error, updatedAt: now })
-        .where(and(mine(userId, postId), eq(directPostSend.kind, kind)));
+        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending")));
     },
     async recent(userId, limit) {
       return (await db().select().from(directPostSend).where(eq(directPostSend.userId, userId)).orderBy(desc(directPostSend.createdAt)).limit(limit)).map(toRow);

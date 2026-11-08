@@ -4,7 +4,7 @@
  * "Authorization: Bearer <CRON_SECRET>"; anything else gets 401. Users run one after another so one account's Buffer
  * read never competes with another's, and the run stops early rather than past the function's time limit.
  */
-import { timingSafeEqual } from "node:crypto";
+import { cronAuthorized } from "@/lib/cron-auth";
 import { getAuth } from "@/lib/auth";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { refreshSnapshot } from "@/lib/buffer/snapshot";
@@ -19,23 +19,21 @@ import { postgresDirectPostStore } from "@/lib/direct-post-store";
 export const maxDuration = 300;
 const BUDGET_MS = 240_000;
 
-function authorized(header: string | null, secret: string | undefined): boolean {
-  if (!secret || !header) return false;
-  const a = Buffer.from(header);
-  const b = Buffer.from(`Bearer ${secret}`);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
 export async function GET(req: Request) {
-  if (!authorized(req.headers.get("authorization"), process.env.CRON_SECRET)) return new Response(null, { status: 401 });
+  if (!cronAuthorized(req.headers.get("authorization"), process.env.CRON_SECRET)) return new Response(null, { status: 401 });
   // Request-limit windows older than a day are deleted here, so the counter table stays small.
   await pruneRequestCounts().catch((e) => console.error(JSON.stringify({ event: "qp-prune-request-counts-failed", message: e instanceof Error ? e.message : String(e) })));
   // Safety net for timed direct posts: anything a timer or the Docker check missed goes out now, marked late.
-  const due = await runDueDirectPosts().catch((e) => {
-    console.error(JSON.stringify({ event: "qp-direct-post-sweep-failed", message: e instanceof Error ? e.message : String(e) }));
-    return null;
-  });
-  if (due?.handled) console.log(JSON.stringify({ event: "qp-direct-post-sweep", ...due }));
+  // Runs again while a run fills its limit, so a backlog drains within the time budget, not 25 a day.
+  const sweepStarted = Date.now();
+  for (let round = 0; Date.now() - sweepStarted < 60_000; round++) {
+    const due = await runDueDirectPosts(undefined, { limit: 50 }).catch((e) => {
+      console.error(JSON.stringify({ event: "qp-direct-post-sweep-failed", round, message: e instanceof Error ? e.message : String(e) }));
+      return null;
+    });
+    if (due?.handled) console.log(JSON.stringify({ event: "qp-direct-post-sweep", round, ...due }));
+    if (!due || due.handled < 50) break;
+  }
   const tokens = await botTokens();
   const auth = await getAuth();
   if (!auth || (!tokens.telegram && !tokens.discord)) return Response.json({ users: 0, skipped: "not set up" });
@@ -51,8 +49,8 @@ export async function GET(req: Request) {
       const token = await bufferAccessToken(auth, userId);
       const { result: snap } = await withBudget("cron-echo", userId, () => refreshSnapshot(userId, token, { store: snapshots }));
       if (!snap) continue;
-      await retimeFollowUpsFor(userId, snap.data.posts).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", message: e instanceof Error ? e.message : String(e) })));
-      const out = await echoForUser(userId, snap.data.posts, { store, tokens, followed: (ids) => postgresDirectPostStore().followedBufferPosts(userId, ids) });
+      await retimeFollowUpsFor(userId, snap.data.posts).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", userId, message: e instanceof Error ? e.message : String(e) })));
+      const out = await echoForUser(userId, snap.data.posts, { store, tokens, followed: (ids) => postgresDirectPostStore().followedPlaces(userId, ids) });
       users++;
       sent += out.filter((r) => r.status === "sent").length;
       failed += out.filter((r) => r.status === "failed").length;

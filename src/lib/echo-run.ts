@@ -33,19 +33,19 @@ const realSenders: Senders = {
 };
 
 /** Copies this user's newly sent posts to their destinations. Returns what was attempted. */
-export async function echoForUser(userId: string, posts: Post[], deps: { store: EchoStore; tokens: BotTokens; now?: Date; senders?: Senders; followed?: (ids: string[]) => Promise<Set<string>> }): Promise<EchoRecord[]> {
+export async function echoForUser(userId: string, posts: Post[], deps: { store: EchoStore; tokens: BotTokens; now?: Date; senders?: Senders; /** The places a follow-up covers, as "postId|kind". */ followed?: (ids: string[]) => Promise<Set<string>> }): Promise<EchoRecord[]> {
   const senders = deps.senders ?? realSenders;
   const all = await deps.store.destinations(userId);
   const usable = all.filter((d) => (d.kind === "telegram" ? deps.tokens.telegram : deps.tokens.discord));
   if (usable.length === 0) return [];
 
-  // A post the person set to go to Telegram or Discord with its own text is sent by that follow-up, not copied too.
+  // A place the person set to get its own text for a post is sent by that follow-up, not copied too. Only that place:
+  // a follow-up to Telegram leaves the Discord copy as it was.
   const followed = deps.followed ? await deps.followed(posts.filter((p) => p.status === "sent").map((p) => p.id)) : new Set<string>();
-  posts = posts.filter((p) => !followed.has(p.id));
   const sentIds = posts.filter((p) => p.status === "sent").map((p) => p.id);
   const records = await deps.store.records(userId, sentIds);
   const connectedAt = Object.fromEntries(usable.map((d) => [d.id, new Date(d.connectedAt)]));
-  const plan = planEchoes(posts, usable, records, deps.now ?? new Date(), connectedAt);
+  const plan = planEchoes(posts, usable, records, deps.now ?? new Date(), connectedAt).filter((e) => !followed.has(`${e.post.id}|${e.destination.kind}`));
   if (plan.length === 0) return [];
 
   const byId = new Map(usable.map((d) => [d.id, d]));
@@ -75,11 +75,11 @@ export function scheduleEcho(userId: string, posts: Post[]): void {
   after(async () => {
     // A followed post moved in Buffer: its Telegram and Discord follow-ups move with it.
     // Loaded here: the post runner reads this module's bot tokens, so a top-level import would be circular.
-    await import("./direct-post-run").then((m) => m.retimeFollowUpsFor(userId, posts)).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", message: e instanceof Error ? e.message : String(e) })));
+    await import("./direct-post-run").then((m) => m.retimeFollowUpsFor(userId, posts)).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", userId, message: e instanceof Error ? e.message : String(e) })));
     try {
       const tokens = await botTokens();
       if (!tokens.telegram && !tokens.discord) return;
-      const out = await echoForUser(userId, posts, { store: postgresEchoStore(), tokens, followed: (ids) => postgresDirectPostStore().followedBufferPosts(userId, ids) });
+      const out = await echoForUser(userId, posts, { store: postgresEchoStore(), tokens, followed: (ids) => postgresDirectPostStore().followedPlaces(userId, ids) });
       for (const r of out.filter((x) => x.status === "failed")) console.warn(JSON.stringify({ event: "qp-echo-failed", postId: r.postId, attempts: r.attempts, error: r.error }));
     } catch (e) {
       console.error(JSON.stringify({ event: "qp-echo-run-failed", message: e instanceof Error ? e.message : String(e) }));
