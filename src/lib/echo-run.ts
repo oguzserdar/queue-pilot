@@ -73,6 +73,9 @@ export async function echoForUser(userId: string, posts: Post[], deps: { store: 
  */
 export function scheduleEcho(userId: string, posts: Post[]): void {
   after(async () => {
+    // A followed post moved in Buffer: its Telegram and Discord follow-ups move with it.
+    // Loaded here: the post runner reads this module's bot tokens, so a top-level import would be circular.
+    await import("./direct-post-run").then((m) => m.retimeFollowUpsFor(userId, posts)).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", message: e instanceof Error ? e.message : String(e) })));
     try {
       const tokens = await botTokens();
       if (!tokens.telegram && !tokens.discord) return;

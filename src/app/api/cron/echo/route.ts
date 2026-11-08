@@ -13,7 +13,7 @@ import { bufferAccessToken } from "@/lib/buffer-token";
 import { botTokens, echoForUser } from "@/lib/echo-run";
 import { pruneRequestCounts } from "@/lib/rate-limit";
 import { postgresEchoStore } from "@/lib/echo-store";
-import { runDueDirectPosts } from "@/lib/direct-post-run";
+import { retimeFollowUpsFor, runDueDirectPosts } from "@/lib/direct-post-run";
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
 
 export const maxDuration = 300;
@@ -51,6 +51,7 @@ export async function GET(req: Request) {
       const token = await bufferAccessToken(auth, userId);
       const { result: snap } = await withBudget("cron-echo", userId, () => refreshSnapshot(userId, token, { store: snapshots }));
       if (!snap) continue;
+      await retimeFollowUpsFor(userId, snap.data.posts).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", message: e instanceof Error ? e.message : String(e) })));
       const out = await echoForUser(userId, snap.data.posts, { store, tokens, followed: (ids) => postgresDirectPostStore().followedBufferPosts(userId, ids) });
       users++;
       sent += out.filter((r) => r.status === "sent").length;

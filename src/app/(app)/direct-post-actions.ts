@@ -16,7 +16,7 @@ import * as discord from "@/lib/discord";
 import { followUpIdFor, resendFailed, scheduleDirectPost, sendDirectPost, sendTimeProblem, sentLate, shownStatus, type PostItem, type PostKind, type DirectPostStatus } from "@/lib/direct-posts";
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
-import { directPostDeps } from "@/lib/direct-post-run";
+import { directPostDeps, startTimer } from "@/lib/direct-post-run";
 
 /** Where the person can post, as the composer shows it. */
 export type PostTargets = {
@@ -89,16 +89,6 @@ async function placeItems(userId: string, input: { telegram?: { text: string } |
     items.push({ kind: "discord", target: channel.id, label: `${dc.label.split(" #")[0]} #${channel.name}`, text, guildId: dc.guildId });
   }
   return { ok: true, items };
-}
-
-/**
- * Starts the Vercel timer for a scheduled post. Elsewhere (Docker) the 30-second check sends it, so there is nothing
- * to start.
- */
-async function startTimer(postId: string, revision: number, sendAt: Date): Promise<void> {
-  if (!process.env.VERCEL) return;
-  const [{ start }, { directPostTimer }] = await Promise.all([import("workflow/api"), import("@/workflows/direct-post-timer")]);
-  await start(directPostTimer, [postId, revision, sendAt.toISOString()]);
 }
 
 /** Sends one post now, or schedules it, each place getting the exact text the person confirmed. */

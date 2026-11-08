@@ -84,6 +84,10 @@ export function postgresDirectPostStore(): DirectPostStore {
         .set({ status: "scheduled", sendAt, claimedUntil: null, updatedAt: now })
         .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending"), sql`${directPostSend.callStartedAt} is null`));
     },
+    async waitingFollowUps(userId, bufferPostIds) {
+      if (!bufferPostIds.length) return [];
+      return (await db().select().from(directPostSend).where(and(eq(directPostSend.userId, userId), inArray(directPostSend.bufferPostId, bufferPostIds), eq(directPostSend.status, "scheduled")))).map(toRow);
+    },
     async followedBufferPosts(userId, bufferPostIds) {
       if (!bufferPostIds.length) return new Set();
       const rows = await db()

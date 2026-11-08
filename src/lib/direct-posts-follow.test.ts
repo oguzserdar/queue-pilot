@@ -4,7 +4,7 @@
  * Buffer once per post however many places follow it, and the automatic copy stands down for that post.
  */
 import { describe, expect, it } from "vitest";
-import { followUpIdFor, memoryDirectPostStore, nextBufferCheck, runDue, type BufferState, type DirectPostDeps, type PostItem } from "./direct-posts";
+import { followUpIdFor, memoryDirectPostStore, nextBufferCheck, retimeFollowUps, runDue, type BufferState, type DirectPostDeps, type PostItem } from "./direct-posts";
 
 const DUE = new Date("2026-11-09T18:00:00Z");
 const AT = new Date(DUE.getTime() + 60_000);
@@ -94,3 +94,29 @@ describe("following a Buffer post", () => {
     expect(await d.store.follow("u1", id, { ...tg, text: "Again" }, AT, new Date(), "bp1")).toBe(false);
   });
 });
+
+describe("a followed post moved in Buffer", () => {
+  it("moves its follow-up to the new time, earlier or later, and the old timer sends nothing", async () => {
+    const { d, sent, at } = setup([{ state: "sent" }]);
+    const id = await followUpIdFor("u1", "bp1");
+    await d.store.follow("u1", id, tg, AT, new Date(), "bp1");
+    const earlier = new Date(DUE.getTime() - 3_600_000);
+    const moved = await retimeFollowUps("u1", [{ id: "bp1", status: "scheduled", dueAt: earlier.toISOString() }], d.store, new Date("2026-11-09T10:00:00Z"));
+    expect(moved).toEqual([{ postId: id, revision: 1, sendAt: new Date(earlier.getTime() + 60_000) }]);
+    at(new Date(earlier.getTime() + 61_000));
+    expect(await runDue(d, { only: { postId: id, revision: 0 } })).toEqual([]);
+    await runDue(d, { only: { postId: id, revision: 1 } });
+    expect(sent).toHaveLength(1);
+  });
+
+  it("leaves a follow-up alone when the time did not change, the post went out, or the new time has passed", async () => {
+    const { d } = setup([{ state: "sent" }]);
+    const id = await followUpIdFor("u1", "bp1");
+    await d.store.follow("u1", id, tg, AT, new Date(), "bp1");
+    const now = new Date("2026-11-09T10:00:00Z");
+    expect(await retimeFollowUps("u1", [{ id: "bp1", status: "scheduled", dueAt: DUE.toISOString() }], d.store, now)).toEqual([]);
+    expect(await retimeFollowUps("u1", [{ id: "bp1", status: "sent", dueAt: "2026-11-09T12:00:00Z" }], d.store, now)).toEqual([]);
+    expect(await retimeFollowUps("u1", [{ id: "bp1", status: "scheduled", dueAt: "2026-11-09T09:00:00Z" }], d.store, now)).toEqual([]);
+  });
+});
+

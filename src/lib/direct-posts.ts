@@ -70,6 +70,8 @@ export type DirectPostStore = {
   unfollow(userId: string, postId: string, kind: PostKind, now: Date): Promise<void>;
   /** Puts a claimed row back to wait until sendAt, before any call was made (its Buffer post is not out yet). */
   defer(userId: string, postId: string, kind: PostKind, sendAt: Date, now: Date): Promise<void>;
+  /** This person's follow-up places still waiting, for these Buffer posts. */
+  waitingFollowUps(userId: string, bufferPostIds: string[]): Promise<DirectPostRow[]>;
   /** Of these Buffer post ids, the ones this person has a follow-up for that is not cancelled. */
   followedBufferPosts(userId: string, bufferPostIds: string[]): Promise<Set<string>>;
   /** Changes the time or text of this person's scheduled destinations; returns the rows still scheduled. */
@@ -229,6 +231,30 @@ export function nextBufferCheck(state: BufferState, now: Date): Date | null {
   return new Date(now.getTime() + (late < 2 * 3_600_000 ? 5 * 60_000 : 3_600_000));
 }
 
+/**
+ * After fresh Buffer data: follow-ups whose post now has a different time are moved to that time plus a minute (each
+ * move is a new revision, so the old timer sends nothing).
+ *
+ * @returns The follow-ups moved, with the revision and time a new timer should use
+ */
+export async function retimeFollowUps(userId: string, posts: { id: string; status: string; dueAt: string | null }[], store: DirectPostStore, now: Date): Promise<{ postId: string; revision: number; sendAt: Date }[]> {
+  const byId = new Map(posts.filter((p) => p.dueAt && p.status !== "sent").map((p) => [p.id, Date.parse(p.dueAt!) + 60_000]));
+  if (!byId.size) return [];
+  const waiting = await store.waitingFollowUps(userId, [...byId.keys()]);
+  const moved = new Map<string, number>();
+  for (const r of waiting) {
+    const want = byId.get(r.bufferPostId!);
+    if (want === undefined || !r.sendAt || Math.abs(r.sendAt.getTime() - want) < 30_000 || want <= now.getTime()) continue;
+    moved.set(r.postId, want);
+  }
+  const out: { postId: string; revision: number; sendAt: Date }[] = [];
+  for (const [postId, want] of moved) {
+    const rows = await store.reschedule(userId, postId, { sendAt: new Date(want) }, now);
+    if (rows.length) out.push({ postId, revision: Math.max(...rows.map((r) => r.revision)), sendAt: new Date(want) });
+  }
+  return out;
+}
+
 /** The id of the follow-up for one Buffer post: one per person and post, so ticking places again edits it. */
 export function followUpIdFor(userId: string, bufferPostId: string): Promise<string> {
   return postIdFor(userId, `buffer:${bufferPostId}`);
@@ -328,6 +354,10 @@ export function memoryDirectPostStore(): DirectPostStore {
     async defer(userId, postId, kind, sendAt, now) {
       const r = rows.get(key(postId, kind));
       if (r && r.userId === userId && r.status === "pending" && !r.callStartedAt) Object.assign(r, { status: "scheduled", sendAt, claimedUntil: null, updatedAt: now });
+    },
+    async waitingFollowUps(userId, bufferPostIds) {
+      const want = new Set(bufferPostIds);
+      return [...rows.values()].filter((r) => r.userId === userId && r.bufferPostId && want.has(r.bufferPostId) && r.status === "scheduled").map(out);
     },
     async followedBufferPosts(userId, bufferPostIds) {
       const want = new Set(bufferPostIds);

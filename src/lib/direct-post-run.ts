@@ -9,7 +9,8 @@ import * as discord from "./discord";
 import { botTokens } from "./echo-run";
 import { postgresEchoStore } from "./echo-store";
 import { postgresDirectPostStore } from "./direct-post-store";
-import { runDue, type BufferState, type DirectPostDeps } from "./direct-posts";
+import { retimeFollowUps, runDue, type BufferState, type DirectPostDeps } from "./direct-posts";
+import type { Post } from "./buffer/queries";
 import { getAuth } from "./auth";
 import { bufferAccessToken } from "./buffer-token";
 import { readPostsNow } from "./buffer/queries";
@@ -81,6 +82,29 @@ export function directPostDeps(tokens: Tokens): DirectPostDeps {
       return { link: discord.messageUrl(guildId, item.target, r.messageId) };
     },
   };
+}
+
+/**
+ * Starts the Vercel timer for a scheduled post. Elsewhere (Docker) the 30-second check sends it, so there is nothing
+ * to start.
+ */
+export async function startTimer(postId: string, revision: number, sendAt: Date): Promise<void> {
+  if (!process.env.VERCEL) return;
+  const [{ start }, { directPostTimer }] = await Promise.all([import("workflow/api"), import("@/workflows/direct-post-timer")]);
+  await start(directPostTimer, [postId, revision, sendAt.toISOString()]);
+}
+
+/**
+ * Re-times follow-ups whose Buffer post moved, after fresh Buffer data was read: each waits for the post's new time
+ * plus a minute, with a new timer. Logs and carries on if a timer cannot start; the 30-second check and the daily job
+ * still send it.
+ */
+export async function retimeFollowUpsFor(userId: string, posts: Post[]): Promise<number> {
+  const moved = await retimeFollowUps(userId, posts, postgresDirectPostStore(), new Date());
+  for (const m of moved) {
+    await startTimer(m.postId, m.revision, m.sendAt).catch((e) => console.error(JSON.stringify({ event: "qp-direct-post-timer-failed", message: e instanceof Error ? e.message : String(e) })));
+  }
+  return moved.length;
 }
 
 /**
