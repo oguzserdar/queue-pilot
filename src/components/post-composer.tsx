@@ -20,10 +20,31 @@ export function when(iso: string): string {
   return new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 }
 
-/** The local date plus "HH:MM", as one moment; the browser applies its own time zone and daylight saving. */
-export function atLocal(day: Date, hhmm: string): Date {
+/**
+ * The local date plus "HH:MM", as one moment in the browser's time zone. Returns null for a time that does not
+ * exist that day (the clocks jump forward over it), rather than quietly moving it an hour.
+ */
+export function atLocal(day: Date, hhmm: string): Date | null {
   const [h, m] = hhmm.split(":").map(Number);
-  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0, 0);
+  const d = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0, 0);
+  return d.getHours() === h && d.getMinutes() === m && d.getDate() === day.getDate() ? d : null;
+}
+
+/** The same calendar day n days on, whatever the length of the days between (23 or 25 hours on clock changes). */
+export function daysFrom(base: Date, n: number): Date {
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate() + n);
+}
+
+/**
+ * The UTC offset to show beside a time that happens twice that day (the clocks go back over it), e.g. "UTC−5";
+ * null when the time happens once.
+ */
+export function repeatedOffset(at: Date): string | null {
+  const same = (t: Date) => t.getHours() === at.getHours() && t.getMinutes() === at.getMinutes();
+  if (!same(new Date(at.getTime() + 3_600_000)) && !same(new Date(at.getTime() - 3_600_000))) return null;
+  const off = -at.getTimezoneOffset();
+  const hh = Math.floor(Math.abs(off) / 60), mm = Math.abs(off) % 60;
+  return `UTC${off < 0 ? "−" : "+"}${hh}${mm ? `:${String(mm).padStart(2, "0")}` : ""}`;
 }
 
 /** How one result reads: landed with a link, refused with Telegram's or Discord's reason, or may have landed. */
@@ -76,7 +97,11 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
   const limitFor = (k: Kind) => targets?.[k]?.limit ?? 0;
   const chosen = places.filter((k) => on[k]);
   const channel = targets?.discord?.channels.find((c) => c.id === channelId);
-  const sendAt = scheduled && day ? atLocal(day, time) : null;
+  const picked = scheduled && day ? atLocal(day, time) : null;
+  const missing = scheduled && !!day && !picked;
+  const sendAt = picked;
+  const offset = sendAt ? repeatedOffset(sendAt) : null;
+  const whenText = sendAt ? `${when(sendAt.toISOString())}${offset ? ` (${offset})` : ""}` : null;
   const problems = chosen.flatMap((k) => {
     const t = textFor(k);
     if (!t) return [`Write the ${NAME[k]} text.`];
@@ -84,14 +109,15 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
     if (k === "discord" && !channel) return ["Pick a Discord channel Queue Pilot can post in."];
     return [];
   });
-  if (scheduled && !sendAt) problems.push("Pick a day.");
+  if (missing) problems.push(`${time} does not exist that day: the clocks move forward. Pick another time.`);
+  else if (scheduled && !sendAt) problems.push("Pick a day.");
   else if (sendAt && sendAt.getTime() <= Date.now() + 30_000) problems.push("Pick a time in the future.");
   const placeName = (k: Kind) => (k === "discord" && channel ? `#${channel.name}` : targets?.[k]?.label ?? NAME[k]);
-  const action = !chosen.length ? "Choose a place" : sendAt ? `Schedule for ${when(sendAt.toISOString())}` : scheduled ? "Schedule" : `Send to ${chosen.map(placeName).join(" and ")}`;
+  const action = !chosen.length ? "Choose a place" : whenText ? `Schedule for ${whenText}` : scheduled ? "Schedule" : `Send to ${chosen.map(placeName).join(" and ")}`;
   const quick = [
-    { label: "This evening, 18:00", day: new Date(), time: "18:00" },
-    { label: "Tomorrow, 09:00", day: new Date(Date.now() + 86_400_000), time: "09:00" },
-  ].filter((q) => atLocal(q.day, q.time).getTime() > Date.now() + 60_000);
+    { label: "This evening, 18:00", day: daysFrom(new Date(), 0), time: "18:00" },
+    { label: "Tomorrow, 09:00", day: daysFrom(new Date(), 1), time: "09:00" },
+  ].filter((q) => (atLocal(q.day, q.time)?.getTime() ?? 0) > Date.now() + 60_000);
 
   const send = () =>
     startSend(async () => {
@@ -217,7 +243,7 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
                   <Popover>
                     <PopoverTrigger className={styles.whenButton} aria-label="When to send">
                       <span className={styles.whenLabel}>When</span>
-                      <span suppressHydrationWarning>{sendAt ? when(sendAt.toISOString()) : scheduled ? "Pick a day" : "Now"}</span> ▾
+                      <span suppressHydrationWarning>{whenText ?? (scheduled ? "Pick a day" : "Now")}</span> ▾
                     </PopoverTrigger>
                     <PopoverContent className={styles.whenPanel} align="end">
                       <PopoverClose asChild>
@@ -307,7 +333,7 @@ function Recent({ rows }: { rows: DirectPostView[] }) {
                 <DatePicker label="Day" value={moving.day} onChange={(d) => setMoving({ ...moving, day: d })} minDate={new Date(new Date().setHours(0, 0, 0, 0))} maxDate={new Date(Date.now() + 60 * 86_400_000)} />
                 <TimePicker label="Time" value={moving.time} onChange={(t) => setMoving({ ...moving, time: t })} minuteStep={5} format="24h" />
                 <Button variant="ghost" size="sm" onClick={() => setMoving(null)}>Keep the time</Button>
-                <Button variant="primary" size="sm" loading={pending} disabled={!moving.day} onClick={() => moving.day && act(() => changeScheduledPostAction(r.postId, { sendAt: atLocal(moving.day!, moving.time).toISOString() }))}>Save time</Button>
+                <Button variant="primary" size="sm" loading={pending} disabled={!moving.day || !atLocal(moving.day, moving.time)} onClick={() => { const at = moving.day && atLocal(moving.day, moving.time); if (at) act(() => changeScheduledPostAction(r.postId, { sendAt: at.toISOString() })); }}>Save time</Button>
               </div>
             )}
             {r.link && <a className={styles.link} href={r.link} target="_blank" rel="noopener noreferrer">Open the message</a>}
