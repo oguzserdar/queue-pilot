@@ -2,13 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { cancelScheduledPostAction, changeScheduledPostAction, postTargets, resendPostAction, sendPostAction, type DirectPostView, type PostTargets, type SendPostResult } from "@/app/(app)/direct-post-actions";
-import SegmentedControl from "@/registry/components/segmented-control/segmented-control";
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
 import { DatePicker } from "@/registry/components/date-picker/date-picker";
 import { TimePicker } from "@/registry/components/time-picker/time-picker";
 import { Button } from "@/registry/components/button/button";
-import { Checkbox } from "@/registry/components/checkbox/checkbox";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
-import { Select } from "@/registry/components/select/select";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { ChannelIcon } from "./channel-icon";
@@ -39,8 +37,9 @@ export function resultWords(r: { status: string; error: string | null; sendAt?: 
 }
 
 /**
- * Write one post and send it to the person's Telegram channel and/or Discord channel on its own, without a
- * Buffer post. Each place shows exactly what it will receive, can carry its own text, and reports its own result.
+ * Write one post for Telegram and Discord, without a Buffer post: the places as chips at the top, one shared text
+ * with a tab per place for different text, a live preview of what each place will show, and one button that sends
+ * now or at the time picked beside it.
  */
 export function PostComposer({ recent, loadTargets = postTargets }: { recent: DirectPostView[]; loadTargets?: () => Promise<PostTargets> }) {
   const [open, setOpen] = useState(false);
@@ -48,13 +47,14 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
   const [message, setMessage] = useState("");
   const [on, setOn] = useState<Record<Kind, boolean>>({ telegram: true, discord: true });
   const [own, setOwn] = useState<Record<Kind, string | null>>({ telegram: null, discord: null });
+  const [tab, setTab] = useState<"all" | Kind>("all");
   const [channelId, setChannelId] = useState<string | null>(null);
   const [result, setResult] = useState<SendPostResult | null>(null);
   // One key per composed post: every submit of this form reuses it, so a retry never posts twice.
   const [key, setKey] = useState(() => crypto.randomUUID());
-  const [timing, setTiming] = useState<"now" | "later">("now");
   const [day, setDay] = useState<Date | undefined>(undefined);
   const [time, setTime] = useState("18:00");
+  const [scheduled, setScheduled] = useState(false);
   const zone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "";
   const [loading, startLoad] = useTransition();
   const [sending, startSend] = useTransition();
@@ -69,32 +69,35 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
       setChannelId(t.discord?.defaultId ?? null);
     });
   };
+  const reset = () => { setOpen(false); setMessage(""); setOwn({ telegram: null, discord: null }); setTab("all"); setScheduled(false); setDay(undefined); setKey(crypto.randomUUID()); };
 
   const places = (["telegram", "discord"] as const).filter((k) => targets?.[k]);
   const textFor = (k: Kind) => (own[k] ?? message).trim();
   const limitFor = (k: Kind) => targets?.[k]?.limit ?? 0;
   const chosen = places.filter((k) => on[k]);
-  const channelName = targets?.discord?.channels.find((c) => c.id === channelId)?.name;
+  const channel = targets?.discord?.channels.find((c) => c.id === channelId);
+  const sendAt = scheduled && day ? atLocal(day, time) : null;
   const problems = chosen.flatMap((k) => {
     const t = textFor(k);
-    if (!t) return [`The ${NAME[k]} message is empty.`];
-    if (t.length > limitFor(k)) return [`The ${NAME[k]} message is ${t.length} characters; ${NAME[k]} takes up to ${limitFor(k)}.`];
-    if (k === "discord" && !channelName) return ["Pick a Discord channel Queue Pilot can post in."];
+    if (!t) return [`Write the ${NAME[k]} text.`];
+    if (t.length > limitFor(k)) return [`The ${NAME[k]} text is ${t.length - limitFor(k)} characters too long.`];
+    if (k === "discord" && !channel) return ["Pick a Discord channel Queue Pilot can post in."];
     return [];
   });
-  const sendAt = timing === "later" && day ? atLocal(day, time) : null;
-  if (timing === "later") {
-    if (!sendAt) problems.push("Pick a day to send it.");
-    else if (sendAt.getTime() <= Date.now() + 30_000) problems.push("Pick a time in the future.");
-  }
-  const where = chosen.map((k) => (k === "discord" && channelName ? `#${channelName}` : NAME[k])).join(" and ");
-  const sendLabel = timing === "later" ? (sendAt ? `Schedule for ${when(sendAt.toISOString())}` : "Schedule") : `Send to ${where}`;
+  if (scheduled && !sendAt) problems.push("Pick a day.");
+  else if (sendAt && sendAt.getTime() <= Date.now() + 30_000) problems.push("Pick a time in the future.");
+  const placeName = (k: Kind) => (k === "discord" && channel ? `#${channel.name}` : targets?.[k]?.label ?? NAME[k]);
+  const action = !chosen.length ? "Choose a place" : sendAt ? `Schedule for ${when(sendAt.toISOString())}` : scheduled ? "Schedule" : `Send to ${chosen.map(placeName).join(" and ")}`;
+  const quick = [
+    { label: "This evening, 18:00", day: new Date(), time: "18:00" },
+    { label: "Tomorrow, 09:00", day: new Date(Date.now() + 86_400_000), time: "09:00" },
+  ].filter((q) => atLocal(q.day, q.time).getTime() > Date.now() + 60_000);
 
   const send = () =>
     startSend(async () => {
       const r = await sendPostAction({
         key,
-        ...(timing === "later" && sendAt ? { sendAt: sendAt.toISOString() } : {}),
+        ...(sendAt ? { sendAt: sendAt.toISOString() } : {}),
         ...(on.telegram && targets?.telegram ? { telegram: { text: textFor("telegram") } } : {}),
         ...(on.discord && targets?.discord && channelId ? { discord: { channelId, text: textFor("discord") } } : {}),
       });
@@ -107,63 +110,135 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
     <>
       <div className={styles.bar}>
         <Button variant="secondary" size="md" onClick={openComposer}>Write a post</Button>
-        <span className={styles.hint}>Post straight to your Telegram channel or a Discord channel, with no Buffer post needed.</span>
+        <span className={styles.hint}>Post straight to your Telegram channel or a Discord channel, now or later, with no Buffer post needed.</span>
       </div>
       {recent.length > 0 && <Recent rows={recent} />}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent title="Write a post" description="Each place gets exactly the text shown under it.">
+        <DialogContent className={styles.dialog} title="New post" description="Telegram and Discord get exactly what the preview shows.">
           {loading || !targets ? (
             <p className={styles.hint}>Checking where Queue Pilot can post…</p>
           ) : result?.ok ? (
-            <Results result={result} onDone={() => { setOpen(false); setMessage(""); setOwn({ telegram: null, discord: null }); setKey(crypto.randomUUID()); }} />
+            <Results result={result} onDone={reset} />
           ) : places.length === 0 ? (
             <p className={styles.hint}>Connect a Telegram channel or add Queue Pilot to a Discord server first.{targets.problem ? ` ${targets.problem}` : ""}</p>
           ) : (
-            <div className={styles.form}>
-              <Textarea label="Post" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Patch 1.4 is out. Exports now resume after a dropped connection." />
-              {targets.problem && <p className={styles.bad} role="alert">{targets.problem}</p>}
-              {places.map((k) => {
-                const text = textFor(k);
-                const over = text.length > limitFor(k);
-                return (
-                  <section key={k} className={styles.place} data-off={!on[k] || undefined} aria-label={NAME[k]}>
-                    <div className={styles.placeHead}>
-                      <Checkbox checked={on[k]} onCheckedChange={(v) => setOn({ ...on, [k]: v === true })} label={`${NAME[k]} · ${targets[k]!.label}`} />
-                      <ChannelIcon service={k} size={18} />
-                    </div>
-                    {on[k] && (
-                      <>
-                        {k === "discord" && targets.discord && (
-                          <Select label="Channel" value={channelId ?? undefined} onValueChange={setChannelId} placeholder="Pick a channel"
-                            options={targets.discord.channels.map((c) => ({ value: c.id, label: c.canPost ? `#${c.name}` : `#${c.name} (Queue Pilot cannot post here)`, disabled: !c.canPost }))} />
-                        )}
-                        {own[k] === null ? (
-                          <button type="button" className={styles.link} onClick={() => setOwn({ ...own, [k]: message })}>Write different text for {NAME[k]}</button>
-                        ) : (
-                          <Textarea label={`Text for ${NAME[k]}`} rows={4} value={own[k] ?? ""} onChange={(e) => setOwn({ ...own, [k]: e.target.value })} />
-                        )}
-                        <div className={styles.preview} data-kind={k} aria-label={`What ${NAME[k]} will show`}>{text || <span className={styles.hint}>Nothing written yet.</span>}</div>
-                        <span className={over ? styles.bad : styles.count}>{text.length} / {limitFor(k)}</span>
-                      </>
+            <div className={styles.composer}>
+              <div className={styles.places} role="group" aria-label="Where it goes">
+                {places.map((k) => (
+                  <div key={k} className={styles.chip} data-on={on[k] || undefined}>
+                    <button type="button" className={styles.chipToggle} aria-pressed={on[k]} onClick={() => setOn({ ...on, [k]: !on[k] })}>
+                      <ChannelIcon service={k} size={16} />
+                      <span>{k === "discord" ? targets.discord!.label : targets.telegram!.label}</span>
+                      <span className={styles.chipMark} aria-hidden="true">{on[k] ? "✓" : "+"}</span>
+                    </button>
+                    {k === "discord" && on.discord && targets.discord && (
+                      <Popover>
+                        <PopoverTrigger className={styles.chipChannel} aria-label="Discord channel">{channel ? `#${channel.name}` : "Pick a channel"} ▾</PopoverTrigger>
+                        <PopoverContent className={styles.menu}>
+                          {targets.discord.channels.map((c) => (
+                            <PopoverClose asChild key={c.id}>
+                              <button type="button" className={styles.menuItem} disabled={!c.canPost} data-active={c.id === channelId || undefined} onClick={() => setChannelId(c.id)}>
+                                <span>#{c.name}</span>
+                                {!c.canPost && <span className={styles.menuNote}>Queue Pilot cannot post here</span>}
+                              </button>
+                            </PopoverClose>
+                          ))}
+                        </PopoverContent>
+                      </Popover>
                     )}
-                  </section>
-                );
-              })}
-              <div className={styles.timing}>
-                <SegmentedControl label="When" value={timing} onValueChange={(v) => setTiming(v === "later" ? "later" : "now")} options={[{ value: "now", label: "Send now" }, { value: "later", label: "Send later" }]} />
-                {timing === "later" && (
-                  <div className={styles.whenRow}>
-                    <DatePicker label="Day" value={day} onChange={setDay} minDate={new Date(new Date().setHours(0, 0, 0, 0))} maxDate={new Date(Date.now() + 60 * 86_400_000)} showToday />
-                    <TimePicker label="Time" value={time} onChange={setTime} minuteStep={5} format="24h" />
-                    <span className={styles.hint}>Your time zone: {zone}</span>
                   </div>
-                )}
+                ))}
               </div>
-              {result && !result.ok && <p className={styles.bad} role="alert">{result.message}</p>}
-              {problems.length > 0 && chosen.length > 0 && <p className={styles.hint}>{problems[0]}</p>}
-              <div className={styles.foot}>
-                <Button variant="ghost" size="md" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button variant="primary" size="md" loading={sending} disabled={!chosen.length || problems.length > 0} onClick={send}>{chosen.length ? sendLabel : "Choose a place"}</Button>
+              {targets.problem && <p className={styles.bad} role="alert">{targets.problem}</p>}
+
+              <div className={styles.columns}>
+                <div className={styles.write}>
+                  <div className={styles.tabs} role="tablist" aria-label="Text">
+                    {(["all", ...chosen] as const).map((t) => (
+                      <button key={t} type="button" role="tab" aria-selected={tab === t} className={styles.tab} onClick={() => setTab(t)}>
+                        {t === "all" ? "All places" : <><ChannelIcon service={t} size={14} />{NAME[t]}{own[t] !== null && <span className={styles.dot} aria-label="own text" />}</>}
+                      </button>
+                    ))}
+                  </div>
+                  {tab === "all" || !chosen.includes(tab) ? (
+                    <Textarea label="Post" rows={9} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Patch 1.4 is out. Exports now resume after a dropped connection." />
+                  ) : own[tab] === null ? (
+                    <div className={styles.shared}>
+                      <p className={styles.hint}>{NAME[tab]} uses the text from All places.</p>
+                      <Button variant="secondary" size="sm" onClick={() => setOwn({ ...own, [tab]: message })}>Write different text for {NAME[tab]}</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Textarea label={`Text for ${NAME[tab]}`} rows={9} value={own[tab] ?? ""} onChange={(e) => setOwn({ ...own, [tab]: e.target.value })} />
+                      <button type="button" className={styles.link} onClick={() => setOwn({ ...own, [tab]: null })}>Use the text from All places again</button>
+                    </>
+                  )}
+                  <div className={styles.counts}>
+                    {chosen.map((k) => {
+                      const n = textFor(k).length;
+                      return <span key={k} className={n > limitFor(k) ? styles.bad : styles.count}><ChannelIcon service={k} size={12} />{n.toLocaleString("en-GB")} / {limitFor(k).toLocaleString("en-GB")}</span>;
+                    })}
+                  </div>
+                </div>
+
+                <div className={styles.previews} aria-label="Preview">
+                  {chosen.length === 0 && <p className={styles.hint}>Turn on a place to see its preview.</p>}
+                  {chosen.includes("telegram") && (
+                    <figure className={styles.tg}>
+                      <figcaption className={styles.tgHead}><span className={styles.tgAvatar}>{(targets.telegram!.label[0] ?? "T").toUpperCase()}</span><span>{targets.telegram!.label}</span></figcaption>
+                      <div className={styles.tgBubble}>
+                        {textFor("telegram") ? <p className={styles.msg}>{textFor("telegram")}</p> : <p className={styles.empty}>Your post shows here.</p>}
+                        <span className={styles.tgTime} suppressHydrationWarning>{sendAt ? time : "now"}</span>
+                      </div>
+                    </figure>
+                  )}
+                  {chosen.includes("discord") && (
+                    <figure className={styles.dc}>
+                      <figcaption className={styles.dcHead}># {channel?.name ?? "channel"}</figcaption>
+                      <div className={styles.dcRow}>
+                        <span className={styles.dcAvatar} aria-hidden="true">QP</span>
+                        <div className={styles.dcBody}>
+                          <p className={styles.dcName}>Queue Pilot <span className={styles.dcApp}>APP</span> <span className={styles.dcTime} suppressHydrationWarning>{sendAt ? when(sendAt.toISOString()) : "Today"}</span></p>
+                          {textFor("discord") ? <p className={styles.msg}>{textFor("discord")}</p> : <p className={styles.empty}>Your post shows here.</p>}
+                        </div>
+                      </div>
+                    </figure>
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.footer}>
+                <div className={styles.footLeft}>
+                  {result && !result.ok && <p className={styles.bad} role="alert">{result.message}</p>}
+                  {problems.length > 0 && chosen.length > 0 && <p className={styles.hint}>{problems[0]}</p>}
+                  <p className={styles.zone}>Times are in {zone}.</p>
+                </div>
+                <div className={styles.footRight}>
+                  <Popover>
+                    <PopoverTrigger className={styles.whenButton} aria-label="When to send">
+                      <span className={styles.whenLabel}>When</span>
+                      <span suppressHydrationWarning>{sendAt ? when(sendAt.toISOString()) : scheduled ? "Pick a day" : "Now"}</span> ▾
+                    </PopoverTrigger>
+                    <PopoverContent className={styles.whenPanel} align="end">
+                      <PopoverClose asChild>
+                        <button type="button" className={styles.menuItem} data-active={!scheduled || undefined} onClick={() => setScheduled(false)}><span>Now</span><span className={styles.menuNote}>Send as soon as you press the button</span></button>
+                      </PopoverClose>
+                      {quick.map((q) => (
+                        <PopoverClose asChild key={q.label}>
+                          <button type="button" className={styles.menuItem} onClick={() => { setScheduled(true); setDay(q.day); setTime(q.time); }}><span>{q.label}</span></button>
+                        </PopoverClose>
+                      ))}
+                      <div className={styles.pick}>
+                        <span className={styles.whenLabel}>Pick a day and time</span>
+                        <div className={styles.whenRow}>
+                          <DatePicker label="Day" value={day} onChange={(d) => { setDay(d); setScheduled(true); }} minDate={new Date(new Date().setHours(0, 0, 0, 0))} maxDate={new Date(Date.now() + 60 * 86_400_000)} showToday />
+                          <TimePicker label="Time" value={time} onChange={(t) => { setTime(t); setScheduled(true); }} minuteStep={5} format="24h" />
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <Button variant="primary" size="md" loading={sending} disabled={!chosen.length || problems.length > 0} onClick={send}>{action}</Button>
+                </div>
               </div>
             </div>
           )}
