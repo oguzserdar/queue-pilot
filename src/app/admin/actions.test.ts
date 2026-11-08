@@ -130,3 +130,12 @@ describe("recording who changed a setting", () => {
     expect((await pg.query<{ n: number }>(`select count(*)::int as n from qp_settings_audit`)).rows[0].n).toBe(before);
   });
 });
+
+describe("setting names", () => {
+  it.each(["constructor", "toString", "__proto__"])("refuses %s, a name every object has but no setting is called", async (key) => {
+    await pg.query(`update "user" set role = 'admin' where id = 'u1'`);
+    expect(await as("u1", saveAdminSetting, { key, value: "x" })).toBe("/admin?error=key");
+    expect(await as("u1", clearAdminSetting, { key })).toBe("/admin");
+    expect(await as("u1", keepAdminSetting, { key })).toBe("/admin");
+  });
+});

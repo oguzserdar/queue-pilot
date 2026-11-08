@@ -8,6 +8,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://queuepilot:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/queuepilot
+    # Exposing port 3000 with no proxy in front? Set TRUSTED_PROXY_HOP_COUNT=0. Otherwise the number of proxies that
+    # append to X-Forwarded-For.
     ports:
       - "3000:3000"
     depends_on:

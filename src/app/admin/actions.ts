@@ -42,11 +42,14 @@ async function requireAdmin(): Promise<string> {
   return userId;
 }
 
+/** True only for the settings' own names, never for names every object inherits such as constructor. */
+const isSettingKey = (key: string): key is SettingKey => Object.hasOwn(SETTINGS, key);
+
 /** Saves one setting from its own field. */
 export async function saveAdminSetting(form: FormData) {
   const by = await requireAdmin();
   const key = String(form.get("key")) as SettingKey;
-  if (!(key in SETTINGS)) redirect("/admin?error=key");
+  if (!isSettingKey(key)) redirect("/admin?error=key");
   if (!hasDatabase()) redirect("/admin?error=db");
   // A value saved here wins over the server's environment; removing it brings the environment's value back.
   const value = String(form.get("value") ?? "");
@@ -64,7 +67,7 @@ export async function saveAdminSetting(form: FormData) {
 export async function clearAdminSetting(form: FormData) {
   const by = await requireAdmin();
   const key = String(form.get("key")) as SettingKey;
-  if (!(key in SETTINGS) || !hasDatabase()) redirect("/admin");
+  if (!isSettingKey(key) || !hasDatabase()) redirect("/admin");
   await clearSetting(postgresSettingsStore(), key, by);
   redirect(`/admin?cleared=${key}`);
 }
@@ -73,7 +76,7 @@ export async function clearAdminSetting(form: FormData) {
 export async function keepAdminSetting(form: FormData) {
   const by = await requireAdmin();
   const key = String(form.get("key")) as SettingKey;
-  if (!(key in SETTINGS) || !hasDatabase()) redirect("/admin");
+  if (!isSettingKey(key) || !hasDatabase()) redirect("/admin");
   await keepSavedSetting(postgresSettingsStore(), key, by);
   redirect(`/admin?kept=${key}`);
 }
