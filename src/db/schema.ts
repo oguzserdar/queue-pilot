@@ -143,6 +143,11 @@ export const directPostSend = pgTable(
     attempts: integer("attempts").notNull().default(1),
     link: text("link"),
     error: text("error"),
+    /**
+     * Set when this place follows a Buffer post: it goes out when Buffer has published that post, checked at the
+     * post's time, and the automatic copy of that post stands down.
+     */
+    bufferPostId: text("buffer_post_id"),
     /** The Discord server the channel belongs to, so a scheduled post never lands in a server connected later. */
     guildId: text("guild_id"),
     /** When a scheduled post goes out; null for a post sent at once. */
@@ -160,6 +165,7 @@ export const directPostSend = pgTable(
     primaryKey({ columns: [t.postId, t.kind] }),
     index("qp_announcement_send_user_created").on(t.userId, t.createdAt),
     index("qp_announcement_send_due").on(t.status, t.sendAt),
+    index("qp_announcement_send_buffer_post").on(t.userId, t.bufferPostId),
   ],
 );
 

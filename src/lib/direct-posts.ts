@@ -34,9 +34,21 @@ export type DirectPostRow = PostItem & {
   callStartedAt: Date | null;
   /** Until when the current claim holds; null on rows written before claims were recorded. */
   claimedUntil: Date | null;
+  /** The Buffer post this place follows, or null for a post of its own. */
+  bufferPostId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
+
+/**
+ * What Buffer says about a followed post: published, not yet (with its current time), gone (failed, deleted, or
+ * never published by Buffer), or not readable right now (rate limit, network).
+ */
+export type BufferState =
+  | { state: "sent" }
+  | { state: "waiting"; dueAt: Date | null }
+  | { state: "gone"; reason: string }
+  | { state: "busy" };
 
 /** A row picked up by the due run, with its owner. */
 export type DueRow = DirectPostRow & { userId: string };
@@ -47,8 +59,19 @@ export type ScheduleChange = { sendAt?: Date; texts?: Partial<Record<PostKind, s
 export type DirectPostStore = {
   /** Claims one destination of a new post to send now; false when it already exists. */
   claim(userId: string, postId: string, item: PostItem, now: Date): Promise<boolean>;
-  /** Stores one destination of a new post to send at sendAt; false when it already exists. */
-  schedule(userId: string, postId: string, item: PostItem, sendAt: Date, now: Date): Promise<boolean>;
+  /** Stores one destination of a new post to send at sendAt; false when it already exists. With bufferPostId, it follows that Buffer post. */
+  schedule(userId: string, postId: string, item: PostItem, sendAt: Date, now: Date, bufferPostId?: string): Promise<boolean>;
+  /**
+   * Turns one place of a follow-up on, or updates it: a new row, or a scheduled or cancelled one set to wait again
+   * with this text. A place already sent, sending or failed is left as it is; returns false then.
+   */
+  follow(userId: string, postId: string, item: PostItem, sendAt: Date, now: Date, bufferPostId: string): Promise<boolean>;
+  /** Turns one place of a follow-up off while it still waits. */
+  unfollow(userId: string, postId: string, kind: PostKind, now: Date): Promise<void>;
+  /** Puts a claimed row back to wait until sendAt, before any call was made (its Buffer post is not out yet). */
+  defer(userId: string, postId: string, kind: PostKind, sendAt: Date, now: Date): Promise<void>;
+  /** Of these Buffer post ids, the ones this person has a follow-up for that is not cancelled. */
+  followedBufferPosts(userId: string, bufferPostIds: string[]): Promise<Set<string>>;
   /** Changes the time or text of this person's scheduled destinations; returns the rows still scheduled. */
   reschedule(userId: string, postId: string, change: ScheduleChange, now: Date): Promise<DirectPostRow[]>;
   /** Cancels this person's scheduled destinations; returns how many were cancelled. */
@@ -74,6 +97,8 @@ export type DirectPostDeps = {
   post: (item: PostItem, userId: string) => Promise<{ link: string | null }>;
   /** True when the destination answered with a refusal, so nothing was posted. */
   refused: (e: unknown) => boolean;
+  /** Reads one followed Buffer post; without it, followed rows wait. */
+  bufferCheck?: (userId: string, bufferPostId: string) => Promise<BufferState>;
   now?: () => Date;
 };
 
@@ -189,17 +214,62 @@ export async function scheduleDirectPost(userId: string, key: string, items: Pos
 }
 
 /**
+ * When to look again at a Buffer post that is not out yet: at its new time if Buffer moved it later; every 5 minutes
+ * for the first 2 hours past its time, then hourly; after a day, never (it is marked not sent).
+ *
+ * @returns The next check, or null to give up
+ */
+export function nextBufferCheck(state: BufferState, now: Date): Date | null {
+  if (state.state === "busy") return new Date(now.getTime() + 5 * 60_000);
+  if (state.state !== "waiting") return null;
+  const due = state.dueAt?.getTime();
+  if (due && due > now.getTime()) return new Date(due + 60_000);
+  const late = due ? now.getTime() - due : 0;
+  if (late > 24 * 3_600_000) return null;
+  return new Date(now.getTime() + (late < 2 * 3_600_000 ? 5 * 60_000 : 3_600_000));
+}
+
+/** The id of the follow-up for one Buffer post: one per person and post, so ticking places again edits it. */
+export function followUpIdFor(userId: string, bufferPostId: string): Promise<string> {
+  return postIdFor(userId, `buffer:${bufferPostId}`);
+}
+
+/**
  * Sends everything that is due: scheduled posts whose time has come, and claims a dead worker left before calling
  * Telegram or Discord. Each destination is sent at most once, whatever runs at the same time. With `only`, just that
  * post at that revision, so a timer set before an edit or a cancel sends nothing.
  *
  * @returns One result per destination this run handled
  */
-export async function runDue(deps: DirectPostDeps, opts: { limit?: number; only?: { postId: string; revision: number } } = {}): Promise<(DirectPostResult & { userId: string; postId: string })[]> {
+export async function runDue(deps: DirectPostDeps, opts: { limit?: number; only?: { postId: string; revision: number } } = {}): Promise<(DirectPostResult & { userId: string; postId: string; next?: Date })[]> {
   const now = deps.now ?? (() => new Date());
   const due = await deps.store.claimDue(now(), opts.limit ?? 25, opts.only);
-  const out: (DirectPostResult & { userId: string; postId: string })[] = [];
+  const out: (DirectPostResult & { userId: string; postId: string; next?: Date })[] = [];
+  // One Buffer read per followed post, however many places follow it.
+  const checks = new Map<string, Promise<BufferState>>();
   for (const row of due) {
+    if (row.bufferPostId) {
+      const key = `${row.userId}|${row.bufferPostId}`;
+      if (!checks.has(key)) checks.set(key, deps.bufferCheck ? deps.bufferCheck(row.userId, row.bufferPostId).catch((): BufferState => ({ state: "busy" })) : Promise.resolve({ state: "busy" }));
+      const state = await checks.get(key)!;
+      if (state.state === "gone") {
+        await deps.store.finish(row.userId, row.postId, row.kind, { status: "failed", link: null, error: state.reason }, now());
+        out.push({ kind: row.kind, label: row.label, status: "failed", link: null, error: state.reason, userId: row.userId, postId: row.postId });
+        continue;
+      }
+      if (state.state !== "sent") {
+        const next = nextBufferCheck(state, now());
+        if (!next) {
+          const reason = "Buffer had not published the post a day after its time, so this was not sent.";
+          await deps.store.finish(row.userId, row.postId, row.kind, { status: "failed", link: null, error: reason }, now());
+          out.push({ kind: row.kind, label: row.label, status: "failed", link: null, error: reason, userId: row.userId, postId: row.postId });
+        } else {
+          await deps.store.defer(row.userId, row.postId, row.kind, next, now());
+          out.push({ kind: row.kind, label: row.label, status: "scheduled", link: null, error: null, userId: row.userId, postId: row.postId, next });
+        }
+        continue;
+      }
+    }
     const r = await deliver(row.userId, row.postId, { kind: row.kind, target: row.target, label: row.label, text: row.text, guildId: row.guildId }, deps);
     if (r) out.push({ ...r, userId: row.userId, postId: row.postId });
   }
@@ -230,7 +300,7 @@ export function memoryDirectPostStore(): DirectPostStore {
   const key = (a: string, k: PostKind) => `${a}|${k}`;
   const base = (userId: string, postId: string, item: PostItem, now: Date): Mem => ({
     ...item, guildId: item.guildId ?? null, userId, postId, status: "pending", attempts: 1, link: null, error: null, sendAt: null, revision: 0,
-    claimedUntil: new Date(now.getTime() + CLAIM_MS), callStartedAt: null, createdAt: now, updatedAt: now,
+    claimedUntil: new Date(now.getTime() + CLAIM_MS), callStartedAt: null, bufferPostId: null, createdAt: now, updatedAt: now,
   });
   const out = ({ userId: _u, ...r }: Mem): DirectPostRow => ({ ...r });
   return {
@@ -239,10 +309,29 @@ export function memoryDirectPostStore(): DirectPostStore {
       rows.set(key(postId, item.kind), base(userId, postId, item, now));
       return true;
     },
-    async schedule(userId, postId, item, sendAt, now) {
+    async schedule(userId, postId, item, sendAt, now, bufferPostId) {
       if (rows.has(key(postId, item.kind))) return false;
-      rows.set(key(postId, item.kind), { ...base(userId, postId, item, now), status: "scheduled", sendAt, claimedUntil: null });
+      rows.set(key(postId, item.kind), { ...base(userId, postId, item, now), status: "scheduled", sendAt, claimedUntil: null, bufferPostId: bufferPostId ?? null });
       return true;
+    },
+    async follow(userId, postId, item, sendAt, now, bufferPostId) {
+      const r = rows.get(key(postId, item.kind));
+      if (!r) { rows.set(key(postId, item.kind), { ...base(userId, postId, item, now), status: "scheduled", sendAt, claimedUntil: null, bufferPostId }); return true; }
+      if (r.userId !== userId || (r.status !== "scheduled" && r.status !== "cancelled")) return false;
+      Object.assign(r, { ...item, guildId: item.guildId ?? null, status: "scheduled", sendAt, revision: r.revision + 1, claimedUntil: null, callStartedAt: null, updatedAt: now });
+      return true;
+    },
+    async unfollow(userId, postId, kind, now) {
+      const r = rows.get(key(postId, kind));
+      if (r && r.userId === userId && r.status === "scheduled") Object.assign(r, { status: "cancelled", revision: r.revision + 1, updatedAt: now });
+    },
+    async defer(userId, postId, kind, sendAt, now) {
+      const r = rows.get(key(postId, kind));
+      if (r && r.userId === userId && r.status === "pending" && !r.callStartedAt) Object.assign(r, { status: "scheduled", sendAt, claimedUntil: null, updatedAt: now });
+    },
+    async followedBufferPosts(userId, bufferPostIds) {
+      const want = new Set(bufferPostIds);
+      return new Set([...rows.values()].filter((r) => r.userId === userId && r.bufferPostId && want.has(r.bufferPostId) && r.status !== "cancelled").map((r) => r.bufferPostId!));
     },
     async reschedule(userId, postId, change, now) {
       const mine = [...rows.values()].filter((r) => r.userId === userId && r.postId === postId && r.status === "scheduled");

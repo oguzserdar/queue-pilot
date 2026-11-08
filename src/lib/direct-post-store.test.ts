@@ -101,3 +101,40 @@ describe("postgres due claims", () => {
   });
 });
 
+describe("postgres follow-ups", () => {
+  const at = new Date("2026-11-09T18:01:00Z");
+  const tg = { kind: "telegram" as const, target: "-100", label: "News", text: "Up now." };
+
+  it("adds a place, updates it while waiting or cancelled, and leaves one that went out", async () => {
+    const s = postgresDirectPostStore();
+    expect(await s.follow("u1", "fu1", tg, at, now, "bp1")).toBe(true);
+    await s.unfollow("u1", "fu1", "telegram", now);
+    expect((await s.followedBufferPosts("u1", ["bp1"])).size).toBe(0);
+    expect(await s.follow("u1", "fu1", { ...tg, text: "Back on." }, at, now, "bp1")).toBe(true);
+    const [row] = await s.rows("u1", "fu1");
+    expect([row.status, row.text, row.revision, row.bufferPostId]).toEqual(["scheduled", "Back on.", 2, "bp1"]);
+    expect(await s.followedBufferPosts("u1", ["bp1", "bp9"])).toEqual(new Set(["bp1"]));
+    await s.claimDue(new Date("2026-11-09T18:02:00Z"), 50, { postId: "fu1", revision: 2 });
+    await s.startCall("u1", "fu1", "telegram", now);
+    await s.finish("u1", "fu1", "telegram", { status: "sent", link: null, error: null }, now);
+    expect(await s.follow("u1", "fu1", { ...tg, text: "Again" }, at, now, "bp1")).toBe(false);
+  });
+
+  it("never lets another person overwrite a follow-up", async () => {
+    const s = postgresDirectPostStore();
+    await s.follow("u1", "fu2", tg, at, now, "bp2");
+    expect(await s.follow("u2", "fu2", { ...tg, text: "Mine now" }, at, now, "bp2")).toBe(false);
+    expect((await s.rows("u1", "fu2"))[0].text).toBe("Up now.");
+  });
+
+  it("puts a claimed place back to wait without a call", async () => {
+    const s = postgresDirectPostStore();
+    await s.follow("u1", "fu3", tg, at, now, "bp3");
+    await s.claimDue(new Date("2026-11-09T18:02:00Z"), 50, { postId: "fu3", revision: 0 });
+    const later = new Date("2026-11-09T18:07:00Z");
+    await s.defer("u1", "fu3", "telegram", later, now);
+    const [row] = await s.rows("u1", "fu3");
+    expect([row.status, row.sendAt?.toISOString(), row.callStartedAt]).toEqual(["scheduled", later.toISOString(), null]);
+  });
+});
+

@@ -14,6 +14,7 @@ import { botTokens, echoForUser } from "@/lib/echo-run";
 import { pruneRequestCounts } from "@/lib/rate-limit";
 import { postgresEchoStore } from "@/lib/echo-store";
 import { runDueDirectPosts } from "@/lib/direct-post-run";
+import { postgresDirectPostStore } from "@/lib/direct-post-store";
 
 export const maxDuration = 300;
 const BUDGET_MS = 240_000;
@@ -50,7 +51,7 @@ export async function GET(req: Request) {
       const token = await bufferAccessToken(auth, userId);
       const { result: snap } = await withBudget("cron-echo", userId, () => refreshSnapshot(userId, token, { store: snapshots }));
       if (!snap) continue;
-      const out = await echoForUser(userId, snap.data.posts, { store, tokens });
+      const out = await echoForUser(userId, snap.data.posts, { store, tokens, followed: (ids) => postgresDirectPostStore().followedBufferPosts(userId, ids) });
       users++;
       sent += out.filter((r) => r.status === "sent").length;
       failed += out.filter((r) => r.status === "failed").length;

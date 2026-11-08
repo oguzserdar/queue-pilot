@@ -1,0 +1,2 @@
+ALTER TABLE "qp_announcement_send" ADD COLUMN "buffer_post_id" text;--> statement-breakpoint
+CREATE INDEX "qp_announcement_send_buffer_post" ON "qp_announcement_send" USING btree ("user_id","buffer_post_id");
