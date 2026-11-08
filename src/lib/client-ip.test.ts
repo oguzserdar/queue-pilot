@@ -11,8 +11,13 @@ const h = (xff?: string, extra: Record<string, string> = {}) => new Headers({ ..
 const hops = (n: string | undefined) => ({ TRUSTED_PROXY_HOP_COUNT: n });
 
 describe("trustedProxyHopCount", () => {
-  it("is 1 when unset, the shape of Vercel and one reverse proxy", () => {
-    expect(trustedProxyHopCount({})).toBe(1);
+  it("trusts nothing when unset on a self-hosted copy, so a directly reachable port cannot be spoofed", () => {
+    expect(trustedProxyHopCount({})).toBe(0);
+    expect(trustedProxyHopCount(hops(""))).toBe(0);
+  });
+  it("is 1 when unset on Vercel, whose edge writes X-Forwarded-For itself", () => {
+    expect(trustedProxyHopCount({ VERCEL: "1" })).toBe(1);
+    expect(trustedProxyHopCount({ VERCEL: "1", TRUSTED_PROXY_HOP_COUNT: "0" })).toBe(0);
   });
   it("reads 0 to 10", () => {
     expect(trustedProxyHopCount(hops("0"))).toBe(0);
@@ -25,6 +30,13 @@ describe("trustedProxyHopCount", () => {
 });
 
 describe("clientIp", () => {
+  it("with no settings on a self-hosted copy, forged X-Forwarded-For values share one bucket", () => {
+    expect(clientIp(h("192.0.2.9"), {})).toBe(UNTRUSTED_CLIENT_IP);
+    expect(clientIp(h("192.0.2.10"), {})).toBe(UNTRUSTED_CLIENT_IP);
+  });
+  it("with no settings on Vercel, takes the entry Vercel's edge wrote", () => {
+    expect(clientIp(h("6.6.6.6, 203.0.113.7"), { VERCEL: "1" })).toBe("203.0.113.7");
+  });
   it("with hop count 0, a forged X-Forwarded-For cannot choose a bucket", () => {
     expect(clientIp(h("203.0.113.7"), hops("0"))).toBe(UNTRUSTED_CLIENT_IP);
     expect(clientIp(h("198.51.100.9"), hops("0"))).toBe(UNTRUSTED_CLIENT_IP);
@@ -63,6 +75,12 @@ describe("clientIp", () => {
   it("with TRUSTED_PROXIES set, answers the untrusted key when every entry is a proxy or the client entry is malformed", () => {
     expect(clientIp(h("10.0.0.3, 10.0.0.2"), { TRUSTED_PROXIES: "10.0.0.0/8" })).toBe(UNTRUSTED_CLIENT_IP);
     expect(clientIp(h("junk, 10.0.0.2"), { TRUSTED_PROXIES: "10.0.0.2" })).toBe(UNTRUSTED_CLIENT_IP);
+  });
+  it("fails closed when TRUSTED_PROXIES holds an invalid entry, instead of falling back to the hop count", () => {
+    for (const bad of ["bad-range", "10.0.0.0/33", "10.0.0.2, bad-range", "bad-range,10.0.0.0/8"]) {
+      expect(clientIp(h("192.0.2.9, 10.0.0.2"), { TRUSTED_PROXIES: bad, VERCEL: "1" })).toBe(UNTRUSTED_CLIENT_IP);
+      expect(clientIp(h("192.0.2.9, 10.0.0.2"), { TRUSTED_PROXIES: bad, TRUSTED_PROXY_HOP_COUNT: "1" })).toBe(UNTRUSTED_CLIENT_IP);
+    }
   });
 });
 

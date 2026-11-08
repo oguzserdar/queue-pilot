@@ -4,9 +4,10 @@
  * of the trusted hop can be written by the client, so they are never read, and x-real-ip is never a fallback. When
  * no trustworthy address can be found, every such request shares one bucket instead of letting a client pick its own.
  *
- * The operator setting is TRUSTED_PROXY_HOP_COUNT: how many proxies append to X-Forwarded-For (1 on Vercel, which
- * sets the header itself; 0 when port 3000 is exposed with no proxy in front). TRUSTED_PROXIES, when set, still
- * works and wins: the chain is walked from the right past those addresses or CIDR ranges.
+ * The operator setting is TRUSTED_PROXY_HOP_COUNT: how many proxies append to X-Forwarded-For. Unset, it is 1 on
+ * Vercel (whose edge writes the header itself) and 0 everywhere else, so a self-hosted port reachable directly cannot
+ * be spoofed. TRUSTED_PROXIES, when set, wins: the chain is walked from the right past those addresses or CIDR
+ * ranges. One invalid entry in it trusts nothing, rather than falling back to the hop count.
  */
 import ipaddr from "ipaddr.js";
 
@@ -29,11 +30,12 @@ type Env = Record<string, string | undefined>;
  * How many proxies in front of the app append to X-Forwarded-For.
  *
  * @param env - The server's environment
- * @returns 1 when TRUSTED_PROXY_HOP_COUNT is unset; 0 (trust no forwarded header) when it is not a whole number 0-10
+ * @returns When TRUSTED_PROXY_HOP_COUNT is unset, 1 on Vercel and 0 elsewhere; 0 (trust no forwarded header) when it
+ *   is not a whole number 0-10
  */
 export function trustedProxyHopCount(env: Env = process.env): number {
   const raw = env.TRUSTED_PROXY_HOP_COUNT;
-  if (raw === undefined || raw === "") return 1;
+  if (raw === undefined || raw === "") return env.VERCEL === "1" ? 1 : 0;
   return /^\d{1,2}$/.test(raw) && Number(raw) <= MAX_HOPS ? Number(raw) : 0;
 }
 
@@ -51,16 +53,21 @@ function key(ip: ipaddr.IPv4 | ipaddr.IPv6): string {
   return ipaddr.fromByteArray(bytes).toNormalizedString();
 }
 
-function trustedRanges(env: Env): [ipaddr.IPv4 | ipaddr.IPv6, number][] {
-  return (env.TRUSTED_PROXIES ?? "").split(",").map((s) => s.trim()).filter(Boolean).flatMap((s): [ipaddr.IPv4 | ipaddr.IPv6, number][] => {
+/** The TRUSTED_PROXIES ranges, or null when any entry is invalid, so a typo trusts nothing instead of widening trust. */
+function trustedRanges(env: Env): [ipaddr.IPv4 | ipaddr.IPv6, number][] | null {
+  const ranges: [ipaddr.IPv4 | ipaddr.IPv6, number][] = [];
+  for (const s of (env.TRUSTED_PROXIES ?? "").split(",").map((v) => v.trim()).filter(Boolean)) {
     try {
-      if (s.includes("/")) return [ipaddr.parseCIDR(s)];
-      const ip = ipaddr.process(s);
-      return [[ip, ip.kind() === "ipv4" ? 32 : 128]];
+      if (s.includes("/")) ranges.push(ipaddr.parseCIDR(s));
+      else {
+        const ip = ipaddr.process(s);
+        ranges.push([ip, ip.kind() === "ipv4" ? 32 : 128]);
+      }
     } catch {
-      return [];
+      return null;
     }
-  });
+  }
+  return ranges;
 }
 
 const inRange = (ip: ipaddr.IPv4 | ipaddr.IPv6, [net, bits]: [ipaddr.IPv4 | ipaddr.IPv6, number]) => ip.kind() === net.kind() && ip.match(net as never, bits);
@@ -77,6 +84,7 @@ export function clientIp(headers: Headers, env: Env = process.env): string {
   const chain = (headers.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim());
   if (!headers.has("x-forwarded-for")) return UNTRUSTED_CLIENT_IP;
   const ranges = trustedRanges(env);
+  if (!ranges) return UNTRUSTED_CLIENT_IP;
   if (ranges.length) {
     for (let i = chain.length - 1; i >= 0; i--) {
       const ip = canonical(chain[i]);
