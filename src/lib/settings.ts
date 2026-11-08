@@ -8,7 +8,7 @@
  * the environment's. One exception covers the upgrade: before v0.8 the environment won, so a value saved before then
  * (no "admin wins" mark) does not replace a set environment value. The environment's value stays in use until the
  * operator saves the value again, or chooses "Use the saved value", in /admin. Bootstrap values (SETTINGS_KEY, SESSION_SECRET, DATABASE_URL, ADMIN_SETUP_CODE, CRON_SECRET,
- * BUFFER_REDIRECT_URI, TRUSTED_PROXIES) are environment-only and not listed here: a key never lives in the database it
+ * BUFFER_REDIRECT_URI, TRUSTED_PROXIES, TRUSTED_PROXY_HOP_COUNT) are environment-only and not listed here: a key never lives in the database it
  * unlocks, and the server needs them before /admin can open.
  * The storage itself is injected so the same rules run against Postgres in production and memory in tests.
  */
