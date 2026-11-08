@@ -118,6 +118,33 @@ export const echoClaim = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.postId, t.destinationId] })],
 );
 
+/** An announcement's result at one destination. "pending" is claimed and being sent; it reads as "uncertain" later. */
+export const announcementStatus = pgEnum("qp_announcement_status", ["pending", "sent", "failed", "uncertain"]);
+
+/**
+ * One announcement sent to Telegram and/or Discord on its own, without a Buffer post. One row per destination, keyed
+ * by (announcement, kind): the row is claimed before sending, so a double click or a retry can never post it twice.
+ */
+export const announcementSend = pgTable(
+  "qp_announcement_send",
+  {
+    announcementId: text("announcement_id").notNull(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    kind: echoKind("kind").notNull(),
+    /** The Discord channel id or the Telegram chat id it was sent to. */
+    target: text("target").notNull(),
+    label: text("label").notNull(),
+    text: text("text").notNull(),
+    status: announcementStatus("status").notNull(),
+    attempts: integer("attempts").notNull().default(1),
+    link: text("link"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.announcementId, t.kind] }), index("qp_announcement_send_user_created").on(t.userId, t.createdAt)],
+);
+
 /**
  * Past posts the user picked as examples of how they write. The text is copied in, so an example survives the post
  * leaving Buffer's history; the AI reads these before drafting (get_my_voice).

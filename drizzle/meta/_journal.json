@@ -246,6 +246,13 @@
       "when": 1794129451171,
       "tag": "20261108091731_echo_status_uncertain",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794130128504,
+      "tag": "20261108092848_announcements",
+      "breakpoints": true
     }
   ]
 }
