@@ -242,7 +242,7 @@ function Copies({ copies, discordResult }: { copies: LiveCopy[]; discordResult: 
       <ul className={styles.rows}>
         <li className={styles.row}>
           <div className={styles.name}>
-            <strong>Telegram</strong>
+            <strong className={styles.brand}><ChannelIcon service="telegram" size={18} />Telegram</strong>
             <span className={styles.muted}>{tg ? tg.label : "A channel you own"}</span>
           </div>
           <span className={styles.does}>{tg ? "Gets copies of your sent posts" : "Add the Queue Pilot bot as an admin, then post a code"}</span>
@@ -255,7 +255,7 @@ function Copies({ copies, discordResult }: { copies: LiveCopy[]; discordResult: 
         </li>
         <li className={styles.row}>
           <div className={styles.name}>
-            <strong>Discord</strong>
+            <strong className={styles.brand}><ChannelIcon service="discord" size={18} />Discord</strong>
             <span className={styles.muted}>{dc ? dc.label : "A server where you can add bots"}</span>
           </div>
           <span className={styles.does}>{dc ? "Gets copies of your sent posts" : "Adds the Queue Pilot bot; it posts in your announcements channel"}</span>

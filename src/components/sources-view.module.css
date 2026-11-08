@@ -15,6 +15,7 @@
 .row[data-off="true"] .name strong, .row[data-off="true"] .does { color: var(--text-muted); }
 .name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .name strong { font-weight: 600; }
+.brand { display: inline-flex; align-items: center; gap: 8px; }
 .does { color: var(--text-secondary); }
 .muted { color: var(--text-muted); font-size: var(--text-xs); }
 .ok { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-weight: 600; color: var(--success); justify-self: end; }
