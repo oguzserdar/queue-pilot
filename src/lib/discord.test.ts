@@ -133,3 +133,18 @@ describe("postAnnouncement", () => {
     expect(messageUrl("g", "c1", "m1")).toBe("https://discord.com/channels/g/c1/m1");
   });
 });
+
+describe("an answer that may still have posted", () => {
+  it("is not a refusal when Discord answers 5xx or with no message id", async () => {
+    const e1 = await postAnnouncement("t", "c", "hi", async () => new Response("bad gateway", { status: 502 })).catch((e) => e);
+    expect(e1).toBeInstanceOf(Error);
+    expect(e1).not.toBeInstanceOf(DiscordError);
+    const e2 = await postAnnouncement("t", "c", "hi", async () => new Response("{}", { status: 200 })).catch((e) => e);
+    expect(e2).not.toBeInstanceOf(DiscordError);
+  });
+  it("is a refusal when Discord answers 4xx with its reason", async () => {
+    const e = await postAnnouncement("t", "c", "hi", async () => new Response(JSON.stringify({ message: "Missing Permissions" }), { status: 403 })).catch((e) => e);
+    expect(e).toBeInstanceOf(DiscordError);
+  });
+});
+

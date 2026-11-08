@@ -22,6 +22,9 @@ export function postgresAnnounceStore(): AnnounceStore {
         .returning({ id: announcementSend.announcementId });
       return rows.length === 1;
     },
+    async rows(userId, announcementId) {
+      return (await db().select().from(announcementSend).where(and(eq(announcementSend.userId, userId), eq(announcementSend.announcementId, announcementId)))).map(toRow);
+    },
     async reclaimFailed(userId, announcementId, kind, now) {
       // One statement: only a failed row of this user's flips back to pending, so two resends cannot both win.
       const [row] = await db()

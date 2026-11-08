@@ -27,7 +27,10 @@ async function call<T>(token: string, method: string, body: Record<string, unkno
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(10_000),
   });
-  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string; parameters?: { retry_after?: number } };
+  const json = (await res.json().catch(() => null)) as { ok?: boolean; result?: T; description?: string; parameters?: { retry_after?: number } } | null;
+  // Only Telegram's own refusal (a 4xx with ok:false) means nothing was posted. A 5xx or an answer we cannot read may
+  // still have posted, so it is a plain error, which callers treat as "may have been sent".
+  if (res.status >= 500 || !json) throw new Error(`Telegram answered ${res.status} without a readable result`);
   if (!json.ok) throw new TelegramError(json.description ?? `Telegram answered ${res.status}`, json.parameters?.retry_after);
   return json.result as T;
 }

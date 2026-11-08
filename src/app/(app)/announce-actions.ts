@@ -66,7 +66,7 @@ function deps(tokens: { telegram?: string; discord?: string }, guildId: string |
   };
 }
 
-export type SendAnnouncementInput = { telegram?: { text: string }; discord?: { channelId: string; text: string } };
+export type SendAnnouncementInput = { key: string; telegram?: { text: string }; discord?: { channelId: string; text: string } };
 export type SendAnnouncementResult =
   | { ok: true; results: { kind: AnnounceKind; label: string; status: AnnounceStatus; link: string | null; error: string | null }[] }
   | { ok: false; message: string };
@@ -75,6 +75,7 @@ export type SendAnnouncementResult =
 export async function sendAnnouncementAction(input: SendAnnouncementInput): Promise<SendAnnouncementResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (typeof input?.key !== "string" || !/^[A-Za-z0-9-]{8,64}$/.test(input.key)) return { ok: false, message: "Open the announcement again and send it from there." };
   if (!(await limit("outbound", userId)).ok) return { ok: false, message: "Too many sends this hour. Try again later." };
   const [dests, tokens] = await Promise.all([postgresEchoStore().destinations(userId), botTokens()]);
   const items: AnnounceItem[] = [];
@@ -102,7 +103,7 @@ export async function sendAnnouncementAction(input: SendAnnouncementInput): Prom
   }
   if (!items.length) return { ok: false, message: "Choose at least one place to send it." };
 
-  const { results } = await sendAnnouncement(userId, items, deps(tokens, dc?.guildId ?? null));
+  const { results } = await sendAnnouncement(userId, input.key, items, deps(tokens, dc?.guildId ?? null));
   if (results.some((r) => r.status === "sent" || r.status === "uncertain")) {
     await recordAction(userId, "announcement_sent", { via: "app" }, { name: results.filter((r) => r.status !== "failed").map((r) => (r.kind === "telegram" ? "Telegram" : "Discord")).join(" and ") });
   }

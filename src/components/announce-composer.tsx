@@ -34,6 +34,8 @@ export function AnnounceComposer({ recent, loadTargets = announceTargets }: { re
   const [own, setOwn] = useState<Record<Kind, string | null>>({ telegram: null, discord: null });
   const [channelId, setChannelId] = useState<string | null>(null);
   const [result, setResult] = useState<SendAnnouncementResult | null>(null);
+  // One key per composed announcement: every submit of this form reuses it, so a retry never posts twice.
+  const [key, setKey] = useState(() => crypto.randomUUID());
   const [loading, startLoad] = useTransition();
   const [sending, startSend] = useTransition();
   const { toast } = useToastStack();
@@ -65,6 +67,7 @@ export function AnnounceComposer({ recent, loadTargets = announceTargets }: { re
   const send = () =>
     startSend(async () => {
       const r = await sendAnnouncementAction({
+        key,
         ...(on.telegram && targets?.telegram ? { telegram: { text: textFor("telegram") } } : {}),
         ...(on.discord && targets?.discord && channelId ? { discord: { channelId, text: textFor("discord") } } : {}),
       });
@@ -75,21 +78,21 @@ export function AnnounceComposer({ recent, loadTargets = announceTargets }: { re
   return (
     <>
       <div className={styles.bar}>
-        <Button variant="secondary" size="md" onClick={openComposer}>Write an announcement</Button>
-        <span className={styles.hint}>Send to your Telegram and Discord on their own, with no Buffer post needed.</span>
+        <Button variant="secondary" size="md" onClick={openComposer}>Write a post</Button>
+        <span className={styles.hint}>Post straight to your Telegram channel or a Discord channel, with no Buffer post needed.</span>
       </div>
       {recent.length > 0 && <Recent rows={recent} />}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent title="Write an announcement" description="Each place gets exactly the text shown under it.">
+        <DialogContent title="Write a post" description="Each place gets exactly the text shown under it.">
           {loading || !targets ? (
             <p className={styles.hint}>Checking where Queue Pilot can post…</p>
           ) : result?.ok ? (
-            <Results result={result} onDone={() => { setOpen(false); setMessage(""); setOwn({ telegram: null, discord: null }); }} />
+            <Results result={result} onDone={() => { setOpen(false); setMessage(""); setOwn({ telegram: null, discord: null }); setKey(crypto.randomUUID()); }} />
           ) : places.length === 0 ? (
             <p className={styles.hint}>Connect a Telegram channel or add Queue Pilot to a Discord server first.{targets.problem ? ` ${targets.problem}` : ""}</p>
           ) : (
             <div className={styles.form}>
-              <Textarea label="Announcement" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Patch 1.4 is out. Exports now resume after a dropped connection." />
+              <Textarea label="Post" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Patch 1.4 is out. Exports now resume after a dropped connection." />
               {targets.problem && <p className={styles.bad} role="alert">{targets.problem}</p>}
               {places.map((k) => {
                 const text = textFor(k);
@@ -149,13 +152,13 @@ function Results({ result, onDone }: { result: Extract<SendAnnouncementResult, {
   );
 }
 
-/** The last announcements, each place with its result; a refused place can be sent again from here. */
+/** The last direct posts, each place with its result; a refused place can be sent again from here. */
 function Recent({ rows }: { rows: AnnounceRowView[] }) {
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
   return (
     <div className={styles.recent}>
-      <h3 className={styles.recentTitle}>Recent announcements</h3>
+      <h3 className={styles.recentTitle}>Recent posts</h3>
       <ul className={[styles.results, styles.recentList].join(" ")}>
         {rows.map((r) => (
           <li key={`${r.announcementId}-${r.kind}`} className={styles.result} data-status={r.status}>

@@ -25,6 +25,8 @@ export type AnnounceRow = AnnounceItem & {
 export type AnnounceStore = {
   /** Claims one destination of a new announcement; false when it is already claimed. */
   claim(userId: string, announcementId: string, item: AnnounceItem, now: Date): Promise<boolean>;
+  /** This person's rows for one announcement, so a repeated submit returns what was recorded. */
+  rows(userId: string, announcementId: string): Promise<AnnounceRow[]>;
   /** Claims a failed destination again for a resend; the stored row when claimed, else null. */
   reclaimFailed(userId: string, announcementId: string, kind: AnnounceKind, now: Date): Promise<AnnounceRow | null>;
   finish(userId: string, announcementId: string, kind: AnnounceKind, result: { status: AnnounceStatus; link: string | null; error: string | null }, now: Date): Promise<void>;
@@ -38,7 +40,6 @@ export type AnnounceDeps = {
   /** True when the destination answered with a refusal, so nothing was posted. */
   refused: (e: unknown) => boolean;
   now?: () => Date;
-  newId?: () => string;
 };
 
 export type AnnounceResult = { kind: AnnounceKind; label: string; status: AnnounceStatus; link: string | null; error: string | null };
@@ -62,22 +63,38 @@ async function deliver(userId: string, announcementId: string, item: AnnounceIte
 }
 
 /**
- * Sends one announcement to each chosen destination, one after the other.
+ * The stored id for one composed announcement: the form's key bound to the person, so two people can never share a
+ * row and the browser can never name someone else's.
+ */
+export async function announcementIdFor(userId: string, key: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`qp-announcement|${userId}|${key}`));
+  return Buffer.from(digest).toString("base64url");
+}
+
+/**
+ * Sends one announcement to each chosen destination, one after the other. The key comes from the form and stays the
+ * same for every submit of it, so a double click, a second tab or a retry after a dropped connection sends nothing
+ * new and returns what was recorded. A new announcement, even with the same text, gets a new key.
  *
  * @param userId - The signed-in person; every row is scoped to them
+ * @param key - The form's own id for this announcement
  * @param items - At most one per destination kind, each with its exact text
- * @returns The announcement id and one result per destination
+ * @returns The announcement id and one result per destination: sent now, or as recorded earlier
  * @throws Error when two items name the same destination kind or none is given
  */
-export async function sendAnnouncement(userId: string, items: AnnounceItem[], deps: AnnounceDeps): Promise<{ announcementId: string; results: AnnounceResult[] }> {
+export async function sendAnnouncement(userId: string, key: string, items: AnnounceItem[], deps: AnnounceDeps): Promise<{ announcementId: string; results: AnnounceResult[] }> {
   if (!items.length) throw new Error("Choose at least one place to send it.");
   if (new Set(items.map((i) => i.kind)).size !== items.length) throw new Error("Each place can get one message.");
   const now = deps.now ?? (() => new Date());
-  const announcementId = (deps.newId ?? (() => crypto.randomUUID()))();
+  const announcementId = await announcementIdFor(userId, key);
   const results: AnnounceResult[] = [];
   for (const item of items) {
-    if (!(await deps.store.claim(userId, announcementId, item, now()))) continue;
-    results.push(await deliver(userId, announcementId, item, deps));
+    if (await deps.store.claim(userId, announcementId, item, now())) {
+      results.push(await deliver(userId, announcementId, item, deps));
+      continue;
+    }
+    const row = (await deps.store.rows(userId, announcementId)).find((r) => r.kind === item.kind);
+    if (row) results.push({ kind: row.kind, label: row.label, status: shownStatus(row, now()), link: row.link, error: row.error });
   }
   return { announcementId, results };
 }
@@ -109,6 +126,9 @@ export function memoryAnnounceStore(): AnnounceStore {
       if (rows.has(key(announcementId, item.kind))) return false;
       rows.set(key(announcementId, item.kind), { ...item, userId, announcementId, status: "pending", attempts: 1, link: null, error: null, createdAt: now, updatedAt: now });
       return true;
+    },
+    async rows(userId, announcementId) {
+      return [...rows.values()].filter((r) => r.userId === userId && r.announcementId === announcementId).map((r) => ({ ...r }));
     },
     async reclaimFailed(userId, announcementId, kind, now) {
       const r = rows.get(key(announcementId, kind));

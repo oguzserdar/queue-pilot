@@ -29,7 +29,10 @@ export function installUrl(o: { clientId: string; redirectUri: string; state: st
 }
 
 async function json<T>(res: Response): Promise<T> {
-  const body = (await res.json().catch(() => ({}))) as T & { message?: string; retry_after?: number };
+  const body = (await res.json().catch(() => null)) as (T & { message?: string; retry_after?: number }) | null;
+  // Only Discord's own refusal (a 4xx) means nothing was posted. A 5xx or an answer we cannot read may still have
+  // posted, so it is a plain error, which callers treat as "may have been sent".
+  if (res.status >= 500 || !body) throw new Error(`Discord answered ${res.status} without a readable result`);
   if (!res.ok) throw new DiscordError(body.message ?? `Discord answered ${res.status}`, body.retry_after);
   return body;
 }
@@ -173,7 +176,9 @@ export async function postAnnouncement(botToken: string, channelId: string, cont
     body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
     signal: AbortSignal.timeout(10_000),
   });
-  return { messageId: (await json<{ id: string }>(res)).id };
+  const id = (await json<{ id?: string }>(res)).id;
+  if (!id) throw new Error("Discord accepted the message but did not return its id");
+  return { messageId: id };
 }
 
 /** The link that opens a posted message in Discord. */

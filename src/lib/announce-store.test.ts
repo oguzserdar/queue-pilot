@@ -40,6 +40,12 @@ describe("postgres announcement store", () => {
     expect(await s.reclaimFailed("u1", "a2", "discord", now)).toBeNull();
   });
 
+  it("returns only this person's rows for an announcement", async () => {
+    const s = postgresAnnounceStore();
+    expect((await s.rows("u1", "a2")).map((r) => r.status)).toEqual(["sent"]);
+    expect(await s.rows("u2", "a2")).toEqual([]);
+  });
+
   it("keeps each person's announcements to themselves", async () => {
     const s = postgresAnnounceStore();
     expect(await s.recent("u2", 10)).toEqual([]);
