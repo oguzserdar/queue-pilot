@@ -27,6 +27,7 @@ function what(e: SecurityEvent): string {
     case "tag_deleted": return d.name ? `Deleted the tag "${d.name}"` : "Deleted a tag";
     case "snippet_deleted": return "Deleted a hashtag set";
     case "note_deleted": return "Deleted a note";
+    case "direct_post_sent":
     case "announcement_sent": return d.name ? `Posted to ${d.name}` : "Posted to Telegram or Discord";
   }
 }

@@ -1,3 +1,4 @@
+import { withWorkflow } from "workflow/next";
 import type { NextConfig } from "next";
 
 /**
@@ -28,7 +29,7 @@ const NO_FRAMING = [
   csp(["frame-ancestors 'none'"]),
 ];
 
-const nextConfig: NextConfig = {
+export const nextConfig: NextConfig = {
   devIndicators: false,
   // A self-contained server for the Docker image (node server.js); Vercel ignores it.
   output: "standalone",
@@ -42,4 +43,4 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: { "/admin": ["./drizzle/**/*"], "/*": ["./scripts/migrate-on-deploy.mjs"] },
 };
 
-export default nextConfig;
+export default withWorkflow(nextConfig);

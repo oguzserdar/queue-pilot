@@ -12,10 +12,11 @@ import { securityEvent } from "../db/schema";
 import { capAppName } from "./app-identity";
 
 /** Actions that change what goes out or remove something, recorded with who did them. */
-export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted", "note_deleted", "announcement_sent"] as const;
+export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted", "note_deleted", "direct_post_sent"] as const;
 export type ActionEventKind = (typeof ACTION_EVENTS)[number];
 
-export type SecurityEventKind = "sign_in" | "app_revoked" | "account_deleted" | ActionEventKind;
+/** "announcement_sent" is the name direct posts were recorded under on 8 Nov before the rename; old rows keep it. */
+export type SecurityEventKind = "sign_in" | "app_revoked" | "account_deleted" | "announcement_sent" | ActionEventKind;
 
 export type SecurityEvent = {
   event: SecurityEventKind;

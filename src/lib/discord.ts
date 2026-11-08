@@ -54,7 +54,7 @@ export async function exchangeInstall(
   return { guildId: body.guild.id, guildName: body.guild.name };
 }
 
-/** Channels the bot can post in: text (type 0) and announcement (type 5) channels. */
+/** Channels the bot can post in: text (type 0) and post (type 5) channels. */
 export async function postableChannels(botToken: string, guildId: string, doFetch: Fetch = fetch): Promise<{ id: string; name: string }[]> {
   const res = await doFetch(`${API}/guilds/${encodeURIComponent(guildId)}/channels`, { headers: { authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(10_000) });
   const channels = await json<{ id: string; name: string; type: number; position?: number }[]>(res);
@@ -103,7 +103,7 @@ export function stateMatches(state: string, userId: string, secret: string, now:
   });
 }
 
-/** The channel to post in by default: one named like "announcements", else the first. */
+/** The channel to post in by default: one named like "posts", else the first. */
 export function defaultChannel(channels: { id: string; name: string }[]): { id: string; name: string } | null {
   return channels.find((c) => /announce/i.test(c.name)) ?? channels[0] ?? null;
 }
@@ -146,7 +146,7 @@ export function canPost(o: { guildId: string; roles: { id: string; permissions: 
 }
 
 /**
- * The server's text and announcement channels in server order, each saying whether the bot can post there, so the
+ * The server's text and post channels in server order, each saying whether the bot can post there, so the
  * person picks only a channel that will work.
  */
 export async function channelsWithAccess(botToken: string, guildId: string, doFetch: Fetch = fetch): Promise<{ id: string; name: string; canPost: boolean }[]> {
@@ -165,10 +165,10 @@ export async function channelsWithAccess(botToken: string, guildId: string, doFe
 }
 
 /**
- * Posts an announcement exactly as written: no link added, nothing cut. Text over the limit is refused before
+ * Posts an post exactly as written: no link added, nothing cut. Text over the limit is refused before
  * anything is sent, so the preview is always what lands. Mentions stay off, so it never pings @everyone.
  */
-export async function postAnnouncement(botToken: string, channelId: string, content: string, doFetch: Fetch = fetch): Promise<{ messageId: string }> {
+export async function postText(botToken: string, channelId: string, content: string, doFetch: Fetch = fetch): Promise<{ messageId: string }> {
   if (content.length > CONTENT_LIMIT) throw new DiscordError(`Discord takes up to ${CONTENT_LIMIT} characters; this is ${content.length}.`);
   const res = await doFetch(`${API}/channels/${encodeURIComponent(channelId)}/messages`, {
     method: "POST",

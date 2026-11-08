@@ -13,6 +13,7 @@ import { bufferAccessToken } from "@/lib/buffer-token";
 import { botTokens, echoForUser } from "@/lib/echo-run";
 import { pruneRequestCounts } from "@/lib/rate-limit";
 import { postgresEchoStore } from "@/lib/echo-store";
+import { runDueDirectPosts } from "@/lib/direct-post-run";
 
 export const maxDuration = 300;
 const BUDGET_MS = 240_000;
@@ -28,6 +29,12 @@ export async function GET(req: Request) {
   if (!authorized(req.headers.get("authorization"), process.env.CRON_SECRET)) return new Response(null, { status: 401 });
   // Request-limit windows older than a day are deleted here, so the counter table stays small.
   await pruneRequestCounts().catch((e) => console.error(JSON.stringify({ event: "qp-prune-request-counts-failed", message: e instanceof Error ? e.message : String(e) })));
+  // Safety net for timed direct posts: anything a timer or the Docker check missed goes out now, marked late.
+  const due = await runDueDirectPosts().catch((e) => {
+    console.error(JSON.stringify({ event: "qp-direct-post-sweep-failed", message: e instanceof Error ? e.message : String(e) }));
+    return null;
+  });
+  if (due?.handled) console.log(JSON.stringify({ event: "qp-direct-post-sweep", ...due }));
   const tokens = await botTokens();
   const auth = await getAuth();
   if (!auth || (!tokens.telegram && !tokens.discord)) return Response.json({ users: 0, skipped: "not set up" });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import config from "../../next.config";
+import { nextConfig as config } from "../../next.config";
 
 const rules = async () => (await config.headers!()) as { source: string; headers: { key: string; value: string }[] }[];
 const keys = (h: { key: string }[]) => h.map((x) => x.key);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAPTION_LIMIT, TelegramError, connectCodeFor, connectMessages, drainConnectCodes, fit, newConnectCode, sendCopy, postAnnouncement } from "./telegram";
+import { CAPTION_LIMIT, TelegramError, connectCodeFor, connectMessages, drainConnectCodes, fit, newConnectCode, sendCopy, postText } from "./telegram";
 
 function fakeTelegram(answer: (method: string, body: any) => unknown) {
   const calls: { method: string; body: any }[] = [];
@@ -119,19 +119,19 @@ describe("connectCodeFor", () => {
   });
 });
 
-describe("postAnnouncement answers", () => {
+describe("postText answers", () => {
   it("treats a 5xx or unreadable answer as possibly sent, not refused", async () => {
-    const e = await postAnnouncement("t", 1, "hi", async () => new Response("oops", { status: 502 })).catch((x) => x);
+    const e = await postText("t", 1, "hi", async () => new Response("oops", { status: 502 })).catch((x) => x);
     expect(e).toBeInstanceOf(Error);
     expect(e).not.toBeInstanceOf(TelegramError);
   });
   it("treats Telegram's own 4xx refusal as refused", async () => {
-    const e = await postAnnouncement("t", 1, "hi", async () => new Response(JSON.stringify({ ok: false, description: "Bad Request: chat not found" }), { status: 400 })).catch((x) => x);
+    const e = await postText("t", 1, "hi", async () => new Response(JSON.stringify({ ok: false, description: "Bad Request: chat not found" }), { status: 400 })).catch((x) => x);
     expect(e).toBeInstanceOf(TelegramError);
   });
   it("refuses text over the limit before sending", async () => {
     let called = false;
-    await expect(postAnnouncement("t", 1, "x".repeat(4097), async () => { called = true; return new Response("{}"); })).rejects.toThrow(/up to 4096/);
+    await expect(postText("t", 1, "x".repeat(4097), async () => { called = true; return new Response("{}"); })).rejects.toThrow(/up to 4096/);
     expect(called).toBe(false);
   });
 });

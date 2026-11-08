@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTENT_LIMIT, DiscordError, PERMISSIONS, defaultChannel, installState, stateMatches, exchangeInstall, installUrl, postableChannels, sendCopy, canPost, postAnnouncement, messageUrl } from "./discord";
+import { CONTENT_LIMIT, DiscordError, PERMISSIONS, defaultChannel, installState, stateMatches, exchangeInstall, installUrl, postableChannels, sendCopy, canPost, postText, messageUrl } from "./discord";
 
 function fakeDiscord(answer: (url: string, init: any) => { status: number; body: unknown }) {
   const calls: { url: string; init: any }[] = [];
@@ -119,15 +119,15 @@ describe("canPost, Discord's documented permission order", () => {
   });
 });
 
-describe("postAnnouncement", () => {
+describe("postText", () => {
   it("refuses text over the limit before sending anything", async () => {
     let called = false;
-    await expect(postAnnouncement("t", "c", "x".repeat(2001), async () => { called = true; return new Response("{}"); })).rejects.toThrow(/up to 2000 characters/);
+    await expect(postText("t", "c", "x".repeat(2001), async () => { called = true; return new Response("{}"); })).rejects.toThrow(/up to 2000 characters/);
     expect(called).toBe(false);
   });
   it("sends the text unchanged with mentions off and returns the message id", async () => {
     let body: Record<string, unknown> = {};
-    const out = await postAnnouncement("t", "c1", "Patch 1.4 is out @everyone", async (_u, init) => { body = JSON.parse(String(init?.body)); return new Response(JSON.stringify({ id: "m1" })); });
+    const out = await postText("t", "c1", "Patch 1.4 is out @everyone", async (_u, init) => { body = JSON.parse(String(init?.body)); return new Response(JSON.stringify({ id: "m1" })); });
     expect(body).toEqual({ content: "Patch 1.4 is out @everyone", allowed_mentions: { parse: [] } });
     expect(out).toEqual({ messageId: "m1" });
     expect(messageUrl("g", "c1", "m1")).toBe("https://discord.com/channels/g/c1/m1");
@@ -136,14 +136,14 @@ describe("postAnnouncement", () => {
 
 describe("an answer that may still have posted", () => {
   it("is not a refusal when Discord answers 5xx or with no message id", async () => {
-    const e1 = await postAnnouncement("t", "c", "hi", async () => new Response("bad gateway", { status: 502 })).catch((e) => e);
+    const e1 = await postText("t", "c", "hi", async () => new Response("bad gateway", { status: 502 })).catch((e) => e);
     expect(e1).toBeInstanceOf(Error);
     expect(e1).not.toBeInstanceOf(DiscordError);
-    const e2 = await postAnnouncement("t", "c", "hi", async () => new Response("{}", { status: 200 })).catch((e) => e);
+    const e2 = await postText("t", "c", "hi", async () => new Response("{}", { status: 200 })).catch((e) => e);
     expect(e2).not.toBeInstanceOf(DiscordError);
   });
   it("is a refusal when Discord answers 4xx with its reason", async () => {
-    const e = await postAnnouncement("t", "c", "hi", async () => new Response(JSON.stringify({ message: "Missing Permissions" }), { status: 403 })).catch((e) => e);
+    const e = await postText("t", "c", "hi", async () => new Response(JSON.stringify({ message: "Missing Permissions" }), { status: 403 })).catch((e) => e);
     expect(e).toBeInstanceOf(DiscordError);
   });
 });

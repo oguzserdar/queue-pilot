@@ -36,8 +36,13 @@ services:
     env_file: .env
     depends_on:
       - app
-    # Once a day at 17:00 UTC, like vercel.json.
-    entrypoint: ["sh", "-c", "while true; do now=$$(date -u +%H%M); if [ \"$$now\" = \"1700\" ]; then curl -fsS -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/echo; sleep 60; fi; sleep 30; done"]
+    # Every 30 seconds: send direct posts whose time has come (one small query when nothing is due), at most 50 s
+    # per call so a slow run never stops the next ones.
+    # Daily, at or after 17:00 UTC like vercel.json: copies of published Buffer posts and the overdue sweep. It runs
+    # in the background so it never delays the 30-second check, and the day counts as done only when it succeeds,
+    # so a failure, or a host that starts at 17:01, still gets that day's run. /tmp/echo-started holds when the
+    # current daily run began; a run older than 6 minutes (cut off by a restart) no longer blocks a new one.
+    entrypoint: ["sh", "-c", "while true; do curl -fsS -m 50 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/due || true; today=$$(date -u +%F); now=$$(date -u +%s); started=$$(cat /tmp/echo-started 2>/dev/null || echo 0); if [ $$(date -u +%H%M) -ge 1700 ] && [ \"$$(cat /tmp/echo-day 2>/dev/null)\" != \"$$today\" ] && [ $$((now - started)) -gt 360 ]; then echo $$now > /tmp/echo-started; (curl -fsS -m 300 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/echo && echo $$today > /tmp/echo-day; echo 0 > /tmp/echo-started) & fi; sleep 30; done"]
 
 volumes:
   db:

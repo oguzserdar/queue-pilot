@@ -25,17 +25,19 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
         copies={connected ? [{ kind: "telegram", label: "This Week in AI news" }, { kind: "discord", label: "This Week in AI #new-issues" }] : []}
         discordResult={null}
         loadTargets={sampleTargets}
-        announcements={connected ? [
-          { announcementId: "d1", kind: "discord", label: "QP test #announcements", text: "Patch 1.4 is out. Exports now resume after a dropped connection.", status: "sent", link: "https://discord.com/channels/1/2/3", error: null, at: new Date(Date.now() - 600_000).toISOString() },
-          { announcementId: "d1", kind: "telegram", label: "QueuePilot", text: "Patch 1.4: exports resume after a dropped connection.", status: "uncertain", link: null, error: "No answer in time, so it may have been sent. Check the channel.", at: new Date(Date.now() - 600_000).toISOString() },
-          { announcementId: "d0", kind: "discord", label: "QP test #general", text: "Maintenance tonight from 22:00 UTC.", status: "failed", link: null, error: "Missing Permissions", at: new Date(Date.now() - 86_400_000).toISOString() },
+        posts={connected ? [
+          { postId: "d2", kind: "discord", label: "QP test #announcements", text: "Patch 1.5 goes out Monday. Back up your exports first.", status: "scheduled", link: null, error: null, at: new Date().toISOString(), sendAt: new Date(Date.now() + 26 * 3_600_000).toISOString(), late: false },
+          { postId: "d2", kind: "telegram", label: "QueuePilot", text: "Patch 1.5 goes out Monday. Back up your exports first.", status: "scheduled", link: null, error: null, at: new Date().toISOString(), sendAt: new Date(Date.now() + 26 * 3_600_000).toISOString(), late: false },
+          { postId: "d1", kind: "discord", label: "QP test #announcements", text: "Patch 1.4 is out. Exports now resume after a dropped connection.", status: "sent", link: "https://discord.com/channels/1/2/3", error: null, at: new Date(Date.now() - 600_000).toISOString(), sendAt: null, late: false },
+          { postId: "d1", kind: "telegram", label: "QueuePilot", text: "Patch 1.4: exports resume after a dropped connection.", status: "uncertain", link: null, error: "No answer in time, so it may have been sent. Check the channel.", at: new Date(Date.now() - 600_000).toISOString(), sendAt: null, late: false },
+          { postId: "d0", kind: "discord", label: "QP test #general", text: "Maintenance tonight from 22:00 UTC.", status: "failed", link: null, error: "Missing Permissions", at: new Date(Date.now() - 86_400_000).toISOString(), sendAt: null, late: false },
         ] : []}
       />
     </AppShell>
   );
 }
 
-/** Sample places for checking the announcement form in development: one Discord channel the bot cannot post in. */
+/** Sample places for checking the post form in development: one Discord channel the bot cannot post in. */
 async function sampleTargets() {
   "use server";
   return {

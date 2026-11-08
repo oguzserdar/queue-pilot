@@ -1,7 +1,7 @@
 "use client";
 
-import { AnnounceComposer } from "./announce-composer";
-import type { AnnounceRowView, AnnounceTargets } from "@/app/(app)/announce-actions";
+import { PostComposer } from "./post-composer";
+import type { DirectPostView, PostTargets } from "@/app/(app)/direct-post-actions";
 import { useConfirmed } from "./use-confirmed";
 import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
 import { ArrowUpRight } from "lucide-react";
@@ -29,7 +29,7 @@ export type LiveSource = { id: string; title: string; url: string };
 export type LiveCopy = { kind: "telegram" | "discord"; label: string };
 export type SourcesProps =
   | { mode: "example"; connectorUrl: string }
-  | { mode: "live"; channels: LiveChannel[]; connectorUrl: string; sources: LiveSource[]; copies: LiveCopy[]; discordResult: string | null; announcements: AnnounceRowView[]; loadTargets?: () => Promise<AnnounceTargets> };
+  | { mode: "live"; channels: LiveChannel[]; connectorUrl: string; sources: LiveSource[]; copies: LiveCopy[]; discordResult: string | null; posts: DirectPostView[]; loadTargets?: () => Promise<PostTargets> };
 
 const LIVE_AI = [
   { name: "Claude", how: "Add Queue Pilot as a custom connector in Claude", plan: "Your Claude plan" },
@@ -48,7 +48,7 @@ const EXAMPLE = {
   ],
   copies: [{ kind: "telegram" as const, label: "@thisweekinai" }],
   discordResult: null,
-  announcements: [{ announcementId: "example-1", kind: "telegram" as const, label: "@thisweekinai", text: "This week's issue is out: three model releases and what changed for builders.", status: "sent" as const, link: null, error: null, at: "2026-11-06T16:00:00.000Z" }],
+  posts: [{ postId: "example-1", kind: "telegram" as const, label: "@thisweekinai", text: "This week's issue is out: three model releases and what changed for builders.", status: "sent" as const, link: null, error: null, at: "2026-11-06T16:00:00.000Z", sendAt: null, late: false }],
 };
 
 /** Sources: the signed-in person's own, or the example account's on the same screen. */
@@ -56,7 +56,7 @@ export function SourcesView(props: SourcesProps) {
   return props.mode === "live" ? <LiveSources {...props} /> : <LiveSources mode="live" connectorUrl={props.connectorUrl} {...EXAMPLE} />;
 }
 
-function LiveSources({ channels, connectorUrl, sources, copies, discordResult, announcements, loadTargets }: Extract<SourcesProps, { mode: "live" }>) {
+function LiveSources({ channels, connectorUrl, sources, copies, discordResult, posts, loadTargets }: Extract<SourcesProps, { mode: "live" }>) {
   return (
     <div className={styles.page}>
       <header className={styles.head}>
@@ -122,7 +122,7 @@ function LiveSources({ channels, connectorUrl, sources, copies, discordResult, a
         </div>
         <p className={styles.foot}>Copy published Buffer posts: after Buffer publishes a post, Queue Pilot posts the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>
         <Copies copies={copies} discordResult={discordResult} />
-        {copies.length > 0 && <AnnounceComposer recent={announcements} loadTargets={loadTargets} />}
+        {copies.length > 0 && <PostComposer recent={posts} loadTargets={loadTargets} />}
       </section>
     </div>
   );
@@ -252,7 +252,7 @@ function Copies({ copies, discordResult }: { copies: LiveCopy[]; discordResult: 
           <span className={styles.does}>{tg ? "Gets copies of your sent posts" : "Add the Queue Pilot bot as an admin, then post a code"}</span>
           <span />
           {tg ? (
-            <ConfirmButton variant="secondary" label="Stop copying" question="Stop sending copies to Telegram?" confirmLabel="Stop copies" pending={pending} onConfirm={() => stop("telegram")} />
+            <ConfirmButton variant="secondary" label="Disconnect" question="Disconnect Telegram? Copies stop, and scheduled posts to it will not go out." confirmLabel="Disconnect Telegram" pending={pending} onConfirm={() => stop("telegram")} />
           ) : (
             <Button variant="secondary" size="sm" disabled={pending} onClick={startTelegram}>Connect</Button>
           )}
@@ -262,10 +262,10 @@ function Copies({ copies, discordResult }: { copies: LiveCopy[]; discordResult: 
             <strong className={styles.brand}><ChannelIcon service="discord" size={18} />Discord</strong>
             <span className={styles.muted}>{dc ? dc.label : "A server where you can add bots"}</span>
           </div>
-          <span className={styles.does}>{dc ? "Gets copies of your sent posts" : "Adds the Queue Pilot bot; it posts in your announcements channel"}</span>
+          <span className={styles.does}>{dc ? "Gets copies of your sent posts" : "Adds the Queue Pilot bot; it posts in your posts channel"}</span>
           <span />
           {dc ? (
-            <ConfirmButton variant="secondary" label="Stop copying" question="Stop sending copies to Discord?" confirmLabel="Stop copies" pending={pending} onConfirm={() => stop("discord")} />
+            <ConfirmButton variant="secondary" label="Disconnect" question="Disconnect Discord? Copies stop, and scheduled posts to it will not go out." confirmLabel="Disconnect Discord" pending={pending} onConfirm={() => stop("discord")} />
           ) : (
             <Button variant="secondary" size="sm" disabled={pending} onClick={addDiscord}>Add to server</Button>
           )}

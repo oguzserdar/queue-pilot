@@ -3,7 +3,7 @@
  * /embed/* the one place that may be framed.
  */
 import { describe, expect, it } from "vitest";
-import nextConfig from "./next.config";
+import { nextConfig } from "./next.config";
 
 type Header = { key: string; value: string };
 

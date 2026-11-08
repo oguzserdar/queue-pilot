@@ -23,3 +23,8 @@
 .recent { margin-top: 16px; }
 .recentTitle { margin: 0 0 8px; font-size: var(--text-sm); font-weight: 600; }
 .excerpt { color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.timing { display: flex; flex-direction: column; gap: 10px; }
+.whenRow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.rowActions { display: flex; flex-wrap: wrap; gap: 4px; }
+.result[data-status="scheduled"] > span:not(.excerpt) { color: var(--foreground); }
+.result[data-status="cancelled"] > span:not(.excerpt) { color: var(--text-muted); }
