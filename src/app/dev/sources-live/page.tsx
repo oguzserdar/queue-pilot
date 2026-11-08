@@ -16,7 +16,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
         channels={[
           { id: "x", name: "X", service: "twitter", isDisconnected: false, isLocked: false, isQueuePaused: false },
           { id: "li", name: "LinkedIn", service: "linkedin", isDisconnected: false, isLocked: false, isQueuePaused: false },
-          { id: "bs", name: "Bluesky", service: "bluesky", isDisconnected: true, isLocked: false, isQueuePaused: false },
+          { id: "th", name: "Threads", service: "threads", isDisconnected: true, isLocked: false, isQueuePaused: false },
         ]}
         sources={[
           { id: "s1", title: "This Week in AI", url: "https://thisweekinai.example/feed" },
