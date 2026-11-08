@@ -5,6 +5,34 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-08 Writing for X and using fewer Buffer requests
+
+### Added
+- The fill-week skill reads a dated reference on writing for X, drawn from X's published ranking code and checked on 8 November. Your voice, playbook and Buffer posting times still come first. After 30 days without a new check, the assistant leaves the reference out and says so.
+- A weekly check compares X's ranking code with the commit the reference was checked at, and opens one issue with the changed lines when something it relies on moves. It never edits the reference. A person verifies the change first.
+- Skills can carry reference files, read only when a step needs them. Every install route carries them: the plugin, `npx skills add https://getqueuepilot.com`, and the setup prompt.
+- Ask which drafts a teammate's Buffer Note affects: Queue Pilot shows the proposed edits on that account, you apply the ones you want, and keep a lasting preference for that account only. A one-off fact correction stays with the drafts it affects.
+- @mention a teammate when writing or editing a Buffer Note, and let your AI edit or delete a note when your Buffer permissions allow it.
+- Each rule a draft passed says where it came from: an edit you made twice, a teammate's note, a rule you added, or one your AI added, with the app's name. Posts show the last approval recorded through Queue Pilot.
+- Settings, Security lists scheduling, deleting, connecting and removing an AI app next to sign-ins, with who did it. An app that only names itself shows as unverified.
+- Write a post for your Telegram channel and Discord channels from Sources. Each place can get its own words, both previews show exactly what will be sent, and it goes now or at a time you pick. You can change the text or time, or cancel, until it goes out.
+- On a Buffer draft, turn on Telegram and Discord, and Queue Pilot sends them once Buffer has published the post, with the text you set. If the post moves, they move. If Buffer deletes the post or fails to publish it, they say so and send nothing.
+- The Telegram and Discord bots and the Exa key can be set in /admin, where a saved value wins over the server's environment.
+- A new signed-out example: Alex, who writes This Week in AI, with drafts from real recent news quoted word for word.
+
+### Changed
+- Looking up a teammate reuses the channel instead of reading the whole queue: four Buffer requests became one on our account. If Buffer asks Queue Pilot to wait, it pauses the write and keeps the last complete queue.
+- Saving in /admin stays on the page: the button shows it is saving, a short message says what is in use now, and a problem stays next to its field.
+- The Telegram and Discord copy rows show their logos.
+- Settings are read at most once every 30 seconds per server, instead of on every Buffer and AI call. A change in /admin applies at once on the server it was saved from.
+- Every page sends a Content Security Policy: scripts only from this site, no plugins, forms post only here. The example calendar can still be embedded.
+- Dependencies are on their current releases, including the web framework's security update.
+
+### Fixed
+- Rate limits count each visitor by an address a visitor cannot write. Self-hosted copies trust no forwarded address unless `TRUSTED_PROXY_HOP_COUNT` or `TRUSTED_PROXIES` says how many proxies sit in front. Vercel needs nothing. An invalid proxy list trusts nothing.
+- Signing out behind a proxy returns to the site you were on, not an internal address.
+- /admin accepts only real setting names.
+
 ## [0.7.0] - 2026-11-05 Research with Grok Bot, draft in Buffer
 
 ### Added
