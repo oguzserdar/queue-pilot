@@ -1,6 +1,5 @@
-import { Button } from "@/registry/components/button/button";
 import { SETTINGS, type SettingKey } from "@/lib/settings";
-import { clearAdminSetting, keepAdminSetting } from "./actions";
+import { SettingButton } from "./setting-forms";
 import styles from "./admin.module.css";
 
 /**
@@ -17,10 +16,7 @@ export function ShadowedNotice({ keys }: { keys: SettingKey[] }) {
         {keys.map((key) => (
           <li key={key} className={styles.shadowedItem}>
             <span>{SETTINGS[key].label} <code className={styles.code}>{SETTINGS[key].env}</code></span>
-            <form action={clearAdminSetting}>
-              <input type="hidden" name="key" value={key} />
-              <Button type="submit" variant="ghost" size="sm">Use the server&apos;s value</Button>
-            </form>
+            <SettingButton settingKey={key} kind="clear" label="Use the server's value" />
           </li>
         ))}
       </ul>
@@ -32,14 +28,8 @@ export function ShadowedNotice({ keys }: { keys: SettingKey[] }) {
 export function LegacyChoice({ settingKey }: { settingKey: SettingKey }) {
   return (
     <span className={styles.shadowedActions}>
-      <form action={keepAdminSetting}>
-        <input type="hidden" name="key" value={settingKey} />
-        <Button type="submit" variant="secondary" size="sm">Use the saved value</Button>
-      </form>
-      <form action={clearAdminSetting}>
-        <input type="hidden" name="key" value={settingKey} />
-        <Button type="submit" variant="ghost" size="sm">Remove the saved value</Button>
-      </form>
+      <SettingButton settingKey={settingKey} kind="keep" label="Use the saved value" variant="secondary" />
+      <SettingButton settingKey={settingKey} kind="clear" label="Remove the saved value" />
     </span>
   );
 }

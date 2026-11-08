@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { claimAdminIfNone } from "@/lib/admin-role";
 import { checkSetupCode } from "@/lib/admin-setup-code";
@@ -45,40 +46,54 @@ async function requireAdmin(): Promise<string> {
 /** True only for the settings' own names, never for names every object inherits such as constructor. */
 const isSettingKey = (key: string): key is SettingKey => Object.hasOwn(SETTINGS, key);
 
-/** Saves one setting from its own field. */
-export async function saveAdminSetting(form: FormData) {
+/** What a settings change did, said in plain words for the toast or the alert next to the field. */
+export type AdminResult = { ok: boolean; message: string };
+
+/** What applies once nothing is saved here: the server's environment value if it sets one, else the default. */
+function fallbackNote(key: SettingKey): string {
+  return process.env[SETTINGS[key].env] ? "The server environment's value applies again." : SETTINGS[key].default !== null ? "The default applies again." : "It is not set now.";
+}
+
+/**
+ * Saves one setting from its own field. Returns what happened instead of redirecting, so the page stays on the same
+ * tab and the person sees the result where they are.
+ */
+export async function saveAdminSetting(_prev: AdminResult | null, form: FormData): Promise<AdminResult> {
   const by = await requireAdmin();
-  const key = String(form.get("key")) as SettingKey;
-  if (!isSettingKey(key)) redirect("/admin?error=key");
-  if (!hasDatabase()) redirect("/admin?error=db");
+  const key = String(form.get("key"));
+  if (!isSettingKey(key)) return { ok: false, message: "Unknown setting." };
+  if (!hasDatabase()) return { ok: false, message: "Connect a database to this deployment before saving keys." };
   // A value saved here wins over the server's environment; removing it brings the environment's value back.
   const value = String(form.get("value") ?? "");
-  let problem: string | null = null;
   try {
     await saveSetting(postgresSettingsStore(), key, value, secrets().master, by);
   } catch (e) {
-    problem = e instanceof Error ? e.message : "could not be saved";
+    return { ok: false, message: e instanceof Error ? e.message : "It could not be saved." };
   }
-  if (problem) redirect(`/admin?field=${key}&problem=${encodeURIComponent(problem)}`);
-  redirect(`/admin?saved=${key}`);
+  revalidatePath("/admin");
+  return { ok: true, message: `${SETTINGS[key].label} saved. It is in use now.` };
 }
 
 /** Removes one saved setting, so the server's environment value (if any), else the default, applies again. */
-export async function clearAdminSetting(form: FormData) {
+export async function clearAdminSetting(_prev: AdminResult | null, form: FormData): Promise<AdminResult> {
   const by = await requireAdmin();
-  const key = String(form.get("key")) as SettingKey;
-  if (!isSettingKey(key) || !hasDatabase()) redirect("/admin");
+  const key = String(form.get("key"));
+  if (!isSettingKey(key)) return { ok: false, message: "Unknown setting." };
+  if (!hasDatabase()) return { ok: false, message: "Connect a database to this deployment first." };
   await clearSetting(postgresSettingsStore(), key, by);
-  redirect(`/admin?cleared=${key}`);
+  revalidatePath("/admin");
+  return { ok: true, message: `${SETTINGS[key].label} removed. ${fallbackNote(key)}` };
 }
 
 /** Makes a value saved before v0.8 win over the server's environment, without typing it again. */
-export async function keepAdminSetting(form: FormData) {
+export async function keepAdminSetting(_prev: AdminResult | null, form: FormData): Promise<AdminResult> {
   const by = await requireAdmin();
-  const key = String(form.get("key")) as SettingKey;
-  if (!isSettingKey(key) || !hasDatabase()) redirect("/admin");
+  const key = String(form.get("key"));
+  if (!isSettingKey(key)) return { ok: false, message: "Unknown setting." };
+  if (!hasDatabase()) return { ok: false, message: "Connect a database to this deployment first." };
   await keepSavedSetting(postgresSettingsStore(), key, by);
-  redirect(`/admin?kept=${key}`);
+  revalidatePath("/admin");
+  return { ok: true, message: `${SETTINGS[key].label}: the saved value is in use now.` };
 }
 
 

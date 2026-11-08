@@ -9,7 +9,8 @@ import { TabsContent, TabsList, TabsTrigger } from "@/registry/components/tabs/t
 import { adminAccess, signedInEmail } from "@/lib/current-user";
 import { hasDatabase, postgresSettingsStore, recentSettingChanges } from "@/lib/db";
 import { describeSettings, GROUPS, memoryStore, SETTINGS, type GroupId, type SettingKey } from "@/lib/settings";
-import { clearAdminSetting, saveAdminSetting } from "./actions";
+import { SettingButton, SettingSaveForm } from "./setting-forms";
+import { ToastStack, ToastStackProvider } from "@/registry/components/toast-stack/toast-stack";
 import { AdminRecovery, SetupSteps } from "./setup-steps";
 import { setupCodeReady, setupCodeRequired } from "@/lib/admin-setup-code";
 import { HeldBackNotice, LegacyChoice, ShadowedNotice } from "./shadowed-notice";
@@ -21,14 +22,10 @@ import styles from "./admin.module.css";
 
 export const dynamic = "force-dynamic";
 
-const NOTES: Record<string, string> = {
-  db: "Connect a database to this deployment before saving keys.",
-  empty: "A key cannot be empty. Use Remove to clear it.",
-  key: "Unknown setting.",
-};
+const NO_DATABASE = "Connect a database to this deployment before saving keys.";
 
-export default async function Admin({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; cleared?: string; kept?: string; field?: string; problem?: string; tab?: string }> }) {
-  const { error, saved, cleared, kept, field, problem, tab } = await searchParams;
+export default async function Admin({ searchParams }: { searchParams: Promise<{ problem?: string; tab?: string }> }) {
+  const { problem, tab } = await searchParams;
   const master = process.env.SETTINGS_KEY;
 
   if (!master) {
@@ -87,11 +84,10 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
   const perPerson = num("ai_cap_per_person") ?? 10;
   const totalCap = num("ai_cap_total");
   const groups = Object.keys(GROUPS) as GroupId[];
-  // After a save or remove, reopen the tab that holds the field that changed.
-  const changed = (saved ?? cleared ?? kept ?? field) as SettingKey | undefined;
-  // The tab of a setting just changed, else the one in the address, else the first.
-  const openTab = changed && SETTINGS[changed] ? SETTINGS[changed].group : tab && [...groups, "activity"].includes(tab) ? tab : groups[0];
+  // The tab in the address, else the first. Saving no longer reloads the page, so the open tab stays open.
+  const openTab = tab && [...groups, "activity"].includes(tab) ? tab : groups[0];
   return (
+    <ToastStackProvider>
     <main className={styles.page}>
       <header className={styles.head}>
         <div>
@@ -101,7 +97,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
         </div>
         <a className={styles.back} href="/">Back to Queue Pilot</a>
       </header>
-      {!hasDatabase() ? <p className={styles.error} role="alert">{NOTES.db}</p> : null}
+      {!hasDatabase() ? <p className={styles.error} role="alert">{NO_DATABASE}</p> : null}
       <HeldBackNotice keys={rows.filter((r) => r.heldBack).map((r) => r.key)} />
       <ShadowedNotice keys={rows.filter((r) => r.shadowsEnv).map((r) => r.key)} />
       <UrlTabs initial={openTab} first={groups[0]}>
@@ -139,10 +135,6 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
                     ))}
                   </ol>
                   {(r.key === "supadata_api_key" || r.key === "exa_api_key") && <TestSourceKey setting={r.key} />}
-                  {saved === r.key ? <p className={styles.ok} role="status">Saved.</p> : null}
-                  {kept === r.key ? <p className={styles.ok} role="status">The saved value is in use now.</p> : null}
-                  {cleared === r.key ? <p className={styles.ok} role="status">Removed. {r.source === "environment" ? "The server environment's value applies again." : r.source === "default" ? "The default applies again." : ""}</p> : null}
-                  {field === r.key && (problem || error) ? <p className={styles.error} role="alert">{problem ?? NOTES[error ?? ""]}</p> : null}
                   {r.heldBack ? (
                     <div className={styles.help}>
                       <p>The value saved here is from before this version, when the server&apos;s environment won. So nothing changed on upgrade, the server&apos;s value <code className={styles.code}>{r.env}</code> is still in use. Use the saved value to make it win, save a new one, or remove it.</p>
@@ -154,18 +146,13 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
                     <p className={styles.help}>Set in the server&apos;s environment as <code className={styles.code}>{r.env}</code>. A value saved here replaces it, and removing that value goes back to the server&apos;s.</p>
                   ) : null}
                   <div className={styles.cardFoot}>
-                    <form action={saveAdminSetting} className={styles.field}>
-                      <input type="hidden" name="key" value={r.key} />
+                    <SettingSaveForm settingKey={r.key}>
                       {r.type === "secret" || r.type === "ai-key"
                         ? <PasswordField name="value" label={r.display ? "Replace with" : "Value"} autoComplete="off" placeholder={PLACEHOLDER[r.type]} />
                         : <Input name="value" label={r.display ? "Replace with" : "Value"} inputMode={r.type === "usd" ? "decimal" : r.type === "int" ? "numeric" : undefined} autoComplete="off" placeholder={PLACEHOLDER[r.type]} />}
-                      <Button type="submit" variant="primary" size="md">Save</Button>
-                    </form>
+                    </SettingSaveForm>
                     {r.source === "saved" ? (
-                      <form action={clearAdminSetting}>
-                        <input type="hidden" name="key" value={r.key} />
-                        <Button type="submit" variant="ghost" size="sm">{r.layers.some((l) => l.source === "environment" && l.display) ? "Use the server's value" : "Remove"}</Button>
-                      </form>
+                      <SettingButton settingKey={r.key} kind="clear" label={r.layers.some((l) => l.source === "environment" && l.display) ? "Use the server's value" : "Remove"} />
                     ) : null}
                   </div>
                 </section>
@@ -191,6 +178,8 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
         </TabsContent>
       </UrlTabs>
     </main>
+    <ToastStack />
+    </ToastStackProvider>
   );
 }
 
