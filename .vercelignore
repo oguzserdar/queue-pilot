@@ -6,4 +6,5 @@ node_modules
 scripts/*
 !scripts/migrate-on-deploy.mjs
 !scripts/sync-plugin-skills.mjs
+!scripts/check-x-ranking.mjs
 .local
