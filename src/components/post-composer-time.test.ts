@@ -6,7 +6,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 let before: string | undefined;
-beforeAll(() => { before = process.env.TZ; process.env.TZ = "America/New_York"; });
+// The composer module is large; import it once here, where a slow machine has time, not inside the first test.
+beforeAll(async () => { before = process.env.TZ; process.env.TZ = "America/New_York"; await import("./post-composer"); }, 60_000);
 afterAll(() => { process.env.TZ = before; });
 
 const load = () => import("./post-composer");

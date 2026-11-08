@@ -13,8 +13,9 @@ import { limit } from "@/lib/rate-limit";
 import { recordAction } from "@/lib/security-events";
 import * as telegram from "@/lib/telegram";
 import * as discord from "@/lib/discord";
-import { resendFailed, scheduleDirectPost, sendDirectPost, sendTimeProblem, sentLate, shownStatus, type PostItem, type PostKind, type DirectPostStatus } from "@/lib/direct-posts";
+import { followUpIdFor, resendFailed, scheduleDirectPost, sendDirectPost, sendTimeProblem, sentLate, shownStatus, type PostItem, type PostKind, type DirectPostStatus } from "@/lib/direct-posts";
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
+import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { directPostDeps } from "@/lib/direct-post-run";
 
 /** Where the person can post, as the composer shows it. */
@@ -60,6 +61,37 @@ export type SendPostResult =
   | { ok: false; message: string };
 
 /**
+ * Checks the places a person chose and turns them into what gets sent: their connected Telegram channel, and a
+ * Discord channel in their server that the bot can post in (checked against Discord every time).
+ */
+async function placeItems(userId: string, input: { telegram?: { text: string } | null; discord?: { channelId: string; text: string } | null }, tokens: { telegram?: string; discord?: string }): Promise<{ ok: true; items: PostItem[] } | { ok: false; message: string }> {
+  const dests = await postgresEchoStore().destinations(userId);
+  const items: PostItem[] = [];
+  const tg = dests.find((d) => d.kind === "telegram");
+  const dc = dests.find((d) => d.kind === "discord");
+  if (input.telegram) {
+    const text = String(input.telegram.text ?? "").trim();
+    if (!tg || !tokens.telegram) return { ok: false, message: "Connect a Telegram channel first." };
+    if (!text) return { ok: false, message: "Write the Telegram message, or leave Telegram out." };
+    if (text.length > telegram.TEXT_LIMIT) return { ok: false, message: `The Telegram message is ${text.length} characters; Telegram takes up to ${telegram.TEXT_LIMIT}.` };
+    items.push({ kind: "telegram", target: tg.target, label: tg.label, text });
+  }
+  if (input.discord) {
+    const text = String(input.discord.text ?? "").trim();
+    if (!dc || !dc.guildId || !tokens.discord) return { ok: false, message: "Add Queue Pilot to a Discord server first." };
+    if (!text) return { ok: false, message: "Write the Discord message, or leave Discord out." };
+    if (text.length > discord.CONTENT_LIMIT) return { ok: false, message: `The Discord message is ${text.length} characters; Discord takes up to ${discord.CONTENT_LIMIT}.` };
+    let channels;
+    try { channels = await guildChannels(tokens.discord, dc.guildId); } catch (e) { return { ok: false, message: `Discord did not answer just now: ${e instanceof Error ? e.message : String(e)}` }; }
+    const channel = channels.find((c) => c.id === String(input.discord!.channelId));
+    if (!channel) return { ok: false, message: "That channel is not in your Discord server." };
+    if (!channel.canPost) return { ok: false, message: `Queue Pilot cannot post in #${channel.name}. Give its role View Channel and Send Messages there, or pick another channel.` };
+    items.push({ kind: "discord", target: channel.id, label: `${dc.label.split(" #")[0]} #${channel.name}`, text, guildId: dc.guildId });
+  }
+  return { ok: true, items };
+}
+
+/**
  * Starts the Vercel timer for a scheduled post. Elsewhere (Docker) the 30-second check sends it, so there is nothing
  * to start.
  */
@@ -80,30 +112,10 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
     if (problem) return { ok: false, message: problem };
   }
   if (!(await limit("outbound", userId)).ok) return { ok: false, message: "Too many sends this hour. Try again later." };
-  const [dests, tokens] = await Promise.all([postgresEchoStore().destinations(userId), botTokens()]);
-  const items: PostItem[] = [];
-  const tg = dests.find((d) => d.kind === "telegram");
-  const dc = dests.find((d) => d.kind === "discord");
-
-  if (input.telegram) {
-    const text = String(input.telegram.text ?? "").trim();
-    if (!tg || !tokens.telegram) return { ok: false, message: "Connect a Telegram channel first." };
-    if (!text) return { ok: false, message: "Write the Telegram message, or leave Telegram out." };
-    if (text.length > telegram.TEXT_LIMIT) return { ok: false, message: `The Telegram message is ${text.length} characters; Telegram takes up to ${telegram.TEXT_LIMIT}.` };
-    items.push({ kind: "telegram", target: tg.target, label: tg.label, text });
-  }
-  if (input.discord) {
-    const text = String(input.discord.text ?? "").trim();
-    if (!dc || !dc.guildId || !tokens.discord) return { ok: false, message: "Add Queue Pilot to a Discord server first." };
-    if (!text) return { ok: false, message: "Write the Discord message, or leave Discord out." };
-    if (text.length > discord.CONTENT_LIMIT) return { ok: false, message: `The Discord message is ${text.length} characters; Discord takes up to ${discord.CONTENT_LIMIT}.` };
-    let channels;
-    try { channels = await guildChannels(tokens.discord, dc.guildId); } catch (e) { return { ok: false, message: `Discord did not answer just now: ${e instanceof Error ? e.message : String(e)}` }; }
-    const channel = channels.find((c) => c.id === String(input.discord!.channelId));
-    if (!channel) return { ok: false, message: "That channel is not in your Discord server." };
-    if (!channel.canPost) return { ok: false, message: `Queue Pilot cannot post in #${channel.name}. Give its role View Channel and Send Messages there, or pick another channel.` };
-    items.push({ kind: "discord", target: channel.id, label: `${dc.label.split(" #")[0]} #${channel.name}`, text, guildId: dc.guildId });
-  }
+  const tokens = await botTokens();
+  const built = await placeItems(userId, input, tokens);
+  if (!built.ok) return built;
+  const { items } = built;
   if (!items.length) return { ok: false, message: "Choose at least one place to send it." };
 
   if (sendAt) {
@@ -196,3 +208,62 @@ export async function recentDirectPosts(): Promise<DirectPostView[]> {
     sendAt: r.sendAt?.toISOString() ?? null, late: sentLate(r),
   }));
 }
+
+/** One place of a draft's follow-up, as the draft dialog shows it. */
+export type FollowUpPlace = { kind: PostKind; label: string; text: string; target: string; status: DirectPostStatus; error: string | null; link: string | null };
+
+/** A Buffer post's follow-up places, and the Buffer post's time when Queue Pilot has it. */
+export async function followUpFor(bufferPostId: string): Promise<{ places: FollowUpPlace[]; dueAt: string | null }> {
+  const userId = await signedInUserId();
+  if (!userId || typeof bufferPostId !== "string" || bufferPostId.length > 100) return { places: [], dueAt: null };
+  const [rows, snap] = await Promise.all([
+    postgresDirectPostStore().rows(userId, await followUpIdFor(userId, bufferPostId)),
+    postgresSnapshotStore().get(userId),
+  ]);
+  const now = new Date();
+  const post = snap?.data.posts.find((p) => p.id === bufferPostId);
+  return {
+    dueAt: post?.dueAt ?? null,
+    places: rows.filter((r) => r.status !== "cancelled").map((r) => ({ kind: r.kind, label: r.label, text: r.text, target: r.target, status: shownStatus(r, now), error: r.error, link: r.link })),
+  };
+}
+
+/** What to send where when a Buffer post goes out: a place left out (null) is turned off. */
+export type FollowUpInput = { telegram: { text: string } | null; discord: { channelId: string; text: string } | null };
+
+/**
+ * Sets which places follow one of the person's Buffer posts, with their text. Each goes out once Buffer has
+ * published the post; a place turned off stops waiting.
+ */
+export async function saveFollowUpAction(bufferPostId: string, input: FollowUpInput): Promise<{ ok: true } | { ok: false; message: string }> {
+  const userId = await signedInUserId();
+  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (typeof bufferPostId !== "string" || bufferPostId.length > 100) return { ok: false, message: "Unknown post." };
+  // The post must be one of this person's, from their own saved Buffer week, with a time.
+  const post = (await postgresSnapshotStore().get(userId))?.data.posts.find((p) => p.id === bufferPostId);
+  if (!post || !post.dueAt || post.status === "sent") return { ok: false, message: "Only a post that has not gone out yet, and has a time, can be followed." };
+  const tokens = await botTokens();
+  const built = await placeItems(userId, input, tokens);
+  if (!built.ok) return built;
+  const store = postgresDirectPostStore();
+  const id = await followUpIdFor(userId, bufferPostId);
+  const at = new Date(Date.parse(post.dueAt) + 60_000);
+  const now = new Date();
+  for (const kind of ["telegram", "discord"] as const) {
+    const item = built.items.find((i) => i.kind === kind);
+    if (item) await store.follow(userId, id, item, at, now, bufferPostId);
+    else await store.unfollow(userId, id, kind, now);
+  }
+  const waiting = (await store.rows(userId, id)).filter((r) => r.status === "scheduled");
+  if (waiting.length) {
+    try {
+      await startTimer(id, Math.max(...waiting.map((r) => r.revision)), at);
+    } catch (e) {
+      console.error(JSON.stringify({ event: "qp-direct-post-timer-failed", message: e instanceof Error ? e.message : String(e) }));
+      return { ok: false, message: "Saved, but its timer did not start, so it may go out late, with the daily check. Save again to retry." };
+    }
+  }
+  revalidatePath("/week");
+  return { ok: true };
+}
+

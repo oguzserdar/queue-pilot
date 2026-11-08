@@ -27,6 +27,7 @@ import { WriteWeekButton } from "./write-week-button";
 import { AccountsComposer } from "./accounts-composer";
 import { DraftNotes, type NotesPreview } from "./draft-notes";
 import { DraftTags } from "./draft-tags";
+import { FollowUpPanel } from "./follow-up-panel";
 import type { DraftTag } from "@/app/(app)/tag-actions";
 import type { DraftNote } from "@/app/(app)/note-actions";
 import { ShareReviewButton } from "./share-review-button";
@@ -435,6 +436,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
             })()}
           </section>
           {(live || notesPreview?.[current.id]) && <DraftNotes key={current.id} postId={current.id} preview={notesPreview?.[current.id]} />}
+          {live && current.status !== "sent" && <FollowUpPanel key={`follow-${current.id}`} bufferPostId={current.id} draftText={current.text} />}
           </div>
         </div>
         {/* The decision stays in view: a fixed bar at the bottom of the window, as Buffer keeps a post's actions in one row. */}

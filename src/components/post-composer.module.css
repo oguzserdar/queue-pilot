@@ -85,3 +85,10 @@
 .whenLabel { color: var(--text-muted); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; }
 /* The action stays in reach while the form scrolls inside the dialog. */
 .footer { position: sticky; bottom: 0; z-index: 1; background: var(--surface-raised); padding-bottom: 4px; }
+
+/* The follow-up panel on a draft: the same chips as the composer, one text per place. */
+.follow { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px; background: var(--surface-muted); }
+.followTitle { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.followPlace { display: flex; flex-direction: column; gap: 4px; }
+.followPlace .count, .followPlace .bad { align-self: flex-end; }
+.followFoot { display: flex; justify-content: flex-end; }
