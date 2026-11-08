@@ -152,7 +152,7 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
               <div className={styles.places} role="group" aria-label="Where it goes">
                 {places.map((k) => (
                   <div key={k} className={styles.chip} data-on={on[k] || undefined}>
-                    <button type="button" className={styles.chipToggle} aria-pressed={on[k]} onClick={() => setOn({ ...on, [k]: !on[k] })}>
+                    <button type="button" className={styles.chipToggle} aria-pressed={on[k]} onClick={() => setOn((o) => ({ ...o, [k]: !o[k] }))}>
                       <ChannelIcon service={k} size={16} />
                       <span>{k === "discord" ? targets.discord!.label : targets.telegram!.label}</span>
                       <span className={styles.chipMark} aria-hidden="true">{on[k] ? "✓" : "+"}</span>
@@ -191,12 +191,12 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
                   ) : own[tab] === null ? (
                     <div className={styles.shared}>
                       <p className={styles.hint}>{NAME[tab]} uses the text from All places.</p>
-                      <Button variant="secondary" size="sm" onClick={() => setOwn({ ...own, [tab]: message })}>Write different text for {NAME[tab]}</Button>
+                      <Button variant="secondary" size="sm" onClick={() => setOwn((o) => ({ ...o, [tab]: message }))}>Write different text for {NAME[tab]}</Button>
                     </div>
                   ) : (
                     <>
-                      <Textarea label={`Text for ${NAME[tab]}`} rows={9} value={own[tab] ?? ""} onChange={(e) => setOwn({ ...own, [tab]: e.target.value })} />
-                      <button type="button" className={styles.link} onClick={() => setOwn({ ...own, [tab]: null })}>Use the text from All places again</button>
+                      <Textarea label={`Text for ${NAME[tab]}`} rows={9} value={own[tab] ?? ""} onChange={(e) => setOwn((o) => ({ ...o, [tab]: e.target.value }))} />
+                      <button type="button" className={styles.link} onClick={() => setOwn((o) => ({ ...o, [tab]: null }))}>Use the text from All places again</button>
                     </>
                   )}
                   <div className={styles.counts}>

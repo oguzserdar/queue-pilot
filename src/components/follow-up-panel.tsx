@@ -79,7 +79,7 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
       <div className={styles.places}>
         {places.map((k) => (
           <div key={k} className={styles.chip} data-on={on[k] || undefined}>
-            <button type="button" className={styles.chipToggle} aria-pressed={on[k]} disabled={doneKinds.has(k)} onClick={() => setOn({ ...on, [k]: !on[k] })}>
+            <button type="button" className={styles.chipToggle} aria-pressed={on[k]} disabled={doneKinds.has(k)} onClick={() => setOn((o) => ({ ...o, [k]: !o[k] }))}>
               <ChannelIcon service={k} size={16} />
               <span>{targets[k]!.label}</span>
               <span className={styles.chipMark} aria-hidden="true">{on[k] ? "✓" : "+"}</span>
@@ -115,7 +115,7 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
               </p>
             ) : (
               <>
-                <Textarea label={`Text for ${NAME[k]}`} rows={3} value={text[k]} onChange={(e) => setText({ ...text, [k]: e.target.value })} />
+                <Textarea label={`Text for ${NAME[k]}`} rows={3} value={text[k]} onChange={(e) => setText((t) => ({ ...t, [k]: e.target.value }))} />
                 <span className={text[k].trim().length > limit ? styles.bad : styles.count}>{text[k].trim().length.toLocaleString("en-GB")} / {limit.toLocaleString("en-GB")}</span>
               </>
             )}
