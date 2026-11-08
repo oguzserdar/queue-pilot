@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTENT_LIMIT, DiscordError, PERMISSIONS, defaultChannel, installState, stateMatches, exchangeInstall, installUrl, postableChannels, sendCopy } from "./discord";
+import { CONTENT_LIMIT, DiscordError, PERMISSIONS, defaultChannel, installState, stateMatches, exchangeInstall, installUrl, postableChannels, sendCopy, canPost, postAnnouncement, messageUrl } from "./discord";
 
 function fakeDiscord(answer: (url: string, init: any) => { status: number; body: unknown }) {
   const calls: { url: string; init: any }[] = [];
@@ -88,5 +88,48 @@ describe("defaultChannel", () => {
     expect(defaultChannel([{ id: "g", name: "general" }, { id: "a", name: "📢announcements" }])).toEqual({ id: "a", name: "📢announcements" });
     expect(defaultChannel([{ id: "g", name: "general" }])).toEqual({ id: "g", name: "general" });
     expect(defaultChannel([])).toBeNull();
+  });
+});
+
+describe("canPost, Discord's documented permission order", () => {
+  const guildId = "g";
+  const VIEW = String(1 << 10), SEND = String(1 << 11), BOTH = String((1 << 10) | (1 << 11)), ADMIN = String(1 << 3);
+  const base = { guildId, memberId: "bot", memberRoles: ["botrole"], roles: [{ id: "g", permissions: VIEW }, { id: "botrole", permissions: SEND }] };
+
+  it("allows a channel with no overwrites when @everyone and the bot's role together give view and send", () => {
+    expect(canPost({ ...base, overwrites: [] })).toBe(true);
+  });
+  it("refuses when the channel's @everyone overwrite denies sending", () => {
+    expect(canPost({ ...base, overwrites: [{ id: "g", type: 0, allow: "0", deny: SEND }] })).toBe(false);
+  });
+  it("lets a role overwrite allow what @everyone's overwrite denied", () => {
+    expect(canPost({ ...base, overwrites: [{ id: "g", type: 0, allow: "0", deny: BOTH }, { id: "botrole", type: 0, allow: BOTH, deny: "0" }] })).toBe(true);
+  });
+  it("lets the member's own overwrite deny what a role allowed", () => {
+    expect(canPost({ ...base, overwrites: [{ id: "botrole", type: 0, allow: BOTH, deny: "0" }, { id: "bot", type: 1, allow: "0", deny: SEND }] })).toBe(false);
+  });
+  it("ignores overwrites for roles the bot does not have", () => {
+    expect(canPost({ ...base, overwrites: [{ id: "otherrole", type: 0, allow: "0", deny: BOTH }] })).toBe(true);
+  });
+  it("needs view as well as send", () => {
+    expect(canPost({ ...base, roles: [{ id: "g", permissions: "0" }, { id: "botrole", permissions: SEND }], overwrites: [] })).toBe(false);
+  });
+  it("allows everything for an administrator role, whatever the overwrites", () => {
+    expect(canPost({ ...base, roles: [{ id: "g", permissions: "0" }, { id: "botrole", permissions: ADMIN }], overwrites: [{ id: "bot", type: 1, allow: "0", deny: BOTH }] })).toBe(true);
+  });
+});
+
+describe("postAnnouncement", () => {
+  it("refuses text over the limit before sending anything", async () => {
+    let called = false;
+    await expect(postAnnouncement("t", "c", "x".repeat(2001), async () => { called = true; return new Response("{}"); })).rejects.toThrow(/up to 2000 characters/);
+    expect(called).toBe(false);
+  });
+  it("sends the text unchanged with mentions off and returns the message id", async () => {
+    let body: Record<string, unknown> = {};
+    const out = await postAnnouncement("t", "c1", "Patch 1.4 is out @everyone", async (_u, init) => { body = JSON.parse(String(init?.body)); return new Response(JSON.stringify({ id: "m1" })); });
+    expect(body).toEqual({ content: "Patch 1.4 is out @everyone", allowed_mentions: { parse: [] } });
+    expect(out).toEqual({ messageId: "m1" });
+    expect(messageUrl("g", "c1", "m1")).toBe("https://discord.com/channels/g/c1/m1");
   });
 });

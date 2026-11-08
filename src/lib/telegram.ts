@@ -123,3 +123,18 @@ export async function sendCopy(
   const r = await call<{ message_id: number }>(token, "sendMessage", { chat_id: chatId, text: fit(text, TEXT_LIMIT) }, doFetch);
   return { messageId: r.message_id };
 }
+
+/**
+ * Posts an announcement exactly as written: nothing cut, text over the limit refused before sending, so the preview
+ * is always what lands. Returns the message id and, for a public channel, its username for a link.
+ */
+export async function postAnnouncement(token: string, chatId: number, text: string, doFetch: Fetch = fetch): Promise<{ messageId: number; username: string | null }> {
+  if (text.length > TEXT_LIMIT) throw new TelegramError(`Telegram takes up to ${TEXT_LIMIT} characters; this is ${text.length}.`);
+  const r = await call<{ message_id: number; chat: { username?: string } }>(token, "sendMessage", { chat_id: chatId, text }, doFetch);
+  return { messageId: r.message_id, username: r.chat?.username ?? null };
+}
+
+/** The link that opens a posted message, for a public channel or group with a username; null for a private one. */
+export function messageUrl(username: string | null, messageId: number): string | null {
+  return username ? `https://t.me/${username}/${messageId}` : null;
+}
