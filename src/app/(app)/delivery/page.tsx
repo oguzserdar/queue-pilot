@@ -28,7 +28,7 @@ async function copyMarks(postIds: string[]): Promise<CopyMarks> {
     const kind = kindOf.get(r.destinationId);
     // A failed copy that will be retried is not shown yet; only the final outcome is.
     if (!kind || (r.status === "failed" && r.attempts < MAX_ATTEMPTS)) continue;
-    (marks[r.postId] ??= []).push({ kind, ok: r.status === "sent" });
+    (marks[r.postId] ??= []).push({ kind, state: r.status });
   }
   return marks;
 }

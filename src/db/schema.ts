@@ -11,7 +11,7 @@ import { bigint, boolean, date, index, integer, jsonb, pgEnum, pgTable, primaryK
 /** Where a copy goes. A Postgres enum, so the database itself refuses any other value. */
 export const echoKind = pgEnum("qp_echo_kind", ["telegram", "discord"]);
 /** What happened to a copy. */
-export const echoStatus = pgEnum("qp_echo_status", ["sent", "failed"]);
+export const echoStatus = pgEnum("qp_echo_status", ["sent", "failed", "uncertain"]);
 
 /** Admin-entered settings (Buffer app keys); secret values hold the encrypted form only. */
 export const operatorSettings = pgTable("operator_settings", {

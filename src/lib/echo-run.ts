@@ -57,6 +57,8 @@ export async function echoForUser(userId: string, posts: Post[], deps: { store: 
     },
     record: (r) => deps.store.record(userId, r),
     previous: (postId, destinationId) => previous.get(`${postId}|${destinationId}`),
+    // Only an answer from Telegram or Discord proves nothing was posted; anything else may have landed.
+    refused: (e) => e instanceof telegram.TelegramError || e instanceof discord.DiscordError,
   });
 }
 

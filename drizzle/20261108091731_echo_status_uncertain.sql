@@ -1,0 +1,1 @@
+ALTER TYPE "public"."qp_echo_status" ADD VALUE 'uncertain';

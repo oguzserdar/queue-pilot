@@ -8,7 +8,11 @@
 import type { Post } from "./buffer/queries";
 
 export type Destination = { id: string; kind: "telegram" | "discord"; label: string };
-export type EchoRecord = { postId: string; destinationId: string; status: "sent" | "failed"; attempts: number; messageId?: string; error?: string };
+/**
+ * One copy's result. "failed": Telegram or Discord answered with a refusal, so it is tried again later. "uncertain": no
+ * answer came back (a timeout or a dropped connection), so the copy may have landed and is never resent on its own.
+ */
+export type EchoRecord = { postId: string; destinationId: string; status: "sent" | "failed" | "uncertain"; attempts: number; messageId?: string; error?: string };
 export type EchoSend = { post: Post; destination: Destination };
 
 export const MAX_ATTEMPTS = 3;
@@ -33,7 +37,7 @@ export function planEchoes(posts: Post[], destinations: Destination[], records: 
       const since = connectedAt[destination.id];
       if (since && sent < since.getTime()) continue;
       const r = byKey.get(`${post.id}|${destination.id}`);
-      if (r?.status === "sent" || (r && r.attempts >= MAX_ATTEMPTS)) continue;
+      if (r?.status === "sent" || r?.status === "uncertain" || (r && r.attempts >= MAX_ATTEMPTS)) continue;
       out.push({ post, destination });
     }
   }
@@ -46,6 +50,8 @@ export type EchoDeps = {
   send: (s: EchoSend) => Promise<{ messageId: string }>;
   record: (r: EchoRecord) => Promise<void>;
   previous: (postId: string, destinationId: string) => EchoRecord | undefined;
+  /** True when the destination answered with a refusal, so nothing was posted and trying again later is safe. */
+  refused: (e: unknown) => boolean;
 };
 
 /** Sends the planned copies one by one and records each result. Returns what happened, for the delivery screen. */
@@ -59,7 +65,9 @@ export async function runEchoes(plan: EchoSend[], deps: EchoDeps): Promise<EchoR
       const { messageId } = await deps.send(s);
       rec = { postId: s.post.id, destinationId: s.destination.id, status: "sent", attempts, messageId };
     } catch (e) {
-      rec = { postId: s.post.id, destinationId: s.destination.id, status: "failed", attempts, error: e instanceof Error ? e.message : String(e) };
+      rec = deps.refused(e)
+        ? { postId: s.post.id, destinationId: s.destination.id, status: "failed", attempts, error: e instanceof Error ? e.message : String(e) }
+        : { postId: s.post.id, destinationId: s.destination.id, status: "uncertain", attempts, error: "No answer in time, so it may have been sent. Check the channel." };
     }
     try {
       await deps.record(rec);
