@@ -4,7 +4,8 @@
  * connector address in it, since each deployment has a different address.
  */
 import { createHash } from "node:crypto";
-import { PLUGIN_SKILLS } from "./plugin-skills";
+import { zipSync } from "fflate";
+import { PLUGIN_SKILL_FILES, PLUGIN_SKILLS } from "./plugin-skills";
 import { FILL_WEEK_STEPS } from "./fill-week-prompt";
 
 import { SKILL_NAME } from "./skill-name";
@@ -150,8 +151,13 @@ export const SKILL_TOOL_NAMES = TOOLS.map(([name]) => name);
  * @param origin - The deployment's address
  */
 export function skillIndex(origin: string) {
-  const sha = (text: string) => `sha256:${createHash("sha256").update(text).digest("hex")}`;
-  const entry = (name: string, description: string, text: string) => ({ name, type: "skill-md", description, url: `/.well-known/agent-skills/${name}/SKILL.md`, digest: sha(text) });
+  const sha = (data: string | Uint8Array) => `sha256:${createHash("sha256").update(data).digest("hex")}`;
+  const entry = (name: string, description: string, text: string) => {
+    const archive = skillArchive(name);
+    return archive
+      ? { name, type: "archive", description, url: `/.well-known/agent-skills/${name}/skill.zip`, digest: sha(archive) }
+      : { name, type: "skill-md", description, url: `/.well-known/agent-skills/${name}/SKILL.md`, digest: sha(text) };
+  };
   return {
     $schema: "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
     skills: [
@@ -159,6 +165,37 @@ export function skillIndex(origin: string) {
       ...Object.entries(PLUGIN_SKILLS).map(([name, text]) => entry(name, skillDescription(text), text)),
     ],
   };
+}
+
+/** A fixed timestamp for every archive entry, so the same files always give the same bytes and digest. */
+const ARCHIVE_TIME = new Date("2026-01-01T00:00:00Z");
+
+/**
+ * The whole skill folder as a zip, for a skill that ships files beside SKILL.md (the discovery spec's archive type).
+ *
+ * @param name - A plugin skill's name
+ * @returns The zip bytes with SKILL.md at the archive's root, where installers look for it, or null when the skill is
+ *   SKILL.md alone
+ */
+export function skillArchive(name: string): Uint8Array | null {
+  const files = Object.hasOwn(PLUGIN_SKILL_FILES, name) ? PLUGIN_SKILL_FILES[name] : null;
+  if (!files || !Object.hasOwn(PLUGIN_SKILLS, name)) return null;
+  const enc = new TextEncoder();
+  const entries: Record<string, [Uint8Array, { mtime: Date }]> = { "SKILL.md": [enc.encode(PLUGIN_SKILLS[name]), { mtime: ARCHIVE_TIME }] };
+  for (const [path, text] of Object.entries(files)) entries[path] = [enc.encode(text), { mtime: ARCHIVE_TIME }];
+  return zipSync(entries);
+}
+
+/**
+ * One file a plugin skill ships beside its SKILL.md.
+ *
+ * @param name - A plugin skill's name
+ * @param path - The file's path inside the skill folder, such as references/x.md
+ * @returns The text, or null for any name or path the skill does not ship
+ */
+export function skillFile(name: string, path: string): string | null {
+  const files = Object.hasOwn(PLUGIN_SKILL_FILES, name) ? PLUGIN_SKILL_FILES[name] : null;
+  return files && Object.hasOwn(files, path) ? files[path] : null;
 }
 
 /** The description line of a skill's front matter. */
