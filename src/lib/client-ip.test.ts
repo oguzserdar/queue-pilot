@@ -85,14 +85,25 @@ describe("clientIp", () => {
 });
 
 describe("withClientIp", () => {
-  it("overwrites a client-sent private header with the resolved address", () => {
-    const req = new Request("https://qp.example/api/auth/ok", { headers: { "x-forwarded-for": "203.0.113.7", [CLIENT_IP_HEADER]: "198.51.100.1" } });
-    expect(withClientIp(req, hops("1")).headers.get(CLIENT_IP_HEADER)).toBe("203.0.113.7");
-    expect(withClientIp(req, hops("0")).headers.get(CLIENT_IP_HEADER)).toBe(UNTRUSTED_CLIENT_IP);
+  it("works when the incoming request is not this runtime's own Request class, as on the hosting runtime", async () => {
+    // A request made by another copy of the fetch implementation: same shape, but the global Request cannot read
+    // its internals, so it must be rebuilt from its parts rather than passed in whole.
+    const foreign = { url: "https://qp.example/api/auth/token", method: "POST", headers: new Headers({ "x-forwarded-for": "203.0.113.7", "content-type": "application/x-www-form-urlencoded" }), body: new Request("https://x", { method: "POST", body: "a=1" }).body, arrayBuffer: () => new Response("a=1").arrayBuffer() };
+    const out = await withClientIp(foreign as unknown as Request, hops("1"));
+    expect(out.url).toBe("https://qp.example/api/auth/token");
+    expect(out.method).toBe("POST");
+    expect(out.headers.get(CLIENT_IP_HEADER)).toBe("203.0.113.7");
+    expect(out.headers.get("content-type")).toBe("application/x-www-form-urlencoded");
+    expect(await out.text()).toBe("a=1");
+  });
+  it("overwrites a client-sent private header with the resolved address", async () => {
+    const req = () => new Request("https://qp.example/api/auth/ok", { headers: { "x-forwarded-for": "203.0.113.7", [CLIENT_IP_HEADER]: "198.51.100.1" } });
+    expect((await withClientIp(req(), hops("1"))).headers.get(CLIENT_IP_HEADER)).toBe("203.0.113.7");
+    expect((await withClientIp(req(), hops("0"))).headers.get(CLIENT_IP_HEADER)).toBe(UNTRUSTED_CLIENT_IP);
   });
   it("keeps the method, address and body", async () => {
     const req = new Request("https://qp.example/api/auth/x", { method: "POST", body: "a=1", headers: { "x-forwarded-for": "203.0.113.7" } });
-    const out = withClientIp(req, hops("1"));
+    const out = await withClientIp(req, hops("1"));
     expect(out.method).toBe("POST");
     expect(out.url).toBe(req.url);
     expect(await out.text()).toBe("a=1");
@@ -108,7 +119,7 @@ describe("Better Auth's limiter", () => {
     rateLimit: { enabled: true, storage: "memory", customRules: { "/ok": { window: 60, max: 1 } } },
   });
   const call = (xff: string, forged?: string) =>
-    auth.handler(withClientIp(new Request("https://qp.example/api/auth/ok", { headers: { "x-forwarded-for": xff, ...(forged ? { [CLIENT_IP_HEADER]: forged } : {}) } }), hops("1")));
+    withClientIp(new Request("https://qp.example/api/auth/ok", { headers: { "x-forwarded-for": xff, ...(forged ? { [CLIENT_IP_HEADER]: forged } : {}) } }), hops("1")).then((r) => auth.handler(r));
 
   it("counts by the same resolved address, so a forged first entry or private header does not change the bucket", async () => {
     expect((await call("203.0.113.7")).status).toBe(200);

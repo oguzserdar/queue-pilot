@@ -12,7 +12,7 @@ type DiscoveryAuth = { handler: (req: Request) => Promise<Response>; api: { getO
  */
 export function forwardDiscovery(auth: DiscoveryAuth | null, req: Request): Promise<Response> | Response {
   if (!auth) return Response.json({ error: "Sign in with Buffer is not open yet" }, { status: 503 });
-  return auth.handler(withClientIp(req));
+  return withClientIp(req).then((r) => auth.handler(r));
 }
 
 /** The provider serves openid-configuration only under the issuer path; this serves the root form clients also try. */

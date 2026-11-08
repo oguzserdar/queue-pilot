@@ -6,7 +6,7 @@ import { withRetryAfter } from "@/lib/retry-after";
 async function handle(req: Request): Promise<Response> {
   const auth = await getAuth();
   if (!auth) return Response.json({ error: "Sign in with Buffer is not open yet" }, { status: 503 });
-  return withRetryAfter(await auth.handler(withClientIp(req)));
+  return withRetryAfter(await auth.handler(await withClientIp(req)));
 }
 
 export const GET = handle;

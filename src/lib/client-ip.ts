@@ -102,12 +102,15 @@ export function clientIp(headers: Headers, env: Env = process.env): string {
 /**
  * The same request with CLIENT_IP_HEADER set to clientIp's answer, replacing anything the client sent under that
  * name. Every request handed to Better Auth's handler goes through this, so its limiter counts by the same address.
+ * The request is rebuilt from its URL, method, headers and body: on the hosting runtime the incoming request comes
+ * from another copy of the fetch implementation, and passing it whole to Request throws.
  *
  * @param req - The incoming request
  * @param env - The server's environment
  */
-export function withClientIp(req: Request, env: Env = process.env): Request {
+export async function withClientIp(req: Request, env: Env = process.env): Promise<Request> {
   const headers = new Headers(req.headers);
   headers.set(CLIENT_IP_HEADER, clientIp(req.headers, env));
-  return new Request(req, { headers });
+  const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+  return new Request(req.url, { method: req.method, headers, body });
 }
