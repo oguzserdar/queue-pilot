@@ -15,6 +15,7 @@ import { pruneRequestCounts } from "@/lib/rate-limit";
 import { postgresEchoStore } from "@/lib/echo-store";
 import { retimeFollowUpsFor, runDueDirectPosts } from "@/lib/direct-post-run";
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
+import { forLog } from "@/lib/direct-posts";
 
 export const maxDuration = 300;
 const BUDGET_MS = 240_000;
@@ -24,23 +25,24 @@ export async function GET(req: Request) {
   // Request-limit windows older than a day are deleted here, so the counter table stays small.
   await pruneRequestCounts().catch((e) => console.error(JSON.stringify({ event: "qp-prune-request-counts-failed", message: e instanceof Error ? e.message : String(e) })));
   // Safety net for timed direct posts: anything a timer or the Docker check missed goes out now, marked late.
+  const tokens = await botTokens();
   // Runs again while a run fills its limit, so a backlog drains within the time budget, not 25 a day.
   const sweepStarted = Date.now();
   for (let round = 0; Date.now() - sweepStarted < 60_000; round++) {
-    const due = await runDueDirectPosts(undefined, { limit: 50 }).catch((e) => {
-      console.error(JSON.stringify({ event: "qp-direct-post-sweep-failed", round, message: e instanceof Error ? e.message : String(e) }));
+    const due = await runDueDirectPosts(undefined, { limit: 50, tokens: async () => tokens }).catch((e) => {
+      console.error(JSON.stringify({ event: "qp-direct-post-sweep-failed", round, message: forLog(e) }));
       return null;
     });
     if (due?.handled) console.log(JSON.stringify({ event: "qp-direct-post-sweep", round, ...due }));
     if (!due || due.handled < 50) break;
   }
-  const tokens = await botTokens();
   const auth = await getAuth();
   if (!auth || (!tokens.telegram && !tokens.discord)) return Response.json({ users: 0, skipped: "not set up" });
 
   const started = Date.now();
   const store = postgresEchoStore();
   const snapshots = postgresSnapshotStore();
+  const followUps = postgresDirectPostStore();
   let users = 0, sent = 0, failed = 0, stoppedEarly = false;
   for (const userId of await store.usersWithDestinations()) {
     if (Date.now() - started > BUDGET_MS) { stoppedEarly = true; break; }
@@ -49,13 +51,13 @@ export async function GET(req: Request) {
       const token = await bufferAccessToken(auth, userId);
       const { result: snap } = await withBudget("cron-echo", userId, () => refreshSnapshot(userId, token, { store: snapshots }));
       if (!snap) continue;
-      await retimeFollowUpsFor(userId, snap.data.posts).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", userId, message: e instanceof Error ? e.message : String(e) })));
-      const out = await echoForUser(userId, snap.data.posts, { store, tokens, followed: (ids) => postgresDirectPostStore().followedPlaces(userId, ids) });
+      await retimeFollowUpsFor(userId, snap.data.posts).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", userId, message: forLog(e) })));
+      const out = await echoForUser(userId, snap.data.posts, { store, tokens, followed: (ids) => followUps.followedPlaces(userId, ids) });
       users++;
       sent += out.filter((r) => r.status === "sent").length;
       failed += out.filter((r) => r.status === "failed").length;
     } catch (e) {
-      console.warn(JSON.stringify({ event: "qp-cron-echo-user-failed", message: e instanceof Error ? e.message : String(e) }));
+      console.warn(JSON.stringify({ event: "qp-cron-echo-user-failed", userId, message: forLog(e) }));
     }
   }
   console.log(JSON.stringify({ event: "qp-cron-echo", users, sent, failed, stoppedEarly }));

@@ -21,7 +21,7 @@ function setup(opts: { buffer?: BufferState; post?: DirectPostDeps["post"]; read
     post: opts.post ?? (async (item) => (sent.push(item.kind), { link: null })),
     ready: opts.ready,
     refused: (e) => e instanceof Refusal,
-    bufferCheck: async () => opts.buffer ?? { state: "sent" },
+    bufferCheck: async (_u, ids) => new Map(ids.map((id) => [id, opts.buffer ?? { state: "sent" as const }])),
     now: () => now,
   };
   return { d, sent, at: (t: Date) => (now = t) };
@@ -158,6 +158,20 @@ describe("a place that follows a Buffer post", () => {
     at(plus(AT, 1_000));
     await runDue(d);
     expect((await d.store.followedPlaces("u1", ["bp1"])).size).toBe(0);
+  });
+});
+
+describe("reading Buffer for follow-ups", () => {
+  it("reads all of one person's due follow-ups in one call", async () => {
+    const { d, sent, at } = setup();
+    const calls: string[][] = [];
+    d.bufferCheck = async (_u, ids) => (calls.push(ids), new Map(ids.map((id) => [id, { state: "sent" as const }])));
+    await d.store.follow("u1", await followUpIdFor("u1", "bp1"), tg, AT, new Date(), "bp1");
+    await d.store.follow("u1", await followUpIdFor("u1", "bp2"), dc, AT, new Date(), "bp2");
+    at(plus(AT, 1_000));
+    await runDue(d);
+    expect(calls.map((c) => c.sort())).toEqual([["bp1", "bp2"]]);
+    expect(sent.sort()).toEqual(["discord", "telegram"]);
   });
 });
 

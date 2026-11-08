@@ -9,7 +9,7 @@ import * as discord from "./discord";
 import { botTokens } from "./echo-run";
 import { postgresEchoStore } from "./echo-store";
 import { postgresDirectPostStore } from "./direct-post-store";
-import { retimeFollowUps, runDue, type BufferState, type DirectPostDeps } from "./direct-posts";
+import { forLog, retimeFollowUps, runDue, type BufferState, type DirectPostDeps } from "./direct-posts";
 import type { Post } from "./buffer/queries";
 import { getAuth } from "./auth";
 import { bufferAccessToken } from "./buffer-token";
@@ -25,15 +25,22 @@ type Tokens = { telegram?: string; discord?: string };
 export class DestinationGone extends Error {}
 
 /**
- * Reads one Buffer post with the person's own Buffer sign-in: one request, only that post, counted against the
- * person's Buffer allowance like every background read. Published means Buffer sent it (a reminder post counts only
- * once the person marked it published). Throws when Buffer cannot be read; the due run waits and tries again.
+ * Reads a person's followed Buffer posts with their own Buffer sign-in: one request for all of them, counted against
+ * the person's Buffer allowance like every background read. Published means Buffer sent it (a reminder post counts
+ * only once the person marked it published). Throws when Buffer cannot be read; the due run waits and tries again.
+ *
+ * @returns Each id's state; an id Buffer no longer has reads as deleted
  */
-export async function readBufferState(userId: string, bufferPostId: string): Promise<BufferState> {
+export async function readBufferStates(userId: string, bufferPostIds: string[]): Promise<Map<string, BufferState>> {
   const auth = await getAuth();
   if (!auth) throw new Error("Buffer sign-in is not set up on this deployment.");
   const token = await bufferAccessToken(auth, userId);
-  const { result: [post] } = await withBudget("follow-up-check", userId, () => readPostsNow(token, [bufferPostId]));
+  const { result: posts } = await withBudget("follow-up-check", userId, () => readPostsNow(token, bufferPostIds));
+  const byId = new Map(posts.map((p) => [p.id, p]));
+  return new Map(bufferPostIds.map((id) => [id, stateOf(byId.get(id))]));
+}
+
+function stateOf(post: Post | undefined): BufferState {
   if (!post) return { state: "gone", reason: "The post was deleted in Buffer, so this was not sent." };
   if (post.status === "sent") {
     if (post.schedulingType === "notification" && post.notificationStatus !== "markedAsPublished") return { state: "waiting", dueAt: post.dueAt ? new Date(post.dueAt) : null };
@@ -68,7 +75,7 @@ export function directPostDeps(tokens: () => Promise<Tokens>): DirectPostDeps {
   };
   return {
     store: postgresDirectPostStore(),
-    bufferCheck: readBufferState,
+    bufferCheck: readBufferStates,
     refused: (e) => e instanceof telegram.TelegramError || e instanceof discord.DiscordError || e instanceof DestinationGone,
     ready: async (item, userId) => {
       const [now, t] = await Promise.all([connected(userId), bots()]);
@@ -106,7 +113,18 @@ export async function startTimer(postId: string, revision: number, sendAt: Date)
 
 /** Logs a timer that did not start; the 30-second check and the daily job still send the post. */
 export function timerFailed(postId: string, revision: number, e: unknown): void {
-  console.error(JSON.stringify({ event: "qp-direct-post-timer-failed", postId, revision, message: e instanceof Error ? e.message : String(e) }));
+  console.error(JSON.stringify({ event: "qp-direct-post-timer-failed", postId, revision, message: forLog(e) }));
+}
+
+/** Starts a post's timer; when it does not start, logs it and returns the note telling the person it may be late. */
+export async function startTimerOrNote(postId: string, revision: number, at: Date): Promise<string | undefined> {
+  try {
+    await startTimer(postId, revision, at);
+    return undefined;
+  } catch (e) {
+    timerFailed(postId, revision, e);
+    return "Saved, but its timer did not start, so it may go out late, with the daily check.";
+  }
 }
 
 /**
@@ -115,7 +133,7 @@ export function timerFailed(postId: string, revision: number, e: unknown): void 
  */
 export async function retimeFollowUpsFor(userId: string, posts: Post[]): Promise<number> {
   const moved = await retimeFollowUps(userId, posts, postgresDirectPostStore(), new Date());
-  for (const m of moved) await startTimer(m.postId, m.revision, m.sendAt).catch((e) => timerFailed(m.postId, m.revision, e));
+  for (const m of moved) await startTimerOrNote(m.postId, m.revision, m.sendAt);
   return moved.length;
 }
 
@@ -123,10 +141,11 @@ export async function retimeFollowUpsFor(userId: string, posts: Post[]): Promise
  * Sends every direct post that is due, or just one post at one revision. Logs one line per destination it handled.
  *
  * @param opts.limit - Rows per run (the daily safety net runs again while a run fills it)
+ * @param opts.tokens - The bot tokens, when the caller already read them
  * @returns How many destinations were handled and sent, and the soonest time a waiting row asked to be looked at again
  */
-export async function runDueDirectPosts(only?: { postId: string; revision: number }, opts: { limit?: number } = {}): Promise<{ handled: number; sent: number; next: string | null }> {
-  const results = await runDue(directPostDeps(() => botTokens()), { limit: opts.limit ?? 25, only });
+export async function runDueDirectPosts(only?: { postId: string; revision: number }, opts: { limit?: number; tokens?: () => Promise<Tokens> } = {}): Promise<{ handled: number; sent: number; next: string | null }> {
+  const results = await runDue(directPostDeps(opts.tokens ?? (() => botTokens())), { limit: opts.limit ?? 25, only });
   for (const r of results) {
     console.log(JSON.stringify({ event: "qp-direct-post", userId: r.userId, postId: r.postId, kind: r.kind, status: r.status, error: r.error, next: r.next?.toISOString() }));
   }

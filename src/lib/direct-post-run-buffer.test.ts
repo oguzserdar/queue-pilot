@@ -12,12 +12,13 @@ vi.mock("./buffer-token", () => ({ bufferAccessToken: async () => "token" }));
 vi.mock("./buffer/queries", () => ({ readPostsNow: async () => state.posts }));
 vi.mock("./buffer/budget", () => ({ withBudget: async (tool: string, _u: string, run: () => Promise<unknown>) => (state.budgeted.push(tool), { result: await run(), requests: 1 }) }));
 
-const { readBufferState } = await import("./direct-post-run");
+const { readBufferStates } = await import("./direct-post-run");
+const readBufferState = async (u: string, id: string) => (await readBufferStates(u, [id])).get(id)!;
 const post = (over: object) => ({ id: "bp1", status: "scheduled", dueAt: "2026-11-09T14:00:00Z", schedulingType: "automatic", notificationStatus: null, error: null, ...over });
 
 beforeEach(() => { state.auth = {}; state.posts = []; state.budgeted = []; });
 
-describe("readBufferState", () => {
+describe("readBufferStates", () => {
   it("sends once Buffer published the post, counted against the person's allowance", async () => {
     state.posts = [post({ status: "sent" })];
     expect(await readBufferState("u1", "bp1")).toEqual({ state: "sent" });
@@ -48,5 +49,12 @@ describe("readBufferState", () => {
   it("throws when Buffer sign-in is not set up, so the run waits instead of giving up", async () => {
     state.auth = null;
     await expect(readBufferState("u1", "bp1")).rejects.toThrow(/not set up/);
+  });
+
+  it("reads several followed posts in one Buffer request, and a missing one reads as deleted", async () => {
+    state.posts = [post({ id: "bp1", status: "sent" }), post({ id: "bp2" })];
+    const out = await readBufferStates("u1", ["bp1", "bp2", "bp3"]);
+    expect(state.budgeted).toEqual(["follow-up-check"]);
+    expect([out.get("bp1")?.state, out.get("bp2")?.state, out.get("bp3")?.state]).toEqual(["sent", "waiting", "gone"]);
   });
 });

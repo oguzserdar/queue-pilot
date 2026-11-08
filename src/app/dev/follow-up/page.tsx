@@ -24,7 +24,7 @@ async function followUp(id: string) {
 async function save() {
   "use server";
   if (process.env.NODE_ENV === "production") throw new Error("Not available.");
-  return { ok: true as const };
+  return { ok: true as const, places: [] };
 }
 
 export default function Page() {

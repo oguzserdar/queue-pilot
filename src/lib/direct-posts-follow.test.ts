@@ -20,7 +20,7 @@ function setup(states: BufferState[]) {
     store: memoryDirectPostStore(),
     post: async (item) => (sent.push(`${item.kind}:${item.text}`), { link: null }),
     refused: () => false,
-    bufferCheck: async () => states[Math.min(reads++, states.length - 1)],
+    bufferCheck: async (_u, ids) => { const st = states[Math.min(reads++, states.length - 1)]; return new Map(ids.map((id) => [id, st])); },
     now: () => now,
   };
   return { d, sent, reads: () => reads, at: (t: Date) => (now = t) };

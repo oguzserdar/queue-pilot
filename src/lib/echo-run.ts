@@ -8,6 +8,7 @@ import type { Post } from "./buffer/queries";
 import { imageOf, planEchoes, runEchoes, type EchoRecord, type EchoSend } from "./echo";
 import { CLAIM_MS, postgresEchoStore, type EchoStore } from "./echo-store";
 import { postgresDirectPostStore } from "./direct-post-store";
+import { forLog } from "./direct-posts";
 import * as telegram from "./telegram";
 import * as discord from "./discord";
 import { operatorSettings, type SettingsSource } from "./env";
@@ -75,14 +76,14 @@ export function scheduleEcho(userId: string, posts: Post[]): void {
   after(async () => {
     // A followed post moved in Buffer: its Telegram and Discord follow-ups move with it.
     // Loaded here: the post runner reads this module's bot tokens, so a top-level import would be circular.
-    await import("./direct-post-run").then((m) => m.retimeFollowUpsFor(userId, posts)).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", userId, message: e instanceof Error ? e.message : String(e) })));
+    await import("./direct-post-run").then((m) => m.retimeFollowUpsFor(userId, posts)).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", userId, message: forLog(e) })));
     try {
       const tokens = await botTokens();
       if (!tokens.telegram && !tokens.discord) return;
       const out = await echoForUser(userId, posts, { store: postgresEchoStore(), tokens, followed: (ids) => postgresDirectPostStore().followedPlaces(userId, ids) });
       for (const r of out.filter((x) => x.status === "failed")) console.warn(JSON.stringify({ event: "qp-echo-failed", postId: r.postId, attempts: r.attempts, error: r.error }));
     } catch (e) {
-      console.error(JSON.stringify({ event: "qp-echo-run-failed", message: e instanceof Error ? e.message : String(e) }));
+      console.error(JSON.stringify({ event: "qp-echo-run-failed", message: forLog(e) }));
     }
   });
 }

@@ -3,10 +3,10 @@
  * due run claims rows with FOR UPDATE SKIP LOCKED, so any number of workers can run at the same time and each row is
  * taken by one of them. Every statement a person's action runs is scoped to their user id.
  */
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { directPostSend } from "../db/schema";
-import { CLAIM_MS, type PostKind, type DirectPostRow, type DirectPostStatus, type DirectPostStore, type DueRow } from "./direct-posts";
+import { CLAIM_MS, type DirectPostRow, type DirectPostStore } from "./direct-posts";
 
 const toRow = (r: typeof directPostSend.$inferSelect): DirectPostRow => ({
   postId: r.postId, kind: r.kind, target: r.target, guildId: r.guildId, label: r.label, text: r.text, status: r.status,
@@ -14,17 +14,6 @@ const toRow = (r: typeof directPostSend.$inferSelect): DirectPostRow => ({
   claimedUntil: r.claimedUntil, bufferPostId: r.bufferPostId, createdAt: r.createdAt, updatedAt: r.updatedAt,
 });
 
-type Raw = {
-  announcement_id: string; user_id: string; kind: PostKind; target: string; guild_id: string | null; label: string; text: string; status: DirectPostStatus;
-  attempts: number; link: string | null; error: string | null; send_at: string | Date | null; revision: number;
-  call_started_at: string | Date | null; claimed_until: string | Date | null; buffer_post_id: string | null; created_at: string | Date; updated_at: string | Date;
-};
-const date = (v: string | Date | null) => (v === null ? null : new Date(v));
-const fromRaw = (r: Raw): DueRow => ({
-  postId: r.announcement_id, userId: r.user_id, kind: r.kind, target: r.target, guildId: r.guild_id, label: r.label, text: r.text, status: r.status,
-  attempts: r.attempts, link: r.link, error: r.error, sendAt: date(r.send_at), revision: r.revision, callStartedAt: date(r.call_started_at), claimedUntil: date(r.claimed_until), bufferPostId: r.buffer_post_id,
-  createdAt: new Date(r.created_at), updatedAt: new Date(r.updated_at),
-});
 const mine = (userId: string, postId: string) => and(eq(directPostSend.userId, userId), eq(directPostSend.postId, postId));
 
 export function postgresDirectPostStore(): DirectPostStore {
@@ -116,22 +105,28 @@ export function postgresDirectPostStore(): DirectPostStore {
       return rows.length;
     },
     async claimDue(now, limit, only) {
-      const until = new Date(now.getTime() + CLAIM_MS);
-      const onlyClause = only ? sql`and announcement_id = ${only.postId} and revision <= ${only.revision}` : sql``;
-      const res = await db().execute(sql`
-        update qp_announcement_send s set status = 'pending', claimed_until = ${until}, updated_at = ${now}
-        where (s.announcement_id, s.kind) in (
-          select announcement_id, kind from qp_announcement_send
-          where ((status = 'scheduled' and send_at <= ${now} and (claimed_until is null or claimed_until <= ${now}))
-             or (status = 'pending' and call_started_at is null and claimed_until < ${now}))
-            ${onlyClause}
-          order by send_at nulls first
-          limit ${limit}
-          for update skip locked
-        )
-        returning s.*`);
-      const rows = (Array.isArray(res) ? res : (res as unknown as { rows: Raw[] }).rows) as Raw[];
-      return rows.map(fromRaw);
+      const t = directPostSend;
+      // Rows that are due and not held, or claimed by a worker that died before calling. SKIP LOCKED lets any number
+      // of workers run at once; each row goes to one of them.
+      const due = db()
+        .select({ postId: t.postId, kind: t.kind })
+        .from(t)
+        .where(and(
+          or(
+            and(eq(t.status, "scheduled"), lte(t.sendAt, now), or(isNull(t.claimedUntil), lte(t.claimedUntil, now))),
+            and(eq(t.status, "pending"), isNull(t.callStartedAt), lt(t.claimedUntil, now)),
+          ),
+          only ? and(eq(t.postId, only.postId), lte(t.revision, only.revision)) : undefined,
+        ))
+        .orderBy(sql`${t.sendAt} nulls first`)
+        .limit(limit)
+        .for("update", { skipLocked: true });
+      const rows = await db()
+        .update(t)
+        .set({ status: "pending", claimedUntil: new Date(now.getTime() + CLAIM_MS), updatedAt: now })
+        .where(sql`(${t.postId}, ${t.kind}) in ${due}`)
+        .returning();
+      return rows.map((r) => ({ ...toRow(r), userId: r.userId }));
     },
     async startCall(userId, postId, kind, now) {
       const rows = await db()

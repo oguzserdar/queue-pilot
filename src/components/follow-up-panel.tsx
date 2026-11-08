@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { followUpFor, postTargets, saveFollowUpAction, type FollowUpPlace, type PostTargets } from "@/app/(app)/direct-post-actions";
 import { Button } from "@/registry/components/button/button";
-import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { ChannelIcon } from "./channel-icon";
+import { PLACE_NAMES, PlaceChips, type PlaceKind } from "./place-chips";
 import { resultWords, when } from "./post-composer";
 import styles from "./post-composer.module.css";
 
-type Kind = "telegram" | "discord";
-const NAME: Record<Kind, string> = { telegram: "Telegram", discord: "Discord" };
+type Kind = PlaceKind;
+const NAME = PLACE_NAMES;
 /** The real loaders, defined once so the panel's effect does not rerun on every render. */
 const LIVE = { targets: postTargets, followUp: followUpFor, save: saveFollowUpAction };
 
@@ -62,7 +62,6 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
   const places = (["telegram", "discord"] as const).filter((k) => targets[k]);
   if (!places.length) return null;
 
-  const channel = targets.discord?.channels.find((c) => c.id === channelId);
   const doneKinds = new Set(saved.filter((p) => p.status !== "scheduled").map((p) => p.kind));
   const save = () =>
     startSave(async () => {
@@ -74,9 +73,8 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
         });
         if (!r.ok) { setNote(r.message); return; }
         setNote(r.note ?? null);
-        const f = await loaders.followUp(bufferPostId);
-        setSaved(f.places);
-        const waiting = f.places.filter((p) => p.status === "scheduled").map((p) => NAME[p.kind]);
+        setSaved(r.places);
+        const waiting = r.places.filter((p) => p.status === "scheduled").map((p) => NAME[p.kind]);
         toast({ type: "success", title: waiting.length ? `Set: ${waiting.join(" and ")} when Buffer publishes this.` : "Turned off." });
       } catch {
         setNote("Queue Pilot did not answer, so the follow-up may not be saved. Save again.");
@@ -90,32 +88,7 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
         When Buffer publishes this{dueAt ? ` (${when(dueAt)})` : ""}, Queue Pilot sends it to the places you turn on, with the text below.
       </p>
       {targets.problem && <p className={styles.bad} role="status">{targets.problem} Discord is left as it is.</p>}
-      <div className={styles.places}>
-        {places.map((k) => (
-          <div key={k} className={styles.chip} data-on={on[k] || undefined}>
-            <button type="button" className={styles.chipToggle} aria-pressed={on[k]} disabled={doneKinds.has(k)} onClick={() => setOn((o) => ({ ...o, [k]: !o[k] }))}>
-              <ChannelIcon service={k} size={16} />
-              <span>{targets[k]!.label}</span>
-              <span className={styles.chipMark} aria-hidden="true">{on[k] ? "✓" : "+"}</span>
-            </button>
-            {k === "discord" && on.discord && targets.discord && !doneKinds.has("discord") && (
-              <Popover>
-                <PopoverTrigger className={styles.chipChannel} aria-label="Discord channel">{channel ? `#${channel.name}` : "Pick a channel"} ▾</PopoverTrigger>
-                <PopoverContent className={styles.menu}>
-                  {targets.discord.channels.map((c) => (
-                    <PopoverClose asChild key={c.id}>
-                      <button type="button" className={styles.menuItem} disabled={!c.canPost} data-active={c.id === channelId || undefined} onClick={() => setChannelId(c.id)}>
-                        <span>#{c.name}</span>
-                        {!c.canPost && <span className={styles.menuNote}>Queue Pilot cannot post here</span>}
-                      </button>
-                    </PopoverClose>
-                  ))}
-                </PopoverContent>
-              </Popover>
-            )}
-          </div>
-        ))}
-      </div>
+      <PlaceChips places={places} on={on} onToggle={(k) => setOn((o) => ({ ...o, [k]: !o[k] }))} targets={targets} channelId={channelId} onChannel={setChannelId} locked={doneKinds} />
       {places.filter((k) => on[k]).map((k) => {
         const result = saved.find((p) => p.kind === k);
         const limit = targets[k]!.limit;

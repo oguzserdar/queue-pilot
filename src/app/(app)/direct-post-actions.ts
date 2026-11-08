@@ -13,10 +13,10 @@ import { limit } from "@/lib/rate-limit";
 import { recordAction } from "@/lib/security-events";
 import * as telegram from "@/lib/telegram";
 import * as discord from "@/lib/discord";
-import { followUpIdFor, resendFailed, scheduleDirectPost, sendDirectPost, sendTimeProblem, sentLate, shownStatus, type PostItem, type PostKind, type DirectPostStatus } from "@/lib/direct-posts";
+import { PLACE_NAME, followUpIdFor, resendFailed, scheduleDirectPost, sendDirectPost, sendTimeProblem, sentLate, shownStatus, type PostItem, type PostKind, type DirectPostStatus } from "@/lib/direct-posts";
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
-import { directPostDeps, startTimer, timerFailed } from "@/lib/direct-post-run";
+import { directPostDeps, startTimerOrNote } from "@/lib/direct-post-run";
 
 /** Where the person can post, as the composer shows it. */
 export type PostTargets = {
@@ -32,13 +32,14 @@ export type PostTargets = {
  */
 export type DirectPostView = { postId: string; kind: PostKind; label: string; text: string; status: DirectPostStatus; link: string | null; error: string | null; at: string; sendAt: string | null; late: boolean; followsBuffer: boolean };
 
-const NAME: Record<PostKind, string> = { telegram: "Telegram", discord: "Discord" };
+/** What a change to a post answers: done (with a note to show), or the reason it was not. */
+export type ActionResult = { ok: true; note?: string } | { ok: false; message: string };
 
 /** Why a message cannot go to that place as written, or null. */
 function textProblem(kind: PostKind, text: string): string | null {
   const max = kind === "telegram" ? telegram.TEXT_LIMIT : discord.CONTENT_LIMIT;
-  if (!text) return `Write the ${NAME[kind]} message, or leave ${NAME[kind]} out.`;
-  if (text.length > max) return `The ${NAME[kind]} message is ${text.length} characters; ${NAME[kind]} takes up to ${max}.`;
+  if (!text) return `Write the ${PLACE_NAME[kind]} message, or leave ${PLACE_NAME[kind]} out.`;
+  if (text.length > max) return `The ${PLACE_NAME[kind]} message is ${text.length} characters; ${PLACE_NAME[kind]} takes up to ${max}.`;
   return null;
 }
 
@@ -48,6 +49,7 @@ const channelLists = new Map<string, { at: number; list: Promise<Awaited<ReturnT
 function guildChannels(token: string, guildId: string) {
   const hit = channelLists.get(guildId);
   if (hit && Date.now() - hit.at < 60_000) return hit.list;
+  for (const [id, e] of channelLists) if (Date.now() - e.at >= 60_000) channelLists.delete(id);
   const list = discord.channelsWithAccess(token, guildId);
   channelLists.set(guildId, { at: Date.now(), list });
   list.catch(() => { if (channelLists.get(guildId)?.list === list) channelLists.delete(guildId); });
@@ -82,8 +84,10 @@ export type SendPostResult =
   | { ok: true; results: { kind: PostKind; label: string; status: DirectPostStatus; link: string | null; error: string | null }[]; note?: string }
   | { ok: false; message: string };
 
-/** Said when a post was saved but its Vercel timer did not start: the 30-second check or the daily job sends it. */
-const TIMER_NOTE = "Saved, but its timer did not start, so it may go out late, with the daily check.";
+/** True when the post is a follow-up of a Buffer post, which is changed on its draft, not in Sources. */
+async function followsBuffer(userId: string, postId: string): Promise<boolean> {
+  return (await postgresDirectPostStore().rows(userId, postId)).some((r) => r.bufferPostId);
+}
 
 /**
  * Checks the places a person chose and turns them into what gets sent: their connected Telegram channel, and a
@@ -137,13 +141,7 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
   if (sendAt) {
     // The post is saved first; a timer that does not start only makes it late, never lost or doubled.
     const scheduled = await scheduleDirectPost(userId, input.key, items, sendAt, deps);
-    let note: string | undefined;
-    try {
-      await startTimer(scheduled.postId, scheduled.revision, sendAt);
-    } catch (e) {
-      timerFailed(scheduled.postId, scheduled.revision, e);
-      note = TIMER_NOTE;
-    }
+    const note = await startTimerOrNote(scheduled.postId, scheduled.revision, sendAt);
     revalidatePath("/sources");
     return { ok: true, results: scheduled.results, note };
   }
@@ -176,7 +174,7 @@ export type ChangeScheduledInput = { sendAt?: string; telegram?: string; discord
  * Changes a scheduled post's time or text before it goes out. The timer set for the old version sends nothing. A
  * follow-up of a Buffer post is changed on its draft instead, since its time is the Buffer post's.
  */
-export async function changeScheduledPostAction(postId: string, change: ChangeScheduledInput): Promise<{ ok: true; note?: string } | { ok: false; message: string }> {
+export async function changeScheduledPostAction(postId: string, change: ChangeScheduledInput): Promise<ActionResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (typeof postId !== "string" || postId.length > 100 || !change || typeof change !== "object") return { ok: false, message: "Unknown post." };
@@ -194,29 +192,20 @@ export async function changeScheduledPostAction(postId: string, change: ChangeSc
     texts[kind] = text;
   }
   if (!(await limit("outbound", userId)).ok) return { ok: false, message: "Too many changes this hour. Try again later." };
-  const store = postgresDirectPostStore();
-  if ((await store.rows(userId, postId)).some((r) => r.bufferPostId)) return { ok: false, message: "This one follows a Buffer post. Change it on that draft in Next week." };
-  const rows = await store.reschedule(userId, postId, { sendAt, texts }, new Date());
+  if (await followsBuffer(userId, postId)) return { ok: false, message: "This one follows a Buffer post. Change it on that draft in Next week." };
+  const rows = await postgresDirectPostStore().reschedule(userId, postId, { sendAt, texts }, new Date());
   if (!rows.length) return { ok: false, message: "It already went out or was cancelled, so it cannot be changed." };
   revalidatePath("/sources");
-  const revision = Math.max(...rows.map((r) => r.revision));
-  try {
-    await startTimer(postId, revision, rows[0].sendAt!);
-  } catch (e) {
-    timerFailed(postId, revision, e);
-    return { ok: true, note: TIMER_NOTE };
-  }
-  return { ok: true };
+  return { ok: true, note: await startTimerOrNote(postId, Math.max(...rows.map((r) => r.revision)), rows[0].sendAt!) };
 }
 
 /** Cancels a scheduled post before it goes out. */
-export async function cancelScheduledPostAction(postId: string): Promise<{ ok: true } | { ok: false; message: string }> {
+export async function cancelScheduledPostAction(postId: string): Promise<ActionResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (typeof postId !== "string" || postId.length > 100) return { ok: false, message: "Unknown post." };
-  const store = postgresDirectPostStore();
-  if ((await store.rows(userId, postId)).some((r) => r.bufferPostId)) return { ok: false, message: "This one follows a Buffer post. Turn it off on that draft in Next week." };
-  const n = await store.cancel(userId, postId, new Date());
+  if (await followsBuffer(userId, postId)) return { ok: false, message: "This one follows a Buffer post. Turn it off on that draft in Next week." };
+  const n = await postgresDirectPostStore().cancel(userId, postId, new Date());
   revalidatePath("/sources");
   return n ? { ok: true } : { ok: false, message: "It already went out or was cancelled." };
 }
@@ -243,12 +232,13 @@ export async function followUpFor(bufferPostId: string): Promise<{ places: Follo
     postgresDirectPostStore().rows(userId, await followUpIdFor(userId, bufferPostId)),
     postgresSnapshotStore().get(userId),
   ]);
+  return { dueAt: snap?.data.posts.find((p) => p.id === bufferPostId)?.dueAt ?? null, places: placesOf(rows) };
+}
+
+/** A follow-up's places as the panel shows them: cancelled ones are left out. */
+function placesOf(rows: { kind: PostKind; label: string; text: string; target: string; status: DirectPostStatus; error: string | null; link: string | null; updatedAt: Date; callStartedAt: Date | null; claimedUntil: Date | null }[]): FollowUpPlace[] {
   const now = new Date();
-  const post = snap?.data.posts.find((p) => p.id === bufferPostId);
-  return {
-    dueAt: post?.dueAt ?? null,
-    places: rows.filter((r) => r.status !== "cancelled").map((r) => ({ kind: r.kind, label: r.label, text: r.text, target: r.target, status: shownStatus(r, now), error: r.error, link: r.link })),
-  };
+  return rows.filter((r) => r.status !== "cancelled").map((r) => ({ kind: r.kind, label: r.label, text: r.text, target: r.target, status: shownStatus(r, now), error: r.error, link: r.link }));
 }
 
 /**
@@ -262,15 +252,15 @@ export type FollowUpInput = { telegram?: { text: string } | null; discord?: { ch
  * published the post; a place turned off stops waiting. A place already going out, sent or failed is not changed,
  * and the answer says so.
  */
-export async function saveFollowUpAction(bufferPostId: string, input: FollowUpInput): Promise<{ ok: true; note?: string } | { ok: false; message: string }> {
+export async function saveFollowUpAction(bufferPostId: string, input: FollowUpInput): Promise<{ ok: false; message: string } | { ok: true; note?: string; places: FollowUpPlace[] }> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (typeof bufferPostId !== "string" || bufferPostId.length > 100 || !input || typeof input !== "object") return { ok: false, message: "Unknown post." };
+  const [snap, allowed, tokens] = await Promise.all([postgresSnapshotStore().get(userId), limit("outbound", userId), botTokens()]);
   // The post must be one of this person's, from their own saved Buffer week, with a time.
-  const post = (await postgresSnapshotStore().get(userId))?.data.posts.find((p) => p.id === bufferPostId);
+  const post = snap?.data.posts.find((p) => p.id === bufferPostId);
   if (!post || !post.dueAt || post.status === "sent") return { ok: false, message: "Only a post that has not gone out yet, and has a time, can be followed." };
-  if (!(await limit("outbound", userId)).ok) return { ok: false, message: "Too many changes this hour. Try again later." };
-  const tokens = await botTokens();
+  if (!allowed.ok) return { ok: false, message: "Too many changes this hour. Try again later." };
   const built = await placeItems(userId, { telegram: input.telegram || null, discord: input.discord || null }, tokens);
   if (!built.ok) return built;
   const store = postgresDirectPostStore();
@@ -290,16 +280,8 @@ export async function saveFollowUpAction(bufferPostId: string, input: FollowUpIn
     if (input[kind] === null && rows.some((r) => r.kind === kind && r.status === "pending")) unchanged.push(kind);
   }
   const waiting = rows.filter((r) => r.status === "scheduled");
-  let note = unchanged.length ? `${unchanged.map((k) => NAME[k]).join(" and ")} already went out or is going out now, so it was not changed.` : undefined;
-  if (waiting.length) {
-    const revision = Math.max(...waiting.map((r) => r.revision));
-    try {
-      await startTimer(id, revision, at);
-    } catch (e) {
-      timerFailed(id, revision, e);
-      note = [note, TIMER_NOTE].filter(Boolean).join(" ");
-    }
-  }
+  const notes = [unchanged.length ? `${unchanged.map((k) => PLACE_NAME[k]).join(" and ")} already went out or is going out now, so it was not changed.` : undefined];
+  if (waiting.length) notes.push(await startTimerOrNote(id, Math.max(...waiting.map((r) => r.revision)), at));
   revalidatePath("/week");
-  return { ok: true, note };
+  return { ok: true, note: notes.filter(Boolean).join(" ") || undefined, places: placesOf(rows) };
 }

@@ -36,8 +36,7 @@ vi.mock("@/lib/buffer/snapshot-store", () => ({ postgresSnapshotStore: () => ({ 
 vi.mock("@/lib/direct-post-store", () => ({ postgresDirectPostStore: () => st.store }));
 vi.mock("@/lib/direct-post-run", () => ({
   directPostDeps: (): DirectPostDeps => ({ store: st.store as DirectPostDeps["store"], post: async (item) => (st.sent.push(item.kind), { link: null }), refused: () => false }),
-  startTimer: async (...a: unknown[]) => { if (st.timerFails) throw new Error("workflow down"); st.timers.push(a); },
-  timerFailed: () => {},
+  startTimerOrNote: async (...a: unknown[]) => { if (st.timerFails) return "Saved, but its timer did not start, so it may go out late, with the daily check."; st.timers.push(a); return undefined; },
 }));
 
 const { memoryDirectPostStore, followUpIdFor } = await import("@/lib/direct-posts");

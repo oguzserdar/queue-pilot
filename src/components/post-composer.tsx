@@ -10,10 +10,11 @@ import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { ChannelIcon } from "./channel-icon";
+import { PLACE_NAMES, PlaceChips, type PlaceKind } from "./place-chips";
 import styles from "./post-composer.module.css";
 
-type Kind = "telegram" | "discord";
-const NAME: Record<Kind, string> = { telegram: "Telegram", discord: "Discord" };
+type Kind = PlaceKind;
+const NAME = PLACE_NAMES;
 
 /** A time as people read it, in their own time zone: "Sun 9 Nov, 18:00". */
 export function when(iso: string): string {
@@ -159,32 +160,7 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
             <p className={styles.hint}>Connect a Telegram channel or add Queue Pilot to a Discord server first.{targets.problem ? ` ${targets.problem}` : ""}</p>
           ) : (
             <div className={styles.composer}>
-              <div className={styles.places} role="group" aria-label="Where it goes">
-                {places.map((k) => (
-                  <div key={k} className={styles.chip} data-on={on[k] || undefined}>
-                    <button type="button" className={styles.chipToggle} aria-pressed={on[k]} onClick={() => setOn((o) => ({ ...o, [k]: !o[k] }))}>
-                      <ChannelIcon service={k} size={16} />
-                      <span>{k === "discord" ? targets.discord!.label : targets.telegram!.label}</span>
-                      <span className={styles.chipMark} aria-hidden="true">{on[k] ? "✓" : "+"}</span>
-                    </button>
-                    {k === "discord" && on.discord && targets.discord && (
-                      <Popover>
-                        <PopoverTrigger className={styles.chipChannel} aria-label="Discord channel">{channel ? `#${channel.name}` : "Pick a channel"} ▾</PopoverTrigger>
-                        <PopoverContent className={styles.menu}>
-                          {targets.discord.channels.map((c) => (
-                            <PopoverClose asChild key={c.id}>
-                              <button type="button" className={styles.menuItem} disabled={!c.canPost} data-active={c.id === channelId || undefined} onClick={() => setChannelId(c.id)}>
-                                <span>#{c.name}</span>
-                                {!c.canPost && <span className={styles.menuNote}>Queue Pilot cannot post here</span>}
-                              </button>
-                            </PopoverClose>
-                          ))}
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <PlaceChips places={places} on={on} onToggle={(k) => setOn((o) => ({ ...o, [k]: !o[k] }))} targets={targets} channelId={channelId} onChannel={setChannelId} />
               {targets.problem && <p className={styles.bad} role="alert">{targets.problem}</p>}
 
               <div className={styles.columns}>
