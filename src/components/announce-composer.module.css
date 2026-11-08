@@ -1,0 +1,25 @@
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.hint { color: var(--text-secondary); font-size: var(--text-sm); }
+.form { display: flex; flex-direction: column; gap: 14px; }
+.place { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px; background: var(--surface-muted); }
+.place[data-off] { opacity: 0.7; }
+.placeHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.preview { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--text-sm); line-height: 1.5; padding: 10px 12px; border-radius: 10px; background: var(--surface); box-shadow: 0 0 0 1px var(--border); }
+.preview[data-kind="telegram"] { border-left: 3px solid #26A5E4; }
+.preview[data-kind="discord"] { border-left: 3px solid #5865F2; }
+.count { color: var(--text-muted); font-size: var(--text-xs); align-self: flex-end; font-variant-numeric: tabular-nums; }
+.bad { color: var(--danger); font-size: var(--text-sm); }
+.link { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; font-size: var(--text-sm); cursor: pointer; }
+.foot { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.result { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--text-sm); }
+.result[data-status="sent"] > span:not(.excerpt) { color: var(--success); }
+.recentList { border-radius: 12px; box-shadow: 0 0 0 1px var(--border); gap: 0; }
+.recentList .result { padding: 12px 16px; }
+.recentList .result + .result { border-top: 1px solid var(--border); }
+.result[data-status="failed"] > span:not(.excerpt) { color: var(--danger); }
+.result[data-status="uncertain"] > span:not(.excerpt) { color: var(--warning); }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.recent { margin-top: 16px; }
+.recentTitle { margin: 0 0 8px; font-size: var(--text-sm); font-weight: 600; }
+.excerpt { color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

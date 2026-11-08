@@ -24,7 +24,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
         ]}
         copies={connected ? [{ kind: "telegram", label: "This Week in AI news" }, { kind: "discord", label: "This Week in AI #new-issues" }] : []}
         discordResult={null}
+        loadTargets={sampleTargets}
+        announcements={connected ? [
+          { announcementId: "d1", kind: "discord", label: "QP test #announcements", text: "Patch 1.4 is out. Exports now resume after a dropped connection.", status: "sent", link: "https://discord.com/channels/1/2/3", error: null, at: new Date(Date.now() - 600_000).toISOString() },
+          { announcementId: "d1", kind: "telegram", label: "QueuePilot", text: "Patch 1.4: exports resume after a dropped connection.", status: "uncertain", link: null, error: "No answer in time, so it may have been sent. Check the channel.", at: new Date(Date.now() - 600_000).toISOString() },
+          { announcementId: "d0", kind: "discord", label: "QP test #general", text: "Maintenance tonight from 22:00 UTC.", status: "failed", link: null, error: "Missing Permissions", at: new Date(Date.now() - 86_400_000).toISOString() },
+        ] : []}
       />
     </AppShell>
   );
+}
+
+/** Sample places for checking the announcement form in development: one Discord channel the bot cannot post in. */
+async function sampleTargets() {
+  "use server";
+  return {
+    telegram: { label: "QueuePilot", limit: 4096 },
+    discord: { label: "QP test", limit: 2000, defaultId: "c1", channels: [{ id: "c1", name: "announcements", canPost: true }, { id: "c2", name: "general", canPost: true }, { id: "c3", name: "staff-only", canPost: false }] },
+  };
 }

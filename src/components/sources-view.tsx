@@ -1,5 +1,7 @@
 "use client";
 
+import { AnnounceComposer } from "./announce-composer";
+import type { AnnounceRowView, AnnounceTargets } from "@/app/(app)/announce-actions";
 import { useConfirmed } from "./use-confirmed";
 import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
 import { ArrowUpRight } from "lucide-react";
@@ -27,7 +29,7 @@ export type LiveSource = { id: string; title: string; url: string };
 export type LiveCopy = { kind: "telegram" | "discord"; label: string };
 export type SourcesProps =
   | { mode: "example"; connectorUrl: string }
-  | { mode: "live"; channels: LiveChannel[]; connectorUrl: string; sources: LiveSource[]; copies: LiveCopy[]; discordResult: string | null };
+  | { mode: "live"; channels: LiveChannel[]; connectorUrl: string; sources: LiveSource[]; copies: LiveCopy[]; discordResult: string | null; announcements: AnnounceRowView[]; loadTargets?: () => Promise<AnnounceTargets> };
 
 const LIVE_AI = [
   { name: "Claude", how: "Add Queue Pilot as a custom connector in Claude", plan: "Your Claude plan" },
@@ -46,6 +48,7 @@ const EXAMPLE = {
   ],
   copies: [{ kind: "telegram" as const, label: "@thisweekinai" }],
   discordResult: null,
+  announcements: [{ announcementId: "example-1", kind: "telegram" as const, label: "@thisweekinai", text: "This week's issue is out: three model releases and what changed for builders.", status: "sent" as const, link: null, error: null, at: "2026-11-06T16:00:00.000Z" }],
 };
 
 /** Sources: the signed-in person's own, or the example account's on the same screen. */
@@ -53,7 +56,7 @@ export function SourcesView(props: SourcesProps) {
   return props.mode === "live" ? <LiveSources {...props} /> : <LiveSources mode="live" connectorUrl={props.connectorUrl} {...EXAMPLE} />;
 }
 
-function LiveSources({ channels, connectorUrl, sources, copies, discordResult }: Extract<SourcesProps, { mode: "live" }>) {
+function LiveSources({ channels, connectorUrl, sources, copies, discordResult, announcements, loadTargets }: Extract<SourcesProps, { mode: "live" }>) {
   return (
     <div className={styles.page}>
       <header className={styles.head}>
@@ -119,6 +122,7 @@ function LiveSources({ channels, connectorUrl, sources, copies, discordResult }:
         </div>
         <p className={styles.foot}>After Buffer publishes a post, Queue Pilot posts the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>
         <Copies copies={copies} discordResult={discordResult} />
+        {copies.length > 0 && <AnnounceComposer recent={announcements} loadTargets={loadTargets} />}
       </section>
     </div>
   );
