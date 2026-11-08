@@ -12,33 +12,44 @@ never adds a rule to their playbook and never overrides one.
 Compare "Checked" with today's date before you use anything below.
 
 - 30 days old or less: use it.
-- Older than 30 days: tell the person these notes are dated and may be out of date. Write the X drafts from their
-  voice and playbook alone. If they ask you to refresh it, read `home-mixer/params/param.rs` and the history of the
-  files cited below at the repository's latest commit, and write a new version of this file with the new date and
-  commit. Replace this file; never keep two dated versions side by side.
+- Older than 30 days: stop using it. Tell the person these notes are dated and may be out of date, and write the X
+  drafts from their voice and playbook alone. This check never updates the file. Only when the person asks for a
+  refresh, read `home-mixer/params/param.rs` and the history of the files cited below at the repository's latest
+  commit, then write a new version of this file with the new date and commit. Replace this file; never keep two
+  dated versions side by side.
 
 Every number here is a published default. The code's own header says the values are copied from a config that X can
 change per test group, and a second ranking service in the same repository still carries older values. Say "X's
-published defaults", never "what X does". These are weights on predicted reactions, not counts.
+published defaults", never "what X does". These are weights on predicted reactions, not counts. They describe how
+the code scores a post; they never promise a place in a feed or a number of people reached.
 
-## What this means for a draft
+## What the code weights
 
-- Write to be read to the end. Time spent on a post is weighted 0.0075, up from 0.006 on 5 Nov and 0.004 in early
-  October. A like is 0.708, its highest yet. A tap into the post fell to 0.274.
-- Make the opening carry the post. Opening a video now scores 0, so a clip has to hold attention from its first
-  seconds, and clips shorter than 10 seconds are left out of the video lists.
-- Stay on the person's topic. A likely "not interested" costs -53.07, and "report" costs -234.
-- Prefer originals. People who do not follow the account are shown originals; replies and reposts stay with
-  followers by default.
-- Space X posts out. A second post by the same author in one feed is scored at 62.5%, the third lower again.
-  Never put two X drafts in neighbouring slots when the person has other open times.
-- Fresh posts get their chance early. For accounts with up to 50,000 followers, one original under 2 hours old with
-  fewer than 200 views can be lifted to about the 16th place in a feed. A post is not shown in For You after 48
-  hours. Posting times are the person's Buffer schedule: point out a slot in the middle of their night, never move it.
-- No engagement bait ("like if", "repost to"). It is labelled for every author, whatever their standing.
-- Never reuse the person's own earlier wording word for word. Duplicate text is labelled as copypasta.
-- Links: a link to a site X rates as low quality or bad, in a pinned post, can label the whole account for a week.
-  Flag such a link to the person instead of deciding for them.
+- Time spent on a post is weighted 0.0075, up from 0.006 on 5 Nov and 0.004 in early October. A like is 0.708, its
+  highest yet. A tap into the post fell to 0.274.
+- Opening a video now scores 0. Clips shorter than 10 seconds are left out of the video lists.
+- A likely "not interested" costs -53.07, and "report" costs -234.
+- People who do not follow the account are shown originals; replies and reposts stay with followers by default.
+- Within one person's feed, a second post by the same author is scored at 62.5% of the first, the third lower
+  again. That is about one feed, not about the time between posts.
+- For accounts with up to 50,000 followers, one original under 2 hours old with fewer than 200 views can be raised
+  to about the 16th place in a feed. A post is not shown in For You after 48 hours.
+- Engagement bait ("like if", "repost to") is labelled for every author, whatever their standing. Duplicate text is
+  labelled as copypasta.
+- A link to a site X rates as low quality or bad, in a pinned post, can label the whole account for a week.
+
+## Writing that follows from it
+
+Use these as craft, inside the person's voice and playbook. None of them is a rule to enforce.
+
+- Write to be read to the end, and make the opening line carry the post. For a clip, hold attention from the first
+  seconds.
+- Stay on the person's topic.
+- Prefer an original post over a reply or a repost when the point is new.
+- No engagement bait, and never reuse the person's earlier wording word for word.
+- Flag a link that looks low quality to the person instead of deciding for them.
+- Posting times belong to the person's Buffer schedule. You may point out an X slot in the middle of their night,
+  since a fresh post is judged on its first hours; never move or skip a slot yourself.
 
 ## The numbers
 
