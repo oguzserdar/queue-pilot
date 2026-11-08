@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { cancelScheduledPostAction, changeScheduledPostAction, postTargets, resendPostAction, sendPostAction, type DirectPostView, type PostTargets, type SendPostResult } from "@/app/(app)/direct-post-actions";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
 import { DatePicker } from "@/registry/components/date-picker/date-picker";
@@ -71,6 +71,8 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
   const [own, setOwn] = useState<Record<Kind, string | null>>({ telegram: null, discord: null });
   const [tab, setTab] = useState<"all" | Kind>("all");
   const [channelId, setChannelId] = useState<string | null>(null);
+  // The per-place text box, so "Write different text" can put the cursor at the end of the copied text.
+  const ownBox = useRef<HTMLTextAreaElement>(null);
   const [result, setResult] = useState<SendPostResult | null>(null);
   // One key per composed post: every submit of this form reuses it, so a retry never posts twice.
   const [key, setKey] = useState(() => crypto.randomUUID());
@@ -177,11 +179,11 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
                   ) : own[tab] === null ? (
                     <div className={styles.shared}>
                       <p className={styles.hint}>{NAME[tab]} uses the text from All places.</p>
-                      <Button variant="secondary" size="sm" onClick={() => setOwn((o) => ({ ...o, [tab]: message }))}>Write different text for {NAME[tab]}</Button>
+                      <Button variant="secondary" size="sm" onClick={() => { setOwn((o) => ({ ...o, [tab]: message })); requestAnimationFrame(() => { const box = ownBox.current; if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } }); }}>Write different text for {NAME[tab]}</Button>
                     </div>
                   ) : (
                     <>
-                      <Textarea label={`Text for ${NAME[tab]}`} rows={9} value={own[tab] ?? ""} onChange={(e) => setOwn((o) => ({ ...o, [tab]: e.target.value }))} />
+                      <Textarea ref={ownBox} label={`Text for ${NAME[tab]}`} rows={9} value={own[tab] ?? ""} onChange={(e) => setOwn((o) => ({ ...o, [tab]: e.target.value }))} />
                       <button type="button" className={styles.link} onClick={() => setOwn((o) => ({ ...o, [tab]: null }))}>Use the text from All places again</button>
                     </>
                   )}
@@ -243,7 +245,7 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
                       <div className={styles.pick}>
                         <span className={styles.whenLabel}>Pick a day and time</span>
                         <div className={styles.whenRow}>
-                          <DatePicker label="Day" value={day} onChange={(d) => { setDay(d); setScheduled(true); }} minDate={new Date(new Date().setHours(0, 0, 0, 0))} maxDate={new Date(Date.now() + 60 * 86_400_000)} showToday />
+                          <DatePicker label="Day" side="top" value={day} onChange={(d) => { setDay(d); setScheduled(true); }} minDate={new Date(new Date().setHours(0, 0, 0, 0))} maxDate={new Date(Date.now() + 60 * 86_400_000)} showToday />
                           <TimePicker label="Time" value={time} onChange={(t) => { setTime(t); setScheduled(true); }} minuteStep={5} format="24h" />
                         </div>
                       </div>
@@ -312,7 +314,7 @@ function Recent({ rows }: { rows: DirectPostView[] }) {
               <span className={styles.excerpt}>{r.text}</span>
             )}
             <span suppressHydrationWarning>{resultWords(r)}</span>
-            {r.followsBuffer && <span className={styles.hint}>Follows a Buffer post: change it on that draft in Next week.</span>}
+            {r.followsBuffer && r.status === "scheduled" && <p className={styles.followNote}>Follows a Buffer post: change it on that draft in Next week.</p>}
             {r.status === "scheduled" && !r.followsBuffer && !editing && !moving && (
               <div className={styles.rowActions}>
                 <Button variant="ghost" size="sm" onClick={() => setEditing({ postId: r.postId, kind: r.kind, text: r.text })}>Edit text</Button>

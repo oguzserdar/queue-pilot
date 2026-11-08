@@ -21,6 +21,8 @@ export interface DatePickerProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   locale?: string;
   format?: Intl.DateTimeFormatOptions;
   /** Adds a Today button to the calendar header. */
+  /** Opens the calendar above the field instead of below, for a field near the bottom of a dialog. */
+  side?: "bottom" | "top";
   showToday?: boolean;
 }
 
@@ -42,7 +44,7 @@ const statusRise: Variants = {
   exit: { opacity: 0, y: "-0.3em", filter: `blur(${blur.subtle}px)`, transition: { duration: 0.14, ease: ease.standard } },
 };
 
-export function DatePicker({ label, value, onChange, description, placeholder = "Select a date", minDate, maxDate, disabledDates, locale = "en-US", format = { month: "short", day: "numeric", year: "numeric" }, showToday, id, className, disabled, ...buttonProps }: DatePickerProps) {
+export function DatePicker({ label, value, onChange, description, placeholder = "Select a date", minDate, maxDate, disabledDates, locale = "en-US", format = { month: "short", day: "numeric", year: "numeric" }, showToday, side = "bottom", id, className, disabled, ...buttonProps }: DatePickerProps) {
   const generatedId = useId();
   const controlId = id ?? generatedId;
   const hintId = description ? `${controlId}-description` : undefined;
@@ -117,7 +119,7 @@ export function DatePicker({ label, value, onChange, description, placeholder = 
         <ChevronDown className={styles.chevron} size={16} strokeWidth={1.75} aria-hidden="true" />
       </button>
       <AnimatePresence>
-        {open && <motion.div ref={popoverRef} className={styles.popover} role="dialog" aria-label={`${label} calendar`} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); close(); } }}
+        {open && <motion.div ref={popoverRef} className={styles.popover} data-side={side} role="dialog" aria-label={`${label} calendar`} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); close(); } }}
           initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8, scale: .95 }}
           animate={{ opacity: 1, y: 0, scale: 1, transition: reduce ? instant : { ...spring.snappy, opacity: { duration: duration.fast, ease: ease.enter } } }}
           exit={{ opacity: 0, ...(reduce ? {} : { y: -6, scale: .97 }), transition: { duration: 0.14, ease: ease.standard } }}>

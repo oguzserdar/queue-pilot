@@ -119,7 +119,8 @@ export function useNoteMentions({ text, setText, picked, setPicked, field, sourc
     onBlur: () => setCaret(null),
   };
 
-  // The list opens under the field, often below the visible part of the draft window: bring it into view when it opens.
+  // A list that opens under a field (editing a note in the middle of the list) can start below the visible part of the
+  // draft window: bring it into view when it opens.
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (open) box.current?.scrollIntoView({ block: "nearest" });

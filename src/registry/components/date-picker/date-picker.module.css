@@ -18,6 +18,7 @@
 .trigger[aria-expanded="true"] .chevron { transform: rotate(180deg); }
 /* Grows out of the trigger's calendar icon and returns there on close. */
 .popover { position: absolute; z-index: 20; top: calc(100% + 8px); left: 0; width: min(320px, calc(100vw - 32px)); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 16px; background: var(--surface-raised); box-shadow: var(--shadow-floating); transform-origin: 22px -8px; will-change: transform, opacity; }
+.popover[data-side="top"] { top: auto; bottom: calc(100% + 8px); transform-origin: 22px calc(100% + 8px); }
 /* On phone widths the calendar matches the field instead of running past the screen edge, and a tighter inset keeps the month and its controls on one row. */
 @media (max-width: 360px) { .popover { right: 0; width: auto; padding: 12px; } }
 .footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; border-top: 1px solid var(--border-subtle); padding-top: 11px; color: var(--text-muted); font-size: var(--text-xs); }

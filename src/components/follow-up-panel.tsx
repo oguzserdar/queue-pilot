@@ -7,7 +7,7 @@ import { Textarea } from "@/registry/components/textarea/textarea";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { ChannelIcon } from "./channel-icon";
 import { PLACE_NAMES, PlaceChips, type PlaceKind } from "./place-chips";
-import { resultWords, when } from "./post-composer";
+import { resultWords } from "./post-composer";
 import styles from "./post-composer.module.css";
 
 type Kind = PlaceKind;
@@ -27,7 +27,6 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
 }) {
   const [targets, setTargets] = useState<PostTargets | null>(null);
   const [saved, setSaved] = useState<FollowUpPlace[]>([]);
-  const [dueAt, setDueAt] = useState<string | null>(null);
   const [on, setOn] = useState<Record<Kind, boolean>>({ telegram: false, discord: false });
   const [text, setText] = useState<Record<Kind, string>>({ telegram: draftText, discord: draftText });
   const [channelId, setChannelId] = useState<string | null>(null);
@@ -45,7 +44,6 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
         const [t, f] = await Promise.all([loaders.targets(), loaders.followUp(bufferPostId)]);
         setTargets(t);
         setSaved(f.places);
-        setDueAt(f.dueAt);
         const tg = f.places.find((p) => p.kind === "telegram");
         const dc = f.places.find((p) => p.kind === "discord");
         setOn({ telegram: !!tg, discord: !!dc });
@@ -85,7 +83,7 @@ export function FollowUpPanel({ bufferPostId, draftText, loaders = LIVE }: {
     <section className={styles.follow} aria-label="Also post to Telegram and Discord">
       <h3 className={styles.followTitle}>Also post to Telegram and Discord</h3>
       <p className={styles.hint} suppressHydrationWarning>
-        When Buffer publishes this{dueAt ? ` (${when(dueAt)})` : ""}, Queue Pilot sends it to the places you turn on, with the text below.
+        When Buffer publishes this post, Queue Pilot sends it to the places you turn on, with the text below.
       </p>
       {targets.problem && <p className={styles.bad} role="status">{targets.problem} Discord is left as it is.</p>}
       <PlaceChips places={places} on={on} onToggle={(k) => setOn((o) => ({ ...o, [k]: !o[k] }))} targets={targets} channelId={channelId} onChannel={setChannelId} locked={doneKinds} />
