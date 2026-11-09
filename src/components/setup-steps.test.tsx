@@ -32,6 +32,10 @@ describe("SetupSteps", () => {
     expect(reached).not.toContain("No AI app has reached");
   });
 
+  it("never states a step count, which changes with the app picked", () => {
+    expect(html()).not.toMatch(/\b(Three|Four) steps\b/);
+  });
+
   it("gives a first task that saves nothing", () => {
     expect(html()).toContain("do not save anything");
   });

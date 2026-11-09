@@ -47,7 +47,7 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
     <section className={styles.setup} aria-labelledby="setup-title">
       <div className={styles.head}>
         <h2 id="setup-title" className={styles.title}>Finish setting up</h2>
-        <p className={styles.muted}>Four steps. No API key: your AI signs in with Buffer through Queue Pilot.</p>
+        <p className={styles.muted}>No API key: your AI signs in with Buffer through Queue Pilot.</p>
       </div>
       <ol className={styles.steps}>
         <li className={styles.step}>
@@ -83,14 +83,14 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
           {account ? (
             <p className={styles.fact}>
               <span className={styles.okMark} aria-hidden="true" />
-              Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length} of {account.channels.length} channels connected ({account.channels.map((c) => c.name).join(", ")}).{" "}
-              {!example && <a href="/sign-in">Not you? Sign in again</a>}
+              <span>Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length} of {account.channels.length} channels connected ({account.channels.map((c) => c.name).join(", ")}).{" "}
+              {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
             </p>
           ) : null}
           {reached.length ? (
             <p className={styles.fact}>
               <span className={styles.okMark} aria-hidden="true" />
-              {reached.map((a) => `${a.brand ?? a.name} reached Queue Pilot ${ago(a.lastUsedAt!)}`).join(". ")}.
+              <span>{reached.map((a) => `${a.brand ?? a.name} reached Queue Pilot ${ago(a.lastUsedAt!)}`).join(". ")}.</span>
             </p>
           ) : (
             <div className={styles.action}>

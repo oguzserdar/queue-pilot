@@ -11,5 +11,6 @@
 .command { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: var(--radius-panel); background: var(--qp-desk); font-size: var(--text-sm); }
 .command code { font-family: ui-monospace, "SF Mono", monospace; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .command span { flex: 1; min-width: 0; }
-.fact { margin: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: var(--text-sm); }
-.okMark { width: 7px; height: 7px; border-radius: 2px; background: var(--success); flex: none; align-self: center; }
+/* The mark stays beside its sentence; the sentence wraps in its own column. */
+.fact { margin: 0; display: grid; grid-template-columns: 7px minmax(0, 1fr); align-items: baseline; gap: 10px; font-size: var(--text-sm); }
+.okMark { width: 7px; height: 7px; border-radius: 2px; background: var(--success); align-self: start; margin-top: 0.55em; }
