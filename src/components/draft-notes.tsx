@@ -17,6 +17,7 @@ import { Avatar } from "@/registry/components/avatar/avatar";
 import { Skeleton } from "@/registry/components/skeleton/skeleton";
 import { Button } from "@/registry/components/button/button";
 import { Tooltip } from "@/registry/components/tooltip/tooltip";
+import { LocalTime } from "./local-time";
 import styles from "./draft-notes.module.css";
 
 type Loaded = { notes: DraftNote[]; more: boolean; team: boolean };
@@ -25,15 +26,8 @@ export type NotesPreview = Loaded & { teammates?: NoteTeammate[] };
 type State = { status: "loading" } | ({ status: "done" } & Loaded) | { status: "failed"; message: string };
 type Result = { ok: true } | { ok: false; message: string };
 
-/** "just now", "12 min ago", "3:40 PM" today, else "4 Nov". */
-function when(iso: string, now = Date.now()): string {
-  const t = new Date(iso);
-  const mins = Math.round((now - t.getTime()) / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
-  if (new Date(now).toDateString() === t.toDateString()) return t.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return t.toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
+/** A note's date past a week: "8 Nov", in the reader's own language. */
+const NOTE_DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
 
 /** Grows a textarea with its text, up to the CSS max-height. */
 const grow = (el: HTMLTextAreaElement | null) => { if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; } };
@@ -177,7 +171,8 @@ export function DraftNotes({ postId, preview }: { postId: string; preview?: Note
                   <div className={styles.body}>
                     <div className={styles.meta}>
                       <span className={styles.author}>{n.author ?? "A deleted account"}</span>
-                      <time dateTime={n.createdAt} title={new Date(n.createdAt).toLocaleString()}>{when(n.createdAt)}</time>
+                      {/* Filled in after load, in the reader's language and time zone, so the server's text never differs. */}
+                      <LocalTime iso={n.createdAt} options={NOTE_DAY} relative />
                       {n.edited && <span>· edited</span>}
                     </div>
                     {editing?.id === n.id ? (
