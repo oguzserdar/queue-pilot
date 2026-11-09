@@ -70,8 +70,9 @@ function pilot(g: G, x: number, y: number, closed: boolean, look = 0, lift = 0) 
     px(g, x + inset, y + r, 16 - inset * 2, 1, r === 3 ? C.strap : C.cap);
   }
   px(g, x + 1, y + 5, 2, 4, C.cap); px(g, x + 13, y + 5, 2, 4, C.cap);
-  px(g, x + 3, y + 2, 4, 3, C.goldDeep); px(g, x + 9, y + 2, 4, 3, C.goldDeep);
-  px(g, x + 4, y + 3, 2, 1, C.lens); px(g, x + 10, y + 3, 2, 1, C.lens);
+  // Goggles two pixels tall on the cap, with a row of cap below them, so at this size they never read as a second pair of eyes.
+  px(g, x + 3, y + 2, 4, 2, C.goldDeep); px(g, x + 9, y + 2, 4, 2, C.goldDeep);
+  px(g, x + 4, y + 2, 2, 1, C.lens); px(g, x + 10, y + 2, 2, 1, C.lens);
   px(g, x + 4, y + 12, 3, 1, C.gold); px(g, x + 9, y + 12, 3, 1, C.gold); px(g, x + 7, y + 12, 2, 2, C.gold);
   const ex = x + 4 + look;
   if (closed) { px(g, ex, y + 7, 2, 1, C.white); px(g, ex + 6, y + 7, 2, 1, C.white); }
