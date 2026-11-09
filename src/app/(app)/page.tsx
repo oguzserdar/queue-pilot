@@ -1,6 +1,6 @@
 import { sourceCards, sourceHoldsFromCards } from "@/lib/source-presentation";
 import { SourceEvidencePanel } from "@/components/source-evidence";
-import { NeedsYouView, type NeedItem, type ReadinessItem } from "@/components/needs-you-view";
+import { NeedsYouView, type ReadinessItem } from "@/components/needs-you-view";
 import { setupReadiness } from "@/lib/setup-readiness";
 import { approvedAiApps, getCurrentUser, signedInUserId } from "@/lib/current-user";
 import { postgresSourceStore } from "@/lib/sources-store";
@@ -11,15 +11,9 @@ import { draftReadiness, type Readiness } from "@/lib/draft-readiness";
 import { postgresWrittenStore } from "@/lib/written-store";
 import { postgresRulesStore } from "@/lib/rules-store";
 import { postgresReviewStore } from "@/lib/review-store";
+import { demoShiftDays } from "@/lib/demo-clock";
+import { exampleNeeds } from "@/lib/example-needs";
 
-/** Example home, matching the example week used on the other screens. */
-const EXAMPLE_NEEDS: NeedItem[] = [
-  { id: "drafts", tone: "warning", title: "4 drafts to approve", detail: "Tue 3 to Thu 5, written from This Week in AI 41 and 40", action: "Review", href: "/week" },
-  { id: "rule", tone: "warning", title: "1 fix you made twice", detail: "On Instagram you replaced a feeling with the result. Keep it as a rule?", action: "Decide", href: "/playbook" },
-  { id: "willfail", tone: "danger", title: "1 post would fail", detail: "Wednesday's Threads post: Threads is disconnected in Buffer", action: "See the post", href: "/week" },
-  { id: "failed", tone: "danger", title: "1 post did not go out", detail: "Wed 28 Oct, X 09:00: the image could not be loaded from its link", action: "See why", href: "/delivery" },
-  { id: "empty", tone: "warning", title: "1 empty slot next week", detail: "Friday, LinkedIn at 12:00", action: "Write it", href: "/week?new=1" },
-];
 
 const EXAMPLE_READINESS: ReadinessItem[] = [
   { id: "buffer", label: "Buffer connected", state: "done", detail: "4 channels: LinkedIn, Instagram, Threads, X" },
@@ -31,7 +25,7 @@ const EXAMPLE_READINESS: ReadinessItem[] = [
 
 export default async function Page() {
   const { user } = await getCurrentUser();
-  if (!user) return <NeedsYouView needs={EXAMPLE_NEEDS} readiness={EXAMPLE_READINESS} greeting="Good morning, Alex" />;
+  if (!user) return <NeedsYouView needs={exampleNeeds(demoShiftDays())} readiness={EXAMPLE_READINESS} greeting="Good morning, Alex" />;
   // Signed in: only facts the Buffer snapshot and the user's saved feeds back.
   const userId = await signedInUserId();
   const [sources, aiApps, voice] = await Promise.all([userId ? postgresSourceStore().list(userId) : [], approvedAiApps(), userId ? postgresVoiceStore().get(userId) : null]);

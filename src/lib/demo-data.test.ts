@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { channels, posts } from "./demo-data";
+import { channels, demoPosts } from "./demo-data";
+
+const posts = demoPosts(0);
 import { channelCheck } from "./preflight";
 
 describe("example drafts", () => {

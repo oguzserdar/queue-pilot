@@ -14,10 +14,17 @@ vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack:
 
 const { WeekView } = await import("./week-view");
 const { PlaybookView } = await import("./playbook-view");
-const { demoWeek } = await import("@/lib/demo-data");
+const { demoWeekFor } = await import("@/lib/demo-data");
+const demoWeek = demoWeekFor(0);
 const { countOpenSlots } = await import("@/lib/week-model");
-const { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } = await import("@/lib/example-week-extras");
-const { EXAMPLE_NOTE_DRAFTS, EXAMPLE_NOTE_PLAN, EXAMPLE_NOTE_RULE, EXAMPLE_TEAM_NOTE } = await import("@/lib/example-notes");
+const { exampleApprovalsFor, exampleEvidenceFor, exampleNotes: notesFor, exampleRules, exampleTags, exampleWriting } = await import("@/lib/example-week-extras");
+// The written week: the parity checks hold for any shift, so they run on the week as written.
+const exampleApprovals = exampleApprovalsFor(0);
+const exampleEvidence = exampleEvidenceFor(0);
+const exampleNotes = (ids: string[]) => notesFor(ids, 0);
+const { EXAMPLE_NOTE_DRAFTS, EXAMPLE_NOTE_PLAN, exampleNoteRule, exampleTeamNote } = await import("@/lib/example-notes");
+const EXAMPLE_NOTE_RULE = exampleNoteRule(0);
+const EXAMPLE_TEAM_NOTE = exampleTeamNote(0);
 const { FeedbackPlanView } = await import("./feedback-plan-view");
 const { ruleOrigin } = await import("@/lib/rule-origin");
 const { channels } = await import("@/lib/example-channels");
@@ -62,7 +69,7 @@ describe("example matches the signed-in screens", () => {
     expect(exampleRules.every((r) => ruleOrigin(r) ?? (r as { origin?: string }).origin)).toBe(true);
     const ids = demoWeek.posts.filter((p) => p.status === "draft").map((p) => p.id);
     const html = renderToStaticMarkup(<WeekView week={demoWeek} evidence={exampleEvidence} notesPreview={exampleNotes(ids)} tagsPreview={exampleTags(ids)} rules={exampleRules} writing={exampleWriting} writeCount={countOpenSlots(demoWeek)} approvals={exampleApprovals} />);
-    expect(html).toContain("Last approved through Queue Pilot: by you in Queue Pilot, 3 Nov");
+    expect(html).toContain("Last approved through Queue Pilot: by you in Queue Pilot, 1 Nov");
   });
 
   it("offers the same @mention picker on the example's notes as on live ones, with Sam and no Buffer call", async () => {

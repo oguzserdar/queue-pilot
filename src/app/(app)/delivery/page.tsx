@@ -4,12 +4,13 @@ import { postgresEchoStore } from "@/lib/echo-store";
 import { MAX_ATTEMPTS } from "@/lib/echo";
 import type { CopyMarks } from "@/components/delivery-view";
 import { deliveriesFromBuffer } from "@/lib/delivery-model";
-import { deliveries as demoDeliveries, deliveryCopies } from "@/lib/demo-data";
+import { demoDeliveries, deliveryCopies } from "@/lib/demo-data";
+import { demoShiftDays } from "@/lib/demo-clock";
 import { postsBetween } from "@/lib/posts-between";
 
 export default async function Page() {
   const { user } = await getCurrentUser();
-  if (!user) return <DeliveryView deliveries={demoDeliveries} copies={deliveryCopies} />;
+  if (!user) return <DeliveryView deliveries={demoDeliveries(demoShiftDays())} copies={deliveryCopies} />;
   const now = new Date();
   const range = { start: new Date(now.getTime() - 7 * 86_400_000), end: now };
   const posts = postsBetween(user.posts, range.start, range.end);

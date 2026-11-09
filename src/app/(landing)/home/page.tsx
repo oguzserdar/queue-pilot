@@ -10,9 +10,8 @@ import { HandUnderline } from "@/components/landing/hand-underline";
 import { SetupScene } from "@/components/landing/setup-scene";
 import { PixelHero } from "@/components/landing/pixel-hero";
 import { DraftTour, SameFixTour, TeamNoteTour } from "@/components/landing/draft-tour";
-import { demoWeek } from "@/lib/demo-data";
-import { countOpenSlots } from "@/lib/week-model";
-import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
+import { exampleWeekProps } from "@/lib/demo-week-props";
+import { demoShiftDays } from "@/lib/demo-clock";
 import s from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -52,14 +51,15 @@ const faq = [
 ];
 
 /** The public landing page: sections on one wrapper, Arc controls as Arc ships them. */
-/** The demo week's props, exactly as the demo's own Next week page passes them. */
-function demoWeekProps() {
-  const ids = demoWeek.posts.filter((p) => p.status === "draft").map((p) => p.id);
-  return { week: demoWeek, evidence: exampleEvidence, notesPreview: exampleNotes(ids), tagsPreview: exampleTags(ids), rules: exampleRules, writing: exampleWriting, writeCount: countOpenSlots(demoWeek), approvals: exampleApprovals };
-}
 
 /** The homepage, drawn with the app's real components (the hero plays a scripted walkthrough). */
+/** Rebuilt at most hourly, so the example week moves on by itself after each Monday. */
+export const revalidate = 3600;
+
 export default function HomePage() {
+  // Alex's example is always next week. The page is rebuilt hourly, so the shift is never more than an hour stale.
+  const shift = demoShiftDays();
+  const demo = exampleWeekProps(shift);
   return (
     <div className={s.page}>
       <header className={s.header}>
@@ -91,7 +91,7 @@ export default function HomePage() {
               </div>
             </div>
             <PilotWeek week={false} className={s.heroPilot} />
-            <div className={s.heroArt}><PixelHero week={demoWeek} /></div>
+            <div className={s.heroArt}><PixelHero week={demo.week} /></div>
           </div>
         </section>
 
@@ -110,7 +110,7 @@ export default function HomePage() {
               <li><b>You approve</b><p>Drafts wait in Buffer. Approve them in Queue Pilot, in Buffer or in your AI chat.</p></li>
             </ol>
             <figure className={[s.shot, s.liveShot].join(" ")}>
-              <DraftTour {...demoWeekProps()} showDraft="d1" />
+              <DraftTour {...demo} showDraft="d1" />
             </figure>
           </div>
         </section>
@@ -131,7 +131,7 @@ export default function HomePage() {
               <p>A teammate leaves a note on a draft in Buffer. Queue Pilot suggests the edit, and a lasting wish becomes a rule for that one account.</p>
             </div>
             <figure className={[s.shot, s.cardShot, s.liveShot].join(" ")}>
-              <TeamNoteTour />
+              <TeamNoteTour shift={shift} />
             </figure>
           </div>
         </section>
@@ -161,7 +161,7 @@ export default function HomePage() {
                 </tbody>
                 <tfoot><tr><th scope="row">First session</th><td>13</td></tr></tfoot>
               </table>
-              <figcaption>Measured by a test that runs the real code against a fake Buffer and counts every call. <a href={`${REPO}#how-it-uses-buffers-api`} target="_blank" rel="noopener noreferrer">Every call it makes</a></figcaption>
+              <figcaption>Measured by a test that counts every Buffer call. <a href={`${REPO}#how-it-uses-buffers-api`} target="_blank" rel="noopener noreferrer">See each call</a></figcaption>
             </figure>
           </div>
         </section>

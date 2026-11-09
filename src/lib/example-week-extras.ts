@@ -12,7 +12,8 @@ import type { Rule } from "./rules";
 import type { WritingAvailability } from "./writing-availability";
 import { EXAMPLE_RULES } from "./example-playbook";
 import { APPROVED_IN_APP, approverLine } from "./rule-origin";
-import { EXAMPLE_TEAM_NOTE } from "./example-notes";
+import { exampleTeamNote } from "./example-notes";
+import { shiftIso, storyShift } from "./demo-clock";
 
 const CHECKED = "2026-11-01T18:00:00Z";
 /** Primary sources behind the example drafts: the company's own page for each piece of news, read 6 Nov 2026. */
@@ -31,7 +32,7 @@ const TERRA = "GPT-6.1 Terra is a fast, efficient model for high-volume professi
 const AGENTS = "You can choose from over 40 coding agents";
 
 /** The quotes from each primary source that the example drafts' claims rest on, copied word for word. */
-export const exampleEvidence: EvidenceCard[] = [
+const EVIDENCE: EvidenceCard[] = [
   card("d1", "carbon", "Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59.", "Carbon ranks #1 on the recently updated v5.0 of Artificial Analysis Intelligence Index at 59."),
   card("d1", "carbon", "For now only a subset of cyber defenders can use it.", "Starting this week, we will make Carbon available to a subset of cyber defenders"),
   card("d2", "studio", "Android Studio now lets you pick from over 40 coding agents.", AGENTS),
@@ -42,18 +43,21 @@ export const exampleEvidence: EvidenceCard[] = [
   card("d5", "duet", "It is a research preview, in the Pro, Max and Ultra plans.", "For this research preview, Claude Duet is included in Pro, Max, and Ultra plans and uses the same usage limits as the rest of Claude."),
 ];
 
-const noteOn: Record<string, DraftNote[]> = {
+/** The evidence cards, each last checked the evening the newsletter went out, moved by `shift` days. */
+export const exampleEvidenceFor = (shift: number): EvidenceCard[] => EVIDENCE.map((c) => ({ ...c, lastCheckedAt: c.lastCheckedAt && shiftIso(c.lastCheckedAt, storyShift(shift)) }));
+
+const noteOn = (shift: number): Record<string, DraftNote[]> => ({
   // Newest first, as Buffer returns them. Sam's note is the one the Playbook turns into a LinkedIn rule (example-notes.ts).
   d1: [
-    { id: "n2", author: "Sam", avatar: null, createdAt: EXAMPLE_TEAM_NOTE.at!, edited: false, text: EXAMPLE_TEAM_NOTE.text, canEdit: false, canDelete: false },
-    { id: "n1", author: "Alex Rivera", avatar: null, createdAt: "2026-11-01T19:10:00Z", edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true },
+    { id: "n2", author: "Sam", avatar: null, createdAt: exampleTeamNote(shift).at!, edited: false, text: exampleTeamNote(shift).text, canEdit: false, canDelete: false },
+    { id: "n1", author: "Alex Rivera", avatar: null, createdAt: shiftIso("2026-11-01T19:10:00Z", storyShift(shift)), edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true },
   ],
-};
+});
 /** The teammate Alex can @mention in a note: Sam, who can read notes on every example channel. */
 export const EXAMPLE_TEAMMATES: NoteTeammate[] = [{ urn: "urn:buffer:account:example-sam", name: "Sam", email: "sam@example.com", avatar: null, locked: false }];
 
 /** Notes on each example draft, as Buffer would return them. Alex works with Sam, so notes are worded for a team. */
-export const exampleNotes = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { notes: noteOn[id] ?? [], more: false, team: true, teammates: EXAMPLE_TEAMMATES }]));
+export const exampleNotes = (ids: string[], shift: number) => Object.fromEntries(ids.map((id) => [id, { notes: noteOn(shift)[id] ?? [], more: false, team: true, teammates: EXAMPLE_TEAMMATES }]));
 
 const TAGS: DraftTag[] = [{ id: "t1", name: "Releases", color: "#8F2457" }, { id: "t2", name: "Agents", color: "#2F6F4E" }, { id: "t3", name: "Newsletter", color: "#3B5BA5" }];
 /** Tags on each example draft, from Alex's three Buffer tags. */
@@ -63,7 +67,7 @@ export const exampleTags = (ids: string[]) => Object.fromEntries(ids.map((id) =>
 export const exampleRules: Rule[] = EXAMPLE_RULES;
 
 /** The last approval recorded through Queue Pilot for the example's scheduled posts, as the week shows it under each one. */
-export const exampleApprovals: Record<string, string> = { p1: approverLine(APPROVED_IN_APP, "2026-11-03T08:00:00Z")! };
+export const exampleApprovalsFor = (shift: number): Record<string, string> => ({ p1: approverLine(APPROVED_IN_APP, shiftIso("2026-11-01T20:00:00Z", storyShift(shift)))! });
 
 /** The example writer: built-in AI, ready. Pressing it on the example changes nothing. */
 export const exampleWriting: WritingAvailability = { ready: true, source: "built-in AI" };

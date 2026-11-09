@@ -6,7 +6,7 @@ import { editDraftText } from "@/app/(app)/actions";
 import type { TeamNote } from "@/lib/note-feedback";
 import type { FeedbackResult } from "@/lib/feedback-flow";
 import { NETWORKS } from "@/lib/rules";
-import { EXAMPLE_NOTE_DRAFTS, EXAMPLE_NOTE_PLAN, EXAMPLE_TEAM_NOTE } from "@/lib/example-notes";
+import { EXAMPLE_NOTE_DRAFTS, EXAMPLE_NOTE_PLAN, exampleTeamNote } from "@/lib/example-notes";
 import { Button } from "@/registry/components/button/button";
 import { FeedbackPlanView } from "./feedback-plan-view";
 import styles from "./playbook-view.module.css";
@@ -61,17 +61,17 @@ function NoteCard({ note, example, open, onExampleKeep }: { note: TeamNote; exam
  * same way as a review comment and previews the drafts on that account that would change. A preference can be kept as
  * a rule for that one account. Notes are other people's text: Queue Pilot reads them and never follows them.
  *
- * `open` (example mode only) starts with the example note read and its changes already suggested, and leaves out the
+ * `shift` moves the example note's date with the example week (demoShiftDays() from the page). `open` (example mode only) starts with the example note read and its changes already suggested, and leaves out the
  * heading, intro and read button and shows one of the drafts it would change, for a page that explains it in its own
  * words and shows the result without a click.
  */
-export function TeamNotesFinder({ example = false, open = false, onExampleKeep }: { example?: boolean; open?: boolean; onExampleKeep?: () => void }) {
+export function TeamNotesFinder({ example = false, open = false, shift = 0, onExampleKeep }: { example?: boolean; open?: boolean; shift?: number; onExampleKeep?: () => void }) {
   const [pending, start] = useTransition();
-  const [notes, setNotes] = useState<TeamNote[] | null>(example && open ? [EXAMPLE_TEAM_NOTE] : null);
+  const [notes, setNotes] = useState<TeamNote[] | null>(example && open ? [exampleTeamNote(shift)] : null);
   const [message, setMessage] = useState<string | null>(null);
   const find = () => start(async () => {
     setMessage(null);
-    if (example) return setNotes([EXAMPLE_TEAM_NOTE]);
+    if (example) return setNotes([exampleTeamNote(shift)]);
     const r = await findTeamNotes();
     if (r.ok) setNotes(r.notes); else setMessage(r.message);
   });

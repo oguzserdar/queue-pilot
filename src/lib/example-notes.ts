@@ -8,14 +8,15 @@
 import type { TeamNote } from "./note-feedback";
 import type { FeedbackResult } from "./feedback-flow";
 import type { ExampleRule } from "./example-playbook";
-import { posts } from "./demo-data";
+import { postText } from "./demo-data";
+import { dayMonth, shiftIso, storyShift } from "./demo-clock";
 
-const text = (id: string) => posts.find((p) => p.id === id)!.text;
+const text = postText;
 const CARBON = text("d1");
 const DUET = text("d5");
 
-/** Sam's note, as Buffer returns it on the open LinkedIn draft. */
-export const EXAMPLE_TEAM_NOTE: TeamNote = {
+/** Sam's note, as Buffer returns it on the open LinkedIn draft, left the evening the newsletter went out. */
+export const exampleTeamNote = (shift: number): TeamNote => ({
   key: "note:example-sam-d1",
   postId: "d1",
   channelId: "linkedin",
@@ -23,9 +24,9 @@ export const EXAMPLE_TEAM_NOTE: TeamNote = {
   network: "linkedin",
   post: CARBON,
   author: "Sam",
-  at: "2026-11-01T21:05:00Z",
+  at: shiftIso("2026-11-01T21:05:00Z", storyShift(shift)),
   text: "On LinkedIn, can we always say whose model it is the first time? Google's Gemini 4 Carbon, not just Gemini 4 Carbon.",
-};
+});
 
 /** The LinkedIn drafts the note is compared with, by id, in the words the finder shows. */
 export const EXAMPLE_NOTE_DRAFTS: Record<string, string> = { d1: "LinkedIn, Tuesday 12:00", d5: "LinkedIn, Thursday 15:00" };
@@ -49,8 +50,11 @@ export const EXAMPLE_NOTE_PLAN: FeedbackResult = {
 };
 
 /** The rule Sam's note becomes when Alex keeps it: LinkedIn only, with the note recorded as where it came from. */
-export const EXAMPLE_NOTE_RULE: ExampleRule = {
-  id: "r-note-sam", kind: "guidance", channels: "all", accountIds: ["linkedin"], level: "warn", text: PREFERENCE,
-  learnedFrom: { kind: "note", note: EXAMPLE_TEAM_NOTE.text, author: "Sam", at: EXAMPLE_TEAM_NOTE.at, postId: "d1", channelId: "linkedin", account: "Alex Rivera", network: "linkedin" },
-  origin: "A note from Sam on 1 Nov",
+export const exampleNoteRule = (shift: number): ExampleRule => {
+  const note = exampleTeamNote(shift);
+  return {
+    id: "r-note-sam", kind: "guidance", channels: "all", accountIds: ["linkedin"], level: "warn", text: PREFERENCE,
+    learnedFrom: { kind: "note", note: note.text, author: "Sam", at: note.at, postId: "d1", channelId: "linkedin", account: "Alex Rivera", network: "linkedin" },
+    origin: `A note from Sam on ${dayMonth(note.at!)}`,
+  };
 };

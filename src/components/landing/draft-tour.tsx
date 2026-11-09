@@ -59,7 +59,7 @@ const TEAM_NOTE: TourStop[] = [
     text: "Kept, it applies to the LinkedIn account it was written on. Your other accounts stay as they are." },
 ];
 
-/** A teammate's note becoming a rule for one account: the real notes screen in example mode, already read. */
-export function TeamNoteTour() {
-  return <PointerTour stops={TEAM_NOTE}><ToastStackProvider><div className={styles.padded}><TeamNotesFinder example open /></div></ToastStackProvider></PointerTour>;
+/** A teammate's note becoming a rule for one account: the real notes screen in example mode, already read. `shift` is demoShiftDays() from the page. */
+export function TeamNoteTour({ shift }: { shift: number }) {
+  return <PointerTour stops={TEAM_NOTE}><ToastStackProvider><div className={styles.padded}><TeamNotesFinder example open shift={shift} /></div></ToastStackProvider></PointerTour>;
 }

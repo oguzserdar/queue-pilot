@@ -19,7 +19,7 @@ import { FirstRulesFinder } from "./first-rules-finder";
 import { RewriteFinder } from "./rewrite-finder";
 import { RuleTester } from "./rule-tester";
 import { TeamNotesFinder } from "./team-notes-finder";
-import { EXAMPLE_NOTE_RULE } from "@/lib/example-notes";
+import { exampleNoteRule } from "@/lib/example-notes";
 import styles from "./playbook-view.module.css";
 
 /** A rule as the Playbook shows it: the rule, and the edits it came from when there were any. */
@@ -66,7 +66,7 @@ export function SameFixOffer({ onKeep, onDismiss }: { onKeep?: () => void; onDis
   );
 }
 
-export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS, accounts = [], inheritance = {} }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[]; accounts?: RuleAccount[]; inheritance?: Inheritance }) {
+export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS, accounts = [], inheritance = {}, demoShift = 0 }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[]; accounts?: RuleAccount[]; inheritance?: Inheritance; /** Days the example note moves with the example week (demoShiftDays() from the page). */ demoShift?: number }) {
   const live = mode === "live";
   // Networks a shared rule was switched off for on this screen, ahead of the server's answer.
   const [except, setExcept] = useState<Record<string, string[]>>({});
@@ -143,7 +143,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
         <SameFixOffer onKeep={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }} onDismiss={() => setOffer("dismissed")} />
       )}
       {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the result.</p>}
-      {(live || !firstVisit) && <TeamNotesFinder example={!live} onExampleKeep={() => setRules((rs) => (rs.some((r) => r.id === EXAMPLE_NOTE_RULE.id) ? rs : [...rs, EXAMPLE_NOTE_RULE]))} />}
+      {(live || !firstVisit) && <TeamNotesFinder example={!live} shift={demoShift} onExampleKeep={() => setRules((rs) => { const rule = exampleNoteRule(demoShift); return rs.some((r) => r.id === rule.id) ? rs : [...rs, rule]; })} />}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
       {accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} onDelete={(r) => remove(r.id)} onAdd={focusAdd} example={!live} />}

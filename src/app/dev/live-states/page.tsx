@@ -9,7 +9,10 @@ import { SettingsView } from "@/components/settings-view";
 import { WeekView } from "@/components/week-view";
 import { PlaybookView } from "@/components/playbook-view";
 import { devReadRule } from "./read-rule";
-import { demoWeek } from "@/lib/demo-data";
+import { demoWeekFor } from "@/lib/demo-data";
+
+// The dev page shows the written week.
+const demoWeek = demoWeekFor(0);
 import { slotKey } from "@/lib/week-model";
 import { NeedsYouView } from "@/components/needs-you-view";
 import type { TriageItem } from "@/lib/triage-model";

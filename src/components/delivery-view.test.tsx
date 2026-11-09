@@ -4,7 +4,9 @@
  */
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { deliveries as demoDeliveries } from "@/lib/demo-data";
+import { demoDeliveries as deliveriesFor } from "@/lib/demo-data";
+
+const demoDeliveries = deliveriesFor(0);
 import { DeliveryView } from "./delivery-view";
 
 const first = demoDeliveries.find((d) => d.tone === "success")!;

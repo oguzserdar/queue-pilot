@@ -4,9 +4,8 @@ import { draftReadiness, type Readiness } from "@/lib/draft-readiness";
 import { playbookVersion } from "@/lib/playbook-version";
 import { WeekView } from "@/components/week-view";
 import { getCurrentUser } from "@/lib/current-user";
-import { demoWeek } from "@/lib/demo-data";
-import { countOpenSlots } from "@/lib/week-model";
-import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
+import { exampleWeekProps } from "@/lib/demo-week-props";
+import { demoShiftDays } from "@/lib/demo-clock";
 import { approverLine } from "@/lib/rule-origin";
 import { postsBetween } from "@/lib/posts-between";
 import { nextWeekRange, weekFromBuffer } from "@/lib/week-from-buffer";
@@ -21,8 +20,8 @@ export default async function Page() {
   const { user } = await getCurrentUser();
   if (!user) {
     // The example shows the same week a signed-in person sees, with Alex's sample quotes, Notes, tags and rules.
-    const ids = demoWeek.posts.filter((p) => p.status === "draft").map((p) => p.id);
-    return <WeekView week={demoWeek} evidence={exampleEvidence} notesPreview={exampleNotes(ids)} tagsPreview={exampleTags(ids)} rules={exampleRules} writing={exampleWriting} writeCount={countOpenSlots(demoWeek)} approvals={exampleApprovals} />;
+    // Always next week: the server works the shift out per visit (demo-clock.ts).
+    return <WeekView {...exampleWeekProps(demoShiftDays())} />;
   }
   // One reference timezone for the week's columns: the first channel's, else the account's own in Buffer.
   const timeZone = user.timeZone;

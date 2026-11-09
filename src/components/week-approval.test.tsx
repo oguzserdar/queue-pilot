@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
-import { demoWeek } from "@/lib/demo-data"
+import { demoWeekFor } from "@/lib/demo-data"
+
+const demoWeek = demoWeekFor(0);
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock("@/app/(app)/actions", () => ({}))

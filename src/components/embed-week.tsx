@@ -1,15 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { DAYS, channels, posts, type Post } from "@/lib/demo-data";
+import { channels, demoDays, demoPosts, type Post } from "@/lib/demo-data";
+import { DEMO_BASE_START, dayMonth, shiftIso } from "@/lib/demo-clock";
 import { TONE_LABEL, worstTone } from "@/lib/week-model";
 import styles from "./embed-week.module.css";
 
 const mins = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
 
-/** The compact week the Queue Pilot plugin shows inside ChatGPT or Claude. Same data and rules as the web app. */
-export function EmbedWeek() {
-  const drafts = posts.filter((p) => p.status === "draft").sort((a, b) => a.day - b.day || mins(a.time) - mins(b.time));
+/**
+ * The compact week the Queue Pilot plugin shows inside ChatGPT or Claude. Same data and rules as the web app, always
+ * next week: `shift` is demoShiftDays() from the page.
+ */
+export function EmbedWeek({ shift }: { shift: number }) {
+  const DAYS = demoDays(shift);
+  const drafts = demoPosts(shift).filter((p) => p.status === "draft").sort((a, b) => a.day - b.day || mins(a.time) - mins(b.time));
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const ready = drafts.filter((p) => worstTone(p) !== "danger" && !approved.has(p.id));
   const chan = (id: Post["channel"]) => channels.find((c) => c.id === id)!.name;
@@ -18,7 +23,7 @@ export function EmbedWeek() {
     <section className={styles.widget} aria-labelledby="qp-embed-title">
       <header className={styles.head}>
         <div>
-          <h1 id="qp-embed-title" className={styles.title}>Next week, 2 Nov to 8 Nov</h1>
+          <h1 id="qp-embed-title" className={styles.title}>Next week, {dayMonth(shiftIso(DEMO_BASE_START, shift))} to {dayMonth(shiftIso(DEMO_BASE_START, shift + 6))}</h1>
           <p className={styles.sub}>5 drafts in your open slots, each checked against your Buffer channels.</p>
         </div>
         <button type="button" className={styles.all} disabled={ready.length === 0} onClick={() => setApproved((s) => new Set([...s, ...ready.map((p) => p.id)]))}>

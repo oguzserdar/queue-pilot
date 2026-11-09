@@ -1,6 +1,7 @@
 import { channels as exampleChannels } from "@/lib/example-channels";
 import { readInheritance } from "@/lib/rule-routing-store";
 import { PlaybookView, type ShownRule } from "@/components/playbook-view";
+import { demoShiftDays } from "@/lib/demo-clock";
 import { getCurrentUser, signedInUserId } from "@/lib/current-user";
 import { postgresRulesStore } from "@/lib/rules-store";
 import { ruleOrigin } from "@/lib/rule-origin";
@@ -8,7 +9,7 @@ import { ruleOrigin } from "@/lib/rule-origin";
 export default async function Page({ searchParams }: { searchParams: Promise<{ first?: string }> }) {
   const userId = await signedInUserId();
   // The example shows the same account view a signed-in person sees, for Alex's four accounts.
-  if (!userId) return <PlaybookView mode="example" firstVisit={(await searchParams).first === "1"} accounts={exampleChannels.filter((c) => !c.isDisconnected).map((c) => ({ id: c.id, name: c.handle, service: c.service }))} />;
+  if (!userId) return <PlaybookView mode="example" demoShift={demoShiftDays()} firstVisit={(await searchParams).first === "1"} accounts={exampleChannels.filter((c) => !c.isDisconnected).map((c) => ({ id: c.id, name: c.handle, service: c.service }))} />;
   const loaded = await Promise.all([postgresRulesStore().list(userId), readInheritance(userId)]).catch((e) => {
     console.error(JSON.stringify({ event: "qp-rules-read-failed", message: e instanceof Error ? e.message : String(e) }));
     return null;
