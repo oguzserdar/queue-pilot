@@ -39,8 +39,8 @@
 @media (max-width: 1000px) {
   .heroGrid { grid-template-columns: minmax(0, 1fr); gap: 48px }
   .heroMedia { margin-top: 0 }
-  /* One column: the section's dots give way to the picture's own, so none sit behind the headline or text. */
-  .hero > canvas { display: none }
+  /* One column: the section's dots fade in below the text, behind the Pilot and the picture, never behind the words. */
+  .hero > canvas { -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 42%, #000 62%); mask-image: linear-gradient(to bottom, transparent 0, transparent 42%, #000 62%) }
   .heroMedia > canvas { display: block }
 }
 
@@ -108,7 +108,7 @@
   .bandInner > :not(.bandPilot) { grid-column: 1 }
   .bandInner > .bandPilot { grid-column: 2; grid-row: 1 / span 3; align-self: center; justify-self: center }
 }
-@media (max-width: 900px) { .bandPilot { display: none } }
+@media (max-width: 900px) { .bandPilot { --pw: 112px; justify-self: start; margin-top: 36px; margin-bottom: 8px } }
 .bandLink { color: oklch(0.92 0.01 357); font-size: 16px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px }
 /* The still Pilot stands on the band's top edge, at the left of the column. */
 .band > .wrap[aria-hidden] { position: relative; z-index: 1; height: 0 }
@@ -137,7 +137,8 @@
 .heroPilot { --pw: clamp(180px, 20vw, 260px); align-self: center; padding-right: clamp(0px, 4vw, 64px) }
 /* Alone in the hero it stands on nothing, so it drops the overlap it keeps when standing on the example week. */
 .heroPilot > div { margin-bottom: 0 }
-@media (max-width: 900px) { .heroPilot { display: none } }
+/* Phones: a smaller Pilot between the buttons and the picture, its speech bubble still above it. */
+@media (max-width: 900px) { .heroPilot { --pw: 128px; justify-self: center; padding-right: 0; margin-top: 40px } }
 .shot { margin: 0; border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 24px 60px -24px oklch(0.35 0.08 357 / 0.28) }
 .shot img { display: block; width: 100%; height: auto }
 .heroShot { margin-bottom: calc(var(--section) * -0.6); position: relative; z-index: 1 }
