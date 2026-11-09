@@ -8,7 +8,7 @@ const W = 72, H = 48;
 const C = {
   ink: "#1C1A1F", crimson: "#8F2457", deep: "#6E1A43", shine: "#B8507F", pink: "#F3D6E2", dot: "#F7E1EA",
   shadow: "#EED3DE", grey: "#E9E7EC", greyDark: "#C9C5CF", white: "#FFFFFF", glow: "#FFF3F7",
-  leather: "#6B4026", leatherDark: "#3E2416", sheen: "#9A6640", fleece: "#F1EAD8", gold: "#E3B54A", goldDeep: "#A97A28", lens: "#CFE6F5",
+  helmet: "#3D1428", ear: "#5A2240", cream: "#F1EAD8", gold: "#E3B54A", lens: "#2A0E1C",
 } as const;
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
@@ -51,8 +51,8 @@ function field(g: G) {
 
 /**
  * The Pilot, 16x16, with a soft shadow on the ground: crimson body, darker belly, two tall white eyes, and the same
- * leather flying helmet as the homepage Pilot. The helmet sits on top of the head and wraps down the sides, so the
- * face keeps every row and the eyes never touch it: a dome with a shine and a fleece brim, brass goggles on the dome,
+ * flying helmet as the homepage Pilot. The helmet sits on top of the head and wraps down the sides, so the
+ * face keeps every row and the eyes never touch it: a dark dome with a cream brim, gold goggles with dark lenses on the dome,
  * side panels with ear cups, and gold wings on the belly.
  */
 function pilot(g: G, x: number, y: number, closed: boolean, look = 0, lift = 0) {
@@ -70,17 +70,16 @@ function pilot(g: G, x: number, y: number, closed: boolean, look = 0, lift = 0) 
   const dome = [[5, 6], [3, 10], [1, 14], [0, 16], [-1, 18], [-1, 18], [-1, 18]] as const;
   dome.forEach(([dx, w], k) => {
     px(g, x + dx, y - 4 + k, w, 1, C.ink);
-    if (k > 0) px(g, x + dx + 1, y - 4 + k, w - 2, 1, k === 6 ? C.fleece : C.leather);
+    if (k > 0) px(g, x + dx + 1, y - 4 + k, w - 2, 1, k === 6 ? C.cream : C.helmet);
   });
-  px(g, x + 4, y - 2, 3, 1, C.sheen);
   // Side panels down to the jaw, each with an ear cup.
   // Three pixels wide, so even with the eyes turned there is a column of face between them and the panel.
   for (const sx of [x - 1, x + 14]) {
-    px(g, sx, y + 3, 3, 8, C.ink); px(g, sx + 1, y + 3, 1, 7, C.leather);
-    px(g, sx + 1, y + 5, 1, 2, C.leatherDark);
+    px(g, sx, y + 3, 3, 8, C.ink); px(g, sx + 1, y + 3, 1, 7, C.helmet);
+    px(g, sx + 1, y + 5, 1, 2, C.ear);
   }
   // Goggles on the dome, a strap between them.
-  px(g, x + 3, y - 2, 4, 3, C.gold); px(g, x + 9, y - 2, 4, 3, C.gold); px(g, x + 7, y - 1, 2, 1, C.goldDeep);
+  px(g, x + 3, y - 2, 4, 3, C.gold); px(g, x + 9, y - 2, 4, 3, C.gold); px(g, x + 7, y - 1, 2, 1, C.gold);
   px(g, x + 4, y - 1, 2, 1, C.lens); px(g, x + 10, y - 1, 2, 1, C.lens);
   // Wings on the belly.
   px(g, x + 4, y + 12, 3, 1, C.gold); px(g, x + 9, y + 12, 3, 1, C.gold); px(g, x + 7, y + 12, 2, 2, C.gold);

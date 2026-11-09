@@ -151,7 +151,7 @@ export function PilotWeek({ week = true, className, tone }: { week?: boolean; cl
               <rect className={styles.shell} x="-46" y="-48" width="92" height="94" />
               <rect className={styles.belly} x="-46" y="30" width="92" height="16" />
             </g>
-            <PilotGear glint={styles.glint} />
+            <PilotGear />
             <rect ref={eyeL} className={styles.eye} x="-19.5" y="-12.5" width="9" height="17" rx="4.5" />
             <rect ref={eyeR} className={styles.eye} x="10.5" y="-12.5" width="9" height="17" rx="4.5" />
           </g>
