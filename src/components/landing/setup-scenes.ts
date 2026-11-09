@@ -8,6 +8,7 @@ const W = 72, H = 48;
 const C = {
   ink: "#1C1A1F", crimson: "#8F2457", deep: "#6E1A43", shine: "#B8507F", pink: "#F3D6E2", dot: "#F7E1EA",
   shadow: "#EED3DE", grey: "#E9E7EC", greyDark: "#C9C5CF", white: "#FFFFFF", glow: "#FFF3F7",
+  cap: "#3D1428", strap: "#57303F", gold: "#E3B54A", goldDeep: "#B4862C", lens: "#AED6F0",
 } as const;
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
@@ -48,7 +49,10 @@ function field(g: G) {
   }
 }
 
-/** The Pilot, 16x16, with a soft shadow on the ground: crimson body, darker belly, a shine, two tall white eyes. */
+/**
+ * The Pilot, 16x16, with a soft shadow on the ground: crimson body, darker belly, two tall white eyes, and its flying
+ * gear (a leather cap with ear flaps, goggles pushed up, gold wings on the belly), the same as the homepage Pilot.
+ */
 function pilot(g: G, x: number, y: number, closed: boolean, look = 0, lift = 0) {
   oval(g, x + 8, y + 17, 7 - Math.abs(lift), 1, C.shadow);
   y += lift;
@@ -60,7 +64,15 @@ function pilot(g: G, x: number, y: number, closed: boolean, look = 0, lift = 0) 
     const inset = r === 1 || r === 14 ? 3 : r === 2 || r === 13 ? 2 : 1;
     px(g, x + inset, y + r, 16 - inset * 2, 1, r >= 11 ? C.deep : C.crimson);
   }
-  px(g, x + 3, y + 3, 2, 1, C.shine); px(g, x + 2, y + 4, 1, 2, C.shine);
+  // Cap over the top rows, ear flaps down both sides, goggles on the cap's band, wings on the belly.
+  for (let r = 1; r <= 4; r++) {
+    const inset = r === 1 ? 3 : r === 2 ? 2 : 1;
+    px(g, x + inset, y + r, 16 - inset * 2, 1, r === 3 ? C.strap : C.cap);
+  }
+  px(g, x + 1, y + 5, 2, 4, C.cap); px(g, x + 13, y + 5, 2, 4, C.cap);
+  px(g, x + 3, y + 2, 4, 3, C.goldDeep); px(g, x + 9, y + 2, 4, 3, C.goldDeep);
+  px(g, x + 4, y + 3, 2, 1, C.lens); px(g, x + 10, y + 3, 2, 1, C.lens);
+  px(g, x + 4, y + 12, 3, 1, C.gold); px(g, x + 9, y + 12, 3, 1, C.gold); px(g, x + 7, y + 12, 2, 2, C.gold);
   const ex = x + 4 + look;
   if (closed) { px(g, ex, y + 7, 2, 1, C.white); px(g, ex + 6, y + 7, 2, 1, C.white); }
   else { px(g, ex, y + 5, 2, 5, C.white); px(g, ex + 6, y + 5, 2, 5, C.white); }

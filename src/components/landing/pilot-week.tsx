@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/registry/components/badge/badge";
 import styles from "./pilot-week.module.css";
+import { PilotCap, PilotGoggles } from "./pilot-mark";
 
 /**
  * The landing hero's picture: the Pilot, a crimson queue slot with eyes, standing above an example Buffer week.
@@ -148,6 +149,8 @@ export function PilotWeek({ week = true, className, tone }: { week?: boolean; cl
               <rect className={styles.shell} x="-46" y="-48" width="92" height="94" />
               <rect className={styles.belly} x="-46" y="30" width="92" height="16" />
             </g>
+            <PilotCap shell="pilot-shell" />
+            <PilotGoggles glint={styles.glint} />
             <rect ref={eyeL} className={styles.eye} x="-19.5" y="-12.5" width="9" height="17" rx="4.5" />
             <rect ref={eyeR} className={styles.eye} x="10.5" y="-12.5" width="9" height="17" rx="4.5" />
           </g>

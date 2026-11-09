@@ -38,7 +38,10 @@
 .slot[data-state="draft"] .time, .slot[data-state="draft"] .channel { color: var(--accent) }
 .badge { justify-self: start; margin-top: 2px }
 @media (max-width: 520px) { .slot { height: 62px; padding: 6px } .week { padding: 12px } .days { gap: 6px } .slot[data-state="draft"] .time { display: none } }
-@media (prefers-reduced-motion: reduce) { .slot[data-fresh] { animation: none } .pilot svg { transition: none } }
+/* Now and then the goggles catch the light. */
+.glint { opacity: 0; animation: pilot-glint 5.2s ease-in-out infinite }
+@keyframes pilot-glint { 0%, 70%, 100% { opacity: 0 } 78% { opacity: .9 } 86% { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .slot[data-fresh] { animation: none } .pilot svg { transition: none } .glint { animation: none } }
 /* Phones: three days at a readable size rather than five cut-off columns. */
 @media (max-width: 520px) { .days { grid-template-columns: repeat(3, minmax(0, 1fr)) } .day:nth-child(n + 4) { display: none } }
 
