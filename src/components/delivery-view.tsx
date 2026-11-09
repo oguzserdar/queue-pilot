@@ -11,7 +11,8 @@ const day = (d: DeliveryItem) => new Intl.DateTimeFormat("en-GB", { weekday: "sh
 const time = (d: DeliveryItem) => new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: d.timeZone ?? "UTC" }).format(new Date(d.at));
 
 /** Where a sent post was also copied, keyed by Buffer post id. */
-export type CopyMarks = Record<string, { kind: "telegram" | "discord"; ok: boolean }[]>;
+/** Each copy of a post: landed, finally failed, or sent with no answer back so it may have landed. */
+export type CopyMarks = Record<string, { kind: "telegram" | "discord"; state: "sent" | "failed" | "uncertain" }[]>;
 
 const COPY_NAME = { telegram: "Telegram", discord: "Discord" } as const;
 
@@ -80,15 +81,17 @@ export function DeliveryView({ deliveries, copies = {} }: { deliveries: Delivery
   );
 }
 
-/** "Also on Telegram, Discord", plus a separate line for any copy that finally failed. */
+/** "Also on Telegram, Discord", plus a line for a copy that finally failed and one for a copy that may have landed. */
 function CopyLine({ marks }: { marks: CopyMarks[string] }) {
-  const ok = marks.filter((m) => m.ok).map((m) => COPY_NAME[m.kind]);
-  const bad = marks.filter((m) => !m.ok).map((m) => COPY_NAME[m.kind]);
-  if (!ok.length && !bad.length) return null;
-  return (
-    <span className={styles.slotMeta}>
-      {ok.length > 0 && <span className={styles.copyOk}>Also on {ok.join(", ")}</span>}
-      {bad.length > 0 && <span className={styles.copyBad}>{ok.length ? ". " : ""}Copy to {bad.join(", ")} failed</span>}
-    </span>
-  );
+  const names = (state: CopyMarks[string][number]["state"]) => marks.filter((m) => m.state === state).map((m) => COPY_NAME[m.kind]);
+  const ok = names("sent");
+  const bad = names("failed");
+  const unsure = names("uncertain");
+  if (!ok.length && !bad.length && !unsure.length) return null;
+  const parts = [
+    ok.length ? <span key="ok" className={styles.copyOk}>Also on {ok.join(", ")}</span> : null,
+    bad.length ? <span key="bad" className={styles.copyBad}>Copy to {bad.join(", ")} failed</span> : null,
+    unsure.length ? <span key="unsure" className={styles.copyBad}>No answer from {unsure.join(", ")}, so the copy may have been sent. Check the channel</span> : null,
+  ].filter(Boolean);
+  return <span className={styles.slotMeta}>{parts.flatMap((p, i) => (i ? [". ", p] : [p]))}</span>;
 }

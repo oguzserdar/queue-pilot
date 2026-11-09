@@ -5,12 +5,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-vi.mock("./actions", () => ({ clearAdminSetting: async () => {}, keepAdminSetting: async () => {} }));
+vi.mock("./actions", () => ({ clearAdminSetting: async () => null, keepAdminSetting: async () => null, saveAdminSetting: async () => null }));
 const { HeldBackNotice, ShadowedNotice } = await import("./shadowed-notice");
+const { ToastStackProvider } = await import("@/registry/components/toast-stack/toast-stack");
+/** The notices sit inside the page's toast provider, which their buttons report to. */
+const page = (node: React.ReactNode) => renderToStaticMarkup(<ToastStackProvider>{node}</ToastStackProvider>);
 
 describe("shadowed settings notice", () => {
   it("lists each hidden server value with its own Use the server's value action", () => {
-    const html = renderToStaticMarkup(<ShadowedNotice keys={["fallback_ai_key", "ai_cap_per_person"]} />);
+    const html = page(<ShadowedNotice keys={["fallback_ai_key", "ai_cap_per_person"]} />);
     expect(html).toContain("role=\"alert\"");
     expect(html).toContain("AI key");
     expect(html).toContain("FALLBACK_AI_KEY");
@@ -22,13 +25,13 @@ describe("shadowed settings notice", () => {
   });
 
   it("shows nothing when no saved value hides the server's", () => {
-    expect(renderToStaticMarkup(<ShadowedNotice keys={[]} />)).toBe("");
+    expect(page(<ShadowedNotice keys={[]} />)).toBe("");
   });
 });
 
 describe("older saved values the server's value holds back", () => {
   it("says the server's value stays in use and offers both choices for each", () => {
-    const html = renderToStaticMarkup(<HeldBackNotice keys={["buffer_client_secret"]} />);
+    const html = page(<HeldBackNotice keys={["buffer_client_secret"]} />);
     expect(html).toContain("BUFFER_CLIENT_SECRET");
     expect(html).toContain("still in use");
     expect(html).toContain("Use the saved value");
@@ -37,6 +40,6 @@ describe("older saved values the server's value holds back", () => {
   });
 
   it("shows nothing when none are held back", () => {
-    expect(renderToStaticMarkup(<HeldBackNotice keys={[]} />)).toBe("");
+    expect(page(<HeldBackNotice keys={[]} />)).toBe("");
   });
 });

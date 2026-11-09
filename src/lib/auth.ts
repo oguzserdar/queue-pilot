@@ -9,6 +9,7 @@ import { admin, genericOAuth, jwt } from "better-auth/plugins";
 import { mcp } from "@better-auth/mcp";
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { BETTER_AUTH_IP_ADDRESS } from "./client-ip";
 import { AUTHORIZE_URL, SCOPES, TOKEN_URL } from "./buffer/oauth";
 import { bufferQuery } from "./buffer/client";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -37,9 +38,9 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
     database: drizzleAdapter(db(), { provider: "pg", schema }),
     advanced: {
       database: { joins: true },
-      // Behind a proxy that appends to x-forwarded-for (a reverse proxy in front of Docker), list its addresses so
-      // each person gets their own rate-limit bucket. Vercel overwrites the header, so it needs nothing here.
-      ...(process.env.TRUSTED_PROXIES ? { ipAddress: { trustedProxies: process.env.TRUSTED_PROXIES.split(",").map((s) => s.trim()).filter(Boolean) } } : {}),
+      // Read only the address src/lib/client-ip.ts resolved (TRUSTED_PROXY_HOP_COUNT, TRUSTED_PROXIES), so this limiter
+      // and ours count the same caller. Every request reaches the handler through withClientIp, which writes it.
+      ipAddress: BETTER_AUTH_IP_ADDRESS,
     },
     // Better Auth's own limits on /api/auth/* (production only), counted in Postgres so every server instance shares
     // them. ChatGPT, Claude and Grok refresh tokens from shared server addresses, so the token rule is raised to

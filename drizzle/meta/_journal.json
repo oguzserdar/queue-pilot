@@ -239,6 +239,34 @@
       "when": 1793951128379,
       "tag": "20261106074528_settings_change_actor",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794129451171,
+      "tag": "20261108091731_echo_status_uncertain",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794130128504,
+      "tag": "20261108092848_announcements",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794136956098,
+      "tag": "20261108112236_scheduled_posts",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794140208585,
+      "tag": "20261108121648_posts_follow_buffer",
+      "breakpoints": true
     }
   ]
 }

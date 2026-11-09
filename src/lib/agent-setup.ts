@@ -3,7 +3,7 @@
  * Queue Pilot skill and add the connector, per agent. The Connect page copies one line that points at it, so the
  * person pastes one sentence instead of following steps. Every command carries this deployment's own address.
  */
-import { PLUGIN_SKILLS } from "./plugin-skills";
+import { PLUGIN_SKILL_FILES, PLUGIN_SKILLS } from "./plugin-skills";
 import { SKILL_NAME } from "./skill-name";
 
 /** The one line the Connect page copies. */
@@ -20,7 +20,12 @@ export function setupPrompt(origin: string): string {
   const mcp = `${origin}/api/mcp`;
   const names = [SKILL_NAME, ...Object.keys(PLUGIN_SKILLS)];
   // Every install route gets the same skills: the main one and the task skills the plugin ships.
-  const fetchSkills = (dir: string) => names.map((n) => `mkdir -p ${dir}/${n} && curl -fsSL ${origin}/.well-known/agent-skills/${n}/SKILL.md -o ${dir}/${n}/SKILL.md`).join("\n");
+  const fetchFile = (dir: string, n: string, path: string) => {
+    const folder = path.includes("/") ? `${dir}/${n}/${path.slice(0, path.lastIndexOf("/"))}` : `${dir}/${n}`;
+    return `mkdir -p ${folder} && curl -fsSL ${origin}/.well-known/agent-skills/${n}/${path} -o ${dir}/${n}/${path}`;
+  };
+  // A skill's reference files go beside its SKILL.md, at the paths its links use.
+  const fetchSkills = (dir: string) => names.flatMap((n) => [fetchFile(dir, n, "SKILL.md"), ...Object.keys(PLUGIN_SKILL_FILES[n] ?? {}).map((p) => fetchFile(dir, n, p))]).join("\n");
   const skill = `${origin}/.well-known/agent-skills/${SKILL_NAME}/SKILL.md`;
   return `These are the setup instructions for Queue Pilot at ${origin}. Queue Pilot connects you to the user's Buffer queue: you write the posts, it checks each draft and saves it in Buffer for the user to approve.
 

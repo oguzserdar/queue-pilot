@@ -42,4 +42,22 @@ describe("skills pack", () => {
     const mcp = JSON.parse(readFileSync(join(ROOT, "plugin/.mcp.json"), "utf8"));
     expect(mcp.mcpServers["queue-pilot"].url).toMatch(/\/api\/mcp$/);
   });
+
+  it.each(skills)("$name links only to files it ships", ({ name, body }) => {
+    const links = [...body.matchAll(/\]\(((?!https?:)[^)#\s]+)\)/g)].map((m) => m[1]);
+    for (const link of links) expect(() => readFileSync(join(skillsDir, name, link))).not.toThrow();
+  });
+
+  it("dates every reference with the day it was checked, the exact source commit and when to stop trusting it", () => {
+    const refs = skills.flatMap(({ name }) => {
+      try { return readdirSync(join(skillsDir, name, "references")).map((f) => join(skillsDir, name, "references", f)); } catch { return []; }
+    });
+    expect(refs.some((f) => f.endsWith("queue-pilot-fill-week/references/x.md"))).toBe(true);
+    for (const file of refs) {
+      const text = readFileSync(file, "utf8");
+      expect(text).toMatch(/^Checked: \d{4}-\d{2}-\d{2}$/m);
+      expect(text).toMatch(/^Source: .+ at commit [0-9a-f]{40}$/m);
+      expect(text).toMatch(/Older than 30 days/);
+    }
+  });
 });

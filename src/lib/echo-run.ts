@@ -7,6 +7,8 @@ import { after } from "next/server";
 import type { Post } from "./buffer/queries";
 import { imageOf, planEchoes, runEchoes, type EchoRecord, type EchoSend } from "./echo";
 import { CLAIM_MS, postgresEchoStore, type EchoStore } from "./echo-store";
+import { postgresDirectPostStore } from "./direct-post-store";
+import { forLog } from "./direct-posts";
 import * as telegram from "./telegram";
 import * as discord from "./discord";
 import { operatorSettings, type SettingsSource } from "./env";
@@ -32,16 +34,19 @@ const realSenders: Senders = {
 };
 
 /** Copies this user's newly sent posts to their destinations. Returns what was attempted. */
-export async function echoForUser(userId: string, posts: Post[], deps: { store: EchoStore; tokens: BotTokens; now?: Date; senders?: Senders }): Promise<EchoRecord[]> {
+export async function echoForUser(userId: string, posts: Post[], deps: { store: EchoStore; tokens: BotTokens; now?: Date; senders?: Senders; /** The places a follow-up covers, as "postId|kind". */ followed?: (ids: string[]) => Promise<Set<string>> }): Promise<EchoRecord[]> {
   const senders = deps.senders ?? realSenders;
   const all = await deps.store.destinations(userId);
   const usable = all.filter((d) => (d.kind === "telegram" ? deps.tokens.telegram : deps.tokens.discord));
   if (usable.length === 0) return [];
 
+  // A place the person set to get its own text for a post is sent by that follow-up, not copied too. Only that place:
+  // a follow-up to Telegram leaves the Discord copy as it was.
+  const followed = deps.followed ? await deps.followed(posts.filter((p) => p.status === "sent").map((p) => p.id)) : new Set<string>();
   const sentIds = posts.filter((p) => p.status === "sent").map((p) => p.id);
   const records = await deps.store.records(userId, sentIds);
   const connectedAt = Object.fromEntries(usable.map((d) => [d.id, new Date(d.connectedAt)]));
-  const plan = planEchoes(posts, usable, records, deps.now ?? new Date(), connectedAt);
+  const plan = planEchoes(posts, usable, records, deps.now ?? new Date(), connectedAt).filter((e) => !followed.has(`${e.post.id}|${e.destination.kind}`));
   if (plan.length === 0) return [];
 
   const byId = new Map(usable.map((d) => [d.id, d]));
@@ -57,6 +62,8 @@ export async function echoForUser(userId: string, posts: Post[], deps: { store: 
     },
     record: (r) => deps.store.record(userId, r),
     previous: (postId, destinationId) => previous.get(`${postId}|${destinationId}`),
+    // Only an answer from Telegram or Discord proves nothing was posted; anything else may have landed.
+    refused: (e) => e instanceof telegram.TelegramError || e instanceof discord.DiscordError,
   });
 }
 
@@ -67,13 +74,16 @@ export async function echoForUser(userId: string, posts: Post[], deps: { store: 
  */
 export function scheduleEcho(userId: string, posts: Post[]): void {
   after(async () => {
+    // A followed post moved in Buffer: its Telegram and Discord follow-ups move with it.
+    // Loaded here: the post runner reads this module's bot tokens, so a top-level import would be circular.
+    await import("./direct-post-run").then((m) => m.retimeFollowUpsFor(userId, posts)).catch((e) => console.error(JSON.stringify({ event: "qp-follow-up-retime-failed", userId, message: forLog(e) })));
     try {
       const tokens = await botTokens();
       if (!tokens.telegram && !tokens.discord) return;
-      const out = await echoForUser(userId, posts, { store: postgresEchoStore(), tokens });
+      const out = await echoForUser(userId, posts, { store: postgresEchoStore(), tokens, followed: (ids) => postgresDirectPostStore().followedPlaces(userId, ids) });
       for (const r of out.filter((x) => x.status === "failed")) console.warn(JSON.stringify({ event: "qp-echo-failed", postId: r.postId, attempts: r.attempts, error: r.error }));
     } catch (e) {
-      console.error(JSON.stringify({ event: "qp-echo-run-failed", message: e instanceof Error ? e.message : String(e) }));
+      console.error(JSON.stringify({ event: "qp-echo-run-failed", message: forLog(e) }));
     }
   });
 }

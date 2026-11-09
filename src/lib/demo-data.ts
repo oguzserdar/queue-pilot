@@ -124,6 +124,6 @@ export const demoWeek: WeekModel = { label: WEEK_LABEL, days: DAYS, channels, sl
 
 /** Example copy marks for the Delivery screen: the two sent posts also went to Telegram and Discord. */
 export const deliveryCopies = {
-  w1: [{ kind: "telegram" as const, ok: true }, { kind: "discord" as const, ok: true }],
-  w2: [{ kind: "telegram" as const, ok: true }],
+  w1: [{ kind: "telegram" as const, state: "sent" as const }, { kind: "discord" as const, state: "sent" as const }],
+  w2: [{ kind: "telegram" as const, state: "sent" as const }],
 };

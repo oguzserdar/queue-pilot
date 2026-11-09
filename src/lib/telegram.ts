@@ -27,7 +27,10 @@ async function call<T>(token: string, method: string, body: Record<string, unkno
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(10_000),
   });
-  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string; parameters?: { retry_after?: number } };
+  const json = (await res.json().catch(() => null)) as { ok?: boolean; result?: T; description?: string; parameters?: { retry_after?: number } } | null;
+  // Only Telegram's own refusal (a 4xx with ok:false) means nothing was posted. A 5xx or an answer we cannot read may
+  // still have posted, so it is a plain error, which callers treat as "may have been sent".
+  if (res.status >= 500 || !json) throw new Error(`Telegram answered ${res.status} without a readable result`);
   if (!json.ok) throw new TelegramError(json.description ?? `Telegram answered ${res.status}`, json.parameters?.retry_after);
   return json.result as T;
 }
@@ -122,4 +125,19 @@ export async function sendCopy(
   }
   const r = await call<{ message_id: number }>(token, "sendMessage", { chat_id: chatId, text: fit(text, TEXT_LIMIT) }, doFetch);
   return { messageId: r.message_id };
+}
+
+/**
+ * Posts a message exactly as written: nothing cut, text over the limit refused before sending, so the preview
+ * is always what lands. Returns the message id and, for a public channel, its username for a link.
+ */
+export async function postText(token: string, chatId: number, text: string, doFetch: Fetch = fetch): Promise<{ messageId: number; username: string | null }> {
+  if (text.length > TEXT_LIMIT) throw new TelegramError(`Telegram takes up to ${TEXT_LIMIT} characters; this is ${text.length}.`);
+  const r = await call<{ message_id: number; chat: { username?: string } }>(token, "sendMessage", { chat_id: chatId, text }, doFetch);
+  return { messageId: r.message_id, username: r.chat?.username ?? null };
+}
+
+/** The link that opens a posted message, for a public channel or group with a username; null for a private one. */
+export function messageUrl(username: string | null, messageId: number): string | null {
+  return username ? `https://t.me/${username}/${messageId}` : null;
 }

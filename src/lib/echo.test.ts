@@ -39,6 +39,11 @@ describe("planEchoes", () => {
     expect(planEchoes([post({})], [tg], failed(MAX_ATTEMPTS), now, long)).toEqual([]);
   });
 
+  it("never sends again on its own when it cannot tell whether a copy landed", () => {
+    const unsure: EchoRecord[] = [{ postId: "p1", destinationId: "tg1", status: "uncertain", attempts: 1, error: "No answer in time" }];
+    expect(planEchoes([post({})], [tg], unsure, now, long)).toEqual([]);
+  });
+
   it("does not flood a newly connected channel with older posts", () => {
     const justNow = { tg1: new Date("2026-11-03T10:00:00Z") };
     expect(planEchoes([post({})], [tg], [], now, justNow)).toEqual([]);
@@ -63,12 +68,32 @@ describe("runEchoes", () => {
       },
       record: async (r) => void recorded.push(r),
       previous: (postId, destinationId) => (postId === "p1" && destinationId === "dc1" ? { postId, destinationId, status: "failed", attempts: 1 } : undefined),
+      refused: () => true,
     });
     expect(out).toEqual([
       { postId: "p1", destinationId: "tg1", status: "failed", attempts: 1, error: "Bad Request: chat not found" },
       { postId: "p1", destinationId: "dc1", status: "sent", attempts: 2, messageId: "m9" },
     ]);
     expect(recorded).toEqual(out);
+  });
+});
+
+describe("runEchoes and a send with no answer", () => {
+  it("records a refusal as failed (tried again later) and a timeout as uncertain (never resent on its own)", async () => {
+    class Refused extends Error {}
+    const plan = planEchoes([post({})], [tg, dc], [], now, long);
+    const out = await runEchoes(plan, {
+      claim: async () => true,
+      send: async (s) => {
+        if (s.destination.kind === "telegram") throw new Refused("Bad Request: chat not found");
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      },
+      record: async () => undefined,
+      previous: () => undefined,
+      refused: (e) => e instanceof Refused,
+    });
+    expect(out.map((r) => [r.destinationId, r.status])).toEqual([["tg1", "failed"], ["dc1", "uncertain"]]);
+    expect(out[1].error).toMatch(/may have been sent/);
   });
 });
 
@@ -95,6 +120,7 @@ describe("runEchoes keeps going", () => {
       send: async (s) => (sentTo.push(s.post.id), { messageId: "m" }),
       record: async (r) => { if (r.postId === "p1") throw new Error("database down"); },
       previous: () => undefined,
+      refused: () => true,
     });
     expect(sentTo).toEqual(["p1", "p2"]);
     expect(out.map((r) => r.status)).toEqual(["sent", "sent"]);

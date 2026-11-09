@@ -29,7 +29,10 @@ export function installUrl(o: { clientId: string; redirectUri: string; state: st
 }
 
 async function json<T>(res: Response): Promise<T> {
-  const body = (await res.json().catch(() => ({}))) as T & { message?: string; retry_after?: number };
+  const body = (await res.json().catch(() => null)) as (T & { message?: string; retry_after?: number }) | null;
+  // Only Discord's own refusal (a 4xx) means nothing was posted. A 5xx or an answer we cannot read may still have
+  // posted, so it is a plain error, which callers treat as "may have been sent".
+  if (res.status >= 500 || !body) throw new Error(`Discord answered ${res.status} without a readable result`);
   if (!res.ok) throw new DiscordError(body.message ?? `Discord answered ${res.status}`, body.retry_after);
   return body;
 }
@@ -103,4 +106,82 @@ export function stateMatches(state: string, userId: string, secret: string, now:
 /** The channel to post in by default: one named like "announcements", else the first. */
 export function defaultChannel(channels: { id: string; name: string }[]): { id: string; name: string } | null {
   return channels.find((c) => /announce/i.test(c.name)) ?? channels[0] ?? null;
+}
+
+const ADMINISTRATOR = BigInt(1 << 3);
+const VIEW_CHANNEL = BigInt(1 << 10);
+const SEND_MESSAGES = BigInt(1 << 11);
+const NONE = BigInt(0);
+
+/** A permission overwrite on a channel: type 0 is a role, type 1 a member. */
+export type Overwrite = { id: string; type: number; allow: string; deny: string };
+
+/**
+ * Whether a member can see and post in a channel, computed the way Discord documents it
+ * (docs.discord.com/developers/topics/permissions, "Permission Overwrites"): @everyone plus the member's roles, then
+ * the channel's @everyone overwrite, then its role overwrites together, then the member's own overwrite.
+ *
+ * @param o.guildId - The server's id, which is also its @everyone role's id
+ * @param o.roles - Every role in the server with its permissions
+ * @param o.memberRoles - The ids of the roles the member has
+ * @param o.memberId - The member's user id
+ * @param o.overwrites - The channel's permission overwrites
+ * @returns true when the member can view the channel and send messages in it
+ */
+export function canPost(o: { guildId: string; roles: { id: string; permissions: string }[]; memberRoles: string[]; memberId: string; overwrites: Overwrite[] }): boolean {
+  const perm = (id: string) => BigInt(o.roles.find((r) => r.id === id)?.permissions ?? "0");
+  let base = perm(o.guildId);
+  for (const id of o.memberRoles) base |= perm(id);
+  if ((base & ADMINISTRATOR) === ADMINISTRATOR) return true;
+  let p = base;
+  const everyone = o.overwrites.find((w) => w.id === o.guildId);
+  if (everyone) p = (p & ~BigInt(everyone.deny)) | BigInt(everyone.allow);
+  let allow = NONE;
+  let deny = NONE;
+  for (const w of o.overwrites) if (w.type === 0 && w.id !== o.guildId && o.memberRoles.includes(w.id)) { allow |= BigInt(w.allow); deny |= BigInt(w.deny); }
+  p = (p & ~deny) | allow;
+  const member = o.overwrites.find((w) => w.type === 1 && w.id === o.memberId);
+  if (member) p = (p & ~BigInt(member.deny)) | BigInt(member.allow);
+  return (p & (VIEW_CHANNEL | SEND_MESSAGES)) === (VIEW_CHANNEL | SEND_MESSAGES);
+}
+
+/**
+ * The server's text and announcement channels in server order, each saying whether the bot can post there, so the
+ * person picks only a channel that will work.
+ */
+export async function channelsWithAccess(botToken: string, guildId: string, doFetch: Fetch = fetch): Promise<{ id: string; name: string; canPost: boolean }[]> {
+  const get = async <T>(path: string) => json<T>(await doFetch(`${API}${path}`, { headers: { authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(10_000) }));
+  const g = encodeURIComponent(guildId);
+  const me = await get<{ id: string }>("/users/@me");
+  const [channels, roles, member] = await Promise.all([
+    get<{ id: string; name: string; type: number; position?: number; permission_overwrites?: Overwrite[] }[]>(`/guilds/${g}/channels`),
+    get<{ id: string; permissions: string }[]>(`/guilds/${g}/roles`),
+    get<{ roles: string[] }>(`/guilds/${g}/members/${encodeURIComponent(me.id)}`),
+  ]);
+  return channels
+    .filter((c) => c.type === 0 || c.type === 5)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .map((c) => ({ id: c.id, name: c.name, canPost: canPost({ guildId, roles, memberRoles: member.roles, memberId: me.id, overwrites: c.permission_overwrites ?? [] }) }));
+}
+
+/**
+ * Posts a message exactly as written: no link added, nothing cut. Text over the limit is refused before
+ * anything is sent, so the preview is always what lands. Mentions stay off, so it never pings @everyone.
+ */
+export async function postText(botToken: string, channelId: string, content: string, doFetch: Fetch = fetch): Promise<{ messageId: string }> {
+  if (content.length > CONTENT_LIMIT) throw new DiscordError(`Discord takes up to ${CONTENT_LIMIT} characters; this is ${content.length}.`);
+  const res = await doFetch(`${API}/channels/${encodeURIComponent(channelId)}/messages`, {
+    method: "POST",
+    headers: { authorization: `Bot ${botToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const id = (await json<{ id?: string }>(res)).id;
+  if (!id) throw new Error("Discord accepted the message but did not return its id");
+  return { messageId: id };
+}
+
+/** The link that opens a posted message in Discord. */
+export function messageUrl(guildId: string, channelId: string, messageId: string): string {
+  return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
 }

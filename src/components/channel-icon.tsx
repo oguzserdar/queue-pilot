@@ -1,11 +1,13 @@
 import {
   IconBrandBluesky,
+  IconBrandDiscord,
   IconBrandFacebook,
   IconBrandGoogle,
   IconBrandInstagram,
   IconBrandLinkedin,
   IconBrandMastodon,
   IconBrandPinterest,
+  IconBrandTelegram,
   IconBrandThreads,
   IconBrandTiktok,
   IconBrandX,
@@ -31,6 +33,9 @@ const LOGOS: Record<string, { Icon: Icon; color: string }> = {
   youtube: { Icon: IconBrandYoutube, color: "#FF0000" },
   pinterest: { Icon: IconBrandPinterest, color: "#BD081C" },
   googlebusiness: { Icon: IconBrandGoogle, color: "#4285F4" },
+  // Not Buffer networks: the places Queue Pilot copies sent posts to.
+  telegram: { Icon: IconBrandTelegram, color: "#26A5E4" },
+  discord: { Icon: IconBrandDiscord, color: "#5865F2" },
 };
 
 /** The logo of the network a channel posts to; a plain globe for a network Queue Pilot has no logo for. */

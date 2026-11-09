@@ -221,8 +221,8 @@ export function DraftNotes({ postId, preview }: { postId: string; preview?: Note
             <button type="button" className={styles.send} aria-label="Send note" title="Send (⌘↵)" disabled={!draft.trim() || busy !== null} onClick={add}>
               <ArrowUp size={16} strokeWidth={2} aria-hidden="true" />
             </button>
+            {addMentions.list}
           </div>
-          {addMentions.list}
           {error && <p className={styles.error} role="alert">{error}</p>}
         </>
       )}

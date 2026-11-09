@@ -34,6 +34,13 @@ describe("echoForUser", () => {
     expect(calls).toEqual(["tg -1001 post p1 https://x.com/p/p1", "dc c1 post p1"]);
   });
 
+  it("leaves a followed place to its follow-up, and still copies the post's other places and other posts", async () => {
+    const store = await storeWith();
+    const { senders, calls } = fakeSenders();
+    await echoForUser("u1", [sent("p1"), sent("p2")], { store, tokens: { telegram: "T", discord: "D" }, now, senders, followed: async () => new Set(["p1|telegram"]) });
+    expect(calls).toEqual(["dc c1 post p1", "tg -1001 post p2 https://x.com/p/p2", "dc c1 post p2"]);
+  });
+
   it("does not send again on the next run", async () => {
     const store = await storeWith();
     const { senders, calls } = fakeSenders();

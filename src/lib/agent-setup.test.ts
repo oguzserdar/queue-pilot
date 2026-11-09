@@ -21,6 +21,12 @@ describe("agent setup prompt", () => {
       for (const n of names) expect(setupPrompt(origin)).toContain(`mkdir -p ${dir}/${n} && curl -fsSL ${origin}/.well-known/agent-skills/${n}/SKILL.md -o ${dir}/${n}/SKILL.md`);
   });
 
+  it("installs each skill's reference files beside its SKILL.md, at the paths its links use", () => {
+    const prompt = setupPrompt(origin);
+    for (const dir of ["~/.claude/skills", "~/.agents/skills", "~/.cursor/skills"])
+      expect(prompt).toContain(`mkdir -p ${dir}/queue-pilot-fill-week/references && curl -fsSL ${origin}/.well-known/agent-skills/queue-pilot-fill-week/references/x.md -o ${dir}/queue-pilot-fill-week/references/x.md`);
+  });
+
   it("does not make Codex sign in twice or install into the deprecated folder", () => {
     const p = setupPrompt(origin);
     expect(p).not.toContain("~/.codex/skills");

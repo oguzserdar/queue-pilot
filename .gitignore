@@ -52,3 +52,4 @@ PRODUCT.md
 .claude/
 .agents/
 skills-lock.json
+/.swc

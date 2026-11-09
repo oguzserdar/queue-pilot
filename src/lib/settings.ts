@@ -8,7 +8,7 @@
  * the environment's. One exception covers the upgrade: before v0.8 the environment won, so a value saved before then
  * (no "admin wins" mark) does not replace a set environment value. The environment's value stays in use until the
  * operator saves the value again, or chooses "Use the saved value", in /admin. Bootstrap values (SETTINGS_KEY, SESSION_SECRET, DATABASE_URL, ADMIN_SETUP_CODE, CRON_SECRET,
- * BUFFER_REDIRECT_URI, TRUSTED_PROXIES) are environment-only and not listed here: a key never lives in the database it
+ * BUFFER_REDIRECT_URI, TRUSTED_PROXIES, TRUSTED_PROXY_HOP_COUNT) are environment-only and not listed here: a key never lives in the database it
  * unlocks, and the server needs them before /admin can open.
  * The storage itself is injected so the same rules run against Postgres in production and memory in tests.
  */
@@ -21,7 +21,7 @@ export const GROUPS = {
   buffer: { title: "Buffer app", help: "The app client people sign in with. From Settings, API in your Buffer account." },
   ai: { title: "Built-in AI", help: "This deployment's own AI key, used for people who have not connected their own AI. Its calls are billed to this key." },
   sources: { title: "Sources", help: "Optional services that bring in material to write from." },
-  copies: { title: "Copies to Telegram and Discord", help: "Optional. The shared bots that copy people's sent posts to their own Telegram channel or Discord server." },
+  copies: { title: "Telegram and Discord", help: "Optional. The shared bots that post to people's own Telegram channel or Discord server: copies of published Buffer posts, and posts written in Queue Pilot." },
 } as const;
 /** One /admin section. */
 export type GroupId = keyof typeof GROUPS;

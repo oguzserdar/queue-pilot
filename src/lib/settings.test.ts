@@ -46,7 +46,7 @@ describe("operator settings", () => {
 
   it("keeps bootstrap values out of the registry, so they never live in the database", () => {
     const envs = Object.values(SETTINGS).map((s) => s.env as string);
-    for (const bootstrap of ["SETTINGS_KEY", "SESSION_SECRET", "DATABASE_URL", "ADMIN_SETUP_CODE", "CRON_SECRET", "BUFFER_REDIRECT_URI", "TRUSTED_PROXIES"]) {
+    for (const bootstrap of ["SETTINGS_KEY", "SESSION_SECRET", "DATABASE_URL", "ADMIN_SETUP_CODE", "CRON_SECRET", "BUFFER_REDIRECT_URI", "TRUSTED_PROXIES", "TRUSTED_PROXY_HOP_COUNT"]) {
       expect(envs).not.toContain(bootstrap);
     }
   });

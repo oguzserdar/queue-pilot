@@ -11,7 +11,7 @@ import { bigint, boolean, date, index, integer, jsonb, pgEnum, pgTable, primaryK
 /** Where a copy goes. A Postgres enum, so the database itself refuses any other value. */
 export const echoKind = pgEnum("qp_echo_kind", ["telegram", "discord"]);
 /** What happened to a copy. */
-export const echoStatus = pgEnum("qp_echo_status", ["sent", "failed"]);
+export const echoStatus = pgEnum("qp_echo_status", ["sent", "failed", "uncertain"]);
 
 /** Admin-entered settings (Buffer app keys); secret values hold the encrypted form only. */
 export const operatorSettings = pgTable("operator_settings", {
@@ -116,6 +116,57 @@ export const echoClaim = pgTable(
     claimedUntil: timestamp("claimed_until", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.postId, t.destinationId] })],
+);
+
+/**
+ * A post's state at one destination. "scheduled" waits for its send time; "pending" is claimed and being sent;
+ * "cancelled" was stopped before it went out. A pending row whose call started and never finished reads as
+ * "uncertain".
+ */
+export const directPostStatus = pgEnum("qp_announcement_status", ["pending", "sent", "failed", "uncertain", "scheduled", "cancelled"]);
+
+/**
+ * One post sent to Telegram and/or Discord on its own, without a Buffer post. One row per destination, keyed
+ * by (post, kind): the row is claimed before sending, so a double click or a retry can never post it twice.
+ */
+export const directPostSend = pgTable(
+  "qp_announcement_send",
+  {
+    postId: text("announcement_id").notNull(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    kind: echoKind("kind").notNull(),
+    /** The Discord channel id or the Telegram chat id it was sent to. */
+    target: text("target").notNull(),
+    label: text("label").notNull(),
+    text: text("text").notNull(),
+    status: directPostStatus("status").notNull(),
+    attempts: integer("attempts").notNull().default(1),
+    link: text("link"),
+    error: text("error"),
+    /**
+     * Set when this place follows a Buffer post: it goes out when Buffer has published that post, checked at the
+     * post's time, and the automatic copy of that post stands down.
+     */
+    bufferPostId: text("buffer_post_id"),
+    /** The Discord server the channel belongs to, so a scheduled post never lands in a server connected later. */
+    guildId: text("guild_id"),
+    /** When a scheduled post goes out; null for a post sent at once. */
+    sendAt: timestamp("send_at", { withTimezone: true }),
+    /** Bumped on every edit, time change or cancel, so a timer set for an older version cannot send. */
+    revision: integer("revision").notNull().default(0),
+    /** A claim that is not handed to Telegram or Discord by this time is taken back and sent again. */
+    claimedUntil: timestamp("claimed_until", { withTimezone: true }),
+    /** Set just before the call to Telegram or Discord. Once set, the row is never sent again on its own. */
+    callStartedAt: timestamp("call_started_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.postId, t.kind] }),
+    index("qp_announcement_send_user_created").on(t.userId, t.createdAt),
+    index("qp_announcement_send_due").on(t.status, t.sendAt),
+    index("qp_announcement_send_buffer_post").on(t.userId, t.bufferPostId),
+  ],
 );
 
 /**

@@ -6,7 +6,7 @@
  * the text and remembers who it was, so the note is sent with that mention. Locked members (viewer access in Buffer)
  * are listed but cannot be picked. The list sits under the field, in the same quiet rows as the notes thread.
  */
-import { useEffect, useId, useState, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type RefObject } from "react";
 import { insertMention, matchTeammates, mentionQuery, type NoteTeammate, type PickedMention } from "@/lib/note-mention-picker";
 import { Avatar } from "@/registry/components/avatar/avatar";
 import styles from "./draft-notes.module.css";
@@ -119,8 +119,15 @@ export function useNoteMentions({ text, setText, picked, setPicked, field, sourc
     onBlur: () => setCaret(null),
   };
 
+  // A list that opens under a field (editing a note in the middle of the list) can start below the visible part of the
+  // draft window: bring it into view when it opens.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) box.current?.scrollIntoView({ block: "nearest" });
+  }, [open]);
+
   const list = open ? (
-    <div className={styles.mentions}>
+    <div ref={box} className={styles.mentions}>
       {options.length > 0 && (
         <ul id={listId} role="listbox" aria-label="Teammates" className={styles.mentionList}>
           {options.map((t, i) => (

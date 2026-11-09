@@ -16,6 +16,7 @@ vi.mock("@/db", () => ({ db: () => testDb, schema: {} }));
 /** next/navigation's redirect ends the action by throwing; the test reads where it went. */
 class Redirected extends Error { constructor(readonly to: string) { super(to); } }
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Redirected(to); } }));
+vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 
 let signedIn: string | null = null;
 /** Who is signed in for one request, so two claims can run at once as different people. */
@@ -39,6 +40,11 @@ async function as(userId: string | null, action: (f: FormData) => Promise<unknow
   signedIn = userId;
   try { await action(form(fields)); } catch (e) { if (e instanceof Redirected) return e.to; throw e; }
   throw new Error("the action did not redirect");
+}
+/** Runs a settings action as someone and returns what it answered; a refused caller is still sent to /admin. */
+async function result(userId: string | null, action: (prev: null, f: FormData) => Promise<{ ok: boolean; message: string }>, fields: Record<string, string> = {}) {
+  signedIn = userId;
+  try { return await action(null, form(fields)); } catch (e) { if (e instanceof Redirected) return { redirected: e.to }; throw e; }
 }
 
 beforeAll(async () => {
@@ -111,11 +117,11 @@ describe("recording who changed a setting", () => {
   });
 
   it("records the signed-in admin for a save, a keep and a remove, never a form's claim or a secret's value", async () => {
-    expect(await as("u1", saveAdminSetting, { key: "exa_api_key", value: "exa-very-secret-value", actor: "u2", by: "u2" })).toBe("/admin?saved=exa_api_key");
+    expect(await result("u1", saveAdminSetting, { key: "exa_api_key", value: "exa-very-secret-value", actor: "u2", by: "u2" })).toEqual({ ok: true, message: "Exa API key saved. It is in use now." });
     await pg.query(`update operator_settings set admin_wins = false where key = 'exa_api_key'`);
     await pg.query(`insert into qp_settings_audit (key, action) values ('exa_api_key', 'set')`);
-    expect(await as("u1", keepAdminSetting, { key: "exa_api_key", actor: "u2" })).toBe("/admin?kept=exa_api_key");
-    expect(await as("u1", clearAdminSetting, { key: "exa_api_key", actor: "u2" })).toBe("/admin?cleared=exa_api_key");
+    expect(await result("u1", keepAdminSetting, { key: "exa_api_key", actor: "u2" })).toEqual({ ok: true, message: "Exa API key: the saved value is in use now." });
+    expect(await result("u1", clearAdminSetting, { key: "exa_api_key", actor: "u2" })).toMatchObject({ ok: true, message: expect.stringMatching(/^Exa API key removed\. /) });
     const rows = (await pg.query<Record<string, unknown>>(`select key, action, actor_id, from_value, to_value from qp_settings_audit where key = 'exa_api_key' order by id`)).rows;
     expect(rows.map((r) => [r.action, r.actor_id])).toEqual([["set", "u1"], ["set", null], ["kept", "u1"], ["cleared", "u1"]]);
     expect(JSON.stringify(rows)).not.toContain("exa-very-secret");
@@ -126,7 +132,36 @@ describe("recording who changed a setting", () => {
 
   it("refuses a change from someone who is not the admin and records nothing", async () => {
     const before = (await pg.query<{ n: number }>(`select count(*)::int as n from qp_settings_audit`)).rows[0].n;
-    expect(await as("u2", saveAdminSetting, { key: "ai_cap_per_person", value: "50" })).toBe("/admin");
+    expect(await result("u2", saveAdminSetting, { key: "ai_cap_per_person", value: "50" })).toEqual({ redirected: "/admin" });
     expect((await pg.query<{ n: number }>(`select count(*)::int as n from qp_settings_audit`)).rows[0].n).toBe(before);
+  });
+});
+
+describe("setting names", () => {
+  it.each(["constructor", "toString", "__proto__"])("refuses %s, a name every object has but no setting is called", async (key) => {
+    await pg.query(`update "user" set role = 'admin' where id = 'u1'`);
+    for (const action of [saveAdminSetting, clearAdminSetting, keepAdminSetting])
+      expect(await result("u1", action, { key, value: "x" })).toEqual({ ok: false, message: "Unknown setting." });
+  });
+});
+
+describe("saying what a change did", () => {
+  beforeEach(async () => {
+    vi.stubEnv("SETTINGS_KEY", "c".repeat(64));
+    await pg.query(`update "user" set role = 'admin' where id = 'u1'`);
+  });
+
+  it("names what applies after a remove: the server's value when it sets one, else the default", async () => {
+    await result("u1", saveAdminSetting, { key: "ai_cap_per_person", value: "20" });
+    expect(await result("u1", clearAdminSetting, { key: "ai_cap_per_person" })).toMatchObject({ ok: true, message: expect.stringContaining("The default applies again.") });
+    vi.stubEnv("AI_CAP_PER_PERSON", "30");
+    await result("u1", saveAdminSetting, { key: "ai_cap_per_person", value: "20" });
+    expect(await result("u1", clearAdminSetting, { key: "ai_cap_per_person" })).toMatchObject({ ok: true, message: expect.stringContaining("The server environment's value applies again.") });
+  });
+
+  it("answers a value it cannot save with the reason, for the alert beside the field", async () => {
+    const r = await result("u1", saveAdminSetting, { key: "ai_cap_per_person", value: "lots" });
+    expect(r).toMatchObject({ ok: false });
+    expect((r as { message: string }).message.length).toBeGreaterThan(5);
   });
 });
