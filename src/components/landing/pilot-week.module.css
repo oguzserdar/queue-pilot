@@ -49,5 +49,7 @@
 .root[data-tone="light"] .shell { fill: oklch(0.98 0.004 357) }
 .root[data-tone="light"] .belly { fill: oklch(0.88 0.03 357) }
 .root[data-tone="light"] .eye { fill: var(--qp-night, oklch(0.24 0.06 357)) }
+/* On the dark band a night-coloured cap would vanish into the background and cut off the head, so it is crimson there. */
+.root[data-tone="light"] { --pilot-cap: oklch(0.46 0.165 357); --pilot-strap: oklch(0.38 0.15 357) }
 .root[data-tone="light"] .say { background: oklch(0.98 0.004 357); color: var(--qp-night, oklch(0.24 0.06 357)) }
 .root[data-tone="light"] .say::after { border-top-color: oklch(0.98 0.004 357) }
