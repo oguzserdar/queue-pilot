@@ -7,9 +7,9 @@ import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
 import { Button } from "@/registry/components/button/button";
 import { AiMark } from "./ai-mark";
 import { CopyButton } from "@/registry/components/copy-button/copy-button";
-import { setupLine } from "@/lib/agent-setup";
 import { aiBrand } from "@/lib/ai-brand";
 import { APP_ONLY, CONNECTOR_CATALOG } from "@/lib/connector-catalog";
+import { SetupSteps, type SetupAccount } from "./setup-steps";
 import styles from "./connect-view.module.css";
 
 /** One chat app's setup, shown in its modal. Coding agents set themselves up from the copied prompt instead. */
@@ -27,8 +27,6 @@ type AiSetup = {
 };
 
 /** Coding agents that set themselves up from the copied setup prompt. */
-const CODING_AGENTS = ["Claude Code", "Codex", "Cursor"];
-
 const CONNECTION_CHECK = "Use Queue Pilot to read my setup status and list my drafts. Show the real draft count. Do not change, schedule or publish anything.";
 
 // Grok web and Grok Bot have separate setup paths. Claude remote connectors belong to the Claude account.
@@ -92,7 +90,7 @@ const AIS: AiSetup[] = [
  * `approved` lists the AI apps the person approved, with when each last called the connector, so "connected" here
  * always means the app really reached Queue Pilot.
  */
-export function ConnectView({ connectorUrl, example = false, approved = null }: { connectorUrl: string; example?: boolean; approved?: ApprovedApp[] | null }) {
+export function ConnectView({ connectorUrl, example = false, approved = null, account = null }: { connectorUrl: string; example?: boolean; approved?: ApprovedApp[] | null; account?: SetupAccount | null }) {
   // Which app's setup is open in the modal; the page itself only lists the apps.
   const [open, setOpen] = useState<string | null>(null);
   const [grokSurface, setGrokSurface] = useState("Grok web");
@@ -113,15 +111,8 @@ export function ConnectView({ connectorUrl, example = false, approved = null }: 
         )}
       </header>
 
-      <section className={styles.onboard} aria-labelledby="onboard-title">
-        <div>
-          <h2 id="onboard-title" className={styles.onboardTitle}>Onboard your coding agent</h2>
-          <p className={styles.muted}>Copy one line into Claude Code, Codex or Cursor. It installs the Queue Pilot skills and connects itself.</p>
-        </div>
-        <span className={styles.onboardMarks} aria-hidden="true">{CODING_AGENTS.map((n) => <AiMark key={n} name={n} size={18} />)}</span>
-        <CopyButton value={setupLine(connectorUrl.replace(/\/api\/mcp$/, ""))} label="Copy setup prompt" />
-        <a href={`${connectorUrl.replace(/\/api\/mcp$/, "")}/.well-known/agent-skills/queue-pilot/SKILL.md`} target="_blank" rel="noreferrer">Read the Queue Pilot skill</a>
-      </section>
+      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example}
+        openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
 
       <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
       <div className={styles.address}>
