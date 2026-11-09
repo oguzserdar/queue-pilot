@@ -93,7 +93,7 @@ Some of these actions Buffer's own MCP has too. Where it does, the tool says so:
 
 ## Telegram and Discord
 
-When Buffer sends a post, Queue Pilot can copy it to your Telegram channel and your Discord server. Connect each one from Sources. Copies go out once a day, and whenever your queue refreshes.
+Connect your Telegram channel and Discord server from Sources. Then write a post just for them, with its own words for each place and a live preview, and send it now or at a time you pick. On a Buffer draft, turn on Telegram and Discord and Queue Pilot sends them once Buffer has published the post, following it if you move it. Queue Pilot can also copy each post Buffer sends. Copies go out once a day and whenever your queue refreshes. On Vercel each scheduled post has its own timer. With Docker, a small check runs every 30 seconds.
 
 ## How it uses Buffer's API
 
