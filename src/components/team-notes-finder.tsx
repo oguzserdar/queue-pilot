@@ -37,9 +37,9 @@ function NoteCard({ note, example, open, onExampleKeep }: { note: TeamNote; exam
       <p className={styles.proof}>{`From ${who(note)}'s note in Buffer${day(note.at) ? `, ${day(note.at)}` : ""}, on ${on}`}</p>
       <blockquote className={styles.quote}>{note.text}</blockquote>
       <p className={styles.muted}>On: {note.post.length > 200 ? `${note.post.slice(0, 200)}…` : note.post}</p>
-      <div className={styles.actions}>
+      {!open && <div className={styles.actions}>
         <Button variant={shown ? "ghost" : "secondary"} size="sm" disabled={busy} onClick={ask}>{busy ? "Reading the note…" : shown ? "Look again" : `Suggest changes for ${note.account}`}</Button>
-      </div>
+      </div>}
       {message && <p className={styles.problem} role="alert">{message}</p>}
       {shown && (
         <div className={ui.panel}>
