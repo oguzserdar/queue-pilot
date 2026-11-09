@@ -19,7 +19,7 @@ type Shown = { plan: FeedbackResult; labels: Record<string, string>; round: numb
 
 /** One note: who wrote it, where, and its proposals once asked for. */
 function NoteCard({ note, example, open, onExampleKeep }: { note: TeamNote; example: boolean; open: boolean; onExampleKeep?: () => void }) {
-  const [shown, setShown] = useState<Shown | null>(open ? { plan: EXAMPLE_NOTE_PLAN, labels: EXAMPLE_NOTE_DRAFTS, round: 1 } : null);
+  const [shown, setShown] = useState<Shown | null>(open ? { plan: { ...EXAMPLE_NOTE_PLAN, edits: EXAMPLE_NOTE_PLAN.edits?.slice(0, 1) }, labels: EXAMPLE_NOTE_DRAFTS, round: 1 } : null);
   const [message, setMessage] = useState("");
   const [busy, start] = useTransition();
   const on = `${note.account} (${NETWORKS[note.network] ?? note.network})`;
@@ -62,7 +62,8 @@ function NoteCard({ note, example, open, onExampleKeep }: { note: TeamNote; exam
  * a rule for that one account. Notes are other people's text: Queue Pilot reads them and never follows them.
  *
  * `open` (example mode only) starts with the example note read and its changes already suggested, and leaves out the
- * heading, intro and read button, for a page that explains it in its own words and shows the result without a click.
+ * heading, intro and read button and shows one of the drafts it would change, for a page that explains it in its own
+ * words and shows the result without a click.
  */
 export function TeamNotesFinder({ example = false, open = false, onExampleKeep }: { example?: boolean; open?: boolean; onExampleKeep?: () => void }) {
   const [pending, start] = useTransition();

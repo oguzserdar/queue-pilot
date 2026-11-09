@@ -136,6 +136,36 @@ export default function HomePage() {
           </div>
         </section>
 
+        <section className={s.section} id="buffer-api" aria-labelledby="api-title">
+          <div className={[s.wrap, s.split].join(" ")}>
+            <div className={s.copy}>
+              <h2 id="api-title">Light on Buffer&apos;s API.</h2>
+              <p>Every Queue Pilot user shares one Buffer allowance, so every request counts.</p>
+              <ul className={s.facts}>
+                <li><b>Drafts first.</b> It never schedules on its own. Only your Approve does.</li>
+                <li><b>One saved copy of your queue.</b> Browsing every screen costs no requests. A refresh is one.</li>
+                <li><b>Counted before it is sent.</b> Across every server, and AI requests pause while few are left.</li>
+                <li><b>Who did what.</b> Settings lists every schedule, delete and AI app by name. An app that only names itself shows as unverified.</li>
+              </ul>
+            </div>
+            <figure className={[s.shot, s.apiShot].join(" ")}>
+              <table className={s.apiTable}>
+                <caption>Buffer requests in a first session, 3 channels</caption>
+                <tbody>
+                  <tr><th scope="row">Sign in</th><td>1</td></tr>
+                  <tr><th scope="row">First page</th><td>2</td></tr>
+                  <tr><th scope="row">Browsing every screen</th><td>0</td></tr>
+                  <tr><th scope="row">Write a week, 15 drafts</th><td>7</td></tr>
+                  <tr><th scope="row">Edit one draft</th><td>2</td></tr>
+                  <tr><th scope="row">Refresh</th><td>1</td></tr>
+                </tbody>
+                <tfoot><tr><th scope="row">First session</th><td>13</td></tr></tfoot>
+              </table>
+              <figcaption>Measured by a test that runs the real code against a fake Buffer and counts every call. <a href={`${REPO}#how-it-uses-buffers-api`} target="_blank" rel="noopener noreferrer">Every call it makes</a></figcaption>
+            </figure>
+          </div>
+        </section>
+
         <section className={[s.section, s.faq].join(" ")} id="questions" aria-labelledby="faq-title">
           <div className={[s.wrap, s.split].join(" ")}>
             <div className={s.copy}>

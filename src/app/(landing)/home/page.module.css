@@ -167,3 +167,18 @@
 /* Links inside an answer look like links: the page drops underlines on its own nav and buttons, not here. */
 .faq a { color: var(--foreground); text-decoration: underline; text-decoration-color: var(--text-muted); text-underline-offset: 3px; overflow-wrap: anywhere }
 .faq a:hover { text-decoration-color: currentColor }
+
+/* Light on Buffer's API: four facts beside the measured request count. */
+.facts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 14px; max-width: 46ch }
+.facts li { color: var(--text-secondary); font-size: 16px; line-height: 1.5 }
+.facts b { color: var(--foreground); font-weight: 650 }
+.apiShot { padding: 28px 28px 22px; display: grid; gap: 16px; align-self: start }
+.apiTable { width: 100%; border-collapse: collapse }
+.apiTable caption { text-align: left; font-size: 14px; color: var(--text-muted); padding-bottom: 10px }
+.apiTable th { text-align: left; font-weight: 450; padding: 11px 0 }
+.apiTable td { text-align: right; padding: 11px 0; font-weight: 600; font-variant-numeric: tabular-nums }
+.apiTable tbody tr + tr { border-top: 1px solid var(--border-subtle) }
+.apiTable tfoot tr { border-top: 2px solid var(--foreground) }
+.apiTable tfoot th, .apiTable tfoot td { font-weight: 700; font-size: 18px; padding-top: 14px }
+.apiShot figcaption { font-size: 14px; color: var(--text-muted); line-height: 1.5 }
+.apiShot figcaption a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px }
