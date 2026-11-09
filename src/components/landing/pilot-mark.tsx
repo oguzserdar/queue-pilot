@@ -45,11 +45,12 @@ export function PilotGear({ shell, glint }: { shell: string; glint?: string }) {
         <path d="M-46 -26 H-33 V-6 A6 6 0 0 1 -39 0 H-46 Z M46 -26 H33 V-6 A6 6 0 0 0 39 0 H46 Z" fill={CAP} />
         <rect x="-46" y="-34" width="92" height="6" fill={STRAP} />
       </g>
+      {/* The bridge runs into both frames, so the goggles are one piece with no seam where they meet. */}
+      <rect x="-10" y="-33.5" width="20" height="4.5" fill={FRAME} />
       <rect x="-27" y="-40" width="22" height="17" rx="7" fill={FRAME} />
       <rect x="-24.5" y="-37.5" width="17" height="12" rx="5" fill={LENS} />
       <rect x="5" y="-40" width="22" height="17" rx="7" fill={FRAME} />
       <rect x="7.5" y="-37.5" width="17" height="12" rx="5" fill={LENS} />
-      <rect x="-5" y="-33" width="10" height="4" fill={FRAME} />
       {glint ? (
         <>
           <clipPath id={`${shell}-lenses`}>

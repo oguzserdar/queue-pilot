@@ -72,6 +72,7 @@ function pilot(g: G, x: number, y: number, closed: boolean, look = 0, lift = 0) 
   }
   px(g, x + 1, y + 4, 1, 4, C.cap); px(g, x + 14, y + 4, 1, 4, C.cap);
   px(g, x + 3, y + 1, 4, 2, C.goldDeep); px(g, x + 9, y + 1, 4, 2, C.goldDeep);
+  px(g, x + 7, y + 2, 2, 1, C.goldDeep);
   px(g, x + 4, y + 1, 2, 1, C.lens); px(g, x + 10, y + 1, 2, 1, C.lens);
   px(g, x + 4, y + 12, 3, 1, C.gold); px(g, x + 9, y + 12, 3, 1, C.gold); px(g, x + 7, y + 12, 2, 2, C.gold);
   const ex = x + 4 + look;
