@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { PLUGIN_SKILLS } from "./plugin-skills";
 import { SKILL_DESCRIPTION, SKILL_TOOL_NAMES, servedSkills, skillIndex, skillMarkdown, skillArchive } from "./agent-skill";
 
 const origin = "https://qp.example.com";
@@ -55,3 +56,13 @@ describe("agent skill", () => {
     expect(index.filter((e) => e.type === "archive").map((e) => e.name)).toEqual(["queue-pilot-fill-week"]);
   });
 });
+
+describe("skill descriptions", () => {
+  it("send each task to its own skill, so the general one never competes with them", () => {
+    expect(SKILL_DESCRIPTION.startsWith("Use when")).toBe(true);
+    expect(SKILL_DESCRIPTION.length).toBeLessThanOrEqual(1024);
+    for (const name of Object.keys(PLUGIN_SKILLS)) expect(SKILL_DESCRIPTION).toContain(name);
+    expect(SKILL_DESCRIPTION).not.toMatch(/^Fill /);
+  });
+});
+

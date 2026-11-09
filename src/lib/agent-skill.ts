@@ -10,8 +10,12 @@ import { FILL_WEEK_STEPS } from "./fill-week-prompt";
 
 import { SKILL_NAME } from "./skill-name";
 export { SKILL_NAME } from "./skill-name";
+/**
+ * The general skill: connecting an AI app and anything no task skill covers. It names the task skills to prefer, so an
+ * AI that has them all installed never has two skills competing for "fill my week".
+ */
 export const SKILL_DESCRIPTION =
-  "Fill a Buffer posting week with drafts through Queue Pilot: read the person's voice, playbook and new material, write one post per empty slot, and save them in Buffer as drafts for the person to approve. Use when someone asks to fill their week, draft social posts for Buffer, or work with their Buffer queue.";
+  "Use when connecting an AI app to Queue Pilot, or for Buffer queue work through Queue Pilot that no narrower Queue Pilot skill covers: how to add the remote MCP server and sign in with Buffer, what each tool does, and the rules every task follows (drafts only, the person approves). To fill the week, check the queue, check sources or fix drafts, prefer queue-pilot-fill-week, queue-pilot-check-week, queue-pilot-check-sources or queue-pilot-fix-drafts.";
 
 /** The connector tools and what each is for, in the order the loop uses them. */
 const TOOLS: [string, string][] = [
