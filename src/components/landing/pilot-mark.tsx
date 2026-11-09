@@ -1,6 +1,6 @@
 /**
  * The Pilot drawn still, for places where it only stands and watches. Same shapes as the hero's animated Pilot, in
- * its flying helmet, eyes turned down toward the text.
+ * its leather flying helmet, eyes turned down toward the text.
  */
 export function PilotMark({ className }: { className?: string }) {
   return (
@@ -17,12 +17,12 @@ export function PilotMark({ className }: { className?: string }) {
   );
 }
 
-/* Brand colours only: the night tone of the dark sections, a cream edge, and the gold of the wings. */
-const HELMET = "var(--pilot-helmet, oklch(0.26 0.07 357))";
-const EAR = "var(--pilot-ear, oklch(0.34 0.08 357))";
-const CREAM = "var(--pilot-cream, oklch(0.93 0.025 85))";
-const GOLD = "var(--pilot-gold, oklch(0.8 0.12 82))";
-const LENS = "var(--pilot-lens, oklch(0.2 0.05 357))";
+const LEATHER = "var(--pilot-leather, oklch(0.4 0.08 50))";
+const SHEEN = "var(--pilot-sheen, oklch(0.5 0.08 58))";
+const EAR = "var(--pilot-ear, oklch(0.3 0.06 45))";
+const FLEECE = "var(--pilot-fleece, oklch(0.93 0.025 85))";
+const BRASS = "var(--pilot-brass, oklch(0.8 0.12 82))";
+const LENS = "var(--pilot-lens, oklch(0.88 0.06 220))";
 
 const DOME = "M-50 -30 V-36 C-50 -48 -38 -59.5 0 -59.5 C38 -59.5 50 -48 50 -36 V-30 Z";
 const FLAP_L = "M-51 -32 H-39 V5 C-39 10 -42 13 -45.5 13 C-49 13 -51 10.5 -51 7 Z";
@@ -30,7 +30,7 @@ const FLAP_R = "M51 -32 H39 V5 C39 10 42 13 45.5 13 C49 13 51 10.5 51 7 Z";
 
 /**
  * A light line around the whole Pilot, helmet included, drawn under it. Dark sections switch it on with `--pilot-halo`
- * so the dark helmet never melts into the background.
+ * so the dark leather never melts into the background.
  */
 export function PilotHalo() {
   return (
@@ -42,27 +42,28 @@ export function PilotHalo() {
 }
 
 /**
- * The Pilot's flying helmet and its wings, flat, in the brand's colours. The helmet sits on top of the head and wraps
- * down the sides like a real one, so the face keeps its full size and the eyes never reach it: one dark shape with a
- * cream edge at the brim and an ear cup on each side, gold-rimmed goggles with dark lenses resting high on it (dark,
- * so they never read as a second pair of eyes), and gold wings on the base like a badge.
+ * The Pilot's leather flying helmet and its wings, kept to what reads as "pilot" at a glance. The helmet sits on top
+ * of the head and wraps down the sides like a real one, so the face keeps its full size and the eyes never reach it:
+ * a leather dome with one highlight and a straight cream headband, side panels with an ear cup each, brass goggles
+ * resting on the dome, and gold wings on the base like a badge.
  */
 export function PilotGear() {
   return (
     <>
-      <path d={FLAP_L} fill={HELMET} />
-      <path d={FLAP_R} fill={HELMET} />
+      <path d={FLAP_L} fill={LEATHER} />
+      <path d={FLAP_R} fill={LEATHER} />
       <ellipse cx="-45" cy="-12" rx="3.6" ry="6.5" fill={EAR} />
       <ellipse cx="45" cy="-12" rx="3.6" ry="6.5" fill={EAR} />
-      <path d={DOME} fill={HELMET} />
-      <path d="M-50 -35 Q0 -38.5 50 -35 V-30 Q0 -33.5 -50 -30 Z" fill={CREAM} />
+      <path d={DOME} fill={LEATHER} />
+      <path d="M-36 -44 C-30 -52 -18 -55.5 -8 -55.5 C-19 -52.5 -29 -48.5 -33 -42 Z" fill={SHEEN} />
+      <rect x="-50" y="-35.5" width="100" height="5.5" fill={FLEECE} />
       {[-15, 15].map((cx) => (
-        <circle key={cx} cx={cx} cy="-46" r="7.5" fill={LENS} stroke={GOLD} strokeWidth="2.6" />
+        <circle key={cx} cx={cx} cy="-46" r="7.5" fill={LENS} stroke={BRASS} strokeWidth="3" />
       ))}
-      <rect x="-7.5" y="-47.3" width="15" height="2.6" rx="1.3" fill={GOLD} />
-      <path d="M-3 38 C-10 33 -20 33 -27 35 C-21 37 -15 39 -9 40 Z" fill={GOLD} />
-      <path d="M3 38 C10 33 20 33 27 35 C21 37 15 39 9 40 Z" fill={GOLD} />
-      <circle cx="0" cy="38" r="4.2" fill={GOLD} />
+      <rect x="-7.5" y="-47.4" width="15" height="2.8" rx="1.4" fill={BRASS} />
+      <path d="M-3 38 C-10 33 -20 33 -27 35 C-21 37 -15 39 -9 40 Z" fill={BRASS} />
+      <path d="M3 38 C10 33 20 33 27 35 C21 37 15 39 9 40 Z" fill={BRASS} />
+      <circle cx="0" cy="38" r="4.2" fill={BRASS} />
     </>
   );
 }
