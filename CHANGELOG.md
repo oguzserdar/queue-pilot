@@ -5,7 +5,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-11-08 Writing for X and using fewer Buffer requests
+## [0.8.0] - 2026-11-08 Writing for X's latest algorithm, and optimized Buffer requests
 
 ### Added
 - The fill-week skill reads a dated reference on writing for X, drawn from X's published ranking code and checked on 8 November. Your voice, playbook and Buffer posting times still come first. After 30 days without a new check, the assistant leaves the reference out and says so.
