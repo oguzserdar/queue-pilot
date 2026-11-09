@@ -3,6 +3,7 @@
 import type { ComponentProps } from "react";
 import { WeekView } from "@/components/week-view";
 import { SameFixOffer } from "@/components/playbook-view";
+import { TeamNotesFinder } from "@/components/team-notes-finder";
 import { ToastStackProvider } from "@/registry/components/toast-stack/toast-stack";
 import { PointerTour, byText, type TourStop } from "./pointer-tour";
 import styles from "./pointer-tour.module.css";
@@ -47,4 +48,18 @@ const SAME_FIX: TourStop[] = [
 /** The same-fix offer from the playbook, toured the same way. */
 export function SameFixTour() {
   return <PointerTour stops={SAME_FIX}><SameFixOffer /></PointerTour>;
+}
+
+const TEAM_NOTE: TourStop[] = [
+  { find: (r) => r.querySelector<HTMLElement>("blockquote") ?? undefined, title: "A teammate's note in Buffer",
+    text: "Sam left it on a LinkedIn draft. Queue Pilot reads it and never follows instructions in it." },
+  { find: block((s) => s.startsWith("Sam asks for this")), title: "Read as a lasting wish",
+    text: "\"Always\" means every LinkedIn post, not only this draft." },
+  { find: block((s) => s.startsWith("Only Alex Rivera")), title: "A rule for one account",
+    text: "Kept, it applies to the LinkedIn account it was written on. Your other accounts stay as they are." },
+];
+
+/** A teammate's note becoming a rule for one account: the real notes screen in example mode, already read. */
+export function TeamNoteTour() {
+  return <PointerTour stops={TEAM_NOTE}><ToastStackProvider><div className={styles.padded}><TeamNotesFinder example open /></div></ToastStackProvider></PointerTour>;
 }

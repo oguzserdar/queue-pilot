@@ -9,7 +9,7 @@ import { AiStrip } from "@/components/landing/ai-strip";
 import { HandUnderline } from "@/components/landing/hand-underline";
 import { SetupScene } from "@/components/landing/setup-scene";
 import { PixelHero } from "@/components/landing/pixel-hero";
-import { DraftTour, SameFixTour } from "@/components/landing/draft-tour";
+import { DraftTour, SameFixTour, TeamNoteTour } from "@/components/landing/draft-tour";
 import { demoWeek } from "@/lib/demo-data";
 import { countOpenSlots } from "@/lib/week-model";
 import { exampleApprovals, exampleEvidence, exampleNotes, exampleRules, exampleTags, exampleWriting } from "@/lib/example-week-extras";
@@ -123,6 +123,15 @@ export default function HomePage() {
             </div>
             <figure className={[s.shot, s.cardShot, s.liveShot].join(" ")}>
               <SameFixTour />
+            </figure>
+          </div>
+          <div className={[s.wrap, s.split, s.splitNext].join(" ")}>
+            <div className={s.copy}>
+              <h3>Or your team says it once.</h3>
+              <p>A teammate leaves a note on a draft in Buffer. Queue Pilot suggests the edit, and a lasting wish becomes a rule for that one account.</p>
+            </div>
+            <figure className={[s.shot, s.cardShot, s.liveShot].join(" ")}>
+              <TeamNoteTour />
             </figure>
           </div>
         </section>

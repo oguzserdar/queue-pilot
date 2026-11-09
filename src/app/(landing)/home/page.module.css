@@ -50,6 +50,8 @@
 /* A section heading and its content, always --head-gap apart. */
 .stack { display: grid; gap: var(--head-gap) }
 .split { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 64px; align-items: start }
+/* A second split in the same section: same columns, set apart from the first by the section's own rhythm. */
+.splitNext { margin-top: 72px }
 @media (max-width: 1000px) { .split { grid-template-columns: minmax(0, 1fr); gap: var(--head-gap) } }
 
 /* Before and after: two equal panels, each holding literal pieces of the product. */

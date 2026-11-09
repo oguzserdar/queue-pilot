@@ -26,3 +26,6 @@
 .pop span { opacity: .82 }
 @keyframes pop { from { opacity: 0; transform: scale(.96) } }
 @media (prefers-reduced-motion: reduce) { .pop { animation-name: fade } @keyframes fade { from { opacity: 0 } } }
+
+/* A screen that has no padding of its own, shown in a tour card: the same inset the app's panels use. */
+.padded { padding: 24px }
