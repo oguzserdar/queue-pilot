@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/registry/components/badge/badge";
 import styles from "./pilot-week.module.css";
-import { PilotCap, PilotGoggles } from "./pilot-mark";
+import { PilotGear, PilotHalo } from "./pilot-mark";
 
 /**
  * The landing hero's picture: the Pilot, a crimson queue slot with eyes, standing above an example Buffer week.
@@ -114,7 +114,8 @@ export function PilotWeek({ week = true, className, tone }: { week?: boolean; cl
       ([[eyeL.current, -1], [eyeR.current, 1]] as const).forEach(([el, side]) => {
         if (!el) return;
         const turn = clamp(1 - Math.max(0, -side * s.x) * 0.45, 0.45, 1);
-        const w = 9 * turn, h = 17 * lid, cx = side * 15 + s.x * 16, cy = -4 + s.y * 12;
+        // The eyes look around inside the face only: never up into the helmet's brim or out under its side panels.
+        const w = 9 * turn, h = 17 * lid, cx = side * 15 + clamp(s.x, -0.85, 0.85) * 16, cy = -4 + Math.max(-0.6, s.y) * 12;
         el.setAttribute("x", (cx - w / 2).toFixed(2)); el.setAttribute("y", (cy - h / 2).toFixed(2));
         el.setAttribute("width", w.toFixed(2)); el.setAttribute("height", Math.max(1.4, h).toFixed(2));
         el.setAttribute("rx", Math.min(4.5, w / 2, h / 2).toFixed(2));
@@ -145,12 +146,12 @@ export function PilotWeek({ week = true, className, tone }: { week?: boolean; cl
           <defs><clipPath id="pilot-shell"><rect x="-46" y="-48" width="92" height="94" rx="26" /></clipPath></defs>
           <g ref={body}>
             <rect className={styles.ring} x="-50" y="-52" width="100" height="102" rx="30" />
+            <PilotHalo />
             <g clipPath="url(#pilot-shell)">
               <rect className={styles.shell} x="-46" y="-48" width="92" height="94" />
               <rect className={styles.belly} x="-46" y="30" width="92" height="16" />
             </g>
-            <PilotCap shell="pilot-shell" />
-            <PilotGoggles glint={styles.glint} />
+            <PilotGear glint={styles.glint} />
             <rect ref={eyeL} className={styles.eye} x="-19.5" y="-12.5" width="9" height="17" rx="4.5" />
             <rect ref={eyeR} className={styles.eye} x="10.5" y="-12.5" width="9" height="17" rx="4.5" />
           </g>

@@ -45,11 +45,8 @@
 /* Phones: three days at a readable size rather than five cut-off columns. */
 @media (max-width: 520px) { .days { grid-template-columns: repeat(3, minmax(0, 1fr)) } .day:nth-child(n + 4) { display: none } }
 
-/* The light Pilot, for dark sections: a white body, night-coloured eyes, and a white speech bubble. */
-.root[data-tone="light"] .shell { fill: oklch(0.98 0.004 357) }
-.root[data-tone="light"] .belly { fill: oklch(0.88 0.03 357) }
-.root[data-tone="light"] .eye { fill: var(--qp-night, oklch(0.24 0.06 357)) }
-/* On the dark band a night-coloured cap would vanish into the background and cut off the head, so it is crimson there. */
-.root[data-tone="light"] { --pilot-cap: oklch(0.46 0.165 357); --pilot-strap: oklch(0.38 0.15 357) }
+/* On dark sections the Pilot is the same crimson Pilot as the hero, with a light line around it, helmet included, so
+   the dark leather stays clear of the background. Its speech bubble is light. */
+.root[data-tone="light"] { --pilot-halo: oklch(0.98 0.004 357) }
 .root[data-tone="light"] .say { background: oklch(0.98 0.004 357); color: var(--qp-night, oklch(0.24 0.06 357)) }
 .root[data-tone="light"] .say::after { border-top-color: oklch(0.98 0.004 357) }
