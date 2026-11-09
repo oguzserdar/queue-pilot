@@ -2,13 +2,11 @@
  * @fileoverview Recorded actions on real Postgres (PGlite) with the real migrations: each consequential action is
  * stored with who did it and only ids and counts, and "Connected <app>" is recorded only once the approval exists.
  */
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../db/schema")), ...(await import("../db/auth-schema")) } });
 vi.mock("../db", () => ({ db: () => testDb, schema: {} }));
 
@@ -18,7 +16,6 @@ const { showSecurityEvent } = await import("./security-event-words");
 const { approverLine, approverFor } = await import("./rule-origin");
 
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   await pg.query(`insert into "user" (id, name, email) values ('a', 'a', 'a@x'), ('b', 'b', 'b@x')`);
 });
 afterAll(async () => { await pg.close(); });

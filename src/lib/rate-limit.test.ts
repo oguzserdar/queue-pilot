@@ -1,20 +1,15 @@
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 // Real Postgres (PGLite) with the real migrations, behind the app's Drizzle client.
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../db/schema")), ...(await import("../db/auth-schema")) } });
 let broken = false;
 vi.mock("../db", () => ({ db: () => (broken ? { insert: () => { throw new Error("database is down"); } } : testDb), schema: {} }));
 
 const { bucketStart, limit, limitHeaders, pruneRequestCounts, RULES } = await import("./rate-limit");
 
-beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
-});
 afterAll(async () => { await pg.close(); });
 
 const T = Date.parse("2026-11-02T10:00:05Z");

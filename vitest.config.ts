@@ -3,8 +3,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Nine suites build a real Postgres (PGlite) with every migration in beforeAll. Under load that can pass 10 s while
-    // several build at once; the setup is slow, not wrong, so setup gets 30 s. Test bodies keep the 5 s default.
+    // The migrations run once per test run; database suites open a copy (src/test/migrated-pglite.ts).
+    globalSetup: ["./src/test/pglite-snapshot.global.ts"],
     hookTimeout: 30_000,
   },
   resolve: {

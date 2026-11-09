@@ -3,13 +3,12 @@
  * reservation is never refunded, a partial answer charges the windows it left out, and a delayed answer from before a
  * reset cannot raise the window after it.
  */
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../../db/schema")), ...(await import("../../db/auth-schema")) } });
 const dbState = vi.hoisted(() => ({ broken: false }));
 vi.mock("../../db", () => ({ db: () => { if (dbState.broken) throw new Error("db down"); return testDb; }, schema: {} }));
@@ -18,7 +17,6 @@ const { bufferQuery } = await import("./client");
 const { BufferAllowanceLowError, BufferAllowanceUnknownError, PER_PERSON, TOOL_RESERVE, currentAllowance, releaseRequest, reserveRequest, withBudget } = await import("./budget");
 
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   // Reservations belong to a person, so the people these tests act for must exist.
   const ids = ["u0", "u1", "u2", "u3", "u4", "u5", "u6", "u7", "busy", "calm"];
   await pg.query(`insert into "user" (id, name, email) values ${ids.map((id) => `('${id}', '${id}', '${id}@x')`).join(", ")}`);

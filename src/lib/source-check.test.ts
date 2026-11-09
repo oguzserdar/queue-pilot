@@ -1,11 +1,9 @@
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { answering } from "./ai-test-model";
 import type { Post } from "./buffer/queries";
-const pg = new PGlite(); const testDb = drizzle(pg);
+const pg = await migratedPglite(); const testDb = drizzle(pg);
 vi.mock("../db", () => ({ db: () => testDb }));
 const ai = vi.hoisted(() => ({ model: null as unknown, calls: 0, settle: vi.fn(), giveBack: vi.fn(), available: true }));
 vi.mock("./judge-model", () => ({ aiFor: async () => { ai.calls++; return ai.available ? { language: ai.model, settle: ai.settle, giveBack: ai.giveBack } : null; } }));
@@ -16,7 +14,6 @@ const uri = "https://example.com/release";
 const draft = (id: string): Post => ({ id, channelId: "ch", text: "The price is $10.", status: "draft", dueAt: "2099-01-01", sentAt: null, externalLink: null, error: null });
 let key = ""; let posts: Post[] = [];
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   await pg.query(`insert into "user" (id,name,email) values ('owner','Owner','owner@test'),('other','Other','other@test')`);
 });
 beforeEach(async () => {

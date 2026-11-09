@@ -4,13 +4,12 @@
  * retries count, one person's burst is paced while another keeps access, the person's own app is held only at zero,
  * a cold start sends one assistant request at a time, and an unreadable count stops the request before Buffer.
  */
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../../db/schema")), ...(await import("../../db/auth-schema")) } });
 const dbState = vi.hoisted(() => ({ broken: false }));
 vi.mock("../../db", () => ({ db: () => { if (dbState.broken) throw new Error("db down"); return testDb; }, schema: {} }));
@@ -19,7 +18,6 @@ const { bufferQuery } = await import("./client");
 const { BufferAllowanceLowError, BufferAllowanceUnknownError, PER_PERSON, TOOL_RESERVE, currentAllowance, releaseRequest, reserveRequest, withBudget } = await import("./budget");
 
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   // Reservations belong to a person, so the people these tests act for must exist.
   const ids = ["u0", "u1", "u2", "u3", "u4", "u5", "u6", "u7", "busy", "calm"];
   await pg.query(`insert into "user" (id, name, email) values ${ids.map((id) => `('${id}', '${id}', '${id}@x')`).join(", ")}`);
@@ -75,7 +73,8 @@ describe("shared Buffer allowance", () => {
     for (let i = 0; i < PER_PERSON.max; i++) await withBudget("list_tags", "busy", () => reserveRequest(T0 + i)).then(({ result }) => releaseRequest(result, [], T0 + i));
     await expect(withBudget("list_tags", "busy", () => reserveRequest(T0 + 100))).rejects.toBeInstanceOf(BufferAllowanceLowError);
     await expect(withBudget("list_tags", "calm", () => reserveRequest(T0 + 100))).resolves.toBeTruthy();
-  });
+   // The burst is PER_PERSON.max real reserve-and-release transactions, one after another, so it needs more than 5 s.
+  }, 30_000);
 
   it("holds the person's own app back only at zero, never at the assistant reserve", async () => {
     await seed(2);

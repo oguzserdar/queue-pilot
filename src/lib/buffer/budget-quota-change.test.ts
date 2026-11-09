@@ -3,13 +3,11 @@
  * the name changes ("110-in-15min" becomes "120-in-15min"). Its guide says to match a policy by its window length
  * (RateLimit-Policy w). These tests run the real reservation code on PGlite with the real migrations.
  */
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../../db/schema")), ...(await import("../../db/auth-schema")) } });
 vi.mock("../../db", () => ({ db: () => testDb, schema: {} }));
 
@@ -17,7 +15,6 @@ const { parseRateLimit } = await import("./client");
 const { TOOL_RESERVE, currentAllowance, releaseRequest, reserveRequest, withBudget } = await import("./budget");
 
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   await pg.query(`insert into "user" (id, name, email) values ('u1', 'u1', 'u1@x')`);
 });
 afterAll(async () => { await pg.close(); });

@@ -2,7 +2,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 // The `pg` driver swapped for PGLite (real Postgres in memory), so the token lock runs its exact SQL.
-const pg = new PGlite();
+// Created and awaited at load, so its start-up never counts against a test's time.
+const pg = await PGlite.create();
 const pools: { options: Record<string, unknown>; connects: number }[] = [];
 const sqlLog: string[] = [];
 vi.mock("pg", () => {

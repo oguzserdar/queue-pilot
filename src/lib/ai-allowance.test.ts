@@ -1,18 +1,15 @@
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // Real Postgres (PGLite) with the real migrations, behind the app's Drizzle client.
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../db/schema")), ...(await import("../db/auth-schema")) } });
 vi.mock("../db", () => ({ db: () => testDb, schema: {} }));
 
 const { capMessage, postgresAllowanceStore, utcDay } = await import("./ai-allowance");
 
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   await pg.query(`insert into "user" (id, name, email) values ('a', 'a', 'a@x'), ('b', 'b', 'b@x'), ('c', 'c', 'c@x')`);
 });
 afterAll(async () => { await pg.close(); });

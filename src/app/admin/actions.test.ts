@@ -2,14 +2,12 @@
  * @fileoverview The /admin server actions on real Postgres (PGlite) with the real migrations: claiming a deployment
  * needs a valid setup code in production, and every settings change records the admin from the server session.
  */
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../../db/schema")), ...(await import("../../db/auth-schema")) } });
 vi.mock("@/db", () => ({ db: () => testDb, schema: {} }));
 
@@ -48,7 +46,6 @@ async function result(userId: string | null, action: (prev: null, f: FormData) =
 }
 
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   await pg.query(`insert into "user" (id, name, email, role) values ('u1', 'a', 'a@x', 'user'), ('u2', 'b', 'b@x', 'user'), ('u3', 'c', 'c@x', 'user')`);
 });
 beforeEach(async () => { await pg.query(`update "user" set role = 'user'`); });

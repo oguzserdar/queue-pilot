@@ -2,13 +2,11 @@
  * @fileoverview The Postgres post store on PGlite with the real migrations: the primary key claim lets one
  * request send a destination, a resend wins once, and users stay apart.
  */
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../db/schema")), ...(await import("../db/auth-schema")) } });
 vi.mock("../db", () => ({ db: () => testDb }));
 const { postgresDirectPostStore } = await import("./direct-post-store");
@@ -17,7 +15,6 @@ const item = { kind: "discord" as const, target: "c1", label: "#announcements", 
 const now = new Date("2026-11-08T10:00:00Z");
 
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   await pg.query(`insert into "user" (id, name, email) values ('u1', 'a', 'a@x'), ('u2', 'b', 'b@x')`);
 });
 afterAll(async () => { await pg.close(); });

@@ -1,15 +1,12 @@
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sourceHash, sourceVersionInput, verifyEvidence } from "./source-evidence";
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg);
 vi.mock("../db", () => ({ db: () => testDb }));
 const store = await import("./source-store");
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   await pg.query(`insert into "user" (id,name,email) values ('owner','Owner','owner@test'),('other','Other','other@test')`);
 });
 afterAll(() => pg.close());

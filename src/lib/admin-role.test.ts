@@ -1,14 +1,12 @@
 /**
  * @fileoverview The /admin gate: reading Better Auth's role column, and claiming admin on a deployment that has none.
  */
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 // Real Postgres (PGLite) with the real migrations, behind the app's Drizzle client.
-const pg = new PGlite();
+const pg = await migratedPglite();
 const testDb = drizzle(pg, { schema: { ...(await import("../db/schema")), ...(await import("../db/auth-schema")) } });
 vi.mock("../db", () => ({ db: () => testDb, schema: {} }));
 
@@ -16,7 +14,6 @@ const { claimAdminIfNone, hasAdmin, isAdminRole } = await import("./admin-role")
 const role = async (id: string) => (await pg.query<{ role: string | null }>(`select role from "user" where id = $1`, [id])).rows[0]?.role;
 
 beforeAll(async () => {
-  await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
   await pg.query(`insert into "user" (id, name, email, role) values ('first', 'a', 'a@x', 'user'), ('second', 'b', 'b@x', 'user')`);
 });
 afterAll(async () => { await pg.close(); });

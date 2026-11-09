@@ -1,10 +1,8 @@
 /** Real transport parsing, SQL storage, writer, Buffer-save payload and citation readback.
  * Provider and Buffer HTTP responses are fixtures, not a live account demonstration.
  */
-import { PGlite } from "@electric-sql/pglite";
+import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
-import { join } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { answering, sentText } from "./ai-test-model";
 import { fetchTranscript } from "./transcripts";
@@ -13,7 +11,7 @@ import { sourceTimestamp } from "./source-labels";
 import { verifyEvidence } from "./source-evidence";
 import type { OpenSlot } from "./open-slots";
 import type { Post } from "./buffer/queries";
-const pg = new PGlite(); const testDb = drizzle(pg);
+const pg = await migratedPglite(); const testDb = drizzle(pg);
 vi.mock("../db", () => ({ db: () => testDb }));
 const fake = vi.hoisted(() => ({ query: vi.fn(), owned: vi.fn(), model: null as unknown, giveBack: vi.fn(), settle: vi.fn() }));
 vi.mock("./buffer/client", async original => ({ ...await original<typeof import("./buffer/client")>(), bufferQuery: fake.query }));
@@ -33,7 +31,6 @@ const content = [...Array.from({ length: 718 }, (_, i) => ({ text: `At section $
   { text: "The final experiment reduced review time", offset: 7_190_000 }, { text: "from nine days to three days.", offset: 7_194_000 }];
 const slot: OpenSlot = { id: "ch@2099-01-01T12:00:00.000Z", channelId: "ch", channel: "Personal", service: "linkedin", organizationId: "org", at: "2099-01-01T12:00:00.000Z", local: "Thu 12:00", timezone: "UTC" };
 beforeAll(async () => {
- await migrate(testDb, { migrationsFolder: join(__dirname, "../../drizzle"), migrationsTable: "__drizzle_migrations__", migrationsSchema: "public" });
  await pg.query(`insert into "user" (id,name,email) values ('owner','Owner','owner@test'),('other','Other','other@test')`);
  fake.owned.mockResolvedValue(undefined); fake.giveBack.mockResolvedValue(undefined); fake.settle.mockResolvedValue(undefined);
  fake.query.mockImplementation(async (_token, query) => query.includes("dailyPostingLimits") ? { dailyPostingLimits: [] } : { createContentItem: { __typename: "CreateContentItemSuccess", content: { id: "ci", body: { __typename: "PostContent", posts: [{ id: "podcast-post", channelId: "ch" }] } } } });
