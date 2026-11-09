@@ -35,7 +35,7 @@ export function PilotHalo() {
  * The Pilot's flying cap, goggles and wings. Everything sits inside the Pilot's own outline, so its shape never
  * changes: a leather cap over the top with ear flaps hanging square from it and a goggle strap, goggles pushed up on
  * the cap, and gold wings on the base like a badge. `shell` is the id of the body's clip path; `glint` names the class
- * that flashes the lenses now and then.
+ * that sweeps a reflection across the lenses now and then.
  */
 export function PilotGear({ shell, glint }: { shell: string; glint?: string }) {
   return (
@@ -50,7 +50,17 @@ export function PilotGear({ shell, glint }: { shell: string; glint?: string }) {
       <rect x="5" y="-40" width="22" height="17" rx="7" fill={FRAME} />
       <rect x="7.5" y="-37.5" width="17" height="12" rx="5" fill={LENS} />
       <rect x="-5" y="-33" width="10" height="4" fill={FRAME} />
-      {glint ? <path className={glint} d="M-21 -36 l4 0 l-5 9 l-4 0 Z M11 -36 l4 0 l-5 9 l-4 0 Z" fill="oklch(1 0 0)" /> : null}
+      {glint ? (
+        <>
+          <clipPath id={`${shell}-lenses`}>
+            <rect x="-24.5" y="-37.5" width="17" height="12" rx="5" />
+            <rect x="7.5" y="-37.5" width="17" height="12" rx="5" />
+          </clipPath>
+          <g clipPath={`url(#${shell}-lenses)`}>
+            <path className={glint} d="M-17 -40 l4 0 l-5 17 l-4 0 Z M15 -40 l4 0 l-5 17 l-4 0 Z" fill="oklch(1 0 0)" />
+          </g>
+        </>
+      ) : null}
       <path d="M-3 38 C-10 33 -20 33 -27 35 C-21 37 -15 39 -9 40 Z M3 38 C10 33 20 33 27 35 C21 37 15 39 9 40 Z" fill={GOLD} />
       <circle cx="0" cy="38" r="4.2" fill={GOLD} />
       <circle cx="0" cy="38" r="1.8" fill={FRAME} />

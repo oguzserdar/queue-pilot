@@ -9,10 +9,10 @@
 .eye { fill: var(--surface) }
 .ring { fill: none; stroke: transparent; stroke-width: 3 }
 
-/* Every bubble's arrow ends 18px above the Pilot's top edge, whatever the Pilot's size. The edge is the top of the
+/* Every bubble's arrow ends 8px above the Pilot's top edge, whatever the Pilot's size. The edge is the top of the
    head, 12 units below the box (a unit is --pw / 120); on dark sections the light outline raises it by 2.5 units.
-   The 7px is the arrow. 18px is more than the Pilot's highest hop. */
-.root { --say-gap: calc(25px - var(--pw) * 12 / 120) }
+   The 7px is the arrow. */
+.root { --say-gap: calc(15px - var(--pw) * 12 / 120) }
 .say { position: absolute; left: 50%; bottom: calc(100% + var(--say-gap)); z-index: 2; transform: translateX(-50%) translateY(4px) scale(.97); transform-origin: 50% 100%;
   opacity: 0; pointer-events: none; background: var(--foreground); color: var(--background); font: 600 15px/1.35 var(--font-body);
   padding: 10px 14px; border-radius: var(--radius-panel); white-space: nowrap; box-shadow: var(--shadow-floating);
@@ -42,15 +42,20 @@
 .slot[data-state="draft"] .time, .slot[data-state="draft"] .channel { color: var(--accent) }
 .badge { justify-self: start; margin-top: 2px }
 @media (max-width: 520px) { .slot { height: 62px; padding: 6px } .week { padding: 12px } .days { gap: 6px } .slot[data-state="draft"] .time { display: none } }
-/* Now and then the goggles catch the light. */
+/* Now and then a reflection slides across the goggles, left to right, clipped to the glass. */
 .glint { opacity: 0; animation: pilot-glint 5.2s ease-in-out infinite }
-@keyframes pilot-glint { 0%, 70%, 100% { opacity: 0 } 78% { opacity: .9 } 86% { opacity: 0 } }
+@keyframes pilot-glint {
+  0%, 70% { opacity: 0; transform: translateX(-14px) }
+  73% { opacity: .85 }
+  85% { opacity: .85; transform: translateX(14px) }
+  88%, 100% { opacity: 0; transform: translateX(14px) }
+}
 @media (prefers-reduced-motion: reduce) { .slot[data-fresh] { animation: none } .pilot svg { transition: none } .glint { animation: none } }
 /* Phones: three days at a readable size rather than five cut-off columns. */
 @media (max-width: 520px) { .days { grid-template-columns: repeat(3, minmax(0, 1fr)) } .day:nth-child(n + 4) { display: none } }
 
 /* On dark sections the Pilot is the same crimson Pilot as the hero, with a light line around it, helmet included, so
    the dark leather stays clear of the background. Its speech bubble is light. */
-.root[data-tone="light"] { --pilot-halo: oklch(0.98 0.004 357); --say-gap: calc(25px - var(--pw) * 9.5 / 120) }
+.root[data-tone="light"] { --pilot-halo: oklch(0.98 0.004 357); --say-gap: calc(15px - var(--pw) * 9.5 / 120) }
 .root[data-tone="light"] .say { background: oklch(0.98 0.004 357); color: var(--qp-night, oklch(0.24 0.06 357)) }
 .root[data-tone="light"] .say::after { border-top-color: oklch(0.98 0.004 357) }
