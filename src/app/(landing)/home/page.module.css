@@ -137,8 +137,11 @@
 .heroPilot { --pw: clamp(180px, 20vw, 260px); align-self: center; padding-right: clamp(0px, 4vw, 64px) }
 /* Alone in the hero it stands on nothing, so it drops the overlap it keeps when standing on the example week. */
 .heroPilot > div { margin-bottom: 0 }
-/* Phones: a smaller Pilot between the buttons and the picture, its speech bubble still above it. */
-@media (max-width: 900px) { .heroPilot { --pw: 128px; justify-self: center; padding-right: 0; margin-top: 40px } }
+/* Phones: the Pilot stands on the pixel week below it, feet over the week's top edge, as it stands on the example
+   week further down. Its speech bubble stays above it. */
+@media (max-width: 900px) {
+  .heroPilot { --pw: 168px; justify-self: center; padding-right: 0; margin-top: 24px; margin-bottom: -46px; position: relative; z-index: 2 }
+}
 .shot { margin: 0; border-radius: 16px; overflow: hidden; background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 24px 60px -24px oklch(0.35 0.08 357 / 0.28) }
 .shot img { display: block; width: 100%; height: auto }
 .heroShot { margin-bottom: calc(var(--section) * -0.6); position: relative; z-index: 1 }

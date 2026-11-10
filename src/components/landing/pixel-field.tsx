@@ -36,6 +36,7 @@ export function PixelField({ placement = "hero" }: { placement?: "hero" | "band"
       g.clearRect(0, 0, box.width, box.height);
       g.fillStyle = getComputedStyle(canvas).color;
       const w = Math.ceil(box.width / cell) + 1, h = Math.ceil(box.height / cell) + 1;
+      const narrow = box.width <= 900;
       const toCells = (el: HTMLElement) => {
         const r = el.getBoundingClientRect();
         return { x0: Math.round((r.left - box.left - ox) / cell), x1: Math.round((r.right - box.left - ox) / cell), y0: Math.round((r.top - box.top - oy) / cell), y1: Math.round((r.bottom - box.top - oy) / cell) };
@@ -54,9 +55,11 @@ export function PixelField({ placement = "hero" }: { placement?: "hero" | "band"
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         if (clear.some((o) => inside(o, x, y))) continue;
         if (frames.some((o) => inside(o, x, y) && !corner(o, x, y))) continue;
-        const d = placement === "hero"
-          ? Math.min(1, Math.max(0, (x / w - 0.5) / 0.5)) * (0.4 + 0.6 * Math.sin((y / h) * Math.PI)) * 0.8
-          : Math.min(1, y / h) * 0.7;
+        // Side by side, the dots gather on the picture's side so the text side stays plain. Stacked on a phone the
+        // picture spans the width, so the dots spread evenly across it instead of leaning right.
+        const d = placement === "band" ? Math.min(1, y / h) * 0.7
+          : narrow ? Math.min(1, Math.max(0, (y / h - 0.4) / 0.6)) * 0.5
+          : Math.min(1, Math.max(0, (x / w - 0.5) / 0.5)) * (0.4 + 0.6 * Math.sin((y / h) * Math.PI)) * 0.8;
         // Denser toward the picture, but never solid, so no band forms: at most about half the cells.
         const p = placement === "hero" ? pull(x, y) * 0.55 : 0;
         if (Math.max(d, p) <= threshold(x, y)) continue;
