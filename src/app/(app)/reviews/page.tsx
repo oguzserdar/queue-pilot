@@ -5,10 +5,13 @@ import { ReviewsView } from "@/components/reviews-view";
 import { signedInUserId } from "@/lib/current-user";
 import { publicOrigin } from "@/lib/origin";
 import { postgresReviewStore } from "@/lib/review-store";
+import { exampleReviewLinks } from "@/lib/example-reviews";
+import { demoShiftDays } from "@/lib/demo-clock";
 
 export default async function Page() {
   const userId = await signedInUserId();
-  if (!userId) return <ReviewsView origin="" links={null} />;
+  // Signed out: the example account's shared link, read-only.
+  if (!userId) return <ReviewsView origin={publicOrigin(await headers())} links={exampleReviewLinks(demoShiftDays())} example />;
   const links = await postgresReviewStore().list(userId).catch((e) => {
     console.error(JSON.stringify({ event: "qp-reviews-read-failed", message: e instanceof Error ? e.message : String(e) }));
     return null;

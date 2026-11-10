@@ -35,7 +35,7 @@ function Marked({ text, comments }: { text: string; comments: ReviewComment[] })
  * Reviews: the links the person shared, what people said on each draft beside the words they meant, and, from any
  * comment, proposed changes to the drafts it is about. `links` is null for someone signed out.
  */
-export function ReviewsView({ origin, links, candidates = [], candidatesUnavailable = false }: { candidatesUnavailable?: boolean; candidates?: ReviewCandidate[]; origin: string; links: (ReviewLink & { comments: ReviewComment[] })[] | null }) {
+export function ReviewsView({ origin, links, candidates = [], candidatesUnavailable = false, example = false }: { /** The example account: read-only, no link actions. */ example?: boolean; candidatesUnavailable?: boolean; candidates?: ReviewCandidate[]; origin: string; links: (ReviewLink & { comments: ReviewComment[] })[] | null }) {
   const [off, setOff] = useState<Set<string>>(new Set());
   // Links turned back on here, with their expiry, until the page reloads from the server.
   const [on, setOn] = useState<Map<string, string>>(new Map());
@@ -47,6 +47,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
       <header className={page.head}>
         <h1 className={page.title}>Reviews</h1>
         <p className={page.sub}>What reviewers said on your drafts. Turn any comment into edits.</p>
+        {example && <p className={page.sub}>Alex shared three drafts with Isabel, a client, and Sam, a teammate. They opened the link with no Buffer account and commented on the exact words they meant.</p>}
       </header>
 
       {links === null ? (
@@ -73,7 +74,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                     <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : expiresAt ? <>Open until {day(expiresAt)}</> : "Open"}</Badge>
                     <span className={styles.hint}>{`${l.comments.length} comment${l.comments.length === 1 ? "" : "s"}`}</span>
                   </div>
-                  {live && (
+                  {live && !example && (
                     <div className={styles.row}>
                       <CopyButton value={url} label="Copy link" />
                       <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
@@ -82,7 +83,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                       })}>Turn off</Button>
                     </div>
                   )}
-                  {!live && (
+                  {!live && !example && (
                     <Button variant="secondary" size="sm" disabled={pending} onClick={() => start(async () => {
                       const r = await turnOnReview(l.id);
                       if (!r.ok) return setMessage(r.message);
