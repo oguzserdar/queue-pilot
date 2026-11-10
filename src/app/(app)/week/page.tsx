@@ -15,6 +15,8 @@ import { signedInUserId } from "@/lib/current-user";
 import { writingAvailabilityFor } from "@/lib/writing-availability";
 import { openSlots } from "@/lib/open-slots";
 import { slotsToWrite } from "@/lib/write-week";
+import { postgresFillDraftStore } from "@/lib/fill-draft-store";
+import { recoverFillDrafts } from "@/lib/fill-recovery";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ w?: string }> }) {
   const { user } = await getCurrentUser();
@@ -46,6 +48,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ w
     const network = user.channels.find(c => c.id === post?.channelId)?.service ?? w.network;
     return [w.postId, rules ? draftReadiness(w, post?.text ?? "", rules, { network, channelId: post?.channelId }) : { state: "check", reason: "The playbook could not be read. Try again." }];
   }));
+  // A fill that stopped, or whose Buffer save never answered, is settled against the queue as it is now.
+  if (userId) {
+    const fills = postgresFillDraftStore();
+    await recoverFillDrafts(userId, user.posts, (channelId) => user.channels.find((c) => c.id === channelId)?.service ?? "", { open: fills.open, settle: fills.settle, record: (id, drafts) => postgresWrittenStore().record(id, drafts) })
+      .catch((e) => console.error(JSON.stringify({ event: "qp-fill-recovery-failed", message: e instanceof Error ? e.message : String(e) })));
+  }
   const evidence = userId ? await sourceCards(userId, user.posts, user.channels) : [];
   // The last approval recorded through Queue Pilot for each of its posts that left draft: the person in the app, or which AI app.
   const approved = userId ? await readOr(postgresWrittenStore().get(userId, week.posts.filter((p) => p.status !== "draft").map((p) => p.id)), [], "week-approvers") : [];

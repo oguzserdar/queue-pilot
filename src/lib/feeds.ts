@@ -27,7 +27,8 @@ export class FeedError extends Error {}
 
 export const SUMMARY_CHARS = 600;
 export const BODY_CHARS = 12_000;
-const MAX_BYTES = 2_000_000;
+// A long-running newsletter serves its last twenty issues in full: a few megabytes is normal.
+const MAX_BYTES = 8_000_000;
 const TIMEOUT_MS = 10_000;
 
 /** Strips tags and collapses whitespace; feeds put HTML in descriptions. */

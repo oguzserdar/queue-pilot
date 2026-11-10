@@ -6,6 +6,7 @@
  * posting time in its slot id is what recovery checks, so a retry never makes a second draft for one time.
  */
 import { and, eq, inArray } from "drizzle-orm";
+import type { FillSettlement, OpenFillDraft } from "./fill-recovery";
 import { db } from "../db";
 import { fillDraft } from "../db/schema";
 import type { WrittenDraft } from "./ai-writer";
@@ -17,6 +18,10 @@ export type FillDraftStore = {
   startCall(userId: string, runId: string, slotIds: string[]): Promise<void>;
   /** Records what the Buffer save did with each time. */
   finish(userId: string, runId: string, outcome: { saved: { slotId: string; postId: string | null }[]; refused: { slotId: string; reason: string }[] }): Promise<void>;
+  /** Records still "written": a run in progress, or one that never marked them. */
+  open(userId: string): Promise<OpenFillDraft[]>;
+  /** Applies recovery's decisions. Only a record still "written" changes, so a run finishing at the same moment wins. */
+  settle(userId: string, decisions: FillSettlement[]): Promise<void>;
 };
 
 /** The record in Postgres through Drizzle; every statement is scoped to the user id. */
@@ -34,6 +39,14 @@ export function postgresFillDraftStore(): FillDraftStore {
       const at = (slotId: string) => and(eq(fillDraft.userId, userId), eq(fillDraft.runId, runId), eq(fillDraft.slotId, slotId));
       for (const s of saved) await db().update(fillDraft).set({ status: "saved", postId: s.postId, reason: null, updatedAt: new Date() }).where(at(s.slotId));
       for (const r of refused) await db().update(fillDraft).set({ status: "refused", reason: r.reason.slice(0, 500), updatedAt: new Date() }).where(at(r.slotId));
+    },
+    async open(userId) {
+      return db().select({ runId: fillDraft.runId, slotId: fillDraft.slotId, text: fillDraft.text, callStartedAt: fillDraft.callStartedAt, updatedAt: fillDraft.updatedAt }).from(fillDraft).where(and(eq(fillDraft.userId, userId), eq(fillDraft.status, "written")));
+    },
+    async settle(userId, decisions) {
+      for (const d of decisions)
+        await db().update(fillDraft).set(d.kind === "adopt" ? { status: "saved", postId: d.postId, updatedAt: new Date() } : { status: "failed", reason: d.reason, updatedAt: new Date() })
+          .where(and(eq(fillDraft.userId, userId), eq(fillDraft.runId, d.runId), eq(fillDraft.slotId, d.slotId), eq(fillDraft.status, "written")));
     },
   };
 }

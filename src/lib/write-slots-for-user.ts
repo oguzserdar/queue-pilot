@@ -26,7 +26,7 @@ export type WriteWeekActionResult =
 /** What a live run reports as it goes. The store is written before each report. */
 export type LiveFill = {
   runId: string;
-  store: FillDraftStore;
+  store: Pick<FillDraftStore, "written" | "startCall" | "finish">;
   /** The times this run will write into, soonest first, before any AI is used. */
   onStart?: (slotIds: string[]) => void;
   /** A draft the model finished and our store now holds. A rewrite reports the same time again. */
