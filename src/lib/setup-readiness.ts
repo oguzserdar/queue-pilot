@@ -4,8 +4,12 @@ import type { ApprovedApp } from "./ai-access";
 import type { Source } from "./sources-store";
 import type { Voice } from "./voice-store";
 import { BUFFER_CHANNELS_URL } from "./connect-links";
-/** Exact signed-in setup steps shown by Needs you. Approval stays a human step. */
-export function setupReadiness(user: { channels: Channel[] }, sources: Source[], aiApps: ApprovedApp[] | null, voice: Voice | null): ReadinessItem[] {
+/**
+ * Exact signed-in setup steps shown by Needs you. Approval stays a human step.
+ *
+ * @param approved - Whether the person has approved a draft Queue Pilot wrote, which completes the last step
+ */
+export function setupReadiness(user: { channels: Channel[] }, sources: Source[], aiApps: ApprovedApp[] | null, voice: Voice | null, approved = false): ReadinessItem[] {
   const n = user.channels.length;
   return [
     { id: "buffer", label: n > 0 ? "Channels in Buffer" : "No channels in your Buffer yet", state: n > 0 ? "done" : "todo", detail: n > 0 ? `${n} channel${n === 1 ? "" : "s"}: ${user.channels.map((c) => c.name).join(", ")}` : "Your Buffer account is connected, but it has 0 channels. Add LinkedIn, X or another network in Buffer, and Queue Pilot fills its empty times.", action: n > 0 ? undefined : "Add a channel", href: n > 0 ? undefined : BUFFER_CHANNELS_URL },
@@ -21,6 +25,8 @@ export function setupReadiness(user: { channels: Channel[] }, sources: Source[],
     sources.length > 0
       ? { id: "source", label: "Add one source", state: "done", detail: sources.map((x) => x.title).join(", ") }
       : { id: "source", label: "Add one source", state: "todo", detail: "Your newsletter, blog, YouTube or GitHub releases feed", action: "Add a feed", href: "/sources" },
-    { id: "approve", label: "Approve your first draft", state: "todo", detail: "Your AI saves drafts in Buffer. Approve one and Buffer posts it at its time.", action: "Open week", href: "/week" },
+    approved
+      ? { id: "approve", label: "Approve your first draft", state: "done", detail: "You approved a draft, and Buffer posts it at its time." }
+      : { id: "approve", label: "Approve your first draft", state: "todo", detail: "Your AI saves drafts in Buffer. Approve one and Buffer posts it at its time.", action: "Open week", href: "/week" },
   ];
 }

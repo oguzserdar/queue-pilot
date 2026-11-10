@@ -3,7 +3,8 @@
 import { placeholdersIn } from "@/lib/placeholders";
 
 import { revalidatePath } from "next/cache";
-import { BufferRateLimitedError } from "@/lib/buffer/client";
+import { waitMessage, waitRefusal } from "@/lib/buffer/not-sent";
+import { nextSteps, type NextStep } from "@/lib/next-step";
 import { bufferForWriting, forceRefreshCurrentUser, freshBufferForCurrentUser, signedInUserId } from "@/lib/current-user";
 import { postgresAiKeyStore, providerOf } from "@/lib/ai-key-store";
 import { writeSlotsForUser, type WriteWeekActionResult } from "@/lib/write-slots-for-user";
@@ -17,8 +18,8 @@ import { recordAction } from "@/lib/security-events";
 import { wroteIds } from "@/lib/written-store";
 import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
 import { listRecentSent, readPostsNow, type Post } from "@/lib/buffer/queries";
-import { FeedError, feedUrl, readFeed } from "@/lib/feeds"
-import { removeUnusedApps, renameApp, revokeApp } from "@/lib/ai-access";
+import { FeedError, findFeed } from "@/lib/feeds"
+import { approvedApps, removeUnusedApps, renameApp, revokeApp } from "@/lib/ai-access";
 import { MAX_LABEL } from "@/lib/ai-app-limits";
 import { getAuth } from "@/lib/auth";
 import { deleteAccount } from "@/lib/delete-account";
@@ -63,7 +64,7 @@ export async function refreshBuffer(): Promise<RefreshResult> {
   try {
     if (!(await forceRefreshCurrentUser())) return { ok: false, kind: "signedOut" };
   } catch (e) {
-    if (e instanceof BufferRateLimitedError) return { ok: false, kind: "limited", retryAt: e.retryAt.toISOString() };
+    { const w = waitRefusal(e); if (w) return { ok: false, kind: "limited", retryAt: (w.retryAt ?? new Date(Date.now() + 60_000)).toISOString() }; }
     console.error(JSON.stringify({ event: "qp-refresh-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, kind: "failed" };
   }
@@ -94,7 +95,7 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
     revalidatePath("/", "layout");
     return { ok: true, approved, refused, ...(note ? { note } : {}) };
   } catch (e) {
-    if (e instanceof BufferRateLimitedError) return { ok: false, kind: "limited", retryAt: e.retryAt.toISOString() };
+    { const w = waitRefusal(e); if (w) return { ok: false, kind: "limited", retryAt: (w.retryAt ?? new Date(Date.now() + 60_000)).toISOString() }; }
     console.error(JSON.stringify({ event: "qp-approve-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, kind: "failed" };
   }
@@ -120,13 +121,13 @@ export async function recheckMyDrafts(ids: string[]): Promise<{ ok: true; checke
     }
     return r;
   } catch (e) {
-    if (e instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+    { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
     console.error(JSON.stringify({ event: "qp-recheck-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Could not check those drafts just now. Try again." };
   }
 }
 
-export type SourceActionResult = { ok: true; title?: string; id?: string } | { ok: false; message: string };
+export type SourceActionResult = { ok: true; title?: string; id?: string; next?: NextStep[]; /** For an added feed: how many items it holds and when the newest was published. */ read?: { items: number; newest: string | null } } | { ok: false; message: string };
 
 /** Adds a feed after reading it once to confirm it is a working RSS or Atom feed. */
 export async function addSource(url: string): Promise<SourceActionResult> {
@@ -135,11 +136,11 @@ export async function addSource(url: string): Promise<SourceActionResult> {
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (typeof url !== "string" || url.length > 2000) return { ok: false, message: "That is not a web address." };
   try {
-    const address = feedUrl(url.trim())
-    const feed = await readFeed(address)
-    const source = await postgresSourceStore().add(userId, address, feed.title ?? new URL(address).hostname)
-    revalidatePath("/sources");
-    return { ok: true, title: source.title };
+    // The person may paste the site, newsletter or channel page; the feed it points to is what gets saved.
+    const feed = await findFeed(url)
+    const source = await postgresSourceStore().add(userId, feed.address, feed.title ?? new URL(feed.address).hostname)
+    revalidatePath("/", "layout");
+    return { ok: true, title: source.title, read: { items: feed.items.length, newest: feed.items[0]?.published ?? null } };
   } catch (e) {
     if (e instanceof TooManySourcesError || e instanceof FeedError) return { ok: false, message: e.message };
     console.error(JSON.stringify({ event: "qp-add-source-failed", message: e instanceof Error ? e.message : String(e) }));
@@ -522,12 +523,12 @@ export async function setAiModel(model: string): Promise<SourceActionResult> {
 export type { WriteWeekActionResult } from "@/lib/write-slots-for-user";
 
 /** The "Write drafts with my AI" button: the coming week's empty slots, written by the person's AI, saved as Buffer drafts. */
-export async function writeMyWeek(): Promise<WriteWeekActionResult> {
+export async function writeMyWeek(): Promise<WriteWeekActionResult & { next?: NextStep[] }> {
   return writeSlots();
 }
 
 /** "Write it with my AI" on an empty slot: the same run as writeMyWeek, for that one slot. */
-export async function writeSlotDraft(slotId: string): Promise<WriteWeekActionResult> {
+export async function writeSlotDraft(slotId: string): Promise<WriteWeekActionResult & { next?: NextStep[] }> {
   if (typeof slotId !== "string" || !parseSlotId(slotId)) return { ok: false, message: "That time is not one of your slots." };
   return writeSlots(slotId);
 }
@@ -548,20 +549,33 @@ export async function saveSlotDraft(slotId: string, text: string): Promise<Sourc
     if (r.refused.length) return { ok: false, message: r.refused.map((x) => x.reason).join(" ") };
     revalidatePath("/", "layout");
     const flag = r.flags[0];
-    return { ok: true, title: flag ? `Saved, but check: ${flag.verdict === "fail" ? "it breaks" : "it may break"} "${flag.rule}".` : checkNote(r.check) };
+    // A person writing by hand hears once that the AI they already use can do this for them.
+    return { ok: true, title: flag ? `Saved, but check: ${flag.verdict === "fail" ? "it breaks" : "it may break"} "${flag.rule}".` : checkNote(r.check), next: (await suggestionsFor({ saved: 1 })).filter((n) => n.id === "connect-ai") };
   } catch (e) {
-    if (e instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+    { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
     console.error(JSON.stringify({ event: "qp-save-slot-draft-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Could not save the draft just now. Try again." };
   }
 }
 
 /** Writes and saves drafts for the coming week's empty slots, or only for one slot. */
-async function writeSlots(only?: string): Promise<WriteWeekActionResult> {
+async function writeSlots(only?: string): Promise<WriteWeekActionResult & { next?: NextStep[] }> {
   { const l = await overLimit("ai"); if (l) return tooMany(l); }
   const result = await writeSlotsForUser(bufferForWriting, only);
   revalidatePath("/", "layout");
-  return result;
+  return { ...result, next: await suggestionsFor(result.ok ? { saved: result.saved.length } : { saved: 0, reason: result.reason }) };
+}
+
+/** The toasts to show after a run: what this person is still missing. A failed read suggests nothing. */
+async function suggestionsFor(run: Parameters<typeof nextSteps>[0]): Promise<NextStep[]> {
+  try {
+    const userId = await signedInUserId();
+    if (!userId) return [];
+    const [voice, apps] = await Promise.all([postgresVoiceStore().get(userId), approvedApps(userId)]);
+    return nextSteps(run, { hasVoice: voice.examples.length > 0 || !!voice.note, hasAiApp: apps.some((a) => a.lastUsedAt) });
+  } catch {
+    return [];
+  }
 }
 
 export type TryDraftResult = { ok: true; verdicts: Verdict[]; judgedWith: string } | { ok: false; message: string };
@@ -638,8 +652,8 @@ export type FirstRuleOffer = {
 /** Find my first rules: a model reads the person's recent sent posts and their teammates' notes in Buffer, and each rule comes back with its proof. */
 export async function findFirstRules(): Promise<{ ok: true; offers: FirstRuleOffer[]; skipped: string[] } | { ok: false; message: string }> {
   { const l = await overLimit("ai"); if (l) return tooMany(l); }
-  const b = await bufferForWriting().catch((e) => (e instanceof BufferRateLimitedError ? e : null));
-  if (b instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+  const b = await bufferForWriting().catch((e) => waitRefusal(e) ?? null);
+  if (b && "message" in b) return { ok: false, message: waitMessage(b) };
   if (!b) return { ok: false, message: "Sign in with Buffer first." };
   const jm = await judgeModelFor(b.userId).catch((e) => (e instanceof AiCapError ? e : null));
   if (jm instanceof AiCapError) return { ok: false, message: jm.message };
@@ -667,7 +681,7 @@ export async function findFirstRules(): Promise<{ ok: true; offers: FirstRuleOff
       }),
     };
   } catch (e) {
-    if (e instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+    { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
     await jm.giveBack();
     if (APICallError.isInstance(e) || NoObjectGeneratedError.isInstance(e)) return { ok: false, message: aiErrorMessage(e, jm.cfg.provider) };
     console.error(JSON.stringify({ event: "qp-first-rules-failed", message: e instanceof Error ? e.message : String(e) }));
@@ -718,7 +732,7 @@ export async function editDraftText(postId: string, text: string, expectedText?:
     revalidatePath("/", "layout");
     return { ok: true, title: note };
   } catch (e) {
-    if (e instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+    { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
     console.error(JSON.stringify({ event: "qp-edit-draft-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Could not change the draft just now. Try again." };
   }
@@ -738,7 +752,7 @@ export async function deleteMyDraft(postId: string): Promise<SourceActionResult>
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
-    if (e instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+    { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
     console.error(JSON.stringify({ event: "qp-delete-draft-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Could not delete the draft just now. Try again." };
   }

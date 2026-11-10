@@ -36,3 +36,21 @@ describe("triageFromBuffer overdue drafts", () => {
     expect(kinds.indexOf("overdue")).toBe(kinds.indexOf("failed") + 1);
   });
 });
+
+describe("triageFromBuffer empty times", () => {
+  // Three posting times a day, every day: 21 empty times next week.
+  const busy = { ...channel, postingSchedule: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map((day) => ({ day, paused: false, times: ["09:00", "13:00", "17:00"] })) };
+  const empties = (posts: ReturnType<typeof post>[]) => triageFromBuffer({ channels: [busy] as never, posts: posts as never, now, timeZone: "UTC", checks: {}, comments: [] }).filter((i) => i.kind === "empty");
+
+  it("is one line with the count, never one per time", () => {
+    const rows = empties([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].title).toBe("21 empty times next week");
+    expect(rows[0].href).toBe("/week");
+  });
+  it("counts down as times are filled and disappears when none is left empty", () => {
+    // Next week from Wed 4 Nov 2026 is Mon 9 to Sun 15 Nov.
+    expect(empties([post("a", "draft", "2026-11-09T09:00:00Z")])[0].title).toBe("20 empty times next week");
+    expect(triageFromBuffer({ channels: [channel] as never, posts: [] as never, now, timeZone: "UTC", checks: {}, comments: [] }).some((i) => i.kind === "empty")).toBe(false);
+  });
+});

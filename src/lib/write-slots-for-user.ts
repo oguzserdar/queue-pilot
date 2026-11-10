@@ -1,6 +1,6 @@
 /** Shared built-in writer for the browser action and authenticated connector. */
 import { SourceContextError } from "./source-context";
-import { BufferRateLimitedError } from "./buffer/client";
+import { waitMessage, waitRefusal } from "./buffer/not-sent";
 import type { Channel, Post } from "./buffer/queries";
 import type { Provider } from "./ai-key-store";
 import { writeDrafts, type BriefMaterial } from "./ai-writer";
@@ -20,7 +20,7 @@ import { AiCapError, aiFor } from "./judge-model";
 export type WriteBuffer = { userId: string; token: string; channels: Channel[]; posts: Post[]; timeZone: string; range: { start: Date; end: Date } };
 export type WriteWeekActionResult =
   | { ok: true; saved: { local: string; channel: string }[]; refused: { slotId: string; reason: string }[]; retried: number; flags: { where: string; rule: string; verdict: "fail" | "unsure"; reason: string }[]; note?: string }
-  | { ok: false; message: string };
+  | { ok: false; message: string; /** Set when the run stopped for a reason the person can act on. */ reason?: "no-material" | "ai-used-up" };
 
 export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | null>, only?: string): Promise<WriteWeekActionResult> {
   let provider: Provider = "anthropic";
@@ -85,7 +85,7 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
     });
     if (r.kind === "nothing") {
       await giveBack();
-      return { ok: false, message: r.reason === "no-slots" ? "No empty times remain in the chosen week." : materialNotes.join(" ") || "No new material to write from. Add research under New material or connect a feed." };
+      return { ok: false, message: r.reason === "no-slots" ? "No empty times remain in the chosen week." : materialNotes.join(" ") || "Nothing new to write from. Add your newsletter, blog or video feed under Sources, then fill the week again.", ...(r.reason === "no-material" ? { reason: "no-material" as const } : {}) };
     }
     if (!r.saved.length && r.refused.length && r.refused.every(x => x.reason.startsWith("The writer did not identify a supplied source."))) await giveBack();
     const where = (slotId: string) => { const s = r.saved.find((x) => x.slotId === slotId); return s ? `${s.local} · ${s.channel}` : slotId; };
@@ -99,10 +99,12 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
     };
   } catch (e) {
     if (e instanceof SourceContextError) { await giveBack(); return { ok: false, message: e.message }; }
-    if (e instanceof AiCapError || e instanceof ModelListError) return { ok: false, message: e.message };
-    if (e instanceof BufferRateLimitedError) {
+    if (e instanceof AiCapError) return { ok: false, message: e.message, reason: "ai-used-up" };
+    if (e instanceof ModelListError) return { ok: false, message: e.message };
+    const wait = waitRefusal(e);
+    if (wait) {
       await giveBack();
-      return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+      return { ok: false, message: waitMessage(wait) };
     }
     if (APICallError.isInstance(e) || NoObjectGeneratedError.isInstance(e)) {
       await giveBack();

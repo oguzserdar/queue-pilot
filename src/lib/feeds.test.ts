@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BODY_CHARS, FeedError, feedUrl, freshItems, itemsFromXml, newItems, plainText, readCapped, readFeed, scopeKeys, splitKey } from "./feeds"
+import { BODY_CHARS, FeedError, feedUrl, freshItems, itemsFromXml, newItems, plainText, readCapped, readFeed, scopeKeys, splitKey, feedCandidates } from "./feeds"
 
 describe("release feed addresses", () => {
   it("uses the release feed for a page and leaves other hosts and feeds alone", () => {
@@ -164,4 +164,37 @@ describe("YouTube channel feeds", () => {
 it("labels a publisher's Read more cutoff as an excerpt without guessing paid status", () => {
   const xml = `<rss version="2.0"><channel><title>Feed</title><item><guid>one</guid><description><![CDATA[<p>Opening paragraph.</p><p><a href="https://example.com/full">Read more</a></p>]]></description></item></channel></rss>`;
   expect(itemsFromXml(xml).items[0]).toMatchObject({ truncated: true, body: "Opening paragraph. Read more" });
+});
+
+describe("finding the feed behind a pasted page", () => {
+  it("takes the feed a page names, resolved against the page", () => {
+    const html = `<head><link rel="alternate" type="application/atom+xml" title="Everything" href="/rss/"><link rel="stylesheet" href="/a.css"></head>`;
+    expect(feedCandidates(html, new URL("https://example.com/"))[0]).toBe("https://example.com/rss/");
+  });
+  it("reads the tag whichever order its attributes come in, and unescapes the address", () => {
+    const html = `<link href="https://example.com/feed?a=1&amp;b=2" type='application/rss+xml' rel='alternate'/>`;
+    expect(feedCandidates(html, new URL("https://example.com/blog"))[0]).toBe("https://example.com/feed?a=1&b=2");
+  });
+  it("builds a video channel's feed from the channel id on its page", () => {
+    const html = `<script>{"channelId":"UC1234567890abcdefghijkl"}</script>`;
+    expect(feedCandidates(html, new URL("https://www.youtube.com/@someone"))).toContain("https://www.youtube.com/feeds/videos.xml?channel_id=UC1234567890abcdefghijkl");
+  });
+  it("ignores a channel id on a page that is not the video site", () => {
+    const html = `<a href="https://www.youtube.com/channel/UC1234567890abcdefghijkl">videos</a>`;
+    expect(feedCandidates(html, new URL("https://example.com/")).some((u) => u.includes("videos.xml"))).toBe(false);
+  });
+  it("falls back to the usual feed paths under the page and the site, without duplicates", () => {
+    const got = feedCandidates("<html></html>", new URL("https://example.com/resources/"));
+    expect(got).toEqual(["https://example.com/resources/feed", "https://example.com/resources/rss/", "https://example.com/feed", "https://example.com/rss.xml", "https://example.com/atom.xml"]);
+  });
+  it("skips links that are not web addresses", () => {
+    const html = `<link rel="alternate" type="application/rss+xml" href="javascript:alert(1)">`;
+    expect(feedCandidates(html, new URL("https://example.com/")).every((u) => u.startsWith("https://example.com/"))).toBe(true);
+  });
+  it("stays fast on a page made of unclosed tags", () => {
+    const hostile = "<link ".repeat(300_000);
+    const started = Date.now();
+    feedCandidates(hostile, new URL("https://example.com/"));
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
 });

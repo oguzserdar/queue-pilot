@@ -18,18 +18,28 @@ function parts(instant: Date, timeZone: string) {
   return { weekday: p.weekday as string, day: Number(p.day), month: p.month as string, year: Number(p.year), time: `${Number(p.hour)}:${p.minute}` };
 }
 
-/** The next Monday 00:00 (always the following week, even on a Monday) to the Monday after, in a timezone. */
-export function nextWeekRange(now: Date, timeZone: string): { start: Date; end: Date } {
+/**
+ * A Monday 00:00 to the Monday after, in a timezone.
+ *
+ * @param weeksAhead - 1 for the following week (the default screen, even on a Monday), 0 for the week today is in
+ */
+export function weekRange(now: Date, timeZone: string, weeksAhead: 0 | 1): { start: Date; end: Date } {
   const today = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).formatToParts(now);
   const get = (t: string) => today.find((x) => x.type === t)!.value;
   const dow = INDEX[get("weekday").toLowerCase().slice(0, 3) as DayOfWeek];
   const base = Date.UTC(Number(get("year")), Number(get("month")) - 1, Number(get("day")));
-  const monday = new Date(base + (7 - dow) * 86_400_000);
+  const monday = new Date(base + (weeksAhead * 7 - dow) * 86_400_000);
   const start = zonedToUtc(monday.getUTCFullYear(), monday.getUTCMonth() + 1, monday.getUTCDate(), 0, 0, timeZone);
   const nextMonday = new Date(monday.getTime() + 7 * 86_400_000);
   const end = zonedToUtc(nextMonday.getUTCFullYear(), nextMonday.getUTCMonth() + 1, nextMonday.getUTCDate(), 0, 0, timeZone);
   return { start, end };
 }
+
+/** The next Monday 00:00 (always the following week, even on a Monday) to the Monday after, in a timezone. */
+export const nextWeekRange = (now: Date, timeZone: string): { start: Date; end: Date } => weekRange(now, timeZone, 1);
+
+/** The Monday 00:00 of the week today is in to next Monday, in a timezone: where a draft for the coming days shows. */
+export const thisWeekRange = (now: Date, timeZone: string): { start: Date; end: Date } => weekRange(now, timeZone, 0);
 
 const STATUS: Record<BufferPost["status"], WeekPost["status"]> = {
   draft: "draft",

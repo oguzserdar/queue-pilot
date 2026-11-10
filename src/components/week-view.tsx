@@ -54,8 +54,9 @@ const RESULT_TONE = { pass: "success", fail: "danger", unsure: "warning" } as co
  * `live` is true for a signed-in user: Approve schedules the drafts in Buffer. Example data only marks them on screen.
  * `verdicts` are the playbook verdicts each draft was saved with, by post id; null means it was saved unchecked.
  */
-export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {}, showDraft }: { week: WeekModel; /** Draw only this draft's window, inline in the page, as the homepage shows it. */ showDraft?: string; approvals?: Record<string, string>; notesPreview?: Record<string, NotesPreview>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
+export function WeekView({ week, which = "next", live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {}, showDraft }: { week: WeekModel; /** Which week is drawn: the one today is in, or the following one (the default). */ which?: "this" | "next"; /** Draw only this draft's window, inline in the page, as the homepage shows it. */ showDraft?: string; approvals?: Record<string, string>; notesPreview?: Record<string, NotesPreview>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
   const { label: WEEK_LABEL, days: DAYS, channels, slots } = week;
+  const NAME = which === "this" ? "This week" : "Next week";
   /** A day gets a full column when any channel has a slot or a post on it. */
   const dayHasContent = (d: number) => channels.some((c) => slots[c.id]?.[d]?.length) || posts.some((p) => p.day === d);
   // Edit and Delete draft in the dialog; in example mode they change the screen only.
@@ -117,7 +118,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
   useEffect(() => {
     const openNext = () => {
       const s = firstEmptySlot({ ...week, posts });
-      if (!s) return setComposed("Every slot next week already has a post.");
+      if (!s) return setComposed(`Every slot ${NAME.toLowerCase()} already has a post.`);
       const ch = channels.find((c) => c.id === s.channelId);
       setComposing({ id: week.slotIds?.[slotKey(s.channelId, s.day, s.time)], name: `${ch?.name ?? ""}, ${FULL_DAY[s.day]} at ${s.time}`, service: ch?.service });
     };
@@ -355,15 +356,15 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         <div>
           <h1 className={styles.title}>
             {channels.length === 0
-              ? "Next week"
+              ? NAME
               : drafts.length > 0
-              ? `Next week: ${[
+              ? `${NAME}: ${[
                   toApprove && `${toApprove} draft${toApprove === 1 ? "" : "s"} to approve`,
                   held && `${held} held back`,
                   drafts.length - waiting && `${drafts.length - waiting} approved`,
                   open ? `${open} empty slot${open === 1 ? "" : "s"}` : "every slot filled",
                 ].filter(Boolean).join(", ")}`
-              : open === 0 ? "Next week: every slot has a post" : `Next week: ${open} empty slot${open === 1 ? "" : "s"}`}
+              : open === 0 ? `${NAME}: every slot has a post` : `${NAME}: ${open} empty slot${open === 1 ? "" : "s"}`}
           </h1>
           <p className={styles.sub}>
             <span className="tnum">{WEEK_LABEL}</span>.{" "}
@@ -371,8 +372,13 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
               ? "Nothing to fill yet."
               : drafts.length > 0
               ? `${live ? (waiting ? `${waiting} waiting for your approval` : "No drafts from Queue Pilot are waiting for approval") : "Written from your newsletter, each one checked against your playbook"}${blocked.length ? `. ${blocked.length} can't go out until ${blocked.length === 1 ? "its" : "their"} problem is fixed` : ""}.`
-              : "Connect your AI, then pick \"Fill my week\" in it to draft the open slots."}
+              : writing?.ready ? "Fill next week writes a draft for each empty time. Or connect your AI and ask it to fill your week." : "Connect your AI and ask it to fill your week."}
           </p>
+          {live && (
+            <p className={styles.sub}>
+              {which === "this" ? <a href="/week">Show next week</a> : <a href="/week?w=this">Show this week</a>}
+            </p>
+          )}
         </div>
         <div className={styles.headActions}>
           {/* Posts that would fail sit behind one button, so the week stays where it is; each card is marked too. */}
@@ -435,7 +441,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
       ) : (
       <div className={styles.layout}>
         <div className={styles.gridWrap}>
-          <div className={styles.grid} role="table" aria-label="Posting slots for next week" style={{ gridTemplateColumns: `max-content ${DAYS.map((_, d) => (dayHasContent(d) ? "minmax(132px, 1fr)" : "56px")).join(" ")}` }}>
+          <div className={styles.grid} role="table" aria-label={`Posting slots for ${NAME.toLowerCase()}`} style={{ gridTemplateColumns: `max-content ${DAYS.map((_, d) => (dayHasContent(d) ? "minmax(132px, 1fr)" : "56px")).join(" ")}` }}>
             <div className={styles.corner}>{week.timeZone && week.startsAt && <span className={styles.zone}>Times in {zoneLabel(week.timeZone, new Date(week.startsAt))}</span>}</div>
             {DAYS.map((d, i) => {
               const has = dayHasContent(i);
@@ -463,7 +469,7 @@ export function WeekView({ week, live = false, verdicts = live ? {} : EXAMPLE_VE
         </div>
 
         {/* On a phone the week reads as a list by day, each post labelled with its channel (the grid is hidden). */}
-        <div className={styles.list} aria-label="Posting slots for next week, by day">
+        <div className={styles.list} aria-label={`Posting slots for ${NAME.toLowerCase()}, by day`}>
           {DAYS.map((d, day) => dayHasContent(day) && (
             <section key={d} className={styles.listDay} aria-label={d}>
               <h2 className={styles.listHead}>{d}</h2>

@@ -33,7 +33,9 @@ export function TriageList({ items, live, onRemaining }: { items: TriageItem[]; 
   const rows = useRef<(HTMLLIElement | null)[]>([]);
   const shown = TRIAGE_GROUPS.map((g) => ({ ...g, items: items.filter((i) => i.kind === g.kind && !(i.postId && done.has(i.postId))) })).filter((g) => g.items.length);
   const flat = shown.flatMap((g) => g.items);
-  useEffect(() => { onRemaining?.(flat.length); }, [flat.length, onRemaining]);
+  // Empty times are listed but not counted: they are room to fill, not something waiting on the person.
+  const waiting = flat.filter((i) => i.kind !== "empty").length;
+  useEffect(() => { onRemaining?.(waiting); }, [waiting, onRemaining]);
 
   // An approved row folds away, and the rows below slide up into its place, before it leaves the list.
   const leave = async (ids: string[]) => {

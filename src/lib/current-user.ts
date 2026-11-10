@@ -17,6 +17,7 @@ import { MIN_REFRESH_MS, refreshSnapshot, withScheduled } from "./buffer/snapsho
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
 import { knownRange } from "./open-slots";
 import { bufferAccessToken } from "./buffer-token";
+import { waitRefusal } from "./buffer/not-sent";
 import { scheduleEcho } from "./echo-run";
 import { hasDatabase } from "./db";
 import { readConfig } from "./env";
@@ -176,24 +177,33 @@ export async function forceRefreshCurrentUser(): Promise<boolean> {
   return true;
 }
 
-export const getCurrentUser = cache(async (): Promise<{ signInOpen: boolean; user: BufferContext | null }> => {
+/**
+ * The signed-in person's Buffer account for a page.
+ *
+ * `unreadable` is set when someone is signed in but Buffer could not be read and no saved copy exists. Pages must
+ * show that state, never the signed-out example: `retryAt` is when Buffer's limit lets the next read through.
+ */
+export const getCurrentUser = cache(async (): Promise<{ signInOpen: boolean; user: BufferContext | null; unreadable?: { retryAt: string | null } }> => {
   const { auth, userId } = await sessionUser();
   if (!auth) return { signInOpen: false, user: null };
   if (!userId) return { signInOpen: true, user: null };
   try {
     const store = postgresSnapshotStore();
     const snap = (await store.get(userId)) ?? (await refreshSnapshot(userId, await bufferAccessToken(auth, userId), { store }));
-    if (!snap) return { signInOpen: true, user: null };
-    const d = snap.data;
+    // No copy and no fresh read usually means another request is reading Buffer for the first time right now:
+    // wait for it once before saying Buffer could not be read.
+    const ready = snap ?? (await new Promise((r) => setTimeout(r, 1500)).then(() => store.get(userId)));
+    if (!ready) return { signInOpen: true, user: null, unreadable: { retryAt: null } };
+    const d = ready.data;
     return {
       signInOpen: true,
       user: {
         email: d.email, timeZone: d.channels[0]?.timezone || d.timezone || "UTC", organizationIds: d.organizationIds, channels: d.channels, posts: d.posts,
-        fetchedAt: snap.fetchedAt, needsRefresh: Date.now() - snap.fetchedAt.getTime() > MIN_REFRESH_MS, rateLimit: snap.rateLimit, range: knownRange(d, new Date()),
+        fetchedAt: ready.fetchedAt, needsRefresh: Date.now() - ready.fetchedAt.getTime() > MIN_REFRESH_MS, rateLimit: ready.rateLimit, range: knownRange(d, new Date()),
       },
     };
   } catch (e) {
     console.error(JSON.stringify({ event: "qp-account-read-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { signInOpen: true, user: null };
+    return { signInOpen: true, user: null, unreadable: { retryAt: waitRefusal(e)?.retryAt?.toISOString() ?? null } };
   }
 });

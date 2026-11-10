@@ -151,18 +151,12 @@ export function feedUrl(url: string): string {
   return parsed.toString()
 }
 
-/** Fetches and parses a feed URL. Errors carry a sentence the user can act on. */
-export async function readFeed(url: string): Promise<{ title: string | null; items: FeedItem[] }> {
-  let parsed: URL;
-  try {
-    parsed = new URL(feedUrl(url))
-  } catch {
-    throw new FeedError("That is not a web address.");
-  }
+/** Fetches a public address as text, with the feed reader's time and size limits. Errors are written for people. */
+async function fetchText(parsed: URL, accept: string): Promise<string> {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new FeedError("That is not a web address.");
   let res: Response;
   try {
-    res = await safeFetch(parsed, { headers: { accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9" }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    res = await safeFetch(parsed, { headers: { accept }, signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (e) {
     if (e instanceof BlockedAddressError) throw new FeedError("That address is not on the public internet.");
     if (e instanceof Error && e.name === "TimeoutError") throw new FeedError("The feed took too long to answer.");
@@ -171,10 +165,92 @@ export async function readFeed(url: string): Promise<{ title: string | null; ite
   if (!res.ok) throw new FeedError(`The feed answered ${res.status}.`);
   const length = Number(res.headers.get("content-length") ?? 0);
   if (length > MAX_BYTES) throw new FeedError("The feed is too large to read.");
-  const text = await readCapped(res, MAX_BYTES);
+  return readCapped(res, MAX_BYTES);
+}
+
+const FEED_ACCEPT = "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9";
+
+/** Fetches and parses a feed URL. Errors carry a sentence the user can act on. */
+export async function readFeed(url: string): Promise<{ title: string | null; items: FeedItem[] }> {
+  let parsed: URL;
+  try {
+    parsed = new URL(feedUrl(url))
+  } catch {
+    throw new FeedError("That is not a web address.");
+  }
+  const text = await fetchText(parsed, FEED_ACCEPT);
   try {
     return itemsFromXml(text);
   } catch {
     throw new FeedError("That address is not an RSS or Atom feed.");
   }
+}
+
+/**
+ * The feed addresses a web page points to, most likely first: the feed it names in a `<link rel="alternate">` tag, a
+ * video channel's own feed, then the usual feed paths under the page and the site.
+ *
+ * @param html - The page as fetched
+ * @param page - The page's address, for resolving relative links
+ * @returns Absolute addresses, without duplicates; empty when the page offers nothing to try
+ */
+export function feedCandidates(html: string, page: URL): string[] {
+  const out: string[] = [];
+  const add = (href: string | undefined) => {
+    if (!href) return;
+    try {
+      const u = new URL(href.replace(/&amp;/g, "&"), page);
+      if ((u.protocol === "https:" || u.protocol === "http:") && !out.includes(u.toString())) out.push(u.toString());
+    } catch { /* A malformed link is skipped. */ }
+  };
+  // Feed links sit in the head, so only the start of the page is read, and a tag never runs past the next "<":
+  // an unclosed tag on a hostile page cannot make this scan slow.
+  html = html.slice(0, SCAN_CHARS);
+  for (const [tag] of html.matchAll(/<link\b[^<>]*>/gi)) {
+    if (!/\brel=["']?alternate/i.test(tag) || !/type=["']application\/(?:rss|atom)\+xml/i.test(tag)) continue;
+    add(tag.match(/\bhref=["']([^"']+)["']/i)?.[1]);
+  }
+  const channel = html.match(/(?:channel_id=|"channelId":"|\/channel\/)(UC[\w-]{22})/)?.[1];
+  if (channel && /(^|\.)youtube\.com$/.test(page.hostname)) add(`https://www.youtube.com/feeds/videos.xml?channel_id=${channel}`);
+  const base = page.pathname.replace(/\/$/, "");
+  for (const path of [`${base}/feed`, `${base}/rss/`, "/feed", "/rss.xml", "/atom.xml"]) add(path);
+  return out;
+}
+
+/** How much of a page feedCandidates reads. */
+const SCAN_CHARS = 200_000;
+/** The longest findFeed spends on the addresses a page points to, all together. */
+const FIND_MS = 20_000;
+/** How many addresses findFeed tries after the one it was given. */
+const MAX_CANDIDATES = 5;
+
+/**
+ * Finds the feed behind what a person pasted: the feed itself, or the site, newsletter or channel page it belongs to.
+ *
+ * People paste the address they know, which is usually the page, not its feed. Used when a feed is added, never on
+ * later reads: the address returned is the feed's own and is what gets saved.
+ *
+ * @param url - What the person pasted
+ * @returns The feed's address and its current items
+ * @throws FeedError with a sentence the person can act on when no feed is found
+ */
+export async function findFeed(url: string): Promise<{ address: string; title: string | null; items: FeedItem[] }> {
+  let parsed: URL;
+  try {
+    parsed = new URL(feedUrl(/^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`));
+  } catch {
+    throw new FeedError("That is not a web address.");
+  }
+  const text = await fetchText(parsed, `${FEED_ACCEPT}, text/html;q=0.8`);
+  try {
+    return { address: parsed.toString(), ...itemsFromXml(text) };
+  } catch { /* Not a feed itself: look for the one the page points to. */ }
+  const deadline = Date.now() + FIND_MS;
+  for (const candidate of feedCandidates(text, parsed).slice(0, MAX_CANDIDATES)) {
+    if (Date.now() > deadline) break;
+    try {
+      return { address: candidate, ...itemsFromXml(await fetchText(new URL(candidate), FEED_ACCEPT)) };
+    } catch { /* Try the next address. */ }
+  }
+  throw new FeedError("No feed was found at that address. Paste the feed's own address: for a newsletter it usually ends in /feed, for a blog in /rss or /atom.xml.");
 }

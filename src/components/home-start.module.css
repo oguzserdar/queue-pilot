@@ -1,0 +1,8 @@
+/* First drafts on Home: one panel, the feed box or the fill button, then the other way in. */
+.start { display: grid; gap: 12px; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.title { margin: 0; font-size: var(--text-base); font-weight: 600; }
+.muted { margin: 0; color: var(--text-muted); font-size: var(--text-sm); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.input { flex: 1; min-width: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-control, 8px); background: var(--background, transparent); color: inherit; font: inherit; font-size: var(--text-sm); }
+.input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.read { margin: 0; font-size: var(--text-sm); color: var(--success); }

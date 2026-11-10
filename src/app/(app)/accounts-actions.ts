@@ -6,7 +6,7 @@
  * (src/lib/content-item-flow.ts): each version is checked against that account's own limit and rules first, every post
  * is saved as a draft, and nothing schedules or publishes.
  */
-import { BufferRateLimitedError } from "@/lib/buffer/client";
+import { waitMessage, waitRefusal } from "@/lib/buffer/not-sent";
 import { textLimits } from "@/lib/buffer/workspace";
 import { contentItemFlow, type ItemBuffer } from "@/lib/content-item-flow";
 import { bufferForReading } from "@/lib/current-user";
@@ -90,7 +90,7 @@ export async function saveForAccounts(input: { requestId: string; text: string; 
     const n = promoted.created ?? versions.length;
     return { ok: true, saved: n, message: `Saved ${n} draft${n === 1 ? "" : "s"} in Buffer. Nothing was scheduled.` };
   } catch (e) {
-    if (e instanceof BufferRateLimitedError) return { ok: false, message: "Buffer asked us to wait a moment. Try again in a minute." };
+    { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
     console.error(JSON.stringify({ event: "qp-save-for-accounts-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Buffer did not answer clearly. Press Save again: the same post is found, never saved twice." };
   }

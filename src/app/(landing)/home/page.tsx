@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Accordion } from "@/registry/components/accordion/accordion";
 import button from "@/registry/components/button/button.module.css";
 import { PilotWeek } from "@/components/landing/pilot-week";
+import { SignInNotice } from "@/components/sign-in-button";
 import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
 import { HandUnderline } from "@/components/landing/hand-underline";
@@ -34,7 +35,7 @@ function LinkButton({ href, kind, size = "lg", say, children }: { href: string; 
 
 const faq = [
   { title: "Which AI do I need?", content: "The one you already use every day. Queue Pilot is built to work inside Claude, ChatGPT and Grok, coding agents like Claude Code, Codex and Cursor, and any app that can add a remote MCP server. Your AI writes on the plan you already pay for; Queue Pilot gives it your week, your sources and your rules." },
-  { title: "Does it post on its own?", content: "No. Queue Pilot saves drafts in Buffer and never schedules on its own. A draft is scheduled only when you approve it: in the app, in Buffer, or by telling your AI yes to the drafts it showed you. In Settings you can let your AI schedule when you ask without the extra confirm step, or keep scheduling to yourself only. A draft that breaks a blocking rule is refused either way." },
+  { title: "Does it post on its own?", content: "No. Queue Pilot saves drafts in Buffer and never schedules on its own. A draft is scheduled only when you approve it: in the app, in Buffer, or by telling your AI yes to the drafts it showed you. In Settings you can let your AI schedule when you ask without the extra confirm step, or keep scheduling to yourself only. Queue Pilot refuses to approve a draft that breaks a blocking rule either way." },
   { title: "Can I use it without an AI app?", content: "Yes. Write my week drafts your empty times with Queue Pilot's own AI, within a small daily allowance, or with your own API key in Settings. You review and approve in the app, the same as with a connected AI." },
   { title: "How do I connect a coding agent?", content: <>Copy one line from the Connect page and send it to Claude Code, Codex or Cursor. The agent fetches its <a href="/agent-setup/prompt.md" target="_blank" rel="noopener noreferrer">setup instructions</a>, installs the Queue Pilot skills and adds the connector, and you finish by signing in with Buffer.</> },
   { title: "How is this different from Buffer's MCP?", content: "Buffer checks what each network requires, like length and posting limits; Queue Pilot checks what you require. Buffer's MCP lets your AI read and write posts in Buffer. Queue Pilot works alongside it: it checks every draft against your playbook before saving it, whichever AI wrote it, adds your sources with checked quotes, and learns rules from your own edits. It is an independent open-source app, not made by Buffer." },
@@ -79,6 +80,8 @@ export default function HomePage() {
       </header>
 
       <main>
+        {/* A cancelled or failed Buffer sign-in returns here with ?error=; say what happened. */}
+        <div className={s.wrap}><SignInNotice /></div>
         <section className={s.hero} aria-labelledby="hero-title">
           <PixelField placement="hero" />
           <div className={[s.wrap, s.heroStack].join(" ")}>
@@ -142,7 +145,7 @@ export default function HomePage() {
               <h2 id="api-title">Light on Buffer&apos;s API.</h2>
               <p>Every Queue Pilot user shares one Buffer allowance, so every request counts.</p>
               <ul className={s.facts}>
-                <li><b>Drafts first.</b> It never schedules on its own. Only your Approve does.</li>
+                <li><b>Drafts first.</b> It never schedules on its own. Only your Approve schedules, or your AI when you ask it.</li>
                 <li><b>One saved copy of your queue.</b> Browsing every screen costs no requests. A refresh is one.</li>
                 <li><b>Counted before it is sent.</b> Across every server, and AI requests pause while few are left.</li>
                 <li><b>Who did what.</b> Settings lists every schedule, delete and AI app by name. An app that only names itself shows as unverified.</li>

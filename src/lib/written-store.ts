@@ -2,7 +2,7 @@
  * What Queue Pilot wrote: the saved text of each draft it put in Buffer, keyed by Buffer's post id. The read-back
  * compares it with the post's current text to find the person's fixes.
  */
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { written } from "../db/schema";
 import type { Verdict } from "./judge";
@@ -50,4 +50,10 @@ export function postgresWrittenStore(): WrittenStore {
 /** The subset of these post ids that Queue Pilot recorded writing for this person. */
 export async function wroteIds(userId: string, ...postIds: string[]): Promise<Set<string>> {
   return new Set((await postgresWrittenStore().get(userId, postIds)).map((w) => w.postId));
+}
+
+/** Whether this person has ever approved a draft Queue Pilot wrote, in the app or through a connected AI app. */
+export async function hasApprovedDraft(userId: string): Promise<boolean> {
+  const rows = await db().select({ id: written.postId }).from(written).where(and(eq(written.userId, userId), isNotNull(written.approvedAt))).limit(1);
+  return rows.length > 0;
 }

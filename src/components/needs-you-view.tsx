@@ -8,7 +8,7 @@ import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import type { TriageItem } from "@/lib/triage-model";
 import { TriageList } from "./triage-list";
 import { RollingNumber } from "./rolling-number";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import styles from "./needs-you-view.module.css";
 
 /** One thing on the home screen that needs the person, with the page that fixes it. */
@@ -17,8 +17,9 @@ export type NeedItem = { id: string; tone: "warning" | "danger" | "success"; tit
 export type ReadinessItem = { id: string; label: string; state: "done" | "todo" | "check"; detail: string; action?: string; href?: string };
 
 /** Home: what needs the user right now, and until setup is complete, the readiness checklist. */
-export function NeedsYouView({ needs, readiness, greeting, triage, live = false }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string; triage?: TriageItem[]; live?: boolean }) {
-  const open = triage ?? needs.filter((n) => n.tone !== "success");
+export function NeedsYouView({ needs, readiness, greeting, triage, live = false, start }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string; triage?: TriageItem[]; live?: boolean; /** The first-drafts panel, shown above everything until Queue Pilot has written a draft. */ start?: ReactNode }) {
+  // Empty times are room to fill, not something waiting on the person, so they are left out of the count.
+  const open = triage ? triage.filter((t) => t.kind !== "empty") : needs.filter((n) => n.tone !== "success");
   // The list reports what is left as rows are approved, so the title counts down with it.
   const [left, setLeft] = useState(open.length);
   const done = readiness.filter((r) => r.state === "done").length;
@@ -35,6 +36,8 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false 
         <h1 className={styles.title}>{settingUp ? "Set up Queue Pilot" : left === 0 ? "All caught up." : <><RollingNumber value={left} />{` thing${left === 1 ? "" : "s"} need${left === 1 ? "s" : ""} you.`}</>}</h1>
         {settingUp && <p className={styles.lede}>{done} of {readiness.length} done. Each step takes about a minute, and then your AI fills your week in Buffer.</p>}
       </header>
+
+      {start}
 
       {/* While setup is unfinished it stays at the top as one line with the next step; the full list opens from it. */}
       {triage && !ready && !settingUp && next && (

@@ -6,6 +6,7 @@ import { writeMyWeek, type WriteWeekActionResult } from "@/app/(app)/actions";
 import { Alert } from "@/registry/components/alert/alert";
 import { Button } from "@/registry/components/button/button";
 import type { WritingAvailability } from "@/lib/writing-availability";
+import { useNextSteps } from "./use-next-steps";
 import styles from "./write-week-button.module.css";
 
 /**
@@ -16,6 +17,7 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
   const [result, setResult] = useState<WriteWeekActionResult | null>(null);
   const [pending, start] = useTransition();
   const router = useRouter();
+  const suggest = useNextSteps();
 
   if (!availability.ready) return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>{availability.message} <a href="/settings?tab=ai#ai-key">AI settings</a></p>;
   if (!count) return <p>No known empty times to fill. Sync with Buffer to check the week.</p>;
@@ -24,6 +26,7 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
       <Button variant="secondary" size="lg" disabled={pending} onClick={() => example ? setResult({ ok: false, message: "This is the example account. Sign in with Buffer and Queue Pilot fills your own empty times." }) : start(async () => {
         const r = await writeMyWeek();
         setResult(r);
+        suggest(r.next);
         if (r.ok) router.refresh();
       })}>
         {pending ? "Writing drafts… this takes up to a minute" : "Fill next week"}

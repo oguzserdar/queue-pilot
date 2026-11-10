@@ -8,7 +8,7 @@ import { postgresVoiceStore } from "@/lib/voice-store";
 import { needsFromBuffer } from "@/lib/needs-model";
 import { triageFromBuffer } from "@/lib/triage-model";
 import { draftReadiness, type Readiness } from "@/lib/draft-readiness";
-import { postgresWrittenStore } from "@/lib/written-store";
+import { hasApprovedDraft, postgresWrittenStore } from "@/lib/written-store";
 import { postgresRulesStore } from "@/lib/rules-store";
 import { postgresReviewStore } from "@/lib/review-store";
 import { demoShiftDays } from "@/lib/demo-clock";
@@ -23,13 +23,17 @@ const EXAMPLE_READINESS: ReadinessItem[] = [
   { id: "rules", label: "First rule kept", state: "todo", detail: "Fix drafts as usual. A fix you repeat becomes a rule", action: "Open playbook", href: "/playbook" },
 ];
 
+import { HomeStart } from "@/components/home-start";
+import { openSlots } from "@/lib/open-slots";
+import { slotsToWrite } from "@/lib/write-week";
+import { writingAvailabilityFor } from "@/lib/writing-availability";
 export default async function Page() {
   const { user } = await getCurrentUser();
   if (!user) return <NeedsYouView needs={exampleNeeds(demoShiftDays())} readiness={EXAMPLE_READINESS} greeting="Good morning, Alex" />;
   // Signed in: only facts the Buffer snapshot and the user's saved feeds back.
   const userId = await signedInUserId();
-  const [sources, aiApps, voice] = await Promise.all([userId ? postgresSourceStore().list(userId) : [], approvedAiApps(), userId ? postgresVoiceStore().get(userId) : null]);
-  const readiness = setupReadiness(user, sources, aiApps, voice);
+  const [sources, aiApps, voice, approved] = await Promise.all([userId ? postgresSourceStore().list(userId) : [], approvedAiApps(), userId ? postgresVoiceStore().get(userId) : null, userId ? hasApprovedDraft(userId).catch(() => false) : false]);
+  const readiness = setupReadiness(user, sources, aiApps, voice, approved);
   const needs = needsFromBuffer(user.channels, user.posts, new Date(), user.timeZone);
   const now = new Date();
   // Each draft Queue Pilot wrote, with how it did against the current playbook.
@@ -55,5 +59,10 @@ export default async function Page() {
   const blocks = sourceHoldsFromCards(evidence);
   for (const [id, reason] of blocks) checks[id] = { state: "check", reason };
   const triage = triageFromBuffer({ channels: user.channels, posts: user.posts, now, timeZone: user.timeZone, checks, comments });
-  return <><NeedsYouView needs={needs} readiness={readiness} greeting={`Signed in as ${user.email}`} triage={triage} live /><SourceEvidencePanel cards={evidence} timeZone={user.timeZone} /></>;
+  // Until Queue Pilot has written a draft for the week shown, Home leads with the shortest way to the first ones.
+  const toFill = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, user.timeZone).length;
+  const start = userId && written.length === 0 && toFill > 0
+    ? <HomeStart hasSource={sources.length > 0} writing={await writingAvailabilityFor(userId)} count={toFill} />
+    : undefined;
+  return <><NeedsYouView needs={needs} readiness={readiness} greeting={`Signed in as ${user.email}`} triage={triage} live start={start} /><SourceEvidencePanel cards={evidence} timeZone={user.timeZone} /></>;
 }

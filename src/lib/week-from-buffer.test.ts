@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Channel, Post } from "./buffer/queries";
 import { openSlots } from "./open-slots";
 import { cellEntries, countOpenSlots, createdLine, slotKey, zoneLabel } from "./week-model";
-import { nextWeekRange, weekFromBuffer } from "./week-from-buffer";
+import { nextWeekRange, thisWeekRange, weekFromBuffer } from "./week-from-buffer";
 
 const channel = (over: Partial<Channel> = {}): Channel => ({
   id: "c1", name: "X", service: "twitter", timezone: "Europe/Istanbul",
@@ -20,6 +20,22 @@ describe("nextWeekRange", () => {
     expect(r.end.toISOString()).toBe("2026-11-01T21:00:00.000Z");
     const onMonday = nextWeekRange(new Date("2026-10-26T09:00:00Z"), "Europe/Istanbul");
     expect(onMonday.start.toISOString()).toBe("2026-11-01T21:00:00.000Z");
+  });
+});
+
+describe("thisWeekRange", () => {
+  it("is the Monday-to-Monday week today is in, ending where next week starts", () => {
+    // Tue 20 Oct 2026 in Istanbul: this week began Mon 19 Oct 00:00 Istanbul = Sun 18 Oct 21:00 UTC.
+    const now = new Date("2026-10-20T12:00:00Z");
+    const r = thisWeekRange(now, "Europe/Istanbul");
+    expect(r.start.toISOString()).toBe("2026-10-18T21:00:00.000Z");
+    expect(r.end.toISOString()).toBe(nextWeekRange(now, "Europe/Istanbul").start.toISOString());
+  });
+  it("on a Monday starts that same day, and on a Sunday still holds the Sunday", () => {
+    expect(thisWeekRange(new Date("2026-10-26T09:00:00Z"), "Europe/Istanbul").start.toISOString()).toBe("2026-10-25T21:00:00.000Z");
+    const sunday = new Date("2026-11-01T15:00:00Z");
+    const r = thisWeekRange(sunday, "Europe/Istanbul");
+    expect(r.start <= sunday && sunday < r.end).toBe(true);
   });
 });
 

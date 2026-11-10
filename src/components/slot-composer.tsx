@@ -5,6 +5,8 @@ import { SignInButton } from "./sign-in-button";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveSlotDraft, writeSlotDraft } from "@/app/(app)/actions";
+import type { NextStep } from "@/lib/next-step";
+import { useNextSteps } from "./use-next-steps";
 import { countFor, limitFor } from "@/lib/char-limits";
 import { placeholdersIn } from "@/lib/placeholders";
 import { ComposerLibrary } from "./composer-library";
@@ -46,7 +48,9 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
 
   const reset = () => { setText(""); setProblem(null); setConfirmDiscard(false); };
   const close = () => { reset(); onClose(); };
-  const finish = (r: { ok: true; title?: string } | { ok: false; message: string }, done: string) => {
+  const suggest = useNextSteps();
+  const finish = (r: { ok: true; title?: string; next?: NextStep[] } | { ok: false; message: string; next?: NextStep[] }, done: string) => {
+    suggest(r.next);
     if (!r.ok) return setProblem(r.message);
     reset();
     router.refresh();
@@ -100,8 +104,8 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
                   <Button variant="secondary" disabled={busy} onClick={() => { setDoing("write"); start(async () => {
                     const r = await writeSlotDraft(slot.id!);
                     // Nothing saved is a problem to read here, with the reasons, not a success that closes the dialog.
-                    if (r.ok && !r.saved.length) return setProblem(["Nothing was saved.", ...r.refused.map((x) => x.reason), r.note].filter(Boolean).join(" "));
-                    finish(r.ok ? { ok: true, title: r.flags[0] ? `Check: ${r.flags[0].rule}.` : r.note } : r, "Your AI wrote a draft.");
+                    if (r.ok && !r.saved.length) { suggest(r.next); return setProblem(["Nothing was saved.", ...r.refused.map((x) => x.reason), r.note].filter(Boolean).join(" ")); }
+                    finish(r.ok ? { ok: true, title: r.flags[0] ? `Check: ${r.flags[0].rule}.` : r.note, next: r.next } : r, "Draft written.");
                   }); }}>
                     {busy && doing === "write" ? "Writing… this takes up to a minute" : "Write it with my AI"}
                   </Button>

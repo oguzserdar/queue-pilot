@@ -71,11 +71,13 @@ export function triageFromBuffer(input: {
   for (const c of comments)
     items.push({ id: `comment-${c.id}`, kind: "comment", title: `${c.name}: "${short(c.text, 70)}"`, detail: `On "${short(c.draft, 50)}"`, href: "/reviews", action: "Suggest edits", full: `${c.name}: "${c.text}"`, why: `On "${c.draft}"` });
 
+  // Empty times are one line, never one per time: a new account can have dozens, and none of them is urgent.
+  let empty = 0;
   for (const ch of week.channels.filter((c) => !c.isDisconnected))
     for (let day = 0; day < 7; day++)
       for (const e of cellEntries(week, ch.id, day))
-        if (e.slot && !e.posts.some((p) => p.status !== "error"))
-          items.push({ id: `empty-${ch.id}-${day}-${e.time}`, kind: "empty", title: `${week.days[day]} ${e.time} · ${ch.name}`, detail: "No post yet", href: "/week?new=1", action: "Write" });
+        if (e.slot && !e.posts.some((p) => p.status !== "error")) empty++;
+  if (empty) items.push({ id: "empty-week", kind: "empty", title: `${empty} empty time${empty === 1 ? "" : "s"} next week`, detail: "No posts yet", href: "/week", action: "Open next week" });
 
   return items;
 }
