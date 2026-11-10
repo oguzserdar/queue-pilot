@@ -77,7 +77,7 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
   if (!count) return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>No empty times are left to fill {week === "this" ? "this week" : "next week"}.</p>;
   return (
     <div className={inlineActions ? styles.inline : styles.group}>
-      <Button variant="secondary" size="lg" disabled={busy} onClick={() => example ? play() : start(async () => {
+      <Button variant="secondary" size={inlineActions ? "md" : "lg"} disabled={busy} onClick={() => example ? play() : start(async () => {
         setResult(null); setRunning(true); setProgress({ total: 0, written: 0, saving: false });
         const r = await fill();
         setRunning(false);

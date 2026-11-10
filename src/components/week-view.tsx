@@ -424,7 +424,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
           {blocked.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="secondary" size="lg" className={styles.issues}>
+                <Button variant="ghost" size="md" className={styles.issues}>
                   <span className={styles.issueDot} aria-hidden="true" />
                   {`${blocked.length} post${blocked.length === 1 ? "" : "s"} would fail`}
                 </Button>
@@ -440,19 +440,19 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
               </PopoverContent>
             </Popover>
           )}
-          {channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
+          {channels.length > 0 && <Button variant="secondary" size="md" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
           {(open > 0 || (!live && samples.length > 0)) && writing && <WriteWeekButton availability={writing} count={live ? writeCount : samples.length} inlineActions example={!live} week={which} onWriting={setWritingNow} onProgress={onFill} samples={samples} />}
           {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (
               <>
-                <Button variant="ghost" size="lg" autoFocus onClick={() => setConfirmAll(false)}>Cancel</Button>
-                <Button variant="primary" size="lg" onClick={() => { setConfirmAll(false); approve(ready.map((p) => p.id)); }}>
+                <Button variant="ghost" size="md" autoFocus onClick={() => setConfirmAll(false)}>Cancel</Button>
+                <Button variant="primary" size="md" onClick={() => { setConfirmAll(false); approve(ready.map((p) => p.id)); }}>
                   {`Schedule ${ready.length} post${ready.length === 1 ? "" : "s"} in Buffer`}
                 </Button>
               </>
             ) : (
-              <Button variant="primary" size="lg" disabled={ready.length === 0 || pending} onClick={() => setConfirmAll(true)}>
+              <Button variant="primary" size="md" disabled={ready.length === 0 || pending} onClick={() => setConfirmAll(true)}>
                 {pending ? "Approving…" : ready.length > 0 ? `Approve ${ready.length} draft${ready.length === 1 ? "" : "s"}` : waiting > 0 || !approved.size ? "Nothing ready to approve" : "All approved"}
               </Button>
             )
