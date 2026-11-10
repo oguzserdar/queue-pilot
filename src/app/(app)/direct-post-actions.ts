@@ -143,6 +143,7 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
     const scheduled = await scheduleDirectPost(userId, input.key, items, sendAt, deps);
     const note = await startTimerOrNote(scheduled.postId, scheduled.revision, sendAt);
     revalidatePath("/sources");
+  revalidatePath("/settings");
     return { ok: true, results: scheduled.results, note };
   }
   const { results } = await sendDirectPost(userId, input.key, items, deps);
@@ -150,6 +151,7 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
     await recordAction(userId, "direct_post_sent", { via: "app" }, { name: results.filter((r) => r.status !== "failed").map((r) => (r.kind === "telegram" ? "Telegram" : "Discord")).join(" and ") });
   }
   revalidatePath("/sources");
+  revalidatePath("/settings");
   return { ok: true, results };
 }
 
@@ -164,6 +166,7 @@ export async function resendPostAction(postId: string, kind: PostKind): Promise<
   const r = await resendFailed(userId, postId, kind, directPostDeps(() => Promise.resolve(tokens)));
   if (!r) return { ok: false, message: "Only a message Telegram or Discord refused can be sent again. A follow-up is changed on its Buffer draft." };
   revalidatePath("/sources");
+  revalidatePath("/settings");
   return { ok: true, results: [r] };
 }
 
@@ -196,6 +199,7 @@ export async function changeScheduledPostAction(postId: string, change: ChangeSc
   const rows = await postgresDirectPostStore().reschedule(userId, postId, { sendAt, texts }, new Date());
   if (!rows.length) return { ok: false, message: "It already went out or was cancelled, so it cannot be changed." };
   revalidatePath("/sources");
+  revalidatePath("/settings");
   return { ok: true, note: await startTimerOrNote(postId, Math.max(...rows.map((r) => r.revision)), rows[0].sendAt!) };
 }
 
@@ -207,6 +211,7 @@ export async function cancelScheduledPostAction(postId: string): Promise<ActionR
   if (await followsBuffer(userId, postId)) return { ok: false, message: "This one follows a Buffer post. Turn it off on that draft in Next week." };
   const n = await postgresDirectPostStore().cancel(userId, postId, new Date());
   revalidatePath("/sources");
+  revalidatePath("/settings");
   return n ? { ok: true } : { ok: false, message: "It already went out or was cancelled." };
 }
 

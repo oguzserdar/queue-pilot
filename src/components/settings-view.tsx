@@ -1,5 +1,7 @@
 "use client";
 
+import { ChannelsPanel, EXAMPLE_CHANNELS, type ChannelsPanelProps } from "./sources-view";
+
 
 import { SignInButton } from "./sign-in-button";
 import { UrlTabs } from "./url-tabs";
@@ -49,6 +51,8 @@ export type SettingsAccount = {
   channelNames: string[];
   /** Buffer's RateLimit windows from the last sync, e.g. { policy: "250-in-24h", remaining: 212 }. */
   rateLimit?: { policy: string; remaining: number }[];
+  /** Buffer channels and the Telegram and Discord copies, for the Channels tab. */
+  channelsPanel?: ChannelsPanelProps;
 };
 
 /** Settings: the example account when signed out, the person's own tabs when signed in. */
@@ -74,6 +78,7 @@ const EXAMPLE_ACCOUNT: SettingsAccount = {
     { event: "app_connected", detail: { by: "Claude", via: "ai" }, ip: null, userAgent: null, createdAt: "2026-10-20T09:00:00.000Z" },
   ] as SecurityEvent[]).map(showSecurityEvent),
   notice: null,
+  channelsPanel: EXAMPLE_CHANNELS,
 };
 
 /** Settings: the person's own tabs when signed in, the same screen with the example account when not. */
@@ -82,7 +87,7 @@ export function SettingsView({ account, tab }: { account?: SettingsAccount; tab?
 }
 
 /** The settings tabs; the open one lives in the address (?tab=ai) so a reload or a shared link opens it again. */
-const TABS = ["account", "ai", "security"] as const;
+const TABS = ["account", "channels", "ai", "security"] as const;
 type Tab = (typeof TABS)[number];
 
 function LiveSettings({ account, tab, example = false }: { account: SettingsAccount; tab?: string; example?: boolean }) {
@@ -97,6 +102,7 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
       <UrlTabs initial={open} first="account">
         <TabsList aria-label="Settings sections">
           <TabsTrigger value="account">Account</TabsTrigger>
+          <TabsTrigger value="channels">Channels</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
@@ -160,6 +166,11 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
         <p className={styles.muted}>For writing drafts here without connecting an AI app. Calls go from Queue Pilot to your provider with your key, and you pay your provider for them.</p>
         <AiKeyCard shown={account.aiKey} allowance={account.allowance ?? null} notice={account.notice ?? null} />
       </section>
+          </div>
+        </TabsContent>
+        <TabsContent value="channels">
+          <div className={styles.tab}>
+            {account.channelsPanel ? <ChannelsPanel {...account.channelsPanel} /> : <p className={styles.muted}>Your channels could not be read just now.</p>}
           </div>
         </TabsContent>
         <TabsContent value="security">

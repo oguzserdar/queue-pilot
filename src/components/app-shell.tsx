@@ -69,7 +69,7 @@ export type ShellAccount = {
 function ChannelStatus({ channels }: { channels: NonNullable<ShellAccount>["channels"] }) {
   if (!channels.length) return <span className={styles.statusLine}>No channels in Buffer <a className={styles.statusLink} href={BUFFER_CHANNELS_URL} target="_blank" rel="noreferrer">Add</a></span>;
   const names = channels.map(c => `${c.name} (${c.service})`).join(", ");
-  return <Link href="/sources" className={styles.channelStatus} title={names} aria-label={`Buffer channels: ${names}`}>
+  return <Link href="/settings?tab=channels" className={styles.channelStatus} title={names} aria-label={`Buffer channels: ${names}`}>
     {channels.length <= 2 ? channels.map(c => <span key={c.id} className={styles.channelName}><ChannelIcon service={c.service} /><span>{c.name}</span></span>) :
       <span className={styles.channelSummary}><span className={styles.channelLogos} aria-hidden="true">{channels.slice(0, 4).map(c => <span key={c.id}><ChannelIcon service={c.service} size={14} /></span>)}</span><span>{channels.length} channels</span></span>}
   </Link>;

@@ -155,6 +155,7 @@ export async function removeSource(id: string): Promise<SourceActionResult> {
   if (typeof id !== "string" || id.length > 100) return { ok: false, message: "Unknown feed." };
   await postgresSourceStore().remove(userId, id);
   revalidatePath("/sources");
+  revalidatePath("/settings");
   return { ok: true };
 }
 
@@ -187,6 +188,7 @@ export async function checkTelegramConnect(): Promise<SourceActionResult> {
       if (chat) {
         await postgresEchoStore().setDestination(userId, { kind: "telegram", label: chat.title, target: String(chat.chatId) });
         revalidatePath("/sources");
+  revalidatePath("/settings");
         return { ok: true, title: chat.title };
       }
     }
@@ -205,6 +207,7 @@ export async function disconnectEcho(kind: "telegram" | "discord"): Promise<Sour
   if (kind !== "telegram" && kind !== "discord") return { ok: false, message: "Unknown destination." };
   await postgresEchoStore().removeDestination(userId, kind);
   revalidatePath("/sources");
+  revalidatePath("/settings");
   return { ok: true };
 }
 

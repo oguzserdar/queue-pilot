@@ -15,8 +15,6 @@ import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { Input } from "@/registry/components/input/input";
 import { addSource, checkTelegramConnect, disconnectEcho, discordInstallLink, removeSource, telegramConnectInfo } from "@/app/(app)/actions";
 import { Switch } from "@/registry/components/switch/switch";
-import { CopyButton } from "@/registry/components/copy-button/copy-button";
-import { AiMark } from "./ai-mark";
 import { channelCheck } from "@/lib/preflight";
 import { channels } from "@/lib/demo-data";
 import { ChannelIcon } from "./channel-icon";
@@ -30,14 +28,6 @@ export type LiveCopy = { kind: "telegram" | "discord"; label: string };
 export type SourcesProps =
   | { mode: "example"; connectorUrl: string }
   | { mode: "live"; channels: LiveChannel[]; connectorUrl: string; sources: LiveSource[]; copies: LiveCopy[]; discordResult: string | null; posts: DirectPostView[]; loadTargets?: () => Promise<PostTargets> };
-
-const LIVE_AI = [
-  { name: "Claude", how: "Add Queue Pilot as a custom connector in Claude", plan: "Your Claude plan" },
-  { name: "Grok", how: "Add Queue Pilot as a connector on grok.com", plan: "Your Grok plan" },
-  { name: "ChatGPT", how: "Add Queue Pilot as a connector in ChatGPT", plan: "Your ChatGPT plan" },
-];
-
-
 
 /** The example account's sources, shown on the same screen a signed-in person sees. */
 const EXAMPLE = {
@@ -56,7 +46,7 @@ export function SourcesView(props: SourcesProps) {
   return props.mode === "live" ? <LiveSources {...props} /> : <LiveSources mode="live" connectorUrl={props.connectorUrl} {...EXAMPLE} />;
 }
 
-function LiveSources({ channels, connectorUrl, sources, copies, discordResult, posts, loadTargets }: Extract<SourcesProps, { mode: "live" }>) {
+function LiveSources({ sources }: Extract<SourcesProps, { mode: "live" }>) {
   return (
     <div className={styles.page}>
       <header className={styles.head}>
@@ -64,6 +54,27 @@ function LiveSources({ channels, connectorUrl, sources, copies, discordResult, p
         <p className={styles.sub}>What Queue Pilot reads before it drafts: your newsletter, blog, YouTube or GitHub releases. Drafts start from your own work.</p>
       </header>
 
+      <section aria-labelledby="mat" className={styles.block}>
+        <div className={styles.blockHead}>
+          <h2 id="mat" className={styles.h2}>Your material</h2>
+        </div>
+        <Material sources={sources} />
+      </section>
+
+    </div>
+  );
+}
+
+/** Buffer's channels as Queue Pilot sees them, and the Telegram and Discord copies of published posts. Shown in Settings. */
+export type ChannelsPanelProps = { channels: LiveChannel[]; copies: LiveCopy[]; discordResult: string | null; posts: DirectPostView[]; loadTargets?: () => Promise<PostTargets> };
+
+/** The example account's channels and copies, for the same Settings screen a signed-in person sees. */
+export const EXAMPLE_CHANNELS: ChannelsPanelProps = { channels: EXAMPLE.channels, copies: EXAMPLE.copies, discordResult: null, posts: EXAMPLE.posts };
+
+/** The Channels tab in Settings: whether each Buffer channel can post, then the Telegram and Discord copies. */
+export function ChannelsPanel({ channels, copies, discordResult, posts, loadTargets }: ChannelsPanelProps) {
+  return (
+    <>
       <section aria-labelledby="ch" className={styles.block}>
         <div className={styles.blockHead}>
           <h2 id="ch" className={styles.h2}>Your Buffer channels</h2>
@@ -92,39 +103,15 @@ function LiveSources({ channels, connectorUrl, sources, copies, discordResult, p
         )}
       </section>
 
-      <section aria-labelledby="ai" className={styles.block}>
-        <div className={styles.blockHead}>
-          <h2 id="ai" className={styles.h2}>Your AI</h2>
-        </div>
-        <div className={styles.aiCard}>
-          <div className={styles.aiTop}>
-            <span className={styles.aiMarks} aria-hidden="true">{LIVE_AI.map((a) => <AiMark key={a.name} name={a.name} size={18} />)}</span>
-            <p className={styles.does}>Claude, ChatGPT and Grok add Queue Pilot as a connector with this URL.</p>
-          </div>
-          <div className={styles.address}>
-            <code className={styles.code}>{connectorUrl}</code>
-            <CopyButton value={connectorUrl} label="Copy URL" />
-          </div>
-          <a className={styles.link} href="/connect">Step-by-step for each app</a>
-        </div>
-      </section>
-
-      <section aria-labelledby="mat" className={styles.block}>
-        <div className={styles.blockHead}>
-          <h2 id="mat" className={styles.h2}>Your material</h2>
-        </div>
-        <Material sources={sources} />
-      </section>
-
       <section aria-labelledby="copies" className={styles.block}>
         <div className={styles.blockHead}>
           <h2 id="copies" className={styles.h2}>Telegram and Discord</h2>
         </div>
-        <p className={styles.foot}>Copy published Buffer posts: after Buffer publishes a post, Queue Pilot posts the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>
+        <p className={styles.foot}>Buffer schedules and publishes. After it publishes a post, Queue Pilot can post the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>
         <Copies copies={copies} discordResult={discordResult} />
         {copies.length > 0 && <PostComposer recent={posts} loadTargets={loadTargets} />}
       </section>
-    </div>
+    </>
   );
 }
 
