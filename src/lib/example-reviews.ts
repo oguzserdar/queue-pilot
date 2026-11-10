@@ -28,7 +28,7 @@ export function exampleReviewLinks(shift: number): (ReviewLink & { comments: Rev
     createdAt: at("2026-11-01T23:00:00Z"),
     revokedAt: null,
     expiresAt: at("2026-11-08T23:00:00Z"),
-    drafts: [shared("d1", "linkedin", "LinkedIn"), shared("d4", "twitter", "X"), shared("d5", "linkedin", "LinkedIn")],
+    drafts: [shared("d1", "linkedin", "Alex Rivera"), shared("d4", "twitter", "@alexrivera_ai"), shared("d5", "linkedin", "Alex Rivera")],
     comments: [
       pinned("c1", "d1", "Isabel", "I want to see it on real repos before I switch", "Which repos? Name one and people will trust the test more.", at("2026-11-02T01:10:00Z")),
       pinned("c2", "d4", "Sam", "That is my test for issue 42.", "Love this. Can we say when issue 42 lands?", at("2026-11-02T01:40:00Z")),
