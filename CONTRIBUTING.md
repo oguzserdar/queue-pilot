@@ -21,7 +21,7 @@ you staged, and checks the message format. Each push runs the full test suite.
 
 ## Three rules the code keeps
 
-- Queue Pilot never schedules or publishes on its own. Only your Approve schedules.
+- Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
 - Queue Pilot approves, changes or deletes only drafts it wrote.
 - Every Buffer request counts against a shared daily limit, so a change never adds requests to an action without a
   reason in the pull request.

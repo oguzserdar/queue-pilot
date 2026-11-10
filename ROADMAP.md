@@ -2,7 +2,7 @@
 
 Where Queue Pilot is heading. What has shipped is in [CHANGELOG.md](CHANGELOG.md).
 
-Queue Pilot never schedules or publishes on its own. Only your Approve schedules. It approves, changes or deletes
+Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it. It approves, changes or deletes
 only drafts it wrote, and keeps Buffer requests per person low.
 
 ## Now
