@@ -69,11 +69,17 @@ export function keepAsked(drafts: WrittenDraft[], slotIds: Set<string>): Written
   return drafts.map((d) => ({ ...d, text: d.text.trim() })).filter((d) => d.text && slotIds.has(d.slotId) && !seen.has(d.slotId) && seen.add(d.slotId));
 }
 
+/**
+ * How long one writing call may take. Ten drafts in one structured answer measured over 40 seconds on production
+ * (9 Nov), so the limit leaves room; the route allows 300 seconds in all.
+ */
+export const WRITE_MS = 150_000;
+
 export async function writeDrafts(model: LanguageModel, brief: Brief): Promise<WrittenDraft[]> {
   if (!brief.slots.length) return [];
   return withSourceContext(model, brief.material, "Select distinct factual points for these social drafts, considering the entire source, including its ending: " + JSON.stringify({ slots: brief.slots, voice: brief.voice, rules: brief.rules, retry: brief.retry }), async (sources, extracted) => {
     const { system, prompt } = buildPrompt({ ...brief, material: brief.material.map((m, i) => ({ ...m, ...sources[i], truncated: m.truncated || extracted })) });
-    const { output } = await generateText({ model, output: Output.object({ schema: DraftsSchema }), system, prompt, maxRetries: 0, abortSignal: AbortSignal.timeout(40_000) });
+    const { output } = await generateText({ model, output: Output.object({ schema: DraftsSchema }), system, prompt, maxRetries: 0, abortSignal: AbortSignal.timeout(WRITE_MS) });
     return keepAsked(output.drafts, new Set(brief.slots.map((s) => s.id)));
   });
 }

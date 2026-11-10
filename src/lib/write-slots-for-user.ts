@@ -106,7 +106,8 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
       await giveBack();
       return { ok: false, message: waitMessage(wait) };
     }
-    if (APICallError.isInstance(e) || NoObjectGeneratedError.isInstance(e)) {
+    // A model that timed out was billed for nothing usable: the action is given back like any other AI failure.
+    if (APICallError.isInstance(e) || NoObjectGeneratedError.isInstance(e) || (e instanceof Error && (e.name === "TimeoutError" || /aborted due to timeout/i.test(e.message)))) {
       await giveBack();
       return { ok: false, message: aiErrorMessage(e, provider) };
     }

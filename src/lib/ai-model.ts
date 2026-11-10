@@ -48,5 +48,7 @@ export function aiErrorMessage(e: unknown, provider: Provider): string {
   }
   if (NoObjectGeneratedError.isInstance(e)) return `${name} answered, but not in the form Queue Pilot asked for. Try again.`;
   if (e instanceof Experimental_DecisionRefusalError) return `${name} declined to judge this draft.`;
+  // An AbortSignal timeout: the model was reached but did not finish in time.
+  if (e instanceof Error && (e.name === "TimeoutError" || /aborted due to timeout/i.test(e.message))) return `${name} took too long to answer, so nothing was saved. Try again; a run usually takes under a minute.`;
   return `Could not reach ${name} just now. Try again.`;
 }

@@ -4,6 +4,8 @@ import { BufferUnreadable } from "@/components/buffer-unreadable";
 import { getCurrentUser, signedInProfile } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
+// Writing a week runs AI calls of up to a couple of minutes inside a server action on these pages.
+export const maxDuration = 300;
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const [{ user, signInOpen, unreadable }, profile] = await Promise.all([getCurrentUser(), signedInProfile()]);

@@ -52,3 +52,9 @@ it("returns the action when source-context processing cannot finish, and saves n
  expect(await writeSlotsForUser(load)).toMatchObject({ ok: false, message: expect.stringContaining("larger context window") });
  expect(m.save).not.toHaveBeenCalled(); expect(m.giveBack).toHaveBeenCalledOnce(); expect(m.settle).toHaveBeenCalledOnce();
 });
+it("gives the action back and says the AI took too long when the writing call times out", async () => {
+ // What production logged on 9 Nov: the writing call hit its time limit and the person saw a generic failure.
+ m.write.mockRejectedValue(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+ expect(await writeSlotsForUser(load)).toMatchObject({ ok: false, message: expect.stringContaining("took too long") });
+ expect(m.save).not.toHaveBeenCalled(); expect(m.giveBack).toHaveBeenCalledOnce();
+});
