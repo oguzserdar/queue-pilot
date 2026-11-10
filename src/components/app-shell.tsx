@@ -25,6 +25,7 @@ import { SparklesIcon } from "./animated-icons/sparkles";
 import { ToastStack, ToastStackProvider } from "@/registry/components/toast-stack/toast-stack";
 import { KeyboardShortcuts } from "./keyboard-shortcuts";
 import { NavItem } from "./nav-item";
+import { TabBar } from "./tab-bar";
 import styles from "./app-shell.module.css";
 import { ChannelIcon } from "./channel-icon";
 import { channels as exampleChannels } from "@/lib/example-channels";
@@ -140,6 +141,11 @@ export function AppShell({ account, signInOpen, landing = true, children }: { ac
           )}
           <main className={styles.main}><SignInNotice />{children}</main>
         </div>
+      <TabBar
+        tabs={NAV_GROUPS[0].items.map(i => ({ ...i, href: i.href === "/" ? home : i.href }))}
+        more={NAV_GROUPS.slice(1)}
+        isActive={(href) => href === home ? path === "/" || path === "/demo" : path.startsWith(href)}
+      />
     </div>
     </MaybeSync>
     {/* Confirms a change after it happens; errors stay next to the button that caused them. */}
