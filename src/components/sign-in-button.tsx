@@ -11,12 +11,14 @@ import { signInProblem, withoutSignInError, type SignInProblem } from "@/lib/sig
  * Buffer is the only way in, so there is no page in between; /sign-in remains only for an AI app connecting to
  * Queue Pilot.
  */
-export function SignInButton({ children = "Sign in with Buffer", returnTo, className, variant = "secondary", size = "sm" }: {
+export function SignInButton({ children = "Sign in with Buffer", returnTo, className, variant = "secondary", size = "sm", say }: {
   children?: ReactNode;
   returnTo?: string;
   className?: string;
   variant?: "primary" | "secondary";
   size?: "sm" | "md" | "lg";
+  /** What the home page's Pilot says while the button is hovered. */
+  say?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -39,7 +41,7 @@ export function SignInButton({ children = "Sign in with Buffer", returnTo, class
   const label = busy ? "Opening Buffer…" : children;
   return (
     <>
-      <Button variant={variant} size={size} className={className} onClick={start} disabled={busy}>{label}</Button>
+      <Button variant={variant} size={size} className={className} onClick={start} disabled={busy} data-pilot-say={say}>{label}</Button>
       {problem && <span role="alert">{problem}</span>}
     </>
   );

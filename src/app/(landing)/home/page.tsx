@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Accordion } from "@/registry/components/accordion/accordion";
 import button from "@/registry/components/button/button.module.css";
 import { PilotWeek } from "@/components/landing/pilot-week";
-import { SignInNotice } from "@/components/sign-in-button";
+import { SignInButton, SignInNotice } from "@/components/sign-in-button";
 import { PixelField } from "@/components/landing/pixel-field";
 import { AiStrip } from "@/components/landing/ai-strip";
 import { HandUnderline } from "@/components/landing/hand-underline";
@@ -24,7 +24,6 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-const SIGN_IN = "/sign-in";
 const DEMO = "/demo";
 const REPO = "https://github.com/oguzserdar/queue-pilot";
 
@@ -74,7 +73,7 @@ export default function HomePage() {
           </nav>
           <div className={s.headerActions}>
             <a className={s.quiet} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
-            <LinkButton href={SIGN_IN} kind="primary" size="md" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
+            <SignInButton returnTo="/" variant="primary" size="md" say="Sign in and I will show you your empty times.">Sign in with Buffer</SignInButton>
           </div>
         </div>
       </header>
@@ -89,7 +88,7 @@ export default function HomePage() {
               <h1 id="hero-title">Your Buffer week, written from <HandUnderline>your own work</HandUnderline>.</h1>
               <p className={s.lede}>The AI you already use drafts posts from what you publish: your newsletter, blog or videos. Queue Pilot checks each one against your rules before it reaches Buffer.</p>
               <div className={s.ctas}>
-                <LinkButton href={SIGN_IN} kind="primary" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
+                <SignInButton returnTo="/" variant="primary" size="lg" say="Sign in and I will show you your empty times.">Sign in with Buffer</SignInButton>
                 <LinkButton href={DEMO} kind="secondary" say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</LinkButton>
               </div>
             </div>
@@ -201,7 +200,7 @@ export default function HomePage() {
             <h2 id="start-title">Fill next week from what you already shipped</h2>
             <p>Sign in with Buffer, connect your AI, and ask it to fill next week from your newsletter, blog or videos.</p>
             <div className={s.ctas}>
-              <LinkButton href={SIGN_IN} kind="secondary" say="Sign in and I will show you your empty times.">Sign in with Buffer</LinkButton>
+              <SignInButton returnTo="/" variant="secondary" size="lg" say="Sign in and I will show you your empty times.">Sign in with Buffer</SignInButton>
               <a className={s.bandLink} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
             </div>
             <PilotWeek week={false} tone="light" className={s.bandPilot} />
