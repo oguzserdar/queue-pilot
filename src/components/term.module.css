@@ -1,0 +1,6 @@
+/* Reads as text with a dotted underline, the long-standing sign for "there is a definition here". */
+.trigger { all: unset; cursor: help; text-decoration: underline dotted; text-decoration-color: color-mix(in oklab, currentColor 45%, transparent); text-underline-offset: 3px; border-radius: 4px; }
+.trigger:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.panel { max-width: 280px; display: grid; gap: 4px; padding: 10px 12px; font-size: var(--text-sm); line-height: 1.45; }
+.term { margin: 0; font-weight: 600; color: var(--foreground); }
+.note { margin: 0; color: var(--text-secondary); }

@@ -10,6 +10,7 @@ import { CopyButton } from "@/registry/components/copy-button/copy-button";
 import { aiBrand } from "@/lib/ai-brand";
 import { APP_ONLY, CONNECTOR_CATALOG } from "@/lib/connector-catalog";
 import { SetupSteps, type SetupAccount } from "./setup-steps";
+import { Term } from "./term";
 import styles from "./connect-view.module.css";
 
 /** One chat app's setup, shown in its modal. Coding agents set themselves up from the copied prompt instead. */
@@ -121,7 +122,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
 
       <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
       <div className={styles.address}>
-        <span className={styles.label}>Connector URL</span>
+        <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
         <code className={styles.code}>{connectorUrl}</code>
         <CopyButton value={connectorUrl} label="Copy" />
       </div>
@@ -145,7 +146,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
 
       <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
       <div className={styles.address}>
-        <span className={styles.label}>Connector URL</span>
+        <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
         <code className={styles.code}>{connectorUrl}</code>
         <CopyButton value={connectorUrl} label="Copy" />
       </div>
@@ -197,7 +198,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
             </div>}
             {current.image && <img className={styles.shot} src={current.image} alt={`Where Queue Pilot is added in ${current.name}`} width={1200} height={750} />}
             <div className={styles.address}>
-              <span className={styles.label}>Connector URL</span>
+              <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
               <code className={styles.code}>{connectorUrl}</code>
               <CopyButton value={connectorUrl} label="Copy" />
             </div>
