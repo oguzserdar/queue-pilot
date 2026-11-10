@@ -161,3 +161,13 @@
 /* A posting time that has gone by: shown, never offered. */
 .passed { box-sizing: border-box; display: flex; justify-content: space-between; gap: 6px; border: 1px solid transparent; border-radius: 8px; color: var(--text-muted); font-size: var(--text-xs); padding: 8px; opacity: 0.55; }
 .passed > span { white-space: nowrap; }
+/* A time a draft is being written into. Dots fill it from the left when its turn comes; the time sits on its own
+   solid plate so the dots never cross the digits. */
+.writing { position: relative; overflow: hidden; box-sizing: border-box; display: flex; justify-content: space-between; gap: 6px; border: 1px dashed var(--qp-crimson); border-radius: 8px; font-size: var(--text-xs); padding: 8px; }
+.writing::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle, var(--qp-crimson) 1px, transparent 1.5px); background-size: 6px 6px; opacity: 0.34; clip-path: inset(0 100% 0 0); animation: writingFill 3s var(--ease-standard) calc(4s + var(--turn) * 2.6s) forwards, writingDrift 0.9s steps(6) infinite; }
+.writing > span { position: relative; white-space: nowrap; background: var(--surface); color: var(--foreground); font-weight: 600; padding: 0 5px; margin: 0 -5px; border-radius: 5px; }
+.writing > span:last-child { color: var(--qp-crimson); font-weight: 500; opacity: 0; animation: writingWord 300ms linear calc(4s + var(--turn) * 2.6s) forwards; }
+@keyframes writingFill { to { clip-path: inset(0 0 0 0); } }
+@keyframes writingDrift { to { background-position: 6px 0; } }
+@keyframes writingWord { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .writing::before { animation: none; clip-path: none; } .writing > span:last-child { animation: none; opacity: 1; } }

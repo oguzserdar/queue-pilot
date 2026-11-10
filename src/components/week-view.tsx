@@ -112,6 +112,20 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
   const overdue = new Set(drafts.filter((p) => passed(p.channel, p.day, p.time)).map((p) => p.id));
   const passedEmpty = channels.reduce((n, c) => n + Object.entries(slots[c.id] ?? {}).reduce((m, [day, times]) => m + times.filter((t) => passed(c.id, Number(day), t) && !posts.some((p) => p.channel === c.id && p.day === Number(day) && p.time === t && p.status !== "error")).length, 0), 0);
   const open = countOpenSlots({ ...week, posts }) - passedEmpty;
+  // While a fill runs, the times it writes into show it. Their order is the order the drafts are written in: one
+  // per day in turn, as slotsToWrite picks them (the example has no slot ids, so it takes its open times the same way).
+  const [writingNow, setWritingNow] = useState(false);
+  const writingTurns = new Map<string, number>();
+  if (writingNow) {
+    const rows = Math.max(0, ...channels.flatMap((c) => Object.values(slots[c.id] ?? {}).map((times) => times.length)));
+    const free = (c: string, day: number, t: string) => !passed(c, day, t) && !posts.some((p) => p.channel === c && p.day === day && p.time === t && p.status !== "error");
+    for (let row = 0; row < rows && writingTurns.size < writeCount; row++)
+      for (let day = 0; day < 7 && writingTurns.size < writeCount; day++)
+        for (const c of channels) {
+          const t = (slots[c.id]?.[day] ?? []).filter((x) => free(c.id, day, x))[row];
+          if (t && writingTurns.size < writeCount) writingTurns.set(slotKey(c.id, day, t), writingTurns.size);
+        }
+  }
   const needsCheck = (id: string) => live && (readiness[id]?.state === "check" || readiness[id]?.state === "breaks");
   const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !needsCheck(p.id) && !approved.has(p.id) && !overdue.has(p.id));
   const blocked = drafts.filter((p) => worstTone(p) === "danger");
@@ -174,6 +188,8 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
     cellEntries({ ...week, posts }, channelId, day).flatMap(({ time: t, posts: here }) => {
       if (!here.length) {
         const name = `${channels.find((c) => c.id === channelId)?.name ?? ""}, ${FULL_DAY[day]} at ${t}`;
+        const turn = writingNow ? writingTurns.get(slotKey(channelId, day, t)) : undefined;
+        if (turn !== undefined) return [<div key={t} className={styles.writing} style={{ "--turn": turn } as React.CSSProperties} aria-label={`${name}: a draft is being written`}><span>{t}</span><span aria-hidden="true">Writing</span></div>];
         if (passed(channelId, day, t)) return [<div key={t} className={styles.passed} aria-label={`${name}: this time has passed`}><span>{t}</span><span aria-hidden="true">Passed</span></div>];
         return [
           <button key={t} type="button" className={styles.empty} aria-label={`Write a post for ${name}`} onClick={() => setComposing({ id: week.slotIds?.[slotKey(channelId, day, t)], name, service: channels.find((c) => c.id === channelId)?.service })}>
@@ -415,7 +431,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
             </Popover>
           )}
           {channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
-          {open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions example={!live} week={which} />}
+          {open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions example={!live} week={which} onWriting={setWritingNow} />}
           {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (
