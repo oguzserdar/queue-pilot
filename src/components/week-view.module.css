@@ -158,3 +158,6 @@
 .footState { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
 .footState svg { color: var(--success, currentColor); flex: none; }
 .footer .actions { margin-left: auto; align-items: center; }
+/* A posting time that has gone by: shown, never offered. */
+.passed { box-sizing: border-box; display: flex; justify-content: space-between; gap: 6px; border: 1px solid transparent; border-radius: 8px; color: var(--text-muted); font-size: var(--text-xs); padding: 8px; opacity: 0.55; }
+.passed > span { white-space: nowrap; }

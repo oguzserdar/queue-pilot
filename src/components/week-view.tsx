@@ -54,7 +54,7 @@ const RESULT_TONE = { pass: "success", fail: "danger", unsure: "warning" } as co
  * `live` is true for a signed-in user: Approve schedules the drafts in Buffer. Example data only marks them on screen.
  * `verdicts` are the playbook verdicts each draft was saved with, by post id; null means it was saved unchecked.
  */
-export function WeekView({ week, which = "next", live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {}, showDraft }: { week: WeekModel; /** Which week is drawn: the one today is in, or the following one (the default). */ which?: "this" | "next"; /** Draw only this draft's window, inline in the page, as the homepage shows it. */ showDraft?: string; approvals?: Record<string, string>; notesPreview?: Record<string, NotesPreview>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
+export function WeekView({ week, which = "next", nowIso, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {}, showDraft }: { week: WeekModel; /** The moment the page was built (ISO), from the server. Times before it have passed: no draft can be written into them and a draft sitting on one is overdue. Absent in the example. */ nowIso?: string; /** Which week is drawn: the one today is in, or the following one (the default). */ which?: "this" | "next"; /** Draw only this draft's window, inline in the page, as the homepage shows it. */ showDraft?: string; approvals?: Record<string, string>; notesPreview?: Record<string, NotesPreview>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
   const { label: WEEK_LABEL, days: DAYS, channels, slots } = week;
   const NAME = which === "this" ? "This week" : "Next week";
   /** A day gets a full column when any channel has a slot or a post on it. */
@@ -101,14 +101,24 @@ export function WeekView({ week, which = "next", live = false, verdicts = live ?
   const [newPostOpen, setNewPostOpen] = useState(false);
   const opener = useRef<HTMLButtonElement | null>(null);
   const current = posts.find((p) => p.id === selected);
-  const open = countOpenSlots({ ...week, posts });
+  // A posting time that has passed. Only the week today is in has any; the server's clock decides, so the page and
+  // the browser draw the same thing.
+  const builtAt = nowIso ? Date.parse(nowIso) : null;
+  const passed = (channelId: string, day: number, t: string) => {
+    const id = week.slotIds?.[slotKey(channelId, day, t)];
+    return builtAt !== null && !!id && Date.parse(id.slice(id.lastIndexOf("@") + 1)) <= builtAt;
+  };
+  // A draft whose time passed is never posted by Buffer and cannot be approved; it is named apart from the rest.
+  const overdue = new Set(drafts.filter((p) => passed(p.channel, p.day, p.time)).map((p) => p.id));
+  const passedEmpty = channels.reduce((n, c) => n + Object.entries(slots[c.id] ?? {}).reduce((m, [day, times]) => m + times.filter((t) => passed(c.id, Number(day), t) && !posts.some((p) => p.channel === c.id && p.day === Number(day) && p.time === t && p.status !== "error")).length, 0), 0);
+  const open = countOpenSlots({ ...week, posts }) - passedEmpty;
   const needsCheck = (id: string) => live && (readiness[id]?.state === "check" || readiness[id]?.state === "breaks");
-  const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !needsCheck(p.id) && !approved.has(p.id));
+  const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !needsCheck(p.id) && !approved.has(p.id) && !overdue.has(p.id));
   const blocked = drafts.filter((p) => worstTone(p) === "danger");
   // The title counts what Approve can act on; a post that would fail is named apart, so the two numbers always agree.
   const held = blocked.filter((p) => p.ours !== false && !approved.has(p.id)).length;
-  const waiting = drafts.filter((p) => p.ours !== false && !approved.has(p.id)).length;
-  const toApprove = waiting - drafts.filter((p) => p.ours !== false && !approved.has(p.id) && worstTone(p) === "danger").length;
+  const waiting = drafts.filter((p) => p.ours !== false && !approved.has(p.id) && !overdue.has(p.id)).length;
+  const toApprove = waiting - drafts.filter((p) => p.ours !== false && !approved.has(p.id) && !overdue.has(p.id) && worstTone(p) === "danger").length;
 
 
   // The empty slot whose composer is open.
@@ -164,6 +174,7 @@ export function WeekView({ week, which = "next", live = false, verdicts = live ?
     cellEntries({ ...week, posts }, channelId, day).flatMap(({ time: t, posts: here }) => {
       if (!here.length) {
         const name = `${channels.find((c) => c.id === channelId)?.name ?? ""}, ${FULL_DAY[day]} at ${t}`;
+        if (passed(channelId, day, t)) return [<div key={t} className={styles.passed} aria-label={`${name}: this time has passed`}><span>{t}</span><span aria-hidden="true">Passed</span></div>];
         return [
           <button key={t} type="button" className={styles.empty} aria-label={`Write a post for ${name}`} onClick={() => setComposing({ id: week.slotIds?.[slotKey(channelId, day, t)], name, service: channels.find((c) => c.id === channelId)?.service })}>
             <span>{t}</span>
@@ -187,6 +198,7 @@ export function WeekView({ week, which = "next", live = false, verdicts = live ?
           <button key={p.id} type="button" onClick={(e) => { opener.current = e.currentTarget; setSelected(p.id); setEditing(null); setConfirmDelete(false); setNote(null); setDialogOpen(true); }} className={styles.draft} data-tone={tone} data-selected={dialogOpen && selected === p.id} data-approved={isOn}>
             <span className={styles.time}>{t}<span className={styles.state}><StateMark state={postState(p, isOn)} word why={p.checks?.find((c) => c.tone === "danger")?.label} /></span></span>
             <span className={styles.text}>{p.text}</span>
+            {overdue.has(p.id) && <span className={styles.reason}>Overdue: its time passed, so Buffer will not post it. Pick a new time in Buffer.</span>}
             <span className={styles.src} title={citation ? `${citation.title} · ${citation.needsCheck ? "Evidence needs review" : "Quote matches saved source"}` : p.source?.label ?? "Draft saved in Buffer"}>{citation ? citation.title : p.source ? SOURCE_SHORT[p.source.kind] : "Buffer draft"}</span>
           </button>
         );
@@ -361,6 +373,7 @@ export function WeekView({ week, which = "next", live = false, verdicts = live ?
               ? `${NAME}: ${[
                   toApprove && `${toApprove} draft${toApprove === 1 ? "" : "s"} to approve`,
                   held && `${held} held back`,
+                  overdue.size && `${overdue.size} overdue`,
                   drafts.length - waiting && `${drafts.length - waiting} approved`,
                   open ? `${open} empty slot${open === 1 ? "" : "s"}` : "every slot filled",
                 ].filter(Boolean).join(", ")}`
@@ -372,7 +385,7 @@ export function WeekView({ week, which = "next", live = false, verdicts = live ?
               ? "Nothing to fill yet."
               : drafts.length > 0
               ? `${live ? (waiting ? `${waiting} waiting for your approval` : "No drafts from Queue Pilot are waiting for approval") : "Written from your newsletter, each one checked against your playbook"}${blocked.length ? `. ${blocked.length} can't go out until ${blocked.length === 1 ? "its" : "their"} problem is fixed` : ""}.`
-              : writing?.ready ? "Fill next week writes a draft for each empty time. Or connect your AI and ask it to fill your week." : "Connect your AI and ask it to fill your week."}
+              : writing?.ready ? `Fill ${which} week writes drafts into your empty Buffer posting times. Or connect your AI and ask it to fill your week.` : "Connect your AI and ask it to fill your week."}
           </p>
           {live && (
             <p className={styles.sub}>
@@ -402,7 +415,7 @@ export function WeekView({ week, which = "next", live = false, verdicts = live ?
             </Popover>
           )}
           {channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
-          {open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions example={!live} />}
+          {open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions example={!live} week={which} />}
           {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (

@@ -27,6 +27,23 @@ describe("slotsToWrite", () => {
     expect(slotsToWrite(many, now, "UTC")).toHaveLength(MAX_SLOTS);
   });
 
+  it("spreads a full week one draft per day in turn, so no day gets a second before every day has one", () => {
+    // Four times a day, Monday 2 to Sunday 8 November: 28 empty times, 10 to write.
+    const week = Array.from({ length: 7 }, (_, d) => ["09", "11", "13", "15"].map((h) => slot(`d${d}-${h}`, `2026-11-0${2 + d}T${h}:00:00Z`))).flat();
+    const got = slotsToWrite(week, now, "UTC");
+    expect(got).toHaveLength(MAX_SLOTS);
+    const perDay = Array.from({ length: 7 }, (_, d) => got.filter((s) => s.id.startsWith(`d${d}-`)).length);
+    expect(perDay).toEqual([2, 2, 2, 1, 1, 1, 1]);
+    // Each day's drafts take its earliest times, and the list comes back soonest first.
+    expect(got.slice(0, 3).map((s) => s.id)).toEqual(["d0-09", "d0-11", "d1-09"]);
+  });
+
+  it("fills the week today is in from the times still ahead, never a time that has passed", () => {
+    // Monday 26 October 08:00 UTC: 07:00 today is gone, 09:00 today and Friday are ahead, next Monday is another week.
+    const open = [slot("gone", "2026-10-26T07:00:00Z"), slot("today", "2026-10-26T09:00:00Z"), slot("fri", "2026-10-30T09:00:00Z"), slot("next", "2026-11-02T09:00:00Z")];
+    expect(slotsToWrite(open, now, "UTC", undefined, "this").map((s) => s.id)).toEqual(["today", "fri"]);
+  });
+
   it("honors an exact future slot beyond seven days without substituting another", async () => {
     const chosen = slot("chosen", "2026-11-08T09:00:00Z");
     const targets = slotsToWrite([chosen, slot("earlier", "2026-11-02T09:00:00Z")], now, "UTC", "chosen");

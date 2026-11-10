@@ -3,7 +3,7 @@
  * who draft in the web app instead of through the connector. The answer is only a proposal: every draft still goes
  * through saveDraftsForUser, where the playbook is judged.
  */
-import { generateText, Output, type LanguageModel } from "ai";
+import { generateText, Output, streamText, type LanguageModel } from "ai";
 import * as z from "zod";
 import { evidenceInput, type EvidenceInput } from "./source-evidence";
 import { withSourceContext } from "./source-context";
@@ -81,5 +81,46 @@ export async function writeDrafts(model: LanguageModel, brief: Brief): Promise<W
     const { system, prompt } = buildPrompt({ ...brief, material: brief.material.map((m, i) => ({ ...m, ...sources[i], truncated: m.truncated || extracted })) });
     const { output } = await generateText({ model, output: Output.object({ schema: DraftsSchema }), system, prompt, maxRetries: 0, abortSignal: AbortSignal.timeout(WRITE_MS) });
     return keepAsked(output.drafts, new Set(brief.slots.map((s) => s.id)));
+  });
+}
+
+const DraftElement = DraftsSchema.shape.drafts.element;
+
+/**
+ * Writes the same drafts as {@link writeDrafts}, but hands each one over the moment the model finishes it.
+ *
+ * One model call writes every draft, so they do not repeat each other; the answer is read as a list whose items
+ * arrive one at a time. `onDraft` is awaited for each kept draft, in the order the model wrote them, so the caller can
+ * save it before the next arrives. A draft for a time that was not asked for, a second draft for the same time or an
+ * empty one is dropped, as in writeDrafts.
+ *
+ * @param model - The person's model, or the built-in one
+ * @param brief - The times to fill, the material, the voice and the rules
+ * @param onDraft - Called once per kept draft as it completes
+ * @returns Every kept draft, once the model has finished
+ * @throws What the model call threw (a timeout, a refusal, an answer that does not fit the schema). Drafts already
+ *   handed to `onDraft` stay handed over; the caller decides what to do with them.
+ */
+export async function streamDrafts(model: LanguageModel, brief: Brief, onDraft: (draft: WrittenDraft) => void | Promise<void>): Promise<WrittenDraft[]> {
+  if (!brief.slots.length) return [];
+  const asked = new Set(brief.slots.map((s) => s.id));
+  return withSourceContext(model, brief.material, "Select distinct factual points for these social drafts, considering the entire source, including its ending: " + JSON.stringify({ slots: brief.slots, voice: brief.voice, rules: brief.rules, retry: brief.retry }), async (sources, extracted) => {
+    const { system, prompt } = buildPrompt({ ...brief, material: brief.material.map((m, i) => ({ ...m, ...sources[i], truncated: m.truncated || extracted })) });
+    // The stream reports a failed call through onError and then simply ends, so the error is kept and thrown here.
+    let failed: unknown;
+    const result = streamText({ model, output: Output.array({ element: DraftElement }), system, prompt, maxRetries: 0, abortSignal: AbortSignal.timeout(WRITE_MS), onError: ({ error }) => { failed = error; } });
+    const kept: WrittenDraft[] = [];
+    const seen = new Set<string>();
+    for await (const element of result.elementStream) {
+      const draft = { ...element, text: element.text.trim() };
+      if (!draft.text || !asked.has(draft.slotId) || seen.has(draft.slotId)) continue;
+      seen.add(draft.slotId);
+      kept.push(draft);
+      await onDraft(draft);
+    }
+    if (failed) throw failed;
+    // An item that does not fit the schema is skipped without a word while streaming; the whole answer is checked here.
+    await result.output;
+    return kept;
   });
 }

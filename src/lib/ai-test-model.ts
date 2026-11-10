@@ -4,6 +4,7 @@
  * the given answers, so tests run the SDK's real experimental_decide and generateText without a provider.
  */
 import type { Experimental_DecisionModelV4, Experimental_DecisionModelV4Answer, Experimental_DecisionModelV4CallOptions } from "@ai-sdk/provider";
+import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 
 const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } };
@@ -36,4 +37,23 @@ export function deciding(answer: (questionIds: string[], state: string) => Recor
     },
   };
   return { model, calls };
+}
+
+/**
+ * A mock language model that streams one text answer in the given pieces, so tests run the SDK's real streamText.
+ * Pass an Error as a piece to make the stream fail at that point.
+ */
+export function streaming(...pieces: (string | Error)[]): MockLanguageModelV4 {
+  return new MockLanguageModelV4({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: "text-start" as const, id: "t" },
+          ...pieces.map((piece) => (piece instanceof Error ? { type: "error" as const, error: piece } : { type: "text-delta" as const, id: "t", delta: piece })),
+          { type: "text-end" as const, id: "t" },
+          { type: "finish" as const, finishReason: { unified: "stop" as const, raw: "stop" }, usage },
+        ],
+      }),
+    }),
+  });
 }

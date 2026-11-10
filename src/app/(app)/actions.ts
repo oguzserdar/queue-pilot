@@ -523,8 +523,8 @@ export async function setAiModel(model: string): Promise<SourceActionResult> {
 export type { WriteWeekActionResult } from "@/lib/write-slots-for-user";
 
 /** The "Write drafts with my AI" button: the coming week's empty slots, written by the person's AI, saved as Buffer drafts. */
-export async function writeMyWeek(): Promise<WriteWeekActionResult & { next?: NextStep[] }> {
-  return writeSlots();
+export async function writeMyWeek(week: "this" | "next" = "next"): Promise<WriteWeekActionResult & { next?: NextStep[] }> {
+  return writeSlots(undefined, week === "this" ? "this" : "next");
 }
 
 /** "Write it with my AI" on an empty slot: the same run as writeMyWeek, for that one slot. */
@@ -559,9 +559,9 @@ export async function saveSlotDraft(slotId: string, text: string): Promise<Sourc
 }
 
 /** Writes and saves drafts for the coming week's empty slots, or only for one slot. */
-async function writeSlots(only?: string): Promise<WriteWeekActionResult & { next?: NextStep[] }> {
+async function writeSlots(only?: string, week: "this" | "next" = "next"): Promise<WriteWeekActionResult & { next?: NextStep[] }> {
   { const l = await overLimit("ai"); if (l) return tooMany(l); }
-  const result = await writeSlotsForUser(bufferForWriting, only);
+  const result = await writeSlotsForUser(bufferForWriting, only, week);
   revalidatePath("/", "layout");
   return { ...result, next: await suggestionsFor(result.ok ? { saved: result.saved.length } : { saved: 0, reason: result.reason }) };
 }

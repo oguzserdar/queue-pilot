@@ -53,7 +53,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ w
   const blocks = sourceHoldsFromCards(evidence);
   for (const [id, reason] of blocks) readiness[id] = { state: "check", reason };
   const writing = userId ? await writingAvailabilityFor(userId) : undefined;
-  // Fill next week always writes next week, so it is offered on that week only.
-  const count = which === "next" ? slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, timeZone).length : 0;
-  return <WeekView which={which} week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={which === "next" ? writing : undefined} writeCount={count} approvals={approvals} />;
+  // How many drafts one press would write into the week shown: its empty times still ahead, at most ten.
+  const count = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, timeZone, undefined, which).length;
+  return <WeekView which={which} nowIso={now.toISOString()} week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} approvals={approvals} />;
 }

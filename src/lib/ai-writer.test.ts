@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildPrompt, fenced, keepAsked, writeDrafts, type Brief } from "./ai-writer";
-import { answering, sentText } from "./ai-test-model";
+import { buildPrompt, fenced, keepAsked, streamDrafts, writeDrafts, type Brief, type WrittenDraft } from "./ai-writer";
+import { answering, sentText, streaming } from "./ai-test-model";
 import { providerOf } from "./ai-key-store";
 import type { Rule } from "./rules";
 
@@ -95,4 +95,48 @@ it("supplies real timestamp segments and excerpt limits to the writer", () => {
   const prompt = buildPrompt({ ...brief, material: [{ ...brief.material[0], truncated: true, segments: [{ text: "White bean soup.", seconds: 872 }] }] }).prompt;
   expect(prompt).toContain("Source excerpt only");
   expect(prompt).toContain('"seconds":872');
+});
+
+describe("streamDrafts", () => {
+  const second = "c1@2026-10-28T12:00:00.000Z";
+  const two: Brief = { ...brief, slots: [...brief.slots, { id: second, local: "Wed 28 Oct 12:00", channel: "Mark Evans", service: "linkedin" }] };
+  const item = (id: string, text: string) => JSON.stringify({ slotId: id, text, sourceKey: "s1:41" });
+
+  it("hands over each draft as soon as the model has finished writing it, before the next one exists", async () => {
+    const seenAt: string[] = [];
+    // The second draft is still half written when the first is complete.
+    const model = streaming(`{"elements":[${item(slotId, "Soup night.")},`, `{"slotId":"${second}","text":"Stock, `, `not broth.","sourceKey":"s1:41"}]}`);
+    const got: WrittenDraft[] = [];
+    const all = await streamDrafts(model, two, (d) => { got.push(d); seenAt.push(`${got.length}:${d.slotId}`); });
+    expect(seenAt).toEqual([`1:${slotId}`, `2:${second}`]);
+    expect(all.map((d) => d.text)).toEqual(["Soup night.", "Stock, not broth."]);
+  });
+
+  it("drops a draft for a time that was not asked for, a second draft for one time and an empty one", async () => {
+    const model = streaming(`{"elements":[${item(slotId, " Soup night. ")},${item(slotId, "Again.")},${item("other@2026-01-01T00:00:00.000Z", "Elsewhere.")},${item(second, "   ")}]}`);
+    const got: WrittenDraft[] = [];
+    expect(await streamDrafts(model, two, (d) => { got.push(d); })).toEqual([{ slotId, text: "Soup night.", sourceKey: "s1:41" }]);
+    expect(got).toHaveLength(1);
+  });
+
+  it("waits for each draft to be saved before taking the next", async () => {
+    const order: string[] = [];
+    const model = streaming(`{"elements":[${item(slotId, "One.")},${item(second, "Two.")}]}`);
+    await streamDrafts(model, two, async (d) => { order.push(`start ${d.text}`); await new Promise((r) => setTimeout(r, 5)); order.push(`saved ${d.text}`); });
+    expect(order).toEqual(["start One.", "saved One.", "start Two.", "saved Two."]);
+  });
+
+  it("throws when the model fails partway, and never hands over a draft that was not complete", async () => {
+    const got: WrittenDraft[] = [];
+    const model = streaming(`{"elements":[${item(slotId, "Soup night.")},{"slotId":"${second}","text":"Half a sen`, new Error("connection lost"));
+    await expect(streamDrafts(model, two, (d) => { got.push(d); })).rejects.toThrow("connection lost");
+    // The library may or may not deliver the finished first draft before the failure; the unfinished one never arrives.
+    expect(got.every((d) => d.slotId === slotId && d.text === "Soup night.")).toBe(true);
+  });
+
+  it("writes nothing and calls no model when there is no time to fill", async () => {
+    const model = streaming("{}");
+    expect(await streamDrafts(model, { ...brief, slots: [] }, () => {})).toEqual([]);
+    expect(model.doStreamCalls).toHaveLength(0);
+  });
 });

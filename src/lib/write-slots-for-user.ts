@@ -22,7 +22,13 @@ export type WriteWeekActionResult =
   | { ok: true; saved: { local: string; channel: string }[]; refused: { slotId: string; reason: string }[]; retried: number; flags: { where: string; rule: string; verdict: "fail" | "unsure"; reason: string }[]; note?: string }
   | { ok: false; message: string; /** Set when the run stopped for a reason the person can act on. */ reason?: "no-material" | "ai-used-up" };
 
-export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | null>, only?: string): Promise<WriteWeekActionResult> {
+/**
+ * Writes and saves drafts for one week's empty times, or for one exact time.
+ *
+ * @param only - One slot id, to write just that time
+ * @param week - Which week to fill when `only` is not given: the following one (default) or the one today is in
+ */
+export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | null>, only?: string, week: "this" | "next" = "next"): Promise<WriteWeekActionResult> {
   let provider: Provider = "anthropic";
   let giveBack = async () => {};
   let settle = async () => {};
@@ -32,9 +38,9 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
     // Checked before an AI action is taken, so a click with nothing to write costs the person nothing.
     const open = openSlots(b.channels, b.posts, b.range).slots;
     const now = new Date();
-    const slots = slotsToWrite(open, now, b.timeZone, only);
+    const slots = slotsToWrite(open, now, b.timeZone, only, week);
     if (only && !slots.length) return { ok: false, message: "That time is no longer empty. Refresh the week." };
-    if (!slots.length) return { ok: false, message: "No known empty times next week. Sync with Buffer and check the week." };
+    if (!slots.length) return { ok: false, message: `No empty times are left ${week === "this" ? "this week" : "next week"}. Sync with Buffer and check the week.` };
     const ai = await aiFor(b.userId);
     if (ai) { giveBack = ai.giveBack; settle = ai.settle; }
     if (!ai) return { ok: false, message: "AI writing is unavailable just now. Check built-in AI or your own key in Settings." };
