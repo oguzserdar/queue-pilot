@@ -3,11 +3,10 @@
 .help { font-size: var(--text-sm); color: var(--text-muted); }
 .inline > .help { order: 2; flex-basis: 100%; }
 .inline > .result { order: 3; flex-basis: 100%; min-width: 0; }
-/* What the run is doing now. A light passes over the words; the words carry the meaning. */
-.step { font-size: var(--text-sm); font-weight: 500; background: linear-gradient(90deg, var(--text-muted) 0 40%, var(--foreground) 50%, var(--text-muted) 60% 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: stepSweep 2.2s linear infinite; }
+/* What the run is doing now, in plain words. The motion lives in the button, so this line stays still. */
+.step { font-size: var(--text-sm); color: var(--text-muted); }
 .inline > .step { order: 2; flex-basis: 100%; }
 @keyframes stepSweep { from { background-position: 125% 0; } to { background-position: -125% 0; } }
-@media (prefers-reduced-motion: reduce) { .step { animation: none; background: none; color: var(--foreground); } }
 /* The button while a run is on: four pixels that light in turn, the count with a light passing over it, and a
    line along the bottom that grows with each finished draft. */
 .busy { position: relative; display: inline-flex; align-items: center; gap: 10px; padding-bottom: 5px; margin-bottom: -5px; }
