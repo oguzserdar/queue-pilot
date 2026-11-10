@@ -65,11 +65,12 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
   /** The example plays a run on its own empty times and writes nothing. */
   const play = () => {
     setResult(null); setRunning(true);
-    const gap = 1300;
+    // Paced like a real run of the same size: a few seconds of reading, about three seconds a draft, then the save.
+    const read = 3500, gap = 3200, save = 3000;
     report({ type: "start", slotIds: samples.map((x) => x.slotId) });
-    samples.forEach((x, i) => setTimeout(() => report({ type: "draft", slotId: x.slotId, text: x.text ?? SAMPLE }), 900 + gap * (i + 1)));
-    setTimeout(() => report({ type: "saving" }), 900 + gap * samples.length + 700);
-    setTimeout(() => { setRunning(false); setProgress({ total: 0, written: 0, saving: false }); setResult({ ok: false, message: "That is how a week fills: each draft lands in its time as it is written, then all of them are saved to Buffer as drafts in one go. This is the example account, so nothing was written. Sign in with Buffer and Queue Pilot fills your own empty times." }); }, 900 + gap * samples.length + 2600);
+    samples.forEach((x, i) => setTimeout(() => report({ type: "draft", slotId: x.slotId, text: x.text ?? SAMPLE }), read + gap * i));
+    setTimeout(() => report({ type: "saving" }), read + gap * (samples.length - 1) + 1200);
+    setTimeout(() => { setRunning(false); setProgress({ total: 0, written: 0, saving: false }); setResult({ ok: false, message: "That is how a week fills: each draft lands in its time as it is written, then all of them are saved to Buffer as drafts in one go. This is the example account, so nothing was written. Sign in with Buffer and Queue Pilot fills your own empty times." }); }, read + gap * (samples.length - 1) + 1200 + save);
   };
 
   if (!availability.ready) return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>{availability.message} <a href="/settings?tab=ai#ai-key">AI settings</a></p>;
