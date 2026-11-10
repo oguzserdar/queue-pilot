@@ -14,7 +14,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Paste a site, a newsletter, a video channel or a releases page as a source, and Queue Pilot finds its feed and says what it read.
 - A new account sees a start box on Home: add a feed, then fill next week, without leaving the page.
 - A short hint after a run when something is missing: no feed, no voice, or no AI app connected. Each shows once.
-- Connect opens with Finish setting up: pick your AI, copy `npx skills add https://getqueuepilot.com` for a terminal app, check the connection, then copy a first task that saves nothing.
+- Connect gives one message for each AI app. Pasted into a chat app, it walks you through adding Queue Pilot one step at a time, then shows one preview post and saves nothing. It carries the fill-week instructions, so an app that cannot install skills still writes the Queue Pilot way.
 - The example account replays a fill on its own week, writing nothing.
 
 ### Changed
