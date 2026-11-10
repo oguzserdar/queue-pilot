@@ -37,8 +37,7 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
   };
   const step = progress.saving ? "Checking each one against your playbook and saving to Buffer…"
     : !progress.total ? "Reading what you published…"
-    : progress.written < progress.total ? `Writing draft ${progress.written + 1} of ${progress.total} in your voice…`
-    : "Checking each one against your playbook…";
+    : `Writing draft ${Math.min(progress.written + 1, progress.total)} of ${progress.total} in your voice…`;
 
   /** Reads the run's report line by line; the last line is the result. */
   const fill = async (): Promise<WriteWeekActionResult> => {
@@ -88,7 +87,7 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
         {busy ? (
           <span className={styles.busy}>
             <span className={styles.pixels} aria-hidden="true"><i /><i /><i /><i /></span>
-            <span className={styles.shimmer}>{progress.total ? `Writing ${Math.min(progress.written + (progress.saving ? 0 : 1), progress.total)} of ${progress.total}` : "Writing"}</span>
+            <span className={styles.shimmer}>{progress.saving ? "Saving to Buffer" : progress.total ? `Writing ${Math.min(progress.written + 1, progress.total)} of ${progress.total}` : "Reading"}</span>
             <span className={styles.bar} aria-hidden="true" style={{ transform: `scaleX(${progress.total ? progress.written / progress.total : 0.04})` }} />
           </span>
         ) : week === "this" ? "Fill this week" : "Fill next week"}

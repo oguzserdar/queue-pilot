@@ -116,6 +116,8 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
   // by its slot id; the example has none, so it uses the cell's own key and plays on the times a run would pick.
   const [writingNow, setWritingNow] = useState(false);
   const [fill, setFill] = useState<{ ids: Set<string>; texts: Record<string, string> }>({ ids: new Set(), texts: {} });
+  // The page knows a fill is on, so the example's sign-in card steps aside and does not cover the week.
+  useEffect(() => { document.body.toggleAttribute("data-filling", writingNow); return () => document.body.removeAttribute("data-filling"); }, [writingNow]);
   const onFill = (event: FillEvent) => setFill((f) => event.type === "start" ? { ids: new Set(event.slotIds), texts: {} } : { ids: f.ids, texts: { ...f.texts, [event.slotId]: event.text } });
   const cellId = (c: string, day: number, t: string) => week.slotIds?.[slotKey(c, day, t)] ?? slotKey(c, day, t);
   // The example replays a fill on its own week: its drafts step aside, their times are written again one by one
