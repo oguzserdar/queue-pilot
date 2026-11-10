@@ -80,10 +80,10 @@ function MaybeSync({ account, children }: { account: ShellAccount; children: Rea
 }
 
 /** The app frame: sidebar navigation, the user's AI, and the Buffer account. Signed out, every screen shows example data and says so. */
-export function AppShell({ account, signInOpen, children }: { account: ShellAccount; signInOpen: boolean; children: ReactNode }) {
+export function AppShell({ account, signInOpen, landing = true, children }: { account: ShellAccount; signInOpen: boolean; /** Whether the homepage is launched. Before that there is no demo address to enter or leave: the example is simply what a signed-out visitor sees. */ landing?: boolean; children: ReactNode }) {
   const path = usePathname();
   // The demo's home lives at /demo, because / is the homepage for anyone not signed in.
-  const home = account ? "/" : "/demo";
+  const home = account || !landing ? "/" : "/demo";
   const navRef = useRef<HTMLElement>(null);
   // On a phone the tab row scrolls sideways: bring the current page's tab into view, so you can see where you are.
   useEffect(() => {
@@ -135,7 +135,7 @@ export function AppShell({ account, signInOpen, children }: { account: ShellAcco
             // The demo bar says where you are and always offers the way out, as a button, not a link at the end of a sentence.
             <div className={styles.demo}>
               <p className={styles.demoText}><b>Demo</b> Alex Rivera&apos;s sample account: the app itself, with sample data. Nothing here touches a real Buffer.</p>
-              <a className={[button.button, button.secondary, button.sm, styles.demoExit].join(" ")} href="/demo/leave">Exit demo</a>
+              {landing && <a className={[button.button, button.secondary, button.sm, styles.demoExit].join(" ")} href="/demo/leave">Exit demo</a>}
             </div>
           )}
           <main className={styles.main}><SignInNotice />{children}</main>

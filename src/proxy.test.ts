@@ -3,7 +3,7 @@
  * and the app's screens only after signing in with Buffer.
  */
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APP_SCREENS, DEMO_COOKIE, config, proxy } from "./proxy";
 
 const SESSION = "better-auth.session_token=abc.def";
@@ -12,6 +12,24 @@ const at = (path: string, ...cookies: string[]) => new NextRequest(`https://getq
 const rewrittenTo = (res: Response) => { const r = res.headers.get("x-middleware-rewrite"); return r ? new URL(r).pathname : null; };
 const redirectedTo = (res: Response) => { const l = res.headers.get("location"); return l ? new URL(l).pathname : null; };
 const passes = (res: Response) => res.headers.get("x-middleware-next") === "1";
+
+// Every rule below is for a deployment with the homepage switched on.
+beforeEach(() => { vi.stubEnv("LANDING_PAGE", "on"); });
+afterEach(() => { vi.unstubAllEnvs(); });
+
+describe("before the homepage is launched", () => {
+  beforeEach(() => { vi.stubEnv("LANDING_PAGE", ""); });
+  it("shows a signed-out visitor the example app on every screen, with no redirect", () => {
+    for (const path of ["/", "/week", "/playbook", "/connect"]) expect(passes(proxy(at(path))), path).toBe(true);
+  });
+  it("never serves the homepage, and sends its address and the demo addresses to /", () => {
+    expect(rewrittenTo(proxy(at("/")))).toBeNull();
+    for (const path of ["/home", "/demo", "/demo/leave"]) expect(redirectedTo(proxy(at(path))), path).toBe("/");
+  });
+  it("leaves a signed-in person on their app", () => {
+    expect(passes(proxy(at("/week", SESSION)))).toBe(true);
+  });
+});
 
 describe("the homepage", () => {
   it("shows the homepage at / to a visitor with no session, keeping the address /", () => {

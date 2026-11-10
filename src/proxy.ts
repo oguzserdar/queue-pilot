@@ -9,6 +9,9 @@
  *   `/` is always the homepage for someone not signed in: going back from the demo lands on the homepage. `/demo/leave`
  *   ends it. Someone signed in is sent to their own app instead, so demo buttons can never act on a real account.
  *
+ * The homepage is behind a switch: all of the above applies only when LANDING_PAGE is "on". Otherwise nobody is
+ * redirected and a signed-out visitor sees the example app, with /home and /demo leading to `/`.
+ *
  * Only the presence of a session cookie is checked here. That is a routing choice, not authorization: every app page
  * and action still reads the real session itself.
  */
@@ -32,6 +35,9 @@ const to = (request: NextRequest, path: string) => NextResponse.redirect(new URL
  */
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  // Until the homepage is launched (LANDING_PAGE=on), a visitor who is not signed in sees the example app on every
+  // screen, as before, and the homepage and demo addresses lead back to it.
+  if (process.env.LANDING_PAGE !== "on") return path === "/home" || path === "/demo" || path === "/demo/leave" ? to(request, "/") : NextResponse.next();
   const signedIn = !!getSessionCookie(request);
   const demo = request.cookies.get(DEMO_COOKIE)?.value === "1";
 
