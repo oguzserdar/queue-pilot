@@ -85,7 +85,13 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
         suggest(await nextStepsAfterFill(r.ok ? r.saved.length : 0, r.ok ? undefined : r.reason).catch(() => []));
         router.refresh();
       })}>
-        {busy ? "Writing…" : week === "this" ? "Fill this week" : "Fill next week"}
+        {busy ? (
+          <span className={styles.busy}>
+            <span className={styles.pixels} aria-hidden="true"><i /><i /><i /><i /></span>
+            <span className={styles.shimmer}>{progress.total ? `Writing ${Math.min(progress.written + (progress.saving ? 0 : 1), progress.total)} of ${progress.total}` : "Writing"}</span>
+            <span className={styles.bar} aria-hidden="true" style={{ transform: `scaleX(${progress.total ? progress.written / progress.total : 0.04})` }} />
+          </span>
+        ) : week === "this" ? "Fill this week" : "Fill next week"}
       </Button>
       {busy ? <p className={styles.step} role="status">{step}</p> : example ? <p className={styles.help}>Watch this week get written again: each draft lands in its time as it is written. Nothing is saved.</p> :
       <p className={styles.help}>Writes {count} draft{count === 1 ? "" : "s"} into your Buffer posting times{week === "this" ? " still ahead this week" : ""}, spread across the days, using {availability.source}. At most 10 a run. Saved as drafts in Buffer for your review.</p>}
