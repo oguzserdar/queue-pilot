@@ -18,7 +18,7 @@ const SAMPLE = "A draft written from what you published appears here, in your vo
  * Fill the displayed week using either the person's key or the available built-in allowance.
  * The result says what was saved, what the playbook refused, and why.
  */
-export function WriteWeekButton({ availability, count, inlineActions = false, example = false, week = "next", onWriting, onProgress, sampleIds = [] }: { availability: WritingAvailability; count: number; inlineActions?: boolean; example?: boolean; /** Which week the button fills. */ week?: "this" | "next"; /** Told when a run starts and ends, so the week can show the times being written. */ onWriting?: (writing: boolean) => void; /** Told what the run reports: the times it will write, each finished draft, and nothing more. */ onProgress?: (event: FillEvent) => void; /** The example's empty times, which it plays the run on without writing anything. */ sampleIds?: string[] }) {
+export function WriteWeekButton({ availability, count, inlineActions = false, example = false, week = "next", onWriting, onProgress, samples = [] }: { availability: WritingAvailability; count: number; inlineActions?: boolean; example?: boolean; /** Which week the button fills. */ week?: "this" | "next"; /** Told when a run starts and ends, so the week can show the times being written. */ onWriting?: (writing: boolean) => void; /** Told what the run reports: the times it will write, each finished draft, and nothing more. */ onProgress?: (event: FillEvent) => void; /** The example's times and the text each is written with; it plays the run on them and writes nothing. */ samples?: { slotId: string; text?: string }[] }) {
   const [result, setResult] = useState<WriteWeekActionResult | null>(null);
   const [pending, start] = useTransition();
   const [running, setRunning] = useState(false);
@@ -66,10 +66,11 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
   /** The example plays a run on its own empty times and writes nothing. */
   const play = () => {
     setResult(null); setRunning(true);
-    report({ type: "start", slotIds: sampleIds });
-    sampleIds.forEach((slotId, i) => setTimeout(() => report({ type: "draft", slotId, text: SAMPLE }), 1800 * (i + 1)));
-    setTimeout(() => report({ type: "saving" }), 1800 * sampleIds.length + 900);
-    setTimeout(() => { setRunning(false); setProgress({ total: 0, written: 0, saving: false }); setResult({ ok: false, message: "That is how a week fills. This is the example account, so nothing was written. Sign in with Buffer and Queue Pilot fills your own empty times." }); }, 1800 * sampleIds.length + 3200);
+    const gap = 1300;
+    report({ type: "start", slotIds: samples.map((x) => x.slotId) });
+    samples.forEach((x, i) => setTimeout(() => report({ type: "draft", slotId: x.slotId, text: x.text ?? SAMPLE }), 900 + gap * (i + 1)));
+    setTimeout(() => report({ type: "saving" }), 900 + gap * samples.length + 700);
+    setTimeout(() => { setRunning(false); setProgress({ total: 0, written: 0, saving: false }); setResult({ ok: false, message: "That is how a week fills: each draft lands in its time as it is written, then all of them are saved to Buffer as drafts in one go. This is the example account, so nothing was written. Sign in with Buffer and Queue Pilot fills your own empty times." }); }, 900 + gap * samples.length + 2600);
   };
 
   if (!availability.ready) return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>{availability.message} <a href="/settings?tab=ai#ai-key">AI settings</a></p>;
@@ -86,7 +87,7 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
       })}>
         {busy ? "Writing…" : week === "this" ? "Fill this week" : "Fill next week"}
       </Button>
-      {busy ? <p className={styles.step} role="status">{step}</p> :
+      {busy ? <p className={styles.step} role="status">{step}</p> : example ? <p className={styles.help}>Watch this week get written again: each draft lands in its time as it is written. Nothing is saved.</p> :
       <p className={styles.help}>Writes {count} draft{count === 1 ? "" : "s"} into your Buffer posting times{week === "this" ? " still ahead this week" : ""}, spread across the days, using {availability.source}. At most 10 a run. Saved as drafts in Buffer for your review.</p>}
       {result && <div className={styles.result}>
       {result && !result.ok && <Alert tone={example ? "info" : "danger"} title={example ? "Example only" : "No drafts written"}>{result.message}</Alert>}

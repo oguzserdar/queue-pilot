@@ -165,14 +165,18 @@
    fill in from the left and the first lines of the draft show. The time sits on a solid plate, so dots never cross it. */
 .writing { position: relative; overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; border: 1px dashed var(--qp-crimson); border-radius: 8px; font-size: var(--text-xs); padding: 8px; }
 .writing::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle, var(--qp-crimson) 1px, transparent 1.5px); background-size: 6px 6px; opacity: 0.12; animation: writingDrift 0.9s steps(6) infinite; }
+/* While it waits, a soft band of colour passes through the time, under the dots. */
+.writing::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, color-mix(in oklab, var(--qp-crimson) 16%, transparent) 50%, transparent 80%); background-size: 220% 100%; animation: writingBand 1.6s linear infinite; pointer-events: none; }
+.writing[data-written="true"]::after { animation: none; background: linear-gradient(180deg, color-mix(in oklab, var(--qp-crimson) 9%, transparent), transparent 70%); }
+@keyframes writingBand { from { background-position: 160% 0; } to { background-position: -60% 0; } }
 .writing[data-written="true"] { border-style: solid; }
 .writing[data-written="true"]::before { opacity: 0.3; animation: writingFill 600ms var(--ease-standard) both; }
-.writingHead { position: relative; display: flex; justify-content: space-between; gap: 6px; }
+.writingHead { position: relative; z-index: 1; display: flex; justify-content: space-between; gap: 6px; }
 .writingHead > span, .writingText { background: var(--surface); border-radius: 5px; }
 .writingHead > span { white-space: nowrap; color: var(--foreground); font-weight: 600; padding: 0 5px; margin: 0 -5px; }
 .writingHead > span:last-child { color: var(--qp-crimson); font-weight: 500; }
-.writingText { position: relative; padding: 2px 5px; margin: 0 -5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--foreground); animation: writingText 400ms var(--ease-standard) both; }
+.writingText { position: relative; z-index: 1; padding: 2px 5px; margin: 0 -5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--foreground); animation: writingText 400ms var(--ease-standard) both; }
 @keyframes writingFill { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes writingDrift { to { background-position: 6px 0; } }
 @keyframes writingText { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .writing::before, .writingText { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .writing::before, .writing::after, .writingText { animation: none !important; } }

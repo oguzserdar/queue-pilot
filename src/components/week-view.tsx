@@ -118,16 +118,14 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
   const [fill, setFill] = useState<{ ids: Set<string>; texts: Record<string, string> }>({ ids: new Set(), texts: {} });
   const onFill = (event: FillEvent) => setFill((f) => event.type === "start" ? { ids: new Set(event.slotIds), texts: {} } : { ids: f.ids, texts: { ...f.texts, [event.slotId]: event.text } });
   const cellId = (c: string, day: number, t: string) => week.slotIds?.[slotKey(c, day, t)] ?? slotKey(c, day, t);
-  const sampleIds: string[] = [];
+  // The example replays a fill on its own week: its drafts step aside, their times are written again one by one
+  // with the same text, and they come back when the run ends. Its one empty time gets a sample line.
+  const samples: { slotId: string; text?: string }[] = [];
+  const replayed = new Set<string>();
   if (!live) {
-    const rows = Math.max(0, ...channels.flatMap((c) => Object.values(slots[c.id] ?? {}).map((times) => times.length)));
-    const free = (c: string, day: number, t: string) => !posts.some((p) => p.channel === c && p.day === day && p.time === t && p.status !== "error");
-    for (let row = 0; row < rows && sampleIds.length < writeCount; row++)
-      for (let day = 0; day < 7 && sampleIds.length < writeCount; day++)
-        for (const c of channels) {
-          const t = (slots[c.id]?.[day] ?? []).filter((x) => free(c.id, day, x))[row];
-          if (t && sampleIds.length < writeCount) sampleIds.push(cellId(c.id, day, t));
-        }
+    for (const p of [...drafts].sort((x, y) => x.day - y.day || x.time.localeCompare(y.time))) { samples.push({ slotId: cellId(p.channel, p.day, p.time), text: p.text }); replayed.add(p.id); }
+    for (const c of channels) for (const [day, times] of Object.entries(slots[c.id] ?? {})) for (const t of times)
+      if (!posts.some((p) => p.channel === c.id && p.day === Number(day) && p.time === t && p.status !== "error")) samples.push({ slotId: cellId(c.id, Number(day), t) });
   }
   const needsCheck = (id: string) => live && (readiness[id]?.state === "check" || readiness[id]?.state === "breaks");
   const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !needsCheck(p.id) && !approved.has(p.id) && !overdue.has(p.id));
@@ -188,7 +186,8 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
 
   /** One cell's slots and posts, shared by the desktop grid and the phone day list. */
   const entriesFor = (channelId: string, day: number) =>
-    cellEntries({ ...week, posts }, channelId, day).flatMap(({ time: t, posts: here }) => {
+    cellEntries({ ...week, posts }, channelId, day).flatMap(({ time: t, posts: all }) => {
+      const here = writingNow && !live ? all.filter((p) => !replayed.has(p.id)) : all;
       if (!here.length) {
         const name = `${channels.find((c) => c.id === channelId)?.name ?? ""}, ${FULL_DAY[day]} at ${t}`;
         const id = cellId(channelId, day, t);
@@ -440,7 +439,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
             </Popover>
           )}
           {channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
-          {open > 0 && writing && <WriteWeekButton availability={writing} count={writeCount} inlineActions example={!live} week={which} onWriting={setWritingNow} onProgress={onFill} sampleIds={sampleIds} />}
+          {(open > 0 || (!live && samples.length > 0)) && writing && <WriteWeekButton availability={writing} count={live ? writeCount : samples.length} inlineActions example={!live} week={which} onWriting={setWritingNow} onProgress={onFill} samples={samples} />}
           {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (
