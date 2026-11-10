@@ -161,13 +161,18 @@
 /* A posting time that has gone by: shown, never offered. */
 .passed { box-sizing: border-box; display: flex; justify-content: space-between; gap: 6px; border: 1px solid transparent; border-radius: 8px; color: var(--text-muted); font-size: var(--text-xs); padding: 8px; opacity: 0.55; }
 .passed > span { white-space: nowrap; }
-/* A time a draft is being written into. Dots fill it from the left when its turn comes; the time sits on its own
-   solid plate so the dots never cross the digits. */
-.writing { position: relative; overflow: hidden; box-sizing: border-box; display: flex; justify-content: space-between; gap: 6px; border: 1px dashed var(--qp-crimson); border-radius: 8px; font-size: var(--text-xs); padding: 8px; }
-.writing::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle, var(--qp-crimson) 1px, transparent 1.5px); background-size: 6px 6px; opacity: 0.34; clip-path: inset(0 100% 0 0); animation: writingFill 3s var(--ease-standard) calc(4s + var(--turn) * 2.6s) forwards, writingDrift 0.9s steps(6) infinite; }
-.writing > span { position: relative; white-space: nowrap; background: var(--surface); color: var(--foreground); font-weight: 600; padding: 0 5px; margin: 0 -5px; border-radius: 5px; }
-.writing > span:last-child { color: var(--qp-crimson); font-weight: 500; opacity: 0; animation: writingWord 300ms linear calc(4s + var(--turn) * 2.6s) forwards; }
-@keyframes writingFill { to { clip-path: inset(0 0 0 0); } }
+/* A time a draft is being written into. Faint dots drift across it while it waits; when its draft arrives the dots
+   fill in from the left and the first lines of the draft show. The time sits on a solid plate, so dots never cross it. */
+.writing { position: relative; overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; border: 1px dashed var(--qp-crimson); border-radius: 8px; font-size: var(--text-xs); padding: 8px; }
+.writing::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle, var(--qp-crimson) 1px, transparent 1.5px); background-size: 6px 6px; opacity: 0.12; animation: writingDrift 0.9s steps(6) infinite; }
+.writing[data-written="true"] { border-style: solid; }
+.writing[data-written="true"]::before { opacity: 0.3; animation: writingFill 600ms var(--ease-standard) both; }
+.writingHead { position: relative; display: flex; justify-content: space-between; gap: 6px; }
+.writingHead > span, .writingText { background: var(--surface); border-radius: 5px; }
+.writingHead > span { white-space: nowrap; color: var(--foreground); font-weight: 600; padding: 0 5px; margin: 0 -5px; }
+.writingHead > span:last-child { color: var(--qp-crimson); font-weight: 500; }
+.writingText { position: relative; padding: 2px 5px; margin: 0 -5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--foreground); animation: writingText 400ms var(--ease-standard) both; }
+@keyframes writingFill { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @keyframes writingDrift { to { background-position: 6px 0; } }
-@keyframes writingWord { to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .writing::before { animation: none; clip-path: none; } .writing > span:last-child { animation: none; opacity: 1; } }
+@keyframes writingText { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .writing::before, .writingText { animation: none !important; } }

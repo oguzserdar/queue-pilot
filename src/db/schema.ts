@@ -530,3 +530,35 @@ export const promotionAttempt = pgTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.contentItemId] })],
 );
+
+/**
+ * Drafts the in-app writer produced, saved here before they are written to Buffer. One row per posting time in a run.
+ *
+ * written → saved (in Buffer, postId set)
+ *         ↘ refused (the playbook or Buffer turned it down; reason says why)
+ *         ↘ failed (the time was filled by something else before it could be saved)
+ *
+ * callStartedAt is set just before the Buffer request. A row still "written" with it set means the answer never came
+ * back: recovery looks at that posting time in Buffer and adopts the draft found there with the same text, and only
+ * saves again when the time is still empty. The posting time is the key, so a retry can never make a second draft.
+ */
+export const fillDraft = pgTable(
+  "qp_fill_draft",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    runId: text("run_id").notNull(),
+    /** "<channelId>@<ISO time>", as open-slots.ts builds it. */
+    slotId: text("slot_id").notNull(),
+    text: text("text").notNull(),
+    sourceKey: text("source_key"),
+    snapshotId: text("snapshot_id"),
+    evidence: jsonb("evidence"),
+    status: text("status").$type<"written" | "saved" | "refused" | "failed">().notNull().default("written"),
+    reason: text("reason"),
+    postId: text("post_id"),
+    callStartedAt: timestamp("call_started_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.runId, t.slotId] }), index("qp_fill_draft_open").on(t.userId, t.status)],
+);

@@ -3,7 +3,8 @@ import { SourceContextError } from "./source-context";
 import { waitMessage, waitRefusal } from "./buffer/not-sent";
 import type { Channel, Post } from "./buffer/queries";
 import type { Provider } from "./ai-key-store";
-import { writeDrafts, type BriefMaterial } from "./ai-writer";
+import { streamDrafts, writeDrafts, type BriefMaterial } from "./ai-writer";
+import type { FillDraftStore } from "./fill-draft-store";
 import { aiErrorMessage } from "./ai-model";
 import { APICallError, NoObjectGeneratedError } from "ai";
 import { ModelListError } from "./ai-models";
@@ -22,13 +23,27 @@ export type WriteWeekActionResult =
   | { ok: true; saved: { local: string; channel: string }[]; refused: { slotId: string; reason: string }[]; retried: number; flags: { where: string; rule: string; verdict: "fail" | "unsure"; reason: string }[]; note?: string }
   | { ok: false; message: string; /** Set when the run stopped for a reason the person can act on. */ reason?: "no-material" | "ai-used-up" };
 
+/** What a live run reports as it goes. The store is written before each report. */
+export type LiveFill = {
+  runId: string;
+  store: FillDraftStore;
+  /** The times this run will write into, soonest first, before any AI is used. */
+  onStart?: (slotIds: string[]) => void;
+  /** A draft the model finished and our store now holds. A rewrite reports the same time again. */
+  onDraft?: (draft: { slotId: string; text: string }) => void;
+  /** The Buffer save is starting. */
+  onSaving?: () => void;
+};
+
 /**
  * Writes and saves drafts for one week's empty times, or for one exact time.
  *
  * @param only - One slot id, to write just that time
  * @param week - Which week to fill when `only` is not given: the following one (default) or the one today is in
+ * @param live - When given, each draft is handed over as the model finishes it: recorded in our own store first,
+ *   then reported, and the Buffer save at the end is marked on those records. Without it the run answers once.
  */
-export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | null>, only?: string, week: "this" | "next" = "next"): Promise<WriteWeekActionResult> {
+export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | null>, only?: string, week: "this" | "next" = "next", live?: LiveFill): Promise<WriteWeekActionResult> {
   let provider: Provider = "anthropic";
   let giveBack = async () => {};
   let settle = async () => {};
@@ -41,6 +56,7 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
     const slots = slotsToWrite(open, now, b.timeZone, only, week);
     if (only && !slots.length) return { ok: false, message: "That time is no longer empty. Refresh the week." };
     if (!slots.length) return { ok: false, message: `No empty times are left ${week === "this" ? "this week" : "next week"}. Sync with Buffer and check the week.` };
+    live?.onStart?.(slots.map((x) => x.id));
     const ai = await aiFor(b.userId);
     if (ai) { giveBack = ai.giveBack; settle = ai.settle; }
     if (!ai) return { ok: false, message: "AI writing is unavailable just now. Check built-in AI or your own key in Settings." };
@@ -73,17 +89,29 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
       voice: () => postgresVoiceStore().get(b.userId),
       rules: () => postgresRulesStore().list(b.userId),
       write: async (brief) => {
-        const drafts = (await writeDrafts(model, brief)).flatMap(d => {
+        const withSource = (d: Awaited<ReturnType<typeof writeDrafts>>[number]) => {
           const source = brief.material.find(m => m.key === d.sourceKey);
-          if (source?.snapshotId) return [{ ...d, snapshotId: source.snapshotId }];
+          if (source?.snapshotId) return { ...d, snapshotId: source.snapshotId };
           invalidSources.set(d.slotId, "The writer did not identify a supplied source. This draft was not saved.");
-          return [];
+          return null;
+        };
+        if (!live) return (await writeDrafts(model, brief)).flatMap(d => withSource(d) ?? []);
+        // Our own record first, then the report: a draft the person has seen is one we hold.
+        const kept: NonNullable<ReturnType<typeof withSource>>[] = [];
+        await streamDrafts(model, brief, async (d) => {
+          const draft = withSource(d);
+          if (!draft) return;
+          await live.store.written(b.userId, live.runId, draft);
+          kept.push(draft);
+          live.onDraft?.({ slotId: draft.slotId, text: draft.text });
         });
-        return drafts;
+        return kept;
       },
       // The playbook check is part of this one action, so it judges with the same AI instead of taking another.
       save: async (drafts, sourceKeys) => {
+        if (live) { await live.store.startCall(b.userId, live.runId, drafts.map(d => d.slotId)); live.onSaving?.(); }
         const result = await saveDraftsForUser(b.userId, b.token, { title: "Written by Queue Pilot", drafts, open: slots, sourceKeys }, { ...ai, judges: { decider: ai.decider, explainer: ai.language } });
+        if (live) await live.store.finish(b.userId, live.runId, { saved: result.saved.map(x => ({ slotId: x.slotId, postId: x.postId })), refused: result.refused });
         const invalid = [...invalidSources].map(([slotId, reason]) => ({ slotId, reason }));
         invalidSources.clear();
         return { ...result, refused: [...result.refused, ...invalid] };

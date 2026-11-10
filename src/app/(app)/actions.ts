@@ -566,6 +566,11 @@ async function writeSlots(only?: string, week: "this" | "next" = "next"): Promis
   return { ...result, next: await suggestionsFor(result.ok ? { saved: result.saved.length } : { saved: 0, reason: result.reason }) };
 }
 
+/** The toasts to show after a streamed fill, which ends outside a server action. */
+export async function nextStepsAfterFill(saved: number, reason?: "no-material" | "ai-used-up"): Promise<NextStep[]> {
+  return suggestionsFor({ saved: Math.max(0, Math.floor(Number(saved) || 0)), reason: reason === "no-material" || reason === "ai-used-up" ? reason : undefined });
+}
+
 /** The toasts to show after a run: what this person is still missing. A failed read suggests nothing. */
 async function suggestionsFor(run: Parameters<typeof nextSteps>[0]): Promise<NextStep[]> {
   try {

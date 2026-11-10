@@ -1,11 +1,11 @@
-import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import { describe, beforeEach, afterEach, expect, it, vi } from "vitest";
 import type { Brief, BriefMaterial } from "./ai-writer";
-const m = vi.hoisted(() => ({ material: [] as BriefMaterial[], transcript: vi.fn(), capture: vi.fn(), write: vi.fn(), save: vi.fn(), giveBack: vi.fn(), settle: vi.fn() }));
+const m = vi.hoisted(() => ({ material: [] as BriefMaterial[], transcript: vi.fn(), capture: vi.fn(), write: vi.fn(), stream: vi.fn(), save: vi.fn(), giveBack: vi.fn(), settle: vi.fn() }));
 vi.mock("./new-material", () => ({ newMaterial: async () => m.material }));
 vi.mock("./open-slots", () => ({ openSlots: () => ({ slots: ["a", "b"].map(id => ({ id, at: "2026-11-02T09:00:00Z", channelId: "ch", service: "twitter", channel: "Personal", local: "Mon 9:00" })) }) }));
 vi.mock("./transcript-for-user", () => ({ transcriptForUser: m.transcript }));
 vi.mock("./source-store", () => ({ captureSource: m.capture }));
-vi.mock("./ai-writer", () => ({ writeDrafts: m.write }));
+vi.mock("./ai-writer", () => ({ writeDrafts: m.write, streamDrafts: m.stream }));
 vi.mock("./save-for-user", () => ({ PLAYBOOK_REFUSAL: "Breaks your playbook", checkNote: () => undefined, saveDraftsForUser: (...args: unknown[]) => m.save(...args) }));
 vi.mock("./voice-store", () => ({ postgresVoiceStore: () => ({ get: async () => ({ note: null, examples: [] }) }) }));
 vi.mock("./rules-store", () => ({ postgresRulesStore: () => ({ list: async () => [] }) }));
@@ -57,4 +57,48 @@ it("gives the action back and says the AI took too long when the writing call ti
  m.write.mockRejectedValue(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
  expect(await writeSlotsForUser(load)).toMatchObject({ ok: false, message: expect.stringContaining("took too long") });
  expect(m.save).not.toHaveBeenCalled(); expect(m.giveBack).toHaveBeenCalledOnce();
+});
+
+describe("a live run", () => {
+ const run = () => {
+  const log: string[] = [];
+  const store = { written: vi.fn(async (_u: string, _r: string, d: { slotId: string }) => { log.push(`stored ${d.slotId}`); }), startCall: vi.fn(async () => { log.push("call started"); }), finish: vi.fn(async () => { log.push("finished"); }) };
+  const live = { runId: "run", store, onStart: (ids: string[]) => log.push(`start ${ids.join(",")}`), onDraft: (d: { slotId: string }) => log.push(`shown ${d.slotId}`), onSaving: () => log.push("saving") };
+  return { log, store, live };
+ };
+ beforeEach(() => {
+  m.stream.mockImplementation(async (_model, b: Brief, onDraft: (d: unknown) => Promise<void>) => { for (const s of b.slots) await onDraft({ slotId: s.id, text: `Draft ${s.id}`, sourceKey: b.material[0].key }); return []; });
+  m.save.mockImplementation(async (_u, _t, i) => ({ saved: i.drafts.map((d: { slotId: string }) => ({ ...d, postId: `post-${d.slotId}`, local: "Mon", channel: "Personal" })), refused: [], flags: [], check: "judged" }));
+ });
+
+ it("stores each draft before showing it, and saves to Buffer once, after the last draft", async () => {
+  const { log, store, live } = run();
+  expect(await writeSlotsForUser(load, undefined, "next", live)).toMatchObject({ ok: true, saved: [{}, {}] });
+  expect(log).toEqual(["start a,b", "stored a", "shown a", "stored b", "shown b", "call started", "saving", "finished"]);
+  expect(m.save).toHaveBeenCalledOnce();
+  expect(m.write).not.toHaveBeenCalled();
+  expect(store.finish).toHaveBeenCalledWith("u", "run", { saved: [{ slotId: "a", postId: "post-a" }, { slotId: "b", postId: "post-b" }], refused: [] });
+ });
+
+ it("records a refusal on the draft's own row", async () => {
+  const { store, live } = run();
+  m.save.mockResolvedValue({ saved: [], refused: [{ slotId: "a", reason: "That time was taken." }, { slotId: "b", reason: "That time was taken." }], flags: [], check: "judged" });
+  await writeSlotsForUser(load, undefined, "next", live);
+  expect(store.finish).toHaveBeenCalledWith("u", "run", expect.objectContaining({ saved: [], refused: [expect.objectContaining({ slotId: "a" }), expect.objectContaining({ slotId: "b" })] }));
+ });
+
+ it("leaves the rows marked as started when the Buffer save never answers, so recovery can check those times", async () => {
+  const { log, store, live } = run();
+  m.save.mockRejectedValue(new Error("socket hang up"));
+  expect(await writeSlotsForUser(load, undefined, "next", live)).toMatchObject({ ok: false });
+  expect(log).toContain("call started");
+  expect(store.finish).not.toHaveBeenCalled();
+ });
+
+ it("never shows a draft whose source the writer did not name", async () => {
+  const { log, live } = run();
+  m.stream.mockImplementation(async (_model, b: Brief, onDraft: (d: unknown) => Promise<void>) => { await onDraft({ slotId: b.slots[0].id, text: "Draft", sourceKey: "made-up" }); return []; });
+  await writeSlotsForUser(load, undefined, "next", live);
+  expect(log.filter((l) => l.startsWith("shown") || l.startsWith("stored"))).toEqual([]);
+ });
 });
