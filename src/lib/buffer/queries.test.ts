@@ -1,3 +1,4 @@
+import { BufferApiError } from "./client";
 import { describe, expect, it, vi } from "vitest";
 import { readPostsNow, MAX_ALIASES, listChannels, listPostsDue, type Post } from "./queries";
 
@@ -50,5 +51,21 @@ describe("fresh approval reads", () => {
     expect((await readPostsNow("token", ids, q as never)).map(p => p.id)).toEqual(ids);
     expect(q).toHaveBeenCalledTimes(3);
     expect(q.mock.calls.every(call => Object.keys(call[2]).length <= MAX_ALIASES)).toBe(true);
+  });
+
+  it("leaves out a post deleted in Buffer and still returns the others", async () => {
+    // Buffer types post as non-null: one missing id fails the whole batch with a not-found error.
+    const q = vi.fn(async (_token, _query, variables) => {
+      const ids = Object.values(variables).map((v) => (v as { id: string }).id);
+      if (ids.includes("gone")) throw new BufferApiError("Post not found", 200, "NOT_FOUND");
+      return Object.fromEntries(Object.entries(variables).map(([key, input]) => [`p${key.slice(1)}`, post((input as { id: string }).id)]));
+    });
+    expect((await readPostsNow("token", ["a", "gone", "b"], q as never)).map(p => p.id)).toEqual(["a", "b"]);
+    expect(q).toHaveBeenCalledTimes(4);
+  });
+
+  it("still throws when a single read fails for another reason", async () => {
+    const q = vi.fn(async () => { throw new BufferApiError("Something else broke", 200, "INTERNAL_SERVER_ERROR"); });
+    await expect(readPostsNow("token", ["a", "b"], q as never)).rejects.toThrow("Something else broke");
   });
 });

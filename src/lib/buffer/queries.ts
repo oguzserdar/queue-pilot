@@ -3,7 +3,7 @@
  * channels come from channels(input: { organizationId }), posting slots are ScheduleV2 { day, paused, times: "HH:MM" }
  * in the channel's own timezone, and posts are a Relay connection filtered by dueAt.
  */
-import { bufferQuery } from "./client";
+import { BufferApiError, bufferQuery } from "./client";
 
 export type DayOfWeek = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 export type PostStatus = "draft" | "error" | "needs_approval" | "scheduled" | "sending" | "sent";
@@ -89,19 +89,36 @@ export async function listChannels(token: string, organizationId: string, q: Que
 }
 
 export const POST_FIELDS = "id channelId status text dueAt sentAt externalLink error { message supportUrl } assets { type mimeType source } schedulingType notificationStatus via createdAt author { id name }";
+/** A read Buffer answered with "no such post": the post was deleted since the person's page was built. */
+const postGone = (e: unknown) => e instanceof BufferApiError && e.status === 200 && (e.code === "NOT_FOUND" || /not.?found/i.test(e.message));
+
 /**
  * These posts as Buffer has them right now, in batches of at most MAX_ALIASES. Used right before scheduling, never
  * the saved queue copy, so what goes out is what the person was shown. A post Buffer no longer has is left out.
+ *
+ * Buffer types `post` as non-null, so one deleted id fails its whole batch. That batch is then read one post per
+ * request, and only an answer that says the post was not found counts as gone; any other failure is thrown.
  */
 export async function readPostsNow(token: string, ids: string[], q: Query = bufferQuery): Promise<Post[]> {
   const unique = [...new Set(ids)];
   const posts: Post[] = [];
-  for (let offset = 0; offset < unique.length; offset += MAX_ALIASES) {
-    const list = unique.slice(offset, offset + MAX_ALIASES);
+  const read = async (list: string[]): Promise<Post[]> => {
     const vars = list.map((_, i) => `$i${i}: PostInput!`).join(", ");
     const parts = list.map((_, i) => `p${i}: post(input: $i${i}) { ${POST_FIELDS} }`).join(" ");
     const data = await q<Record<string, Post | null>>(token, `query (${vars}) { ${parts} }`, Object.fromEntries(list.map((id, i) => [`i${i}`, { id }])));
-    posts.push(...list.flatMap((id, i) => { const p = data[`p${i}`]; return p && p.id === id ? [p] : []; }));
+    return list.flatMap((id, i) => { const p = data[`p${i}`]; return p && p.id === id ? [p] : []; });
+  };
+  for (let offset = 0; offset < unique.length; offset += MAX_ALIASES) {
+    const list = unique.slice(offset, offset + MAX_ALIASES);
+    try {
+      posts.push(...(await read(list)));
+    } catch (e) {
+      if (!(e instanceof BufferApiError) || e.status !== 200) throw e;
+      if (list.length === 1) { if (postGone(e)) continue; throw e; }
+      for (const id of list) {
+        try { posts.push(...(await read([id]))); } catch (one) { if (!postGone(one)) throw one; }
+      }
+    }
   }
   return posts;
 }

@@ -26,3 +26,12 @@ export function notSentReason(w: WaitRefusal): string {
   const when = w.retryAt ? ` after ${w.retryAt.toISOString().slice(11, 16)} UTC` : " in a minute";
   return `Not sent: Buffer's request limit says to wait, so Queue Pilot stopped before writing this draft. Nothing was saved for it. Try again${when}.`;
 }
+
+/**
+ * What an app button says when Buffer's limit or the shared allowance stopped it before anything was written.
+ *
+ * @param w - The wait from {@link waitRefusal}
+ */
+export function waitMessage(w: WaitRefusal): string {
+  return `Buffer's request limit is reached for now, so nothing was changed. Try again${w.retryAt ? ` after ${w.retryAt.toISOString().slice(11, 16)} UTC` : " in a minute"}.`;
+}
