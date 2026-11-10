@@ -10,6 +10,10 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - The example account's Reviews page shows a shared link with comments from a client and a teammate, each pinned to the words it is about.
 
 ### Changed
+- Sources holds only your material. Whether each Buffer channel can post, and the Telegram and Discord copies, moved to a new Settings tab, Channels.
+- Connect folds its setup steps behind Add another AI once an AI app has connected.
+- Terms like inherited, blocks, flags and connector URL read as plain words, with the precise term one tap away.
+- On the Week page the action buttons share one size, and a post that would fail shows as a status at the end of the row.
 - On a phone, four tabs sit at the bottom of the screen and More opens the rest. Before, the tab row scrolled and hid seven pages.
 - The example's New material dates follow the shown week, Connect names a disconnected channel as disconnected, finished setup steps read as done, and an empty Buffer time is called an empty time everywhere in the app.
 
