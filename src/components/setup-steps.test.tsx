@@ -18,7 +18,7 @@ describe("SetupSteps", () => {
     expect(html()).not.toContain("npx skills add");
     const terminal = html({ initialApp: "Codex" });
     expect(terminal).toContain("npx skills add https://qp.test");
-    expect(terminal).toContain("Copy setup prompt");
+    expect(terminal).toContain("Copy for Codex");
   });
 
   it("shows the Buffer account and how many channels are connected", () => {
@@ -36,7 +36,8 @@ describe("SetupSteps", () => {
     expect(html()).not.toMatch(/\b(Three|Four) steps\b/);
   });
 
-  it("gives a first task that saves nothing", () => {
-    expect(html()).toContain("do not save anything");
+  it("gives one message per app that says what happens and that nothing is saved", () => {
+    expect(html({ initialApp: "ChatGPT" })).toContain("Copy for ChatGPT");
+    expect(html({ initialApp: "ChatGPT" })).toContain("Nothing is saved.");
   });
 });

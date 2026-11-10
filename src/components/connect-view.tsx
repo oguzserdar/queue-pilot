@@ -111,7 +111,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
         )}
       </header>
 
-      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example}
+      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={Object.fromEntries(AIS.map((a) => [a.name === "Grok web" ? "Grok" : a.name, a.steps]))}
         openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
 
       <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
