@@ -5,6 +5,31 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-10 Queue Pilot has a home page, and you can watch it write your week
+
+### Added
+- A home page at /: a pixel week with the Pilot, a pointer walking through a real draft, rules from your own edits and from a teammate's note, how Queue Pilot uses Buffer's API, questions, and how to run your own copy. The example account moved to /demo. Set `LANDING_PAGE=on` to show it on your own copy. Without it, signed-out visitors land on the example as before.
+- Fill next week shows each draft in its slot as the AI finishes it. The button counts along and says when it is saving to Buffer.
+- Fill this week, next to Fill next week. Only slots still ahead are written.
+- Paste a site, a newsletter, a video channel or a releases page as a source, and Queue Pilot finds its feed and says what it read.
+- A new account sees a start box on Home: add a feed, then fill next week, without leaving the page.
+- A short hint after a run when something is missing: no feed, no voice, or no AI app connected. Each shows once.
+- Connect opens with Finish setting up: pick your AI, copy `npx skills add https://getqueuepilot.com` for a terminal app, check the connection, then copy a first task that saves nothing.
+- The example account replays a fill on its own week, writing nothing.
+
+### Changed
+- A run spreads its drafts across the week: one per day before any day gets a second. It used to take the first ten empty slots.
+- Each draft a run writes is kept in Queue Pilot's database first, then the whole run is saved to Buffer in one go, as before. A run that stops halfway, or a Buffer save that never answers, is checked against your queue the next time you open the week. A draft is never saved twice.
+- A slot that has passed says so, and a draft whose time passed is marked overdue and left out of the approve count.
+- The AI gets up to two and a half minutes to write a week. A run that still times out says so, and the AI action is given back.
+- Feeds up to 8 MB are read. A normal newsletter feed used to be refused as too large.
+- The general Queue Pilot skill no longer competes with the fill-week skill.
+
+### Fixed
+- Approving several drafts stopped when one had been deleted in Buffer. The others are approved now, and the deleted one is named.
+- When Buffer could not be read, the app looked signed out. It now says you are signed in and Buffer could not be read, with a way to try again.
+- Your AI can approve the drafts it just saved, in any week, when you ask it to.
+
 ## [0.8.0] - 2026-11-08 Writing for X's latest algorithm, and optimized Buffer requests
 
 ### Added
