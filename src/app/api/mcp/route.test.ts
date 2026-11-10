@@ -67,6 +67,7 @@ vi.mock("@/lib/rules-store", async original => ({ ...await original<typeof impor
 vi.mock("@/lib/written-store", () => ({
   postgresWrittenStore: () => ({ get: async (id: string, ids: string[]) => (written.get(id) ?? []).filter(w => ids.includes(w.postId)), record: async (id: string, drafts: Written[]) => written.set(id, [...(written.get(id) ?? []), ...drafts]) }),
   wroteIds: async (id: string, ...ids: string[]) => new Set((written.get(id) ?? []).filter((p) => ids.includes(p.postId)).map((p) => p.postId)),
+  hasApprovedDraft: async (id: string) => (written.get(id) ?? []).some((w) => !!w.approvedAt),
 }))
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: (...args: unknown[]) => buffer.q(...args) }))
 vi.mock("@/lib/safe-fetch", () => ({ safeFetch: vi.fn(), BlockedAddressError: class extends Error {} }))
@@ -1239,6 +1240,11 @@ describe("connector controls", () => {
     expect(status.done).toBe(4);
     expect(status.steps.find((s: { id: string }) => s.id === "approve").state).toBe("todo");
     expect(JSON.parse(answer(await call("get_setup_status", {}, "person-b"))).done).toBe(2);
+    // The last step completes only once an approval of a Queue Pilot draft is on record for this person.
+    written.set("person-a", [{ postId: "p1", network: "linkedin", text: "Shipped.", approvedBy: "app", approvedAt: "2026-11-09T10:00:00.000Z" }]);
+    const after = JSON.parse(answer(await call("get_setup_status")));
+    expect(after.steps.find((s: { id: string }) => s.id === "approve").state).toBe("done");
+    expect(JSON.parse(answer(await call("get_setup_status", {}, "person-b"))).steps.find((s: { id: string }) => s.id === "approve").state).toBe("todo");
   });
   it("keeps and dismisses signed suggestions with tenant isolation and stored evidence", async () => {
     const { signSuggestion } = await import("@/lib/rule-suggestions");
@@ -1288,7 +1294,7 @@ describe("connector controls", () => {
   it("gives back the AI action when the built-in writer has no material", async () => {
     const r = await call("write_my_week");
     expect(r.isError).toBe(true);
-    expect(answer(r)).toContain("No new material");
+    expect(answer(r)).toContain("Nothing new to write from");
     expect(aiCalls.giveBack).toHaveBeenCalledTimes(1);
     expect(aiCalls.settle).toHaveBeenCalledTimes(1);
     expect(posts).toHaveLength(0);

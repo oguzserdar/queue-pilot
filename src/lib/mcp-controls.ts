@@ -18,13 +18,13 @@ import { structureRule } from "./structure-rule";
 import { postgresMaterialStore } from "./material-store";
 import { postgresSourceStore } from "./sources-store";
 import { postgresVoiceStore } from "./voice-store";
-import { postgresWrittenStore } from "./written-store";
+import { hasApprovedDraft, postgresWrittenStore } from "./written-store";
 import { postgresAiKeyStore } from "./ai-key-store";
 import { listModels, ModelListError } from "./ai-models";
 import { approvedApps } from "./ai-access";
 import { setupReadiness } from "./setup-readiness";
 import { writeSlotsForUser, type WriteBuffer } from "./write-slots-for-user";
-import { nextWeekRange } from "./week-from-buffer";
+import { nextWeekRange, thisWeekRange } from "./week-from-buffer";
 import { postsBetween } from "./posts-between";
 import { limitFor } from "./char-limits";
 import { applySuggestion, ruleSuggestions } from "./rule-suggestions";
@@ -246,19 +246,21 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     if (!(await store.get(userId, key))) return result("That saved research is not in your account.", true);
     await store.remove(userId, key); return result("Saved research removed. Existing drafts are unchanged.");
   });
-  server.registerTool("get_setup_status", { title: "Read my setup progress", description: "Open and close a workflow with the exact steps and count shown on Needs you. Never invent completion. Approval needs the person: their Approve, or their yes to approve_drafts. It stays incomplete in a drafts-only demo.", annotations: read }, async () => {
-    const [b, sources, apps, voice] = await Promise.all([buffer(), postgresSourceStore().list(userId), approvedApps(userId), postgresVoiceStore().get(userId)]);
-    const steps = setupReadiness(b, sources, apps, voice);
+  server.registerTool("get_setup_status", { title: "Read my setup progress", description: "Reads the setup steps and count shown on Needs you. Call it once, right after connecting or when asked about setup, not before other tasks. Never invent completion. Approval needs the person: their Approve, or their yes to approve_drafts. It stays incomplete in a drafts-only demo.", annotations: read }, async () => {
+    const [b, sources, apps, voice, approved] = await Promise.all([buffer(), postgresSourceStore().list(userId), approvedApps(userId), postgresVoiceStore().get(userId), hasApprovedDraft(userId).catch(() => false)]);
+    const steps = setupReadiness(b, sources, apps, voice, approved);
     return result({ done: steps.filter(s => s.state === "done").length, total: steps.length, steps, next: steps.find(s => s.state !== "done") ?? null });
   });
-  server.registerTool("write_my_week", { title: "Write my week with Queue Pilot", description: "Run Queue Pilot's own Write my week action when the user explicitly asks it to write and save Buffer drafts. First get_setup_status, get_my_voice, get_playbook, list_new_material and list_open_slots. Uses the person's key or the metered built-in AI budget, the same writer and playbook gate as the button. Writes at most 10 empty slots next week per run, retries refused drafts once, and returns saved, flagged and refused results. It never schedules or publishes. Do not automatically repeat to fill more slots; report remaining slots and request another run.", annotations: { ...write, openWorldHint: true } }, async () => {
+  server.registerTool("write_my_week", { title: "Write my week with Queue Pilot", description: "Runs Queue Pilot's own writer when the user explicitly asks Queue Pilot to write and save Buffer drafts. It reads the voice, playbook, new material and empty slots itself, so call nothing first except get_ai_usage. Uses the person's key or the metered built-in AI budget, the same writer and playbook gate as the button. Writes at most 10 empty slots next week per run, retries refused drafts once, and returns saved, flagged and refused results. It never schedules or publishes. Do not automatically repeat to fill more slots; report remaining slots and request another run.", annotations: { ...write, openWorldHint: true } }, async () => {
     const l = await limit("bufferWrite", userId);
     if (!l.ok) return result("Too many Buffer requests just now. Try again in a minute.", true);
     const r = await writeSlotsForUser(() => buffer(true));
     return result(r, !r.ok || r.refused.length > 0);
   });
-  server.registerTool("list_my_drafts", { title: "Read Queue Pilot drafts and checks", description: "List next week's drafts written by Queue Pilot with stored playbook verdicts and why each exists: source evidence, and for each rule it passed where that rule came from (rulesPassed, from is null when nothing was recorded; never invent one). Changed text is marked so old verdicts are not presented as a fresh check. approved lists Queue Pilot posts next week that have left draft, each with the last approval recorded through Queue Pilot (approvedBy, approvedAt). It is history, not who authorized the current version: a post can go back to draft or be approved again in Buffer without Queue Pilot seeing it. Never includes another app's drafts.", annotations: read }, async () => {
-    const b = await buffer(); const range = nextWeekRange(new Date(), b.timeZone);
+  server.registerTool("list_my_drafts", { title: "Read Queue Pilot drafts and checks", description: "List this week's and next week's drafts written by Queue Pilot with stored playbook verdicts and why each exists: source evidence, and for each rule it passed where that rule came from (rulesPassed, from is null when nothing was recorded; never invent one). Changed text is marked so old verdicts are not presented as a fresh check. approved lists Queue Pilot posts in those two weeks that have left draft, each with the last approval recorded through Queue Pilot (approvedBy, approvedAt). It is history, not who authorized the current version: a post can go back to draft or be approved again in Buffer without Queue Pilot seeing it. Never includes another app's drafts.", annotations: read }, async () => {
+    const b = await buffer(); const now = new Date();
+    // From this week's Monday to the end of next week, so a draft saved for the coming days is listed too.
+    const range = { start: thisWeekRange(now, b.timeZone).start, end: nextWeekRange(now, b.timeZone).end };
     // Buffer can label our API-created drafts via=buffer. The account-scoped writing record proves ownership.
     const week = postsBetween(b.posts, range.start, range.end);
     const posts = week.filter(p => p.status === "draft");
