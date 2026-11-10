@@ -59,3 +59,9 @@
 .canCol[data-group="asks"] .canDot { background: var(--warning); }
 .canList { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); line-height: 1.45; }
 @media (max-width: 860px) { .canGrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Connected: the setup steps sit behind one quiet row, closed by default. */
+.another { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding-block: var(--space-3); display: grid; gap: var(--space-5); }
+.anotherSummary { cursor: pointer; font-weight: 600; color: var(--text-secondary); list-style-position: inside; border-radius: 6px; }
+.anotherSummary:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+.another[open] { padding-bottom: var(--space-6); }

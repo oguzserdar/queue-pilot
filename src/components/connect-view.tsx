@@ -94,6 +94,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
   // Which app's setup is open in the modal; the page itself only lists the apps.
   const [open, setOpen] = useState<string | null>(null);
   const [grokSurface, setGrokSurface] = useState("Grok web");
+  const connected = !example && !!approved?.length;
   const current = AIS.find((x) => x.name === (open === "Grok" ? grokSurface : open));
 
   return (
@@ -111,6 +112,10 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
         )}
       </header>
 
+      {/* Once an AI has really reached Queue Pilot, setup folds away: the page leads with what it can do. */}
+      {connected ? (
+        <details className={styles.another}>
+          <summary className={styles.anotherSummary}>Add another AI</summary>
       <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={Object.fromEntries(AIS.map((a) => [a.name === "Grok web" ? "Grok" : a.name, a.steps]))}
         openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
 
@@ -133,6 +138,31 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
           </li>
         ))}
       </ul>
+        </details>
+      ) : <>
+      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={Object.fromEntries(AIS.map((a) => [a.name === "Grok web" ? "Grok" : a.name, a.steps]))}
+        openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
+
+      <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
+      <div className={styles.address}>
+        <span className={styles.label}>Connector URL</span>
+        <code className={styles.code}>{connectorUrl}</code>
+        <CopyButton value={connectorUrl} label="Copy" />
+      </div>
+
+      <ul className={styles.tiles}>
+        {AIS.filter((a) => a.name !== "Grok Bot desktop").map((a) => (
+          <li key={a.name} className={styles.tile}>
+            <div className={styles.cardHead}>
+              <strong className={styles.name}><AiMark name={a.mark ?? a.name} size={20} />{a.name === "Grok web" ? "Grok" : a.name}</strong>
+              {example && a.name === "Claude" ? <span className={styles.ok}><span className={styles.okMark} aria-hidden="true" />Connected</span> : null}
+            </div>
+            <p className={styles.does}>{a.name === "Grok web" ? "Connect on grok.com or in Grok Bot desktop." : a.does}</p>
+            <Button variant="secondary" size="sm" onClick={() => { setGrokSurface("Grok web"); setOpen(a.name === "Grok web" ? "Grok" : a.name); }} aria-label={`Set up ${a.name === "Grok web" ? "Grok" : a.name}`}>Set up</Button>
+          </li>
+        ))}
+      </ul>
+      </>}
 
 
       <section className={styles.can} aria-labelledby="can-title">
