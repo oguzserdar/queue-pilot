@@ -26,7 +26,7 @@ describe("needsFromBuffer", () => {
       ["drafts", "1 draft to approve"],
       ["willfail", "1 post would fail"],
       ["failed", "1 post did not go out"],
-      ["open", "2 empty slots next week"],
+      ["open", "2 empty times next week"],
     ]);
     expect(needs[0].detail).toBe("Next week, on X");
     expect(needs[1].detail).toMatch(/Bluesky is disconnected/);

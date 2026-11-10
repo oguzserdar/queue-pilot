@@ -22,7 +22,7 @@ describe("SetupSteps", () => {
   });
 
   it("shows the Buffer account and how many channels are connected", () => {
-    expect(html()).toContain("Buffer: sam@example.com, 1 of 2 channels connected (LinkedIn, Threads).");
+    expect(html()).toContain("Buffer: sam@example.com, 1 of 2 channels connected (LinkedIn); Threads disconnected.");
   });
 
   it("calls an app connected only after it reached Queue Pilot, and offers the check before that", () => {

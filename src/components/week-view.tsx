@@ -401,9 +401,9 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
                   held && `${held} held back`,
                   overdue.size && `${overdue.size} overdue`,
                   drafts.length - waiting - overdue.size > 0 && `${drafts.length - waiting - overdue.size} approved`,
-                  open ? `${open} empty slot${open === 1 ? "" : "s"}` : "every slot filled",
+                  open ? `${open} empty time${open === 1 ? "" : "s"}` : "every time filled",
                 ].filter(Boolean).join(", ")}`
-              : open === 0 ? `${NAME}: every slot has a post` : `${NAME}: ${open} empty slot${open === 1 ? "" : "s"}`}
+              : open === 0 ? `${NAME}: every time has a post` : `${NAME}: ${open} empty time${open === 1 ? "" : "s"}`}
           </h1>
           <p className={styles.sub}>
             <span className="tnum">{WEEK_LABEL}</span>.{" "}

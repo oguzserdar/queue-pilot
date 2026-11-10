@@ -100,7 +100,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
     <div className={styles.page}>
       <header className={styles.head}>
         <h1 className={styles.title}>Connect your AI</h1>
-        <p className={styles.sub}>Your AI does the writing. Queue Pilot gives it your Buffer slots, your schedule and your material, and checks what it writes before you approve.</p>
+        <p className={styles.sub}>Your AI does the writing. Queue Pilot gives it your empty Buffer times and your material, and checks what it writes before you approve.</p>
         {/* Connections are managed in one place, Settings; here a single line confirms what is connected. */}
         {!example && !!approved?.length && (
           <p className={styles.connectedLine}>

@@ -82,7 +82,7 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
           {account ? (
             <p className={styles.fact}>
               <span className={styles.okMark} aria-hidden="true" />
-              <span>Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length} of {account.channels.length} channels connected ({account.channels.map((c) => c.name).join(", ")}).{" "}
+              <span>Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length} of {account.channels.length} channels connected ({account.channels.filter((c) => !c.disconnected).map((c) => c.name).join(", ")}){account.channels.some((c) => c.disconnected) ? `; ${account.channels.filter((c) => c.disconnected).map((c) => c.name).join(", ")} disconnected` : ""}.{" "}
               {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
             </p>
           ) : null}

@@ -12,5 +12,5 @@ export const exampleNeeds = (shift: number): NeedItem[] => [
   { id: "rule", tone: "warning", title: "1 fix you made twice", detail: "On Instagram you replaced a feeling with the result. Keep it as a rule?", action: "Decide", href: "/playbook" },
   { id: "willfail", tone: "danger", title: "1 post would fail", detail: "Wednesday's Threads post: Threads is disconnected in Buffer", action: "See the post", href: "/week" },
   { id: "failed", tone: "danger", title: "1 post did not go out", detail: `${weekdayDayMonth(shiftIso(DEMO_BASE_START, storyShift(shift) - 5))}, X 09:00: the image could not be loaded from its link`, action: "See why", href: "/delivery" },
-  { id: "empty", tone: "warning", title: "1 empty slot next week", detail: "Friday, LinkedIn at 12:00", action: "Write it", href: "/week?new=1" },
+  { id: "empty", tone: "warning", title: "1 empty time next week", detail: "Friday, LinkedIn at 12:00", action: "Write it", href: "/week?new=1" },
 ];

@@ -126,7 +126,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   return (
     <div className={styles.page}>
       <header className={styles.head}>
-        <h1 className={styles.title}>{live ? (shown.length ? <>Playbook <span className={styles.count}>{shown.length} rule{shown.length === 1 ? "" : "s"}</span></> : "Your playbook") : shown.length ? `Alex's playbook has ${shown.length} rule${shown.length === 1 ? "" : "s"}` : "Alex's first visit"}</h1>
+        <h1 className={styles.title}>{live ? (shown.length ? <>Playbook <span className={styles.count}>{shown.length} rule{shown.length === 1 ? "" : "s"}</span></> : "Your playbook") : shown.length ? `Alex's playbook: ${shown.length} rule${shown.length === 1 ? "" : "s"} across 4 accounts` : "Alex's first visit"}</h1>
         <p className={styles.sub}>
           {!live && firstVisit && !shown.length
             ? "No rules yet. Queue Pilot checks each draft against your rules before saving it in Buffer, so the first ones come from what you already posted."
