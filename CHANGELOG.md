@@ -7,8 +7,10 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ### Added
 - Connect gives one message for each AI app. Pasted into a chat app, it walks you through adding Queue Pilot one step at a time, then shows one preview post and saves nothing. It carries the fill-week instructions, so an app that cannot install skills still writes the Queue Pilot way.
+- The example account's Reviews page shows a shared link with comments from a client and a teammate, each pinned to the words it is about.
 
 ### Changed
+- On a phone, four tabs sit at the bottom of the screen and More opens the rest. Before, the tab row scrolled and hid seven pages.
 - The example's New material dates follow the shown week, Connect names a disconnected channel as disconnected, finished setup steps read as done, and an empty Buffer time is called an empty time everywhere in the app.
 
 ## [0.9.0] - 2026-11-10 Queue Pilot has a home page, and you can watch it write your week
