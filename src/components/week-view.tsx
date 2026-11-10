@@ -374,7 +374,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
                   toApprove && `${toApprove} draft${toApprove === 1 ? "" : "s"} to approve`,
                   held && `${held} held back`,
                   overdue.size && `${overdue.size} overdue`,
-                  drafts.length - waiting && `${drafts.length - waiting} approved`,
+                  drafts.length - waiting - overdue.size > 0 && `${drafts.length - waiting - overdue.size} approved`,
                   open ? `${open} empty slot${open === 1 ? "" : "s"}` : "every slot filled",
                 ].filter(Boolean).join(", ")}`
               : open === 0 ? `${NAME}: every slot has a post` : `${NAME}: ${open} empty slot${open === 1 ? "" : "s"}`}
