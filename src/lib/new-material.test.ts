@@ -7,7 +7,7 @@ import type { FeedItem } from "./feeds";
 
 const state = vi.hoisted(() => ({ sources: [] as { id: string; title: string; url: string }[], used: new Set<string>(), feeds: {} as Record<string, FeedItem[] | Error>, material: [] as { key: string; title: string; link?: string; text: string }[] }));
 vi.mock("./sources-store", () => ({ postgresSourceStore: () => ({ list: async () => state.sources, usedKeys: async () => state.used }) }));
-vi.mock("./material-store", () => ({ postgresMaterialStore: () => ({ list: async () => state.material }) }));
+vi.mock("./material-store", () => ({ postgresMaterialStore: () => ({ list: async () => ({ rows: state.material, older: null, newer: null }) }) }));
 vi.mock("./feeds", async (original) => ({
   ...await original<typeof import("./feeds")>(),
   readFeed: async (url: string) => { const f = state.feeds[url]; if (!f || f instanceof Error) throw f ?? new Error("no feed"); return { title: null, items: f }; },
