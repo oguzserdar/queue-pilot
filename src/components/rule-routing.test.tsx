@@ -16,7 +16,7 @@ const accounts = [{ id: "company", name: "Company", service: "linkedin" }]
 describe("RuleRouting", () => {
   it("says shared rules are off for the network and offers no Turn on here", () => {
     const html = renderToStaticMarkup(<RuleRouting rules={[shared]} accounts={accounts} inheritance={{ networks: { linkedin: { shared: false } } }} onDelete={() => {}} onAdd={() => {}} />)
-    expect(html).toContain("Shared is off for every LinkedIn account")
+    expect(html).toContain("All-account rules are off for every LinkedIn account")
     expect(html).not.toContain("Turn on here")
     expect(html).not.toContain("On here")
   })
