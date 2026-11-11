@@ -1809,7 +1809,7 @@ it("searches the web through the operator's Exa key and never saves anything", a
  const result = JSON.parse(answer(await call("search_context", { query: "export limits", numResults: 3 })));
  expect(result.results[0].url).toBe("https://example.com/a");
  expect(exaState.search).toHaveBeenCalledWith({ query: "export limits", numResults: 3 }, "exa-test");
- expect(await material.list("person-a")).toHaveLength(0);
+ expect((await material.list("person-a")).rows).toHaveLength(0);
 });
 it("says plainly when no Exa key is set", async () => {
  exaState.key = null;
@@ -1821,7 +1821,7 @@ it("keeps a read web page whole as a source snapshot with its link, for evidence
  exaState.page.mockResolvedValueOnce({ status: "ready", page: { title: "Release notes", url: "https://example.com/notes#top", text: "Exports allow 1,000 rows.", truncated: false } });
  const result = JSON.parse(answer(await call("add_web_page", { url: "https://example.com/notes" })));
  expect(result).toMatchObject({ status: "saved", snapshotId: "snapshot-test", link: "https://example.com/notes#top", text: "Exports allow 1,000 rows.", truncated: false });
- expect(await material.list("person-a")).toHaveLength(0);
+ expect((await material.list("person-a")).rows).toHaveLength(0);
 });
 it("returns a page longer than the old material limit without cutting its ending", async () => {
  const episode = `${"Host: question. Guest: answer. ".repeat(3000)}Guest: and that is the final correction.`;
@@ -1851,7 +1851,7 @@ it("sends the AI from search_context to add_web_page and its snapshotId, not to 
 it("saves nothing when the page cannot be read", async () => {
  const result = JSON.parse(answer(await call("add_web_page", { url: "https://example.com/gone" })));
  expect(result.status).toBe("failed");
- expect(await material.list("person-a")).toHaveLength(0);
+ expect((await material.list("person-a")).rows).toHaveLength(0);
 });
 it("rejects a search or page address that is not a web address", async () => {
  expect((await call("add_web_page", { url: "javascript:alert(1)" })).isError).toBe(true);

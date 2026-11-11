@@ -23,7 +23,7 @@ import { remainingOf } from "@/lib/rate-limit-text";
 const EXAMPLE_RATE_LIMIT = [{ policy: "110-in-15min", remaining: 107 }, { policy: "525-in-24h", remaining: 487 }];
 
 import { showSecurityEvents, type ShownSecurityEvent } from "@/lib/security-event-words";
-import Link from "next/link";
+import { Pager } from "./pager";
 import type { SecurityEvent } from "@/lib/security-events";
 export type { ShownSecurityEvent };
 
@@ -214,12 +214,7 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
             ))}
           </ul>
         )}
-        {account.securityPages && (account.securityPages.older || account.securityPages.newer) && (
-          <nav className={styles.pager} aria-label="Security activity pages">
-            {account.securityPages.newer && <Link className={styles.download} href={`/settings?tab=security&after=${encodeURIComponent(account.securityPages.newer)}#security`} scroll={false}>Newer</Link>}
-            {account.securityPages.older && <Link className={styles.download} href={`/settings?tab=security&before=${encodeURIComponent(account.securityPages.older)}#security`} scroll={false}>Older</Link>}
-          </nav>
-        )}
+        {account.securityPages && <Pager path="/settings" query={{ tab: "security" }} older={account.securityPages.older} newer={account.securityPages.newer} label="Security activity pages" hash="security" />}
       </section>
           </div>
         </TabsContent>

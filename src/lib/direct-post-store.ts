@@ -7,6 +7,7 @@ import { and, desc, eq, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-or
 import { db } from "../db";
 import { directPostSend } from "../db/schema";
 import { CLAIM_MS, type DirectPostRow, type DirectPostStore } from "./direct-posts";
+import { readPage, timeText, type Page, type PageFrom } from "./page-bookmark";
 
 const toRow = (r: typeof directPostSend.$inferSelect): DirectPostRow => ({
   postId: r.postId, kind: r.kind, target: r.target, guildId: r.guildId, label: r.label, text: r.text, status: r.status,
@@ -158,4 +159,28 @@ export function postgresDirectPostStore(): DirectPostStore {
       return (await db().select().from(directPostSend).where(eq(directPostSend.userId, userId)).orderBy(desc(directPostSend.createdAt)).limit(limit)).map(toRow);
     },
   };
+}
+
+/** Telegram and Discord posts per page in Settings, Channels. */
+export const DIRECT_POST_PAGE_SIZE = 12;
+
+/**
+ * One page of the person's Telegram and Discord posts, newest first, for Settings, Channels. A post is one row per
+ * place, so the tie-breaker is the post id and the place together.
+ *
+ * @param userId - The signed-in person
+ * @param from - A bookmark from the page before or after; neither opens the newest page
+ * @param limit - Posts per page
+ */
+export async function directPostPage(userId: string, from: PageFrom = {}, limit = DIRECT_POST_PAGE_SIZE): Promise<Page<DirectPostRow>> {
+  const key = sql<string>`${directPostSend.postId} || '|' || ${directPostSend.kind}`;
+  const page = await readPage({
+    time: directPostSend.createdAt,
+    key,
+    from,
+    limit,
+    read: async (where, order, count) =>
+      (await db().select({ row: directPostSend, at: timeText(directPostSend.createdAt), key }).from(directPostSend).where(and(eq(directPostSend.userId, userId), where)).orderBy(...order).limit(count)),
+  });
+  return { ...page, rows: page.rows.map(toRow) };
 }

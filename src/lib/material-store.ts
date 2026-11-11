@@ -1,3 +1,4 @@
+import { readPage, timeText, type Page, type PageFrom } from "./page-bookmark"
 import { createHash } from "node:crypto"
 import { and, desc, eq, notExists } from "drizzle-orm"
 import { z } from "zod"
@@ -18,7 +19,8 @@ export type Material = z.infer<typeof materialInput> & { key: string }
 /** Saves and reads research for the authenticated person. */
 export type MaterialStore = {
   add(userId: string, input: z.infer<typeof materialInput>): Promise<Material>
-  list(userId: string): Promise<Material[]>
+  /** Unused research, newest first, one page at a time; `from` takes a bookmark from the page before or after. */
+  list(userId: string, from?: PageFrom, limit?: number): Promise<Page<Material>>
   get(userId: string, key: string): Promise<Material | null>
   remove(userId: string, key: string): Promise<void>
 }
@@ -29,6 +31,9 @@ function itemFor(input: z.infer<typeof materialInput>): Material {
   return { ...clean, key }
 }
 
+/** Saved research items per page. */
+export const MATERIAL_PAGE_SIZE = 20
+
 /** Private research stored with the person's account. Repeated submissions keep one item. */
 export function postgresMaterialStore(): MaterialStore {
   const fromRow = (row: typeof material.$inferSelect): Material => ({ key: row.key, title: row.title, text: row.text, ...(row.link ? { link: row.link } : {}) })
@@ -38,10 +43,18 @@ export function postgresMaterialStore(): MaterialStore {
       await db().insert(material).values({ userId, ...item }).onConflictDoNothing()
       return item
     },
-    async list(userId) {
+    async list(userId, from = {}, limit = MATERIAL_PAGE_SIZE) {
       const used = db().select({ key: sourceUsed.itemKey }).from(sourceUsed).where(and(eq(sourceUsed.userId, userId), eq(sourceUsed.itemKey, material.key)))
-      const rows = await db().select().from(material).where(and(eq(material.userId, userId), notExists(used))).orderBy(desc(material.addedAt)).limit(20)
-      return rows.map(fromRow)
+      const page = await readPage({
+        time: material.addedAt,
+        key: material.key,
+        from,
+        limit,
+        read: async (where, order, count) =>
+          (await db().select({ row: material, at: timeText(material.addedAt) }).from(material).where(and(eq(material.userId, userId), notExists(used), where)).orderBy(...order).limit(count))
+            .map((r) => ({ ...r, key: r.row.key })),
+      })
+      return { ...page, rows: page.rows.map(fromRow) }
     },
     async remove(userId, key) {
       await db().delete(material).where(and(eq(material.userId, userId), eq(material.key, key)))
@@ -64,7 +77,8 @@ export function memoryMaterialStore(): MaterialStore {
       rows.set(userId, mine)
       return { ...item }
     },
-    async list(userId) { return [...(rows.get(userId)?.values() ?? [])].reverse().map((item) => ({ ...item })) },
+    // One page with no bookmarks: connector tests save a handful of items.
+    async list(userId) { return { rows: [...(rows.get(userId)?.values() ?? [])].reverse().map((item) => ({ ...item })), older: null, newer: null } },
     async remove(userId, key) { rows.get(userId)?.delete(key) },
     async get(userId, key) { return structuredClone(rows.get(userId)?.get(key) ?? null) },
   }

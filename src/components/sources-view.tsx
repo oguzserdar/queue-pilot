@@ -67,7 +67,7 @@ function LiveSources({ sources }: Extract<SourcesProps, { mode: "live" }>) {
 }
 
 /** Buffer's channels as Queue Pilot sees them, and the Telegram and Discord copies of published posts. Shown in Settings. */
-export type ChannelsPanelProps = { channels: LiveChannel[]; copies: LiveCopy[]; discordResult: string | null; posts: DirectPostView[]; loadTargets?: () => Promise<PostTargets> };
+export type ChannelsPanelProps = { channels: LiveChannel[]; copies: LiveCopy[]; discordResult: string | null; posts: DirectPostView[]; /** Bookmarks for the next older and newer pages of posts. */ postPages?: { older: string | null; newer: string | null }; loadTargets?: () => Promise<PostTargets> };
 
 /** The example account's channels and copies, for the same Settings screen a signed-in person sees. */
 export const EXAMPLE_CHANNELS: ChannelsPanelProps = {
@@ -77,7 +77,7 @@ export const EXAMPLE_CHANNELS: ChannelsPanelProps = {
 };
 
 /** The Channels tab in Settings: whether each Buffer channel can post, then the Telegram and Discord copies. */
-export function ChannelsPanel({ channels, copies, discordResult, posts, loadTargets }: ChannelsPanelProps) {
+export function ChannelsPanel({ channels, copies, discordResult, posts, postPages, loadTargets }: ChannelsPanelProps) {
   return (
     <>
       <section aria-labelledby="ch" className={styles.block}>
@@ -114,7 +114,7 @@ export function ChannelsPanel({ channels, copies, discordResult, posts, loadTarg
         </div>
         <p className={styles.foot}>Buffer schedules and publishes. After it publishes a post, Queue Pilot can post the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>
         <Copies copies={copies} discordResult={discordResult} />
-        {copies.length > 0 && <PostComposer recent={posts} loadTargets={loadTargets} />}
+        {copies.length > 0 && <PostComposer recent={posts} pages={postPages} loadTargets={loadTargets} />}
       </section>
     </>
   );

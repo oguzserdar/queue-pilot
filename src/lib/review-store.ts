@@ -4,6 +4,7 @@
  * reviewer never reaches Buffer. Comments are untrusted text: they only become suggested rules (reviewNotes, read by
  * src/lib/day-one-rules.ts as notes) that the person keeps or skips.
  */
+import { readPage, timeText, type Page, type PageFrom } from "./page-bookmark";
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, gt, sql } from "drizzle-orm";
 import { user } from "../db/auth-schema";
@@ -53,6 +54,9 @@ const iso = (d: Date | null) => (d ? d.toISOString() : null);
 const toLink = (r: typeof reviewLink.$inferSelect): ReviewLink => ({ id: r.id, drafts: r.drafts as SharedDraft[], createdAt: r.createdAt.toISOString(), revokedAt: iso(r.revokedAt), expiresAt: r.expiresAt.toISOString() });
 const toComment = (r: typeof reviewComment.$inferSelect): ReviewComment => ({ id: r.id, postId: r.postId, name: r.name, text: r.text, quote: r.quote, start: r.start, end: r.end, createdAt: r.createdAt.toISOString() });
 
+/** Review links per page on the Reviews page. */
+export const REVIEW_PAGE_SIZE = 10;
+
 /** Review links in Postgres. */
 export function postgresReviewStore() {
   return {
@@ -74,6 +78,27 @@ export function postgresReviewStore() {
       if (!links.length) return [];
       const comments = await db().select().from(reviewComment).where(inArray(reviewComment.linkId, links.map((l) => l.id))).orderBy(asc(reviewComment.createdAt));
       return links.map((l) => ({ ...toLink(l), comments: comments.filter((c) => c.linkId === l.id).map(toComment) }));
+    },
+    /**
+     * One page of the person's links, newest first, with the comments on each, for the Reviews page.
+     *
+     * @param userId - The signed-in person
+     * @param from - A bookmark from the page before or after; neither opens the newest page
+     * @param limit - Links per page
+     */
+    async page(userId: string, from: PageFrom = {}, limit = REVIEW_PAGE_SIZE): Promise<Page<ReviewLink & { comments: ReviewComment[] }>> {
+      const links = await readPage({
+        time: reviewLink.createdAt,
+        key: reviewLink.id,
+        from,
+        limit,
+        read: async (where, order, count) =>
+          (await db().select({ row: reviewLink, at: timeText(reviewLink.createdAt) }).from(reviewLink).where(and(eq(reviewLink.userId, userId), where)).orderBy(...order).limit(count))
+            .map((r) => ({ ...r, key: r.row.id })),
+      });
+      if (!links.rows.length) return { ...links, rows: [] };
+      const comments = await db().select().from(reviewComment).where(inArray(reviewComment.linkId, links.rows.map((l) => l.id))).orderBy(asc(reviewComment.createdAt));
+      return { ...links, rows: links.rows.map((l) => ({ ...toLink(l), comments: comments.filter((c) => c.linkId === l.id).map(toComment) })) };
     },
     /** Turns a link off for good. Only its owner can. */
     async revoke(userId: string, id: string): Promise<boolean> {

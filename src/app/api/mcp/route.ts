@@ -1047,13 +1047,17 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     {
       title: "List new material",
       description:
-        "Use this to find what the user published recently that has no posts yet. It reads every feed they added and gives up to 5 new items per feed, newest first: title, date, link, a short summary and a key. Call read_material with a key for the full text before you write about it. Pass the keys you used to save_drafts so they are not offered again. It also lists saved research text from add_material. If there is no material, ask for a feed or research text. Read get_my_voice and get_playbook before writing.",
+        "Use this to find what the user published recently that has no posts yet. It reads every feed they added and gives up to 5 new items per feed, newest first: title, date, link, a short summary and a key. Call read_material with a key for the full text before you write about it. Pass the keys you used to save_drafts so they are not offered again. It also lists saved research text from add_material, 20 at a time, newest first; when there is more, the answer ends with an `older` value to pass back for the next 20 (feeds are not repeated then). If there is no material, ask for a feed or research text. Read get_my_voice and get_playbook before writing.",
+      inputSchema: z.object({ older: z.string().max(300).optional().describe("The older value from the previous answer, for the next page of saved research.") }),
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
-    async () => {
+    async ({ older }) => {
       const store = postgresSourceStore();
-      const [sources, used, material] = await Promise.all([store.list(userId), store.usedKeys(userId), postgresMaterialStore().list(userId)])
-      const fresh = material.filter((item) => !used.has(item.key)).slice(0, 20)
+      const [allSources, used, page] = await Promise.all([store.list(userId), store.usedKeys(userId), postgresMaterialStore().list(userId, { before: older })])
+      // A later page lists saved research only; the feeds were in the first answer.
+      const sources = older ? [] : allSources
+      const fresh = page.rows.filter((item) => !used.has(item.key))
+      if (older && fresh.length === 0) return text("No older saved research.")
       if (sources.length === 0 && fresh.length === 0) return text("No new material. Ask for a feed and call add_source, or save the user's research with add_material.")
       // All feeds at once, so one slow feed costs its own timeout, not everyone's.
       const results = await Promise.allSettled(sources.map((src) => readFeed(src.url)));
@@ -1066,7 +1070,8 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
           : `${src.title}: nothing new.`;
       });
       const research = fresh.map((item) => `- key: ${item.key}\n  ${item.title}${item.link ? `\n  ${item.link}` : ""}\n  ${item.text.slice(0, 600)}`)
-      return text([...blocks, ...research].join("\n\n"))
+      const more = page.older ? [`More saved research is older than this. Call list_new_material with older: ${page.older}`] : []
+      return text([...blocks, ...research, ...more].join("\n\n"))
     },
   );
 

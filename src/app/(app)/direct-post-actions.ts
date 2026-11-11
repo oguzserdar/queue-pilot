@@ -5,6 +5,8 @@
  * place, resending a place Telegram or Discord refused, and the recent results. The Discord channel is checked on the
  * server against the bot's real permissions every time, never taken from the browser on trust.
  */
+import { directPostPage } from "@/lib/direct-post-store";
+import type { Page, PageFrom } from "@/lib/page-bookmark";
 import { revalidatePath } from "next/cache";
 import { signedInUserId } from "@/lib/current-user";
 import { postgresEchoStore } from "@/lib/echo-store";
@@ -215,15 +217,16 @@ export async function cancelScheduledPostAction(postId: string): Promise<ActionR
   return n ? { ok: true } : { ok: false, message: "It already went out or was cancelled." };
 }
 
-/** The person's recent post results, newest first. */
-export async function recentDirectPosts(): Promise<DirectPostView[]> {
+/** The person's post results, newest first, one page at a time, with bookmarks for the pages either side. */
+export async function recentDirectPosts(from: PageFrom = {}): Promise<Page<DirectPostView>> {
   const userId = await signedInUserId();
-  if (!userId) return [];
+  if (!userId) return { rows: [], older: null, newer: null };
   const now = new Date();
-  return (await postgresDirectPostStore().recent(userId, 12)).map((r) => ({
+  const page = await directPostPage(userId, from);
+  return { ...page, rows: page.rows.map((r) => ({
     postId: r.postId, kind: r.kind, label: r.label, text: r.text, status: shownStatus(r, now), link: r.link, error: r.error, at: r.createdAt.toISOString(),
     sendAt: r.sendAt?.toISOString() ?? null, late: sentLate(r), followsBuffer: !!r.bufferPostId,
-  }));
+  })) };
 }
 
 /** One place of a draft's follow-up, as the draft dialog shows it. */

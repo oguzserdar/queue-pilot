@@ -33,7 +33,8 @@ vi.mock("@/lib/discord", async (orig) => ({
   channelsWithAccess: async (_t: string, guildId: string) => (guildId === "guild-u1" ? [{ id: "c1", name: "news", canPost: true }, { id: "c2", name: "staff", canPost: false }] : [{ id: "x9", name: "other", canPost: true }]),
 }));
 vi.mock("@/lib/buffer/snapshot-store", () => ({ postgresSnapshotStore: () => ({ get: async () => ({ data: { posts: st.posts } }) }) }));
-vi.mock("@/lib/direct-post-store", () => ({ postgresDirectPostStore: () => st.store }));
+// The page read is the store's recent list in one page here; paging itself is tested on Postgres.
+vi.mock("@/lib/direct-post-store", () => ({ postgresDirectPostStore: () => st.store, directPostPage: async (userId: string) => ({ rows: await (st.store as DirectPostDeps["store"]).recent(userId, 12), older: null, newer: null }) }));
 vi.mock("@/lib/direct-post-run", () => ({
   directPostDeps: (): DirectPostDeps => ({ store: st.store as DirectPostDeps["store"], post: async (item) => (st.sent.push(item.kind), { link: null }), refused: () => false }),
   startTimerOrNote: async (...a: unknown[]) => { if (st.timerFails) return "Saved, but its timer did not start, so it may go out late, with the daily check."; st.timers.push(a); return undefined; },
@@ -116,7 +117,7 @@ describe("follow-ups in Sources", () => {
 
   it("shows which rows follow a Buffer post", async () => {
     await actions.saveFollowUpAction("bp1", { telegram: { text: "Hi" } });
-    expect((await actions.recentDirectPosts()).map((r) => r.followsBuffer)).toEqual([true]);
+    expect((await actions.recentDirectPosts()).rows.map((r) => r.followsBuffer)).toEqual([true]);
   });
 });
 

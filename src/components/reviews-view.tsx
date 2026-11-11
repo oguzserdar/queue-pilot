@@ -13,6 +13,7 @@ import { LocalTime } from "./local-time";
 import { DEMO_TIME_ZONE } from "@/lib/demo-clock";
 import styles from "./review-ui.module.css";
 import page from "./reviews-view.module.css";
+import { Pager } from "./pager";
 
 const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
 const WHEN: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" };
@@ -41,7 +42,7 @@ function Marked({ text, comments }: { text: string; comments: ReviewComment[] })
  * Reviews: the links the person shared, what people said on each draft beside the words they meant, and, from any
  * comment, proposed changes to the drafts it is about. `links` is null for someone signed out.
  */
-export function ReviewsView({ origin, links, candidates = [], candidatesUnavailable = false, example = false }: { /** The example account: read-only, no link actions. */ example?: boolean; candidatesUnavailable?: boolean; candidates?: ReviewCandidate[]; origin: string; links: (ReviewLink & { comments: ReviewComment[] })[] | null }) {
+export function ReviewsView({ origin, links, candidates = [], candidatesUnavailable = false, example = false, pages }: { /** Bookmarks for the next older and newer pages of links. */ pages?: { older: string | null; newer: string | null }; /** The example account: read-only, no link actions. */ example?: boolean; candidatesUnavailable?: boolean; candidates?: ReviewCandidate[]; origin: string; links: (ReviewLink & { comments: ReviewComment[] })[] | null }) {
   const [off, setOff] = useState<Set<string>>(new Set());
   // Links turned back on here, with their expiry, until the page reloads from the server.
   const [on, setOn] = useState<Map<string, string>>(new Map());
@@ -131,6 +132,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
               </section>
             );
           })}
+          {pages && <Pager path="/reviews" older={pages.older} newer={pages.newer} label="Review link pages" />}
         </>
       )}
     </div>

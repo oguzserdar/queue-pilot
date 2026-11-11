@@ -22,8 +22,8 @@ const OPENROUTER_RESULT: Record<string, { ok: boolean; text: string }> = {
   slow: { ok: false, text: "Too many connection attempts in the last hour. Try again later." },
 };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ openrouter?: string; tab?: string; discord?: string; before?: string; after?: string }> }) {
-  const { openrouter, tab, discord, before, after } = await searchParams;
+export default async function Page({ searchParams }: { searchParams: Promise<{ openrouter?: string; tab?: string; discord?: string; before?: string; after?: string; postsBefore?: string; postsAfter?: string }> }) {
+  const { openrouter, tab, discord, before, after, postsBefore, postsAfter } = await searchParams;
   const notice = openrouter ? OPENROUTER_RESULT[openrouter] ?? null : null;
   const [{ user }, profile, userId, devices] = await Promise.all([getCurrentUser(), signedInProfile(), signedInUserId(), signedInDevices()]);
   const master = process.env.SETTINGS_KEY;
@@ -51,14 +51,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
     userId ? approveMode(userId).catch(() => "ask" as const) : ("ask" as const),
     // The Channels tab's own reads: a failure there shows a note on that tab, never takes down the whole page.
     userId ? postgresEchoStore().destinations(userId).catch((e) => { console.error(JSON.stringify({ event: "qp-echo-read-failed", message: e instanceof Error ? e.message : String(e) })); return null; }) : [],
-    userId ? recentDirectPosts().catch((e) => { console.error(JSON.stringify({ event: "qp-direct-posts-read-failed", message: e instanceof Error ? e.message : String(e) })); return null; }) : [],
+    userId ? recentDirectPosts({ before: postsBefore, after: postsAfter }).catch((e) => { console.error(JSON.stringify({ event: "qp-direct-posts-read-failed", message: e instanceof Error ? e.message : String(e) })); return null; }) : { rows: [], older: null, newer: null },
   ]);
   const allowance = aiKey === null && usage && user ? { ...usage, resetsAt: resetTime(user.timeZone) } : null;
   return (
     <SettingsView
       // The OpenRouter callback's notice shows on the AI tab, so it lands there.
       tab={openrouter ? "ai" : discord ? "channels" : tab}
-      account={user ? { email: user.email, name: profile?.name ?? user.email, image: profile?.image ?? null, channelNames: user.channels.map((c) => c.name), rateLimit: user.rateLimit, apps, devices, security: security ? security.lines : security, securityPages: security ? { older: security.older, newer: security.newer } : undefined, aiKey, allowance, notice, approveMode: approve, channelsPanel: destinations && posts ? { channels: user.channels, copies: destinations.map((d) => ({ kind: d.kind, label: d.label })), discordResult: discord ?? null, posts } : undefined } : undefined}
+      account={user ? { email: user.email, name: profile?.name ?? user.email, image: profile?.image ?? null, channelNames: user.channels.map((c) => c.name), rateLimit: user.rateLimit, apps, devices, security: security ? security.lines : security, securityPages: security ? { older: security.older, newer: security.newer } : undefined, aiKey, allowance, notice, approveMode: approve, channelsPanel: destinations && posts ? { channels: user.channels, copies: destinations.map((d) => ({ kind: d.kind, label: d.label })), discordResult: discord ?? null, posts: posts.rows, postPages: { older: posts.older, newer: posts.newer } } : undefined } : undefined}
     />
   );
 }
