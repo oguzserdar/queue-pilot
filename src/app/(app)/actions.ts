@@ -22,7 +22,7 @@ import { FeedError, findFeed } from "@/lib/feeds"
 import { approvedApps, removeUnusedApps, renameApp, revokeApp } from "@/lib/ai-access";
 import { MAX_LABEL } from "@/lib/ai-app-limits";
 import { getAuth } from "@/lib/auth";
-import { deleteAccount } from "@/lib/delete-account";
+import { deleteAccount, LastAdminError } from "@/lib/delete-account";
 import { addPastedExample, exampleFromQueue, InvalidVoiceExampleError, MAX_NOTE, postgresVoiceStore, TooManyExamplesError } from "@/lib/voice-store"
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram";
@@ -358,6 +358,7 @@ export async function deleteMyAccount(confirm: string): Promise<SourceActionResu
   try {
     await deleteAccount(userId, process.env.SESSION_SECRET);
   } catch (e) {
+    if (e instanceof LastAdminError) return { ok: false, message: e.message };
     console.error(JSON.stringify({ event: "qp-delete-account-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Queue Pilot could not delete your account just now. Nothing was removed. Try again in a minute." };
   }
