@@ -37,3 +37,11 @@
 /* Press feedback: the interface answers the click at once. */
 .allow:active:not(:disabled), .deny:active:not(:disabled) { transform: scale(0.97); }
 @media (prefers-reduced-motion: reduce) { .allow:active:not(:disabled), .deny:active:not(:disabled) { transform: none; } }
+/* Sign-in pop-ups open short windows (Grok's is about 600 wide and shorter than this card), so on a short screen the
+   card tightens and Deny and Allow stay pinned at the bottom, always in view. */
+@media (max-height: 820px) {
+  .page { place-items: start center; padding-block: 16px 0; }
+  .card { gap: 14px; padding: 22px 22px 0; }
+  .clientTile, .appTile { width: 44px; height: 44px; border-radius: 12px; }
+  .actions { position: sticky; bottom: 0; z-index: 1; margin-inline: -22px; padding: 12px 22px max(12px, env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--border); }
+}
