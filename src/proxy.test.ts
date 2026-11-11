@@ -63,6 +63,12 @@ describe("the demo", () => {
     expect(rewrittenTo(res)).toBe("/");
     expect(res.headers.get("set-cookie")).toMatch(new RegExp(`${DEMO_COOKIE}=1`));
   });
+  it("opens on one of its screens with ?to=, starting the demo, and never anywhere else", () => {
+    const res = proxy(at("/demo?to=/playbook"));
+    expect(redirectedTo(res)).toBe("/playbook");
+    expect(res.headers.get("set-cookie")).toMatch(new RegExp(`${DEMO_COOKIE}=1`));
+    for (const bad of ["https://evil.example/", "//evil.example", "/admin", "/api/mcp"]) expect(rewrittenTo(proxy(at(`/demo?to=${encodeURIComponent(bad)}`)))).toBe("/");
+  });
   it("never takes over /: going back from the demo shows the homepage", () => {
     expect(rewrittenTo(proxy(at("/", DEMO)))).toBe("/home");
   });

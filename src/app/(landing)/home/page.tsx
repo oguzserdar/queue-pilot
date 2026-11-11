@@ -215,6 +215,7 @@ export default function HomePage() {
           <nav className={s.nav} aria-label="Footer">
             <a href={`${REPO}#how-it-uses-buffers-api`} target="_blank" rel="noopener noreferrer">How it uses the Buffer API</a>
             <a href={`${REPO}/blob/main/CHANGELOG.md`} target="_blank" rel="noopener noreferrer">Changelog</a>
+            <a href="/privacy">Privacy</a>
             <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
           </nav>
         </div>
