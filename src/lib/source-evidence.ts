@@ -12,7 +12,8 @@ export const sourceVersionInput = z.object({
 export const evidenceInput = z.object({
   claim: z.string().trim().min(1).max(500).describe("Copy the exact sentence or phrase from the draft text, word for word. Do not paraphrase or summarize it. Whitespace differences are allowed."),
   quote: z.string().trim().min(1).max(500).describe("Copy a supporting passage word for word from the saved source snapshot. Do not paraphrase it."),
-  locator: z.string().regex(/^t=\d+$/).optional().describe("Optional timestamp from the returned transcript segments, e.g. t=7190. Never invent a timestamp."),
+  // Models often write "" for "no timestamp"; an empty value means none and must not void the whole answer.
+  locator: z.string().regex(/^(t=\d+)?$/).optional().describe("Optional timestamp from the returned transcript segments, e.g. t=7190. Never invent a timestamp."),
 });
 export type EvidenceInput = z.infer<typeof evidenceInput>;
 
