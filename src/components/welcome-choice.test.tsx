@@ -46,7 +46,7 @@ describe("AiOffer", () => {
 
   it("suggests the next AI that sees more once one is connected", () => {
     const html = renderToStaticMarkup(<AiOffer connected={["Claude"]} />);
-    expect(text(html)).toContain("Claude is connected. Grok can bring in what you post on X.");
+    expect(text(html)).toContain("Claude is connected. Grok can bring in what you and people in your field are posting on X.");
     expect(html).toContain('href="/connect?setup=Grok"');
   });
 

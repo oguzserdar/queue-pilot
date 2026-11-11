@@ -50,7 +50,7 @@ export function WelcomeChoice({ origin, account, approved, count, empty, hasSour
             <strong>Use your own AI</strong>
             <span className={styles.badge}>Recommended</span>
           </span>
-          <span className={styles.body}>Claude, ChatGPT, Grok or any MCP app writes your drafts from your email, docs and posts. Connect more than one to give it more to work with.</span>
+          <span className={styles.body}>Claude, ChatGPT, Grok or any MCP app writes your drafts in your voice, from what you publish and news in your field. Connect more than one to give it more to work with.</span>
           <span className={`${styles.marks} ${styles.foot}`} aria-hidden="true">{["Claude", "ChatGPT", "Grok", "MCP"].map((n) => <AiMark key={n} name={n} size={18} />)}</span>
         </label>
         <label className={styles.choice}>

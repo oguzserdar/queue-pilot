@@ -49,7 +49,7 @@ const AIS: AiSetup[] = [
   {
     name: "Claude",
     plan: "Available on every Claude plan. Free allows one custom connector. Remote connectors belong to your Claude account and work across web, desktop and mobile.",
-    does: "Pick \"Fill my week\" and Claude drafts your empty times from your own work, in your email, docs or blog.",
+    does: "Pick \"Fill my week\" and Claude drafts your empty times from your sources, in your voice.",
     steps: [
       "Go to Customize, Connectors, press + Add, then Add custom connector. Name it Queue Pilot",
       "Paste the URL above and press Continue. Review the detected authentication, then Continue again",
@@ -63,7 +63,7 @@ const AIS: AiSetup[] = [
     name: "Grok web",
     mark: "Grok",
     plan: "These steps are for grok.com. Grok Bot desktop needs its own connection.",
-    does: "Use Queue Pilot in a chat on grok.com.",
+    does: "Use Queue Pilot in a chat on grok.com. Grok can also bring in what you and people in your field are posting on X.",
     steps: ["Go to grok.com/connectors, press New Connector, then Custom", "Name it Queue Pilot, paste the URL above into Server URL, then press Add Connector", "On Queue Pilot's connection page, check the account and press Allow. Sign in with Buffer first if asked", "In a new Grok chat, send the connection check below"],
     help: "These are the browser steps. For the Grok Bot app, use the separate desktop guide. Business and Enterprise accounts may need an admin to add the connector first.",
     docs: "https://docs.x.ai/grok/connectors",

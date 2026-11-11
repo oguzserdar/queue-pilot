@@ -9,8 +9,8 @@ import styles from "./ai-offer.module.css";
 
 /** What a second AI adds, by the name the app picker uses. Only claims each app's own connectors support. */
 const ADDS: Record<string, string> = {
-  Grok: "can bring in what you post on X.",
-  Claude: "can bring in your Gmail, Drive and GitHub through its connectors.",
+  Grok: "can bring in what you and people in your field are posting on X.",
+  Claude: "can learn your style from what you have already written.",
 };
 
 /**
@@ -32,7 +32,7 @@ export function AiOffer({ connected }: {
     <aside className={styles.offer} aria-labelledby="ai-offer-title">
       <div className={styles.text}>
         <h2 id="ai-offer-title" className={styles.title}>{next ? "Add another AI" : "Get better drafts with your own AI"}</h2>
-        <p className={styles.body}>{next ? `${connected[0]} is connected. ${next} ${ADDS[next]}` : "Your AI can draft from your email, docs and posts too."}</p>
+        <p className={styles.body}>{next ? `${connected[0]} is connected. ${next} ${ADDS[next]}` : "It can find news in your field, learn your style from your own writing, and rework a draft when you ask."}</p>
       </div>
       <div className={styles.actions}>
         <span className={styles.marks} aria-hidden="true">{(next ? [next] : ["Claude", "ChatGPT", "Grok", "MCP"]).map((n) => <AiMark key={n} name={n} size={18} />)}</span>

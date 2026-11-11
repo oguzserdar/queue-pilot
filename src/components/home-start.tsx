@@ -12,7 +12,8 @@ import { WriteWeekButton } from "./write-week-button";
 import styles from "./home-start.module.css";
 
 /** What the person pastes into their connected AI to fill the week: drafts first, saved only on their yes. */
-export const FILL_ASK = "Use Queue Pilot to fill my empty Buffer times next week. Read my voice and playbook, then write from what I did this week: my email, docs and posts. Show me the drafts first and save them only when I say yes.";
+/** The fill request a person pastes into their AI. It names no place to look: the connector's own instructions say where topics come from, and an ask that lists email here once sent an AI through a person's inbox. */
+export const FILL_ASK = "Use Queue Pilot to fill my empty Buffer times next week. Show me the drafts before you save anything.";
 
 /**
  * The first-drafts panel on Home, shown until Queue Pilot has written a draft for the week: add one feed, then fill
@@ -42,7 +43,7 @@ export function HomeStart({ hasSource, writing, count, aiLink = true, ai }: { ha
       {ai && (
         <>
           <h2 id="start-title" className={styles.title}>Ask {ai} to fill next week</h2>
-          <p className={styles.muted}>Paste this into {ai}. It writes from your email, docs and posts, and saves each draft only after you say yes.</p>
+          <p className={styles.muted}>Paste this into {ai}. It writes from your sources in your voice, shows you every draft, and saves only after you say yes.</p>
           <div className={styles.row}><CopyButton value={FILL_ASK} label={`Copy for ${ai}`} /></div>
           <p className={styles.or}>Or let Queue Pilot&apos;s AI write from a link</p>
         </>

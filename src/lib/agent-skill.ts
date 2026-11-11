@@ -6,7 +6,7 @@
 import { createHash } from "node:crypto";
 import { zipSync } from "fflate";
 import { PLUGIN_SKILL_FILES, PLUGIN_SKILLS } from "./plugin-skills";
-import { FILL_WEEK_STEPS } from "./fill-week-prompt";
+import { FILL_WEEK_STEPS, PERSONAL_MATTERS_RULE, PRIVATE_PLACES_RULE } from "./fill-week-prompt";
 
 import { SKILL_NAME } from "./skill-name";
 export { SKILL_NAME } from "./skill-name";
@@ -140,6 +140,8 @@ ${TOOLS.map(([name, use]) => `- \`${name}\`: ${use}`).join("\n")}
 ## Rules that always hold
 
 - Write only from the person's material. Never invent numbers, quotes, customers or features.
+- A post is public, and email, chats and private documents hold the person's private life and other people's. ${PRIVATE_PLACES_RULE} Their own sent writing can teach you their style when they ask; nothing read for style becomes a topic. An item the person names themselves is the one exception: read only that item and save it with add_material once they agree.
+- ${PERSONAL_MATTERS_RULE}
 - Show the drafts before saving them, and save only what the person agreed to.
 - When save_drafts refuses a draft, fix it the way the answer says and save it again. Do not work around a playbook rule.
 - An empty slot without good material stays empty. Say which ones.

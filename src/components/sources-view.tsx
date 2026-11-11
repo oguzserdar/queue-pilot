@@ -52,7 +52,7 @@ function LiveSources({ sources }: Extract<SourcesProps, { mode: "live" }>) {
     <div className={styles.page}>
       <header className={styles.head}>
         <h1 className={styles.title}>Where your drafts come from</h1>
-        <p className={styles.sub}>Feeds Queue Pilot reads before it drafts: your blog, newsletter, YouTube or GitHub releases. Your AI can also bring in what you point it to in your email, Slack, docs or X.</p>
+        <p className={styles.sub}>Feeds Queue Pilot reads before it drafts: your blog, newsletter, YouTube or GitHub releases. Your AI can also bring in a page or doc you name, news from your field, and what people in it are saying in public.</p>
       </header>
 
       <section aria-labelledby="mat" className={styles.block}>
