@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { EvidenceCard } from "./source-presentation";
-import { groupBySource, quoteNeedsAttention, quoteWarnings } from "./source-groups";
+import { groupBySource, quoteNeedsAttention, quoteNotes, quoteProblems, quoteWarnings } from "./source-groups";
 
 const card = (over: Partial<EvidenceCard>): EvidenceCard => ({
   postId: "p1", snapshotId: "s1", title: "v0.5.0 Drafts with source evidence", uri: "https://github.com/x/releases/v0.5.0",
@@ -83,5 +83,23 @@ describe("quoteNeedsAttention", () => {
 
   it("is false for a quote found in an unchanged, whole source", () => {
     expect(quoteNeedsAttention(card({}))).toBe(false);
+  });
+});
+
+describe("quoteProblems and quoteNotes", () => {
+  it("treats a missing quote, a changed source and a failed check as problems", () => {
+    expect(quoteProblems(card({ quote: null }))).toEqual(["Quote not found in the saved source"]);
+    expect(quoteProblems(card({ changed: true, needsCheck: true }))).toEqual(["The source changed after this draft was written"]);
+    expect(quoteProblems(card({ needsCheck: true }))).toEqual(["Check this draft against the current source"]);
+  });
+
+  it("does not call an edited draft waiting for a check a problem with its quotes", () => {
+    expect(quoteProblems(card({ needsCheck: true, edited: true }))).toEqual([]);
+    expect(quoteNeedsAttention(card({ needsCheck: true, edited: true }))).toBe(false);
+  });
+
+  it("keeps how a quote was read as a note", () => {
+    expect(quoteNotes(card({ truncated: true }))).toEqual(["Only part of the source was read"]);
+    expect(quoteProblems(card({ truncated: true }))).toEqual([]);
   });
 });

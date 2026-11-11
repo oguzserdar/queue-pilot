@@ -121,7 +121,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                             </div>
                             {c.quote && <q className={page.quote}>{c.quote}</q>}
                             <p className={page.body}>{c.text}</p>
-                            {!candidatesUnavailable && candidates.length > 0 && <ReviewFeedback linkId={l.id} commentId={c.id} channelId={d.channelId} reviewer={c.name} candidates={candidates} />}
+                            {!candidatesUnavailable && candidates.length > 0 && <ReviewFeedback linkId={l.id} commentId={c.id} postId={c.postId} reviewer={c.name} candidates={candidates} />}
                           </li>
                         ))}
                       </ol>

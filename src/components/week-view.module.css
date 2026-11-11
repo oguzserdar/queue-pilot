@@ -121,8 +121,11 @@
 .issue + .issue { padding-top: var(--space-3); border-top: 1px solid var(--border); }
 
 /* Share for review dialog. */
-.shareBody { display: flex; flex-direction: column; gap: 12px; }
-.shareList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; max-height: min(50dvh, 420px); overflow-y: auto; }
+/* The share dialog fills the dialog's body; only the list scrolls, so the expiry and the buttons stay in view on a short window. */
+.shareBody { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
+.shareBody > * { flex: none; }
+.shareBody > .shareList { flex: 0 1 auto; min-height: 96px; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+.shareList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 .shareRow { display: flex; align-items: center; gap: var(--space-3); min-height: 30px; }
 /* The expiry label and its choice share one row, so the dialog fits a laptop screen. */
 .shareExpiry { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
@@ -154,7 +157,8 @@
 .ruleSummary { display: flex; flex-direction: column; gap: 10px; }
 .passIcon { color: var(--success, #2f7d4f); flex: none; }
 .viewRules { margin-left: auto; color: var(--qp-crimson); font-size: var(--text-xs); }
-.footer { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin: var(--space-6) calc(-1 * var(--space-6)) calc(-1 * var(--space-6)); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border); background: var(--surface-raised); }
+/* The dialog body scrolls and has padding; a sticky box stops at its content edge, so the bar reaches past the padding to sit flush. */
+.footer { position: sticky; bottom: calc(-1 * var(--space-6)); display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin: var(--space-6) calc(-1 * var(--space-6)) calc(-1 * var(--space-6)); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border); background: var(--surface-raised); }
 .footNote { color: var(--text-muted); font-size: var(--text-xs); margin: 0; max-width: 52ch; }
 /* The plain saved state reads at the buttons' size, with a mark, so the bar's left side is a status, not a stray caption. */
 .footState { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }

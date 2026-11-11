@@ -1,4 +1,5 @@
 import type { Verdict } from "@/lib/judge";
+import type { EvidenceCard } from "@/lib/source-presentation";
 import { channels as exampleChannels } from "@/lib/example-channels";
 import { notFound } from "next/navigation";
 import { ComposerPreview } from "./composer-preview";
@@ -17,15 +18,31 @@ const demoWeek = demoWeekFor(0);
 import { slotKey } from "@/lib/week-model";
 import { NeedsYouView } from "@/components/needs-you-view";
 import type { TriageItem } from "@/lib/triage-model";
+import { ReviewsView } from "@/components/reviews-view";
+import { ReviewRoom } from "@/app/r/[id]/review-room";
+import { exampleReviewLinks } from "@/lib/example-reviews";
 
 /** Development only: the signed-in Ideas, Voice and Week screens, for screenshots and the layout gate. Production answers 404. */
-export default async function Page({ searchParams }: { searchParams: Promise<{ screen?: string; channels?: string; team?: string; notes?: string; tags?: string; problem?: string; video?: string; stale?: string; repeat?: string; fixes?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ screen?: string; channels?: string; team?: string; notes?: string; tags?: string; problem?: string; video?: string; stale?: string; repeat?: string; fixes?: string; edited?: string; many?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
   const params = await searchParams;
   const asked = params.screen;
   const channelCount = params.channels === "1" ? 1 : params.channels === "2" ? 2 : 4;
   const shellChannels = exampleChannels.slice(0, channelCount).map(c => ({ ...c, name: c.handle }));
-  const screen = asked === "voice" || asked === "settings" || asked === "week" || asked === "playbook" || asked === "needs" || asked === "composer" ? asked : "ideas";
+  const screen = asked === "voice" || asked === "settings" || asked === "week" || asked === "playbook" || asked === "needs" || asked === "composer" || asked === "reviews" || asked === "review-room" ? asked : "ideas";
+  if (screen === "review-room") {
+    // The reviewer's page for the example link: no account, no app shell.
+    const link = exampleReviewLinks(0)[0];
+    return <ReviewRoom id="example" drafts={link.drafts} initial={link.comments} />;
+  }
+  if (screen === "reviews") {
+    // The owner's Reviews page with a week of 20 drafts Queue Pilot wrote: "Suggest changes" picks among them.
+    const link = exampleReviewLinks(0)[0];
+    const drafts = demoWeek.posts.filter((p) => p.status === "draft");
+    const candidates = Array.from({ length: 20 }, (_, i) => { const p = drafts[i % drafts.length]; const c = exampleChannels.find((ch) => ch.id === p.channel); return { id: i < drafts.length ? p.id : `${p.id}-${i}`, channelId: p.channel, network: c?.service ?? "", label: c?.handle ?? "Account", text: p.text }; });
+    const shell: ShellAccount = { email: "alex@thisweekinai.example", channels: shellChannels, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Alex Rivera", image: null };
+    return <AppShell account={shell} signInOpen><ReviewsView origin="http://localhost:3132" links={[link]} candidates={candidates} /></AppShell>;
+  }
   if (screen === "composer") {
     const shell: ShellAccount = { email: "alex@thisweekinai.example", channels: shellChannels, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Alex Rivera", image: null };
     return <AppShell account={shell} signInOpen><ComposerPreview /></AppShell>;
@@ -56,15 +73,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
     const d1Text = week.posts.find((p) => p.id === "d1")?.text ?? "";
     // ?stale=1: d1 changed since its last check, the state that used to say so three times.
     const staleReason = "The draft or its rules changed. Check it again before approving.";
-    const stale = params.stale === "1" ? { readiness: { d1: { state: "check" as const, stale: true, reason: staleReason } }, checkNotes: { d1: staleReason } } : {};
-    return <AppShell account={shell} signInOpen><WeekView week={week} live {...stale} verdicts={Object.fromEntries(week.posts.filter((p) => p.ours !== false && p.status === "draft").map((p) => [p.id, p.id === "d1" && params.stale === "1" ? null : p.id === "d1" ? [{ ruleId: "r1", rule: "Name the model and the number in the first line.", level: "block", verdict: "pass", probability: 0.97, quote: "", reason: "" }, { ruleId: "r2", rule: "Mention the issue number.", level: "block", verdict: "pass", probability: 0.95, quote: "", reason: "" }] satisfies Verdict[] : []]))} writing={{ ready: true, source: "built-in AI" }} writeCount={10} evidence={params.video === "1" ? [
+    // ?edited=1: d1 was edited after its quotes were checked; one quote was read from part of the source only.
+    const editedLine = "You edited this draft. Check it again before approving.";
+    // ?many=1: a full week of 20 drafts, as on a busy account, for the share dialog on a short window.
+    if (params.many === "1") { const drafts = week.posts.filter((p) => p.status === "draft"); Object.assign(week, { posts: [...week.posts, ...Array.from({ length: 20 - drafts.length }, (_, i) => ({ ...drafts[i % drafts.length], id: `many-${i}`, day: i % 7, time: `${8 + (i % 10)}:30` }))] }); }
+    if (params.edited === "1") Object.assign(week, { posts: week.posts.map((p) => p.id === "d1" ? { ...p, editedFrom: p.text, text: `${p.text} https://thisweekinai.example/41` } : p) });
+    // Every quote now waits for a check of the new words; the first was read from part of the source.
+    const edit = (cards: EvidenceCard[]): EvidenceCard[] => params.edited === "1" ? cards.map((c, i) => ({ ...c, needsCheck: true, edited: true, truncated: i === 0, draftText: week.posts.find((p) => p.id === "d1")?.text ?? "", why: editedLine })) : cards;
+    const stale = params.edited === "1" ? { readiness: { d1: { state: "check" as const, stale: true, reason: editedLine } }, checkNotes: { d1: editedLine } } : params.stale === "1" ? { readiness: { d1: { state: "check" as const, stale: true, reason: staleReason } }, checkNotes: { d1: staleReason } } : {};
+    return <AppShell account={shell} signInOpen><WeekView week={week} live {...stale} verdicts={Object.fromEntries(week.posts.filter((p) => p.ours !== false && p.status === "draft").map((p) => [p.id, p.id === "d1" && params.stale === "1" ? null : p.id === "d1" ? [{ ruleId: "r1", rule: "Name the model and the number in the first line.", level: "block", verdict: "pass", probability: 0.97, quote: "", reason: "" }, { ruleId: "r2", rule: "Mention the issue number.", level: "block", verdict: "pass", probability: 0.95, quote: "", reason: "" }] satisfies Verdict[] : []]))} writing={{ ready: true, source: "built-in AI" }} writeCount={10} evidence={edit(params.video === "1" ? [
       { postId: "d1", snapshotId: "dev-video", sourceKey: "yt:releases-video", title: "This Week in AI video: Terra, Carbon, and 40 agents in Android Studio", uri: "https://www.youtube.com/watch?v=abcdefghijk&list=PLreleases", claim: "This Week in AI 41.", quote: "This Week in AI, issue 41.", locator: null, kind: "transcript", captions: "manual", lastCheckedAt: new Date().toISOString(), needsCheck: false, changed: false, scheduled: false, editable: true, oldText: "", newText: "", draftText: d1Text, why: "" },
       { postId: "d1", snapshotId: "dev-video", sourceKey: "yt:releases-video", title: "This Week in AI video: Terra, Carbon, and 40 agents in Android Studio", uri: "https://www.youtube.com/watch?v=abcdefghijk&list=PLreleases", claim: "For now only a subset of cyber defenders can use it.", quote: "Google is giving Carbon to a subset of cyber defenders first.", locator: "t=1342", kind: "transcript", captions: "auto", lastCheckedAt: new Date().toISOString(), needsCheck: false, changed: false, scheduled: false, editable: true, oldText: "", newText: "", draftText: d1Text, why: "" },
       { postId: "d1", snapshotId: "dev-video", sourceKey: "yt:releases-video", title: "This Week in AI video: Terra, Carbon, and 40 agents in Android Studio", uri: "https://www.youtube.com/watch?v=abcdefghijk&list=PLreleases", claim: "Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59.", quote: "Carbon is number one on the Artificial Analysis Intelligence Index, at 59.", locator: "t=754", kind: "transcript", captions: "manual", lastCheckedAt: new Date().toISOString(), needsCheck: false, changed: false, scheduled: false, editable: true, oldText: "", newText: "", draftText: d1Text, why: "" },
     ] : [
       { postId: "d1", snapshotId: "dev-41", sourceKey: "feed:issue-41", title: "This Week in AI 41: Terra, Carbon, and 40 agents in Android Studio", uri: "https://thisweekinai.example/41", claim: "Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59.", quote: "Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59, by Google's own post.", locator: null, lastCheckedAt: new Date().toISOString(), needsCheck: false, changed: false, scheduled: false, editable: true, oldText: "", newText: "", draftText: "", why: "" },
       { postId: "d1", snapshotId: "dev-41", sourceKey: "feed:issue-41", title: "This Week in AI 41: Terra, Carbon, and 40 agents in Android Studio", uri: "https://thisweekinai.example/41", claim: "This Week in AI 41.", quote: params.problem === "1" ? null : "This Week in AI, issue 41.", locator: null, lastCheckedAt: new Date().toISOString(), needsCheck: false, changed: false, scheduled: false, editable: true, oldText: "", newText: "", draftText: "", why: "" },
-    ]} notesPreview={Object.fromEntries(week.posts.map((p) => [p.id, { team: params.team === "1", more: false, notes: params.notes === "0" ? [] : [params.team === "1" ? { id: "n2", author: "Sam Lee", avatar: null, createdAt: new Date(Date.now() - 12 * 60_000).toISOString(), edited: false, text: "Can we use the chart from Sunday instead? This one is hard to read.", canEdit: false, canDelete: false } : { id: "n2", author: "Alex Rivera", avatar: null, createdAt: new Date(Date.now() - 12 * 60_000).toISOString(), edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true }, { id: "n1", author: "Alex Rivera", avatar: null, createdAt: "2026-11-03T17:40:00Z", edited: true, text: "Checked the score against the Google post: still 59.", canEdit: true, canDelete: true }] }]))} tagsPreview={Object.fromEntries(week.posts.map((p) => [p.id, params.tags === "0"
+    ])} notesPreview={Object.fromEntries(week.posts.map((p) => [p.id, { team: params.team === "1", more: false, notes: params.notes === "0" ? [] : [params.team === "1" ? { id: "n2", author: "Sam Lee", avatar: null, createdAt: new Date(Date.now() - 12 * 60_000).toISOString(), edited: false, text: "Can we use the chart from Sunday instead? This one is hard to read.", canEdit: false, canDelete: false } : { id: "n2", author: "Alex Rivera", avatar: null, createdAt: new Date(Date.now() - 12 * 60_000).toISOString(), edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true }, { id: "n1", author: "Alex Rivera", avatar: null, createdAt: "2026-11-03T17:40:00Z", edited: true, text: "Checked the score against the Google post: still 59.", canEdit: true, canDelete: true }] }]))} tagsPreview={Object.fromEntries(week.posts.map((p) => [p.id, params.tags === "0"
       ? { canEdit: p.ours !== false && p.status === "draft", selected: [], all: [] }
       : { canEdit: p.ours !== false && p.status === "draft", selected: [{ id: "t1", name: "Releases", color: "#8F2457" }], all: [{ id: "t1", name: "Releases", color: "#8F2457" }, { id: "t2", name: "Agents", color: "#2F6F4E" }, { id: "t3", name: "Newsletter", color: "#3B5BA5" }] }]))} /></AppShell>;
   }
