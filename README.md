@@ -23,7 +23,7 @@ Teach Queue Pilot your voice by pasting something you've written, or ask your co
   <img alt="Next week: one row per Buffer channel, posting times, the empty times highlighted, and New post, Fill next week, Share for review and Approve" src="docs/media/week.png">
 </picture>
 
-**2. Your AI writes drafts into the empty times.** From your own work, wherever your AI can read it: email, Slack, docs and meeting notes, your posts on X, your blog or videos, and your own past posts. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
+**2. Your AI writes drafts into the empty times.** From what you publish and follow: your blog, newsletter, videos and releases, ideas you saved in Buffer, your own public posts, and news in your field. Email and chats are never a source. Your AI reads your own writing there only to learn your style, when you ask. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
 
 ![A draft opened from the week: the post with its tag, the quote from Google's announcement behind each claim, the checks, the rules set for that account, and a Note](docs/media/draft-check.png)
 
