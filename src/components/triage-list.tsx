@@ -16,7 +16,7 @@ import type { PostState } from "@/lib/post-state";
 import { StateMark } from "./state-mark";
 import styles from "./triage-list.module.css";
 
-const MARK: Record<TriageItem["kind"], PostState> = { breaks: "breaks", failed: "failed", overdue: "draft", approve: "draft", check: "check", comment: "draft", empty: "empty" };
+const MARK: Record<TriageItem["kind"], PostState> = { repeat: "check", breaks: "breaks", failed: "failed", overdue: "draft", approve: "draft", check: "check", comment: "draft", empty: "empty" };
 const external = (href: string) => /^https?:\/\//.test(href);
 
 /**

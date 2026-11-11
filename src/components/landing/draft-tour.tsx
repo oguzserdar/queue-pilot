@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { WeekView } from "@/components/week-view";
-import { SameFixOffer } from "@/components/playbook-view";
+import { EXAMPLE_SAME_FIX, SameFixOffer } from "@/components/playbook-view";
 import { TeamNotesFinder } from "@/components/team-notes-finder";
 import { ToastStackProvider } from "@/registry/components/toast-stack/toast-stack";
 import { PointerTour, byText, type TourStop } from "./pointer-tour";
@@ -47,7 +47,7 @@ const SAME_FIX: TourStop[] = [
 
 /** The same-fix offer from the playbook, toured the same way. */
 export function SameFixTour() {
-  return <PointerTour stops={SAME_FIX}><SameFixOffer /></PointerTour>;
+  return <PointerTour stops={SAME_FIX}><SameFixOffer content={EXAMPLE_SAME_FIX} /></PointerTour>;
 }
 
 const TEAM_NOTE: TourStop[] = [

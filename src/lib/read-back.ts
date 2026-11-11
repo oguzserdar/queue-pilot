@@ -10,6 +10,8 @@ import { rewritesIn } from "./rewrite-rules";
 import type { Rule } from "./rules";
 import { postgresRulesStore } from "./rules-store";
 import { postgresWrittenStore } from "./written-store";
+import { checkKey, postgresVerdictStore } from "./fix-verdicts";
+import { preferencesFrom } from "./confirm-fixes";
 
 export async function currentOffers(userId: string): Promise<(FixOffer & { key: string })[]> {
   const snap = await postgresSnapshotStore().get(userId);
@@ -23,6 +25,18 @@ export async function currentOffers(userId: string): Promise<(FixOffer & { key: 
   ]);
   const offers = openOffers(repeatedFixes(editsFrom(written, posts.map((p) => ({ id: p.id, channelId: p.channelId, text: p.text ?? "" })))), rules, dismissed);
   return offers.map((o) => ({ ...o, key: offerKey(o) }));
+}
+
+/**
+ * The repeated fixes worth telling the person about, for Home and the Playbook, without an AI call. When the model has
+ * already judged this exact set of repeats, only the ones it called lasting preferences are left; until then every
+ * open repeat counts, and the Playbook asks the model when it opens.
+ */
+export async function waitingRepeats(userId: string): Promise<(FixOffer & { key: string })[]> {
+  const offers = await currentOffers(userId);
+  if (!offers.length) return [];
+  const saved = await postgresVerdictStore().get(userId, checkKey(offers)).catch(() => null);
+  return saved?.kind === "answer" ? preferencesFrom(offers, saved.verdicts) : offers;
 }
 
 /** The person's rewrites of Queue Pilot's drafts (edits too big for one fix) and their rules, for rewrite-rules.ts. */

@@ -11,6 +11,7 @@ import { draftReadiness, type Readiness } from "@/lib/draft-readiness";
 import { hasApprovedDraft, postgresWrittenStore } from "@/lib/written-store";
 import { postgresRulesStore } from "@/lib/rules-store";
 import { postgresReviewStore } from "@/lib/review-store";
+import { waitingRepeats } from "@/lib/read-back";
 import { demoShiftDays } from "@/lib/demo-clock";
 import { exampleNeeds } from "@/lib/example-needs";
 
@@ -43,10 +44,12 @@ export default async function Page() {
   const now = new Date();
   // Each draft Queue Pilot wrote, with how it did against the current playbook.
   const draftIds = user.posts.filter((p) => p.status === "draft").map((p) => p.id);
-  const [written, rules, links] = await Promise.all([
+  const [written, rules, links, repeats] = await Promise.all([
     userId ? postgresWrittenStore().get(userId, draftIds).catch(() => []) : [],
     userId ? postgresRulesStore().list(userId).catch(() => null) : null,
     userId ? postgresReviewStore().list(userId).catch(() => []) : [],
+    // Fixes the person repeated, found for free; the Playbook asks the model whether each is a lasting preference.
+    userId ? waitingRepeats(userId).catch(() => []) : [],
   ]);
   // The same test Approve uses, so this page never offers an approval the button would refuse.
   const postsById = new Map(user.posts.map(p => [p.id, p]));
@@ -63,7 +66,7 @@ export default async function Page() {
   const evidence = userId ? await sourceCards(userId, user.posts, user.channels) : [];
   const blocks = sourceHoldsFromCards(evidence);
   for (const [id, reason] of blocks) checks[id] = { state: "check", reason };
-  const triage = triageFromBuffer({ channels: user.channels, posts: user.posts, now, timeZone: user.timeZone, checks, comments });
+  const triage = triageFromBuffer({ channels: user.channels, posts: user.posts, now, timeZone: user.timeZone, checks, comments, repeats });
   // Until Queue Pilot has written a draft for the week shown, Home leads with the shortest way to the first ones.
   const toFill = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, user.timeZone).length;
   // An AI counts as connected once it has really called Queue Pilot, not when its approval was granted.

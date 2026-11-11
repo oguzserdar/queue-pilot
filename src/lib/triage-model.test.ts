@@ -54,3 +54,26 @@ describe("triageFromBuffer empty times", () => {
     expect(triageFromBuffer({ channels: [channel] as never, posts: [] as never, now, timeZone: "UTC", checks: {}, comments: [] }).some((i) => i.kind === "empty")).toBe(false);
   });
 });
+
+describe("triageFromBuffer repeated fixes", () => {
+  const withRepeats = (repeats: { channelId?: string; network: string; count: number }[]) => triageFromBuffer({ channels: [channel] as never, posts: [], now, timeZone: "UTC", checks: {}, comments: [], repeats }).filter((i) => i.kind === "repeat");
+
+  it("shows nothing when no fix was repeated", () => {
+    expect(withRepeats([])).toEqual([])
+    expect(triageFromBuffer({ channels: [channel] as never, posts: [], now, timeZone: "UTC", checks: {}, comments: [] }).filter((i) => i.kind === "repeat")).toEqual([])
+  })
+
+  it("is one line that opens the offer on the Playbook, saying where the fix was made", () => {
+    expect(withRepeats([{ channelId: "x", network: "twitter", count: 2 }])).toEqual([{ id: "repeat-fixes", kind: "repeat", title: "You made the same fix in 2 drafts", detail: "OguzSerdar · X", href: "/playbook#fixes", action: "See the rule" }])
+  })
+
+  it("stays one line for several repeats", () => {
+    const rows = withRepeats([{ channelId: "x", network: "twitter", count: 3 }, { channelId: "x", network: "twitter", count: 2 }])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].title).toBe("You repeated 2 fixes in your drafts")
+  })
+
+  it("comes first on Home, above drafts", () => {
+    expect(TRIAGE_GROUPS[0]).toEqual({ kind: "repeat", label: "Fixes you repeated" })
+  })
+});

@@ -10,9 +10,14 @@ import { nextWeekRange, weekFromBuffer } from "./week-from-buffer";
 import { cellEntries, worstTone } from "./week-model";
 import type { Readiness } from "./draft-readiness";
 import { BUFFER_PUBLISH_URL } from "./connect-links";
+import { NETWORKS } from "./rules";
+
+/** A fix the person made in two or more drafts on one account, from read-back.ts waitingRepeats(). */
+export type TriageRepeat = { channelId?: string; network: string; count: number };
 
 /** Why something needs the person; the groups appear in this order. */
 export const TRIAGE_GROUPS = [
+  { kind: "repeat", label: "Fixes you repeated" },
   { kind: "breaks", label: "Won't go out as it is" },
   { kind: "failed", label: "Didn't go out" },
   { kind: "overdue", label: "Overdue in Buffer" },
@@ -41,12 +46,21 @@ export function triageFromBuffer(input: {
   checks: Record<string, Readiness>;
   /** Review comments from the last seven days, with the draft each was left on. */
   comments: (ReviewComment & { draft: string })[];
+  /** Fixes repeated across drafts and not yet kept or set aside. Found without AI; the Playbook asks the model. */
+  repeats?: TriageRepeat[];
 }): TriageItem[] {
-  const { channels, posts, now, timeZone, checks, comments } = input;
+  const { channels, posts, now, timeZone, checks, comments, repeats = [] } = input;
   const range = nextWeekRange(now, timeZone);
   const week = weekFromBuffer(channels, postsBetween(posts, range.start, range.end), range, timeZone);
   const name = (id: string) => channels.find((c) => c.id === id)?.name ?? "Account";
   const items: TriageItem[] = [];
+
+  // Repeated fixes are one line, like empty times: the Playbook shows each one with its edits and the rule.
+  if (repeats.length) {
+    const where = [...new Set(repeats.map((r) => `${r.channelId ? name(r.channelId) : "Every account"} · ${NETWORKS[r.network] ?? r.network}`))].join(", ");
+    const title = repeats.length === 1 ? `You made the same fix in ${repeats[0].count} drafts` : `You repeated ${repeats.length} fixes in your drafts`;
+    items.push({ id: "repeat-fixes", kind: "repeat", title, detail: where, href: "/playbook#fixes", action: "See the rule" });
+  }
 
   for (const p of week.posts.filter((p) => p.status === "draft")) {
     const where = `${week.days[p.day]} ${p.time} · ${name(p.channel)}`;

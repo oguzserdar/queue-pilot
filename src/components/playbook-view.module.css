@@ -13,9 +13,21 @@
 .offer { border: 1px solid var(--border-strong); border-radius: var(--radius-panel); background: var(--surface); padding: var(--space-5) var(--space-6); display: flex; flex-direction: column; gap: var(--space-2); }
 .diff { margin: 0; font-size: var(--text-sm); }
 .diff del { color: var(--danger); }
+.diff ins { text-decoration: none; font-weight: 600; color: var(--success); background: color-mix(in oklab, var(--success) 10%, transparent); border-radius: 4px; padding: 1px 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .proposed { margin: var(--space-2) 0 0; font-weight: 600; }
 .actions { display: flex; gap: 6px; margin-top: var(--space-2); }
 .done { margin: 0; color: var(--success); font-weight: 600; }
+/* The model's reason, set off as its words rather than a second "where" line. */
+.why { margin: 0; font-size: var(--text-sm); color: var(--text-muted); border-left: 2px solid var(--border-strong); padding-left: var(--space-3); }
+/* The same-fix offer on the live page: reached from Home at /playbook#fixes. */
+.fixes { display: flex; flex-direction: column; gap: var(--space-3); scroll-margin-top: var(--space-6); }
+.fixWait { border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); padding: var(--space-4) var(--space-6); display: flex; align-items: flex-start; gap: var(--space-3); }
+.fixWait > .text { flex: 1; }
+.fixWait strong { font-size: var(--text-base); font-weight: 600; }
+.fixWait > button { align-self: center; }
+.pulse { margin-top: 0.55em; width: 8px; height: 8px; border-radius: 50%; background: var(--qp-crimson); flex: none; animation: pulse 1.4s var(--ease-standard) infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
 @media (max-width: 640px) { .row { flex-direction: column; align-items: flex-start; } }
 .rowEnd { display: flex; align-items: center; gap: var(--space-2); flex: none; }
 .problem { margin: 0; color: var(--danger); font-size: var(--text-sm); }

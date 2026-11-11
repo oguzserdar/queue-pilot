@@ -9,6 +9,7 @@ import { SettingsView } from "@/components/settings-view";
 import { WeekView } from "@/components/week-view";
 import { PlaybookView } from "@/components/playbook-view";
 import { devReadRule } from "./read-rule";
+import { EXAMPLE_RULES } from "@/lib/example-playbook";
 import { demoWeekFor } from "@/lib/demo-data";
 
 // The dev page shows the written week.
@@ -18,7 +19,7 @@ import { NeedsYouView } from "@/components/needs-you-view";
 import type { TriageItem } from "@/lib/triage-model";
 
 /** Development only: the signed-in Ideas, Voice and Week screens, for screenshots and the layout gate. Production answers 404. */
-export default async function Page({ searchParams }: { searchParams: Promise<{ screen?: string; channels?: string; team?: string; notes?: string; tags?: string; problem?: string; video?: string; stale?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ screen?: string; channels?: string; team?: string; notes?: string; tags?: string; problem?: string; video?: string; stale?: string; repeat?: string; fixes?: string }> }) {
   if (process.env.NODE_ENV === "production") notFound();
   const params = await searchParams;
   const asked = params.screen;
@@ -33,13 +34,20 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
     // Example rows, not live: approving folds the row away without calling Buffer.
     const at = (i: number, title: string, time: string, account: string): TriageItem => ({ id: `approve-${i}`, kind: "approve", title, detail: `${time} · ${account}`, href: "/week", action: "Approve", postId: `p${i}`, run: "approve" });
     const triage = [at(1, "Queue Pilot opens review links on Monday.", "Mon 9:00", "Company"), at(2, "On Monday, QP adds account-specific rules.", "Mon 12:00", "Company"), at(3, "I am building QP around my edits.", "Tue 9:00", "Personal"), at(4, "Why one clear point beats three.", "Wed 9:00", "Personal"),
+      // ?repeat=1: a fix Alex made in two drafts, waiting at the top.
+      ...(params.repeat === "1" ? [{ id: "repeat-fixes", kind: "repeat", title: "You made the same fix in 2 drafts", detail: "Alex Rivera · LinkedIn", href: "/playbook#fixes", action: "See the rule" } satisfies TriageItem] : []),
       ...[["Issue 40 is out.", "Mon 2 Nov, 08:06"], ["Android Studio now lets you pick from over 40 coding agents.", "Tue 3 Nov, 12:00"]].map(([title, when], i): TriageItem => ({ id: `overdue-${i}`, kind: "overdue", title, detail: `${when} · Company`, href: "https://publish.buffer.com", action: "Open Buffer", full: title, why: "Its time passed while it was a draft, so Buffer did not post it. Pick a new time or delete it in Buffer." }))];
     const shell: ShellAccount = { email: "alex@thisweekinai.example", channels: shellChannels, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Alex Rivera", image: null };
     return <AppShell account={shell} signInOpen><NeedsYouView needs={[]} readiness={[]} greeting="Good evening" triage={triage} /></AppShell>;
   }
   if (screen === "playbook") {
     const shell: ShellAccount = { email: "alex@thisweekinai.example", channels: shellChannels, fetchedAt: new Date(Date.now() - 3 * 60_000).toISOString(), needsRefresh: false, name: "Alex Rivera", image: null };
-    return <AppShell account={shell} signInOpen><PlaybookView mode="live" initial={[]} reader={devReadRule} /></AppShell>;
+    // ?fixes=reading|offer|none: the same-fix offer at the top, drawn without the server.
+    const ending = "Full issue: thisweekin.ai/41";
+    const fixes = params.fixes === "offer" ? { ok: true as const, note: "", offers: [{ token: "dev", drafts: 2, rule: `End with "${ending}"`, before: "…ranks #1 on the index, at 59.", after: `…ranks #1 on the index, at 59. ${ending}`, change: { lead: "…ranks #1 on the index, at 59.", removed: "", added: ending, tail: "" }, where: `On Alex Rivera (LinkedIn) you added "${ending}" at the end of 2 drafts, on Tuesday and Thursday.`, why: "Both times the post sends readers to the full issue the same way, so it reads as a habit rather than a one-off." }] }
+      : params.fixes === "none" ? { ok: true as const, offers: [], note: "Found 1 repeated fix, but none looked like a lasting preference. One-off facts and chance matches are not offered." }
+      : params.fixes === "reading" ? "reading" as const : undefined;
+    return <AppShell account={shell} signInOpen><PlaybookView mode="live" initial={fixes ? EXAMPLE_RULES.slice(0, 3) : []} reader={devReadRule} repeats={fixes ? { count: 1, edits: 2 } : undefined} fixesPreview={fixes} /></AppShell>;
   }
   if (screen === "week") {
     // The example week as a signed-in person sees it: the empty slot has an id.
