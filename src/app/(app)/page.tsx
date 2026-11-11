@@ -68,14 +68,14 @@ export default async function Page() {
   const toFill = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, user.timeZone).length;
   // An AI counts as connected once it has really called Queue Pilot, not when its approval was granted.
   const connected = [...new Set((aiApps ?? []).filter((a) => a.lastUsedAt).sort((a, b) => b.lastUsedAt!.localeCompare(a.lastUsedAt!)).map((a) => a.brand ?? a.name))];
-  const setAside = userId ? await dismissedOffers(userId).catch(() => new Set()) : new Set();
+  const setAside = userId ? await dismissedOffers(userId).catch((e) => { console.warn(JSON.stringify({ event: "qp-offers-read-failed", message: e instanceof Error ? e.message : String(e) })); return new Set(); }) : new Set();
   // First visit: nothing connected, no link, nothing written yet. Home opens on who should write the drafts.
   const firstVisit = !!userId && connected.length === 0 && sources.length === 0 && written.length === 0 && toFill > 0 && !setAside.has("welcome");
   const offerKey = connected.length ? "add-ai" : "connect-ai";
   const offer = !firstVisit && userId && !setAside.has(offerKey) ? <AiOffer connected={connected} /> : null;
   const firstDrafts = userId && written.length === 0 && toFill > 0;
   const start = firstVisit
-    ? <WelcomeChoice origin={publicOrigin(await headers())} approved={aiApps} count={toFill} hasSource={sources.length > 0} writing={await writingAvailabilityFor(userId)}
+    ? <WelcomeChoice origin={publicOrigin(await headers())} approved={aiApps} count={toFill} empty={triage.find((t) => t.kind === "empty")?.count ?? toFill} hasSource={sources.length > 0} writing={await writingAvailabilityFor(userId)}
         account={{ email: user.email, channels: user.channels.map((c) => ({ name: c.name, service: c.service, disconnected: c.isDisconnected })) }} />
     : (offer || firstDrafts) ? <>{offer}{firstDrafts ? <HomeStart hasSource={sources.length > 0} writing={await writingAvailabilityFor(userId!)} count={toFill} aiLink={!offer && connected.length === 0} /> : null}</> : undefined;
   return <><NeedsYouView needs={needs} readiness={readiness} greeting={`Signed in as ${user.email}`} triage={triage} live start={start} welcome={firstVisit} /><SourceEvidencePanel cards={evidence} timeZone={user.timeZone} /></>;

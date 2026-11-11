@@ -11,7 +11,16 @@ import { getAuth } from "@/lib/auth";
 export async function GET(req: NextRequest) {
   const res = new NextResponse(null, { status: 303, headers: { location: "/" } });
   const auth = await getAuth();
-  const live = auth ? await auth.api.getSession({ headers: req.headers }).catch(() => null) : null;
+  if (!auth) return res;
+  // A lookup that fails says nothing about the session, so nothing is cleared: a database hiccup must not sign a
+  // live person out. Only a lookup that succeeds and finds no session clears the cookies.
+  let live: unknown;
+  try {
+    live = await auth.api.getSession({ headers: req.headers });
+  } catch (e) {
+    console.warn(JSON.stringify({ event: "qp-expired-check-failed", message: e instanceof Error ? e.message : String(e) }));
+    return res;
+  }
   if (live) return res;
   for (const { name } of req.cookies.getAll()) {
     if (/^(__Secure-)?better-auth\./.test(name)) {

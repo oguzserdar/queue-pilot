@@ -14,7 +14,7 @@ const req = () => new NextRequest("https://getqueuepilot.com/auth/expired", {
   headers: { cookie: "__Secure-better-auth.session_token=dead; better-auth.session_data.0=x; theme=dark" },
 });
 
-beforeEach(() => getSession.mockReset());
+beforeEach(() => { getSession.mockReset(); });
 
 describe("GET /auth/expired", () => {
   it("clears every sign-in cookie of a session that no longer exists and sends the visitor home", async () => {
@@ -27,6 +27,13 @@ describe("GET /auth/expired", () => {
     expect(cleared[0]).toMatch(/^__Secure-better-auth\.session_token=;.*Max-Age=0.*Secure/i);
     expect(cleared[1]).toMatch(/^better-auth\.session_data\.0=;.*Max-Age=0/i);
     expect(cleared.join()).not.toMatch(/theme=/);
+  });
+
+  it("clears nothing when the session lookup fails, so a database hiccup never signs anyone out", async () => {
+    getSession.mockImplementation(async () => { throw new Error("db down"); });
+    const res = await GET(req());
+    expect(res.headers.get("location")).toBe("/");
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 
   it("leaves a live session alone and just goes home", async () => {

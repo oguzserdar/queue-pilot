@@ -5,7 +5,7 @@ vi.mock("./source-store", () => ({ replaceDraftEvidence: replace }));
 import { repairDraftEvidence } from "./repair-draft-evidence";
 const post = { id: "p", channelId: "ch", text: "Seats cost $10.", status: "draft" } as Post;
 const input = { postId: "p", text: post.text, expectedText: post.text, snapshotId: "s", evidence: [{ claim: post.text, quote: "cost $10." }] };
-beforeEach(() => replace.mockClear());
+beforeEach(() => { replace.mockClear(); });
 it("repairs the same owned draft without a Buffer mutation", async () => {
   const q = vi.fn(async () => ({ post })) as any;
   expect(await repairDraftEvidence("u", "t", input, [post], new Set(["p"]), q)).toEqual({ ok: true });

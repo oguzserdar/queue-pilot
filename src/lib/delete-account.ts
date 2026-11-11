@@ -32,7 +32,8 @@ export async function deleteAccount(userId: string, telegramSecret?: string): Pr
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('qp-first-admin'))`);
     const [me] = await tx.select({ role: user.role }).from(user).where(eq(user.id, userId));
     if (me && isAdminRole(me.role)) {
-      const admins = await tx.select({ id: user.id, role: user.role }).from(user).where(sql`${user.role} like '%admin%'`);
+      // Locked, so a role change elsewhere waits for this check instead of leaving no admin.
+      const admins = await tx.select({ id: user.id, role: user.role }).from(user).where(sql`${user.role} like '%admin%'`).for("update");
       if (!admins.some((a) => a.id !== userId && isAdminRole(a.role))) throw new LastAdminError();
     }
     if (codes.length) await tx.delete(telegramCode).where(inArray(telegramCode.code, codes));
