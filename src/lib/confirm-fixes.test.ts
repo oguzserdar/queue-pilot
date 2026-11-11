@@ -13,36 +13,59 @@ describe("preferencesFrom", () => {
   it("keeps only candidates the model calls a preference, with its reason", () => {
     const offers = [offer("Excited to share"), offer("https://example.com/v1"), offer("today")];
     const kept = preferencesFrom(offers, [
-      { candidate: 1, verdict: "preference", why: "Both drafts drop a hype opener." },
-      { candidate: 2, verdict: "fact", why: "The link was wrong for these posts." },
-      { candidate: 3, verdict: "unclear", why: "Could be chance." },
+      { candidate: 1, verdict: "preference", why: "Both drafts drop a hype opener.", rule: "Keep it." },
+      { candidate: 2, verdict: "fact", why: "The link was wrong for these posts.", rule: "" },
+      { candidate: 3, verdict: "unclear", why: "Could be chance.", rule: "" },
     ]);
     expect(kept.map((k) => k.fix)).toEqual([{ kind: "banned", phrase: "Excited to share" }]);
     expect(kept[0].why).toBe("Both drafts drop a hype opener.");
   });
 
+  it("keeps an added ending as the author's sentence, and drops one that loses the words, is empty or too long", () => {
+    const ending = (phrase: string): FixOffer => ({ fix: { kind: "ends_with", phrase }, network: "twitter", count: 2, examples: [] });
+    const link = "https://example.com/book";
+    const kept = preferencesFrom([ending(link), ending(link), ending(link), ending(link)], [
+      { candidate: 1, verdict: "preference", why: "Both end the same way.", rule: `End posts about the\n cookbook with "${link}".` },
+      { candidate: 2, verdict: "preference", why: "Same.", rule: "End posts about the cookbook with the link." },
+      { candidate: 3, verdict: "preference", why: "Same.", rule: " " },
+      { candidate: 4, verdict: "preference", why: "Same.", rule: `${"x".repeat(200)} ${link}` },
+    ]);
+    expect(kept.map((k) => k.sentence)).toEqual([`End posts about the cookbook with "${link}".`]);
+  });
+
+  it("keeps a swap or a cut without waiting for a sentence, since its exact words are the rule", () => {
+    expect(preferencesFrom([offer("Excited to share")], [{ candidate: 1, verdict: "preference", why: "Both cut the opener.", rule: "" }])).toHaveLength(1);
+  });
+
   it("drops a candidate the model skipped, numbered wrongly or gave no reason", () => {
     const offers = [offer("a"), offer("b")];
-    expect(preferencesFrom(offers, [{ candidate: 7, verdict: "preference", why: "x" }, { candidate: 2, verdict: "preference", why: " " }])).toEqual([]);
+    expect(preferencesFrom(offers, [{ candidate: 7, verdict: "preference", why: "x", rule: "Keep it." }, { candidate: 2, verdict: "preference", why: " ", rule: "Keep it." }])).toEqual([]);
   });
 
   it("offers nothing when the model gives one candidate conflicting verdicts, in either order", () => {
-    const fact = { candidate: 1, verdict: "fact" as const, why: "x" };
-    const pref = { candidate: 1, verdict: "preference" as const, why: "y" };
+    const fact = { candidate: 1, verdict: "fact" as const, why: "x", rule: "" };
+    const pref = { candidate: 1, verdict: "preference" as const, why: "y", rule: "Keep it." };
     expect(preferencesFrom([offer("a")], [fact, pref])).toEqual([]);
     expect(preferencesFrom([offer("a")], [pref, fact])).toEqual([]);
   });
 });
 
 describe("complete", () => {
+  it("is false when a preference comes without its rule, so it is asked again", () => {
+    const ending: FixOffer = { fix: { kind: "ends_with", phrase: "x" }, network: "twitter", count: 2, examples: [] };
+    expect(complete([ending], [{ candidate: 1, verdict: "preference", why: "Same ending.", rule: "" }])).toBe(false);
+    expect(complete([offer("x")], [{ candidate: 1, verdict: "preference", why: "Same cut.", rule: "" }])).toBe(true);
+    expect(complete([offer("x")], [{ candidate: 1, verdict: "fact", why: "Wrong link.", rule: "" }])).toBe(true);
+  });
+
   it("is true only when every candidate has one clear answer with a reason", () => {
     const two = [offer("a"), offer("b")];
-    const ok = [{ candidate: 1, verdict: "fact" as const, why: "x" }, { candidate: 2, verdict: "preference" as const, why: "y" }];
+    const ok = [{ candidate: 1, verdict: "fact" as const, why: "x", rule: "" }, { candidate: 2, verdict: "preference" as const, why: "y", rule: "Keep it." }];
     expect(complete(two, ok)).toBe(true);
     expect(complete(two, [])).toBe(false);
     expect(complete(two, ok.slice(0, 1))).toBe(false);
-    expect(complete(two, [...ok, { candidate: 2, verdict: "fact", why: "z" }])).toBe(false);
-    expect(complete(two, [ok[0], { candidate: 2, verdict: "preference", why: " " }])).toBe(false);
+    expect(complete(two, [...ok, { candidate: 2, verdict: "fact", why: "z", rule: "" }])).toBe(false);
+    expect(complete(two, [ok[0], { candidate: 2, verdict: "preference", why: " ", rule: "Keep it." }])).toBe(false);
   });
 });
 

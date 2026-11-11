@@ -81,7 +81,7 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
         await keep.catch((e) => console.error(JSON.stringify({ event: "qp-fix-verdict-save-failed", message: e instanceof Error ? e.message : String(e) })));
       }
       const confirmed = preferencesFrom(candidates, answers);
-      suggestions = confirmed.map(o => ({ key: o.key, rule: fixToRule(o.fix, o.network, o.channelId), fixes: o.count, evidence: { fix: o.fix, channelId: o.channelId, network: o.network, count: o.count, examples: o.examples, why: o.why } }));
+      suggestions = confirmed.map(o => ({ key: o.key, rule: fixToRule(o.fix, o.network, o.channelId, o.sentence), fixes: o.count, evidence: { fix: o.fix, channelId: o.channelId, network: o.network, count: o.count, examples: o.examples, why: o.why } }));
       if (!suggestions.length && unanswered) note = "The AI did not answer every repeat clearly. Ask again to check them again.";
       else if (!suggestions.length) note = `Found ${candidates.length} repeated ${candidates.length === 1 ? "fix" : "fixes"}, but none looked like a lasting preference. One-off facts and chance matches are not offered.`;
     } catch (e) { if (token) await verdicts.release(userId, key, token).catch(() => {}); await jm?.giveBack(); throw e; }
@@ -115,7 +115,9 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
   }
   const bounded = suggestions.filter(s => !dismissed.has(s.key)).map(s => {
     const serialized = JSON.stringify(s.evidence);
-    return serialized.length > 12_000 ? { ...s, evidence: { excerpt: serialized.slice(0, 12_000), truncated: true } } : s;
+    // A cut-down record keeps the fix it came from, so a kept rule still closes its offer.
+    const fix = s.evidence && typeof s.evidence === "object" && "fix" in s.evidence ? { fix: (s.evidence as { fix: unknown }).fix } : {};
+    return serialized.length > 12_000 ? { ...s, evidence: { ...fix, excerpt: serialized.slice(0, 12_000), truncated: true } } : s;
   });
   return { suggestions: bounded.map(s => ({ ...s, token: signSuggestion(userId, s) })), note };
 }

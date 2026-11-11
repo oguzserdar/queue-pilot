@@ -76,7 +76,7 @@ export function RepeatedFixes({ repeats, edits, preview }: { repeats: number; ed
       )}
       {state.kind === "read" && state.offers.length === 0 && <p className={styles.muted} role="status">{state.note}</p>}
       {state.kind === "read" && state.offers.map((o) =>
-        handled[o.token] === "kept" ? <p key={o.token} className={styles.done} role="status">Kept. {o.rule} is in your playbook now.</p>
+        handled[o.token] === "kept" ? <p key={o.token} className={styles.done} role="status">Kept in your playbook: {o.rule}</p>
         : handled[o.token] === "aside" ? <p key={o.token} className={styles.muted} role="status">Set aside. Queue Pilot won&apos;t offer this fix again.</p>
         : <SameFixOffer key={o.token} pending={pending} content={{ title: o.drafts === 2 ? "You made the same fix twice" : `You made the same fix in ${o.drafts} drafts`, before: o.before, after: o.after, change: o.change, where: o.where, rule: o.rule, why: o.why }}
             onKeep={() => settle(o, "kept")} onDismiss={() => settle(o, "aside")} />,

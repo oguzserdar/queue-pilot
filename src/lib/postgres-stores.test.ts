@@ -576,7 +576,7 @@ describe("saved repeated-fix answers", () => {
   it("returns answers only to the same user, for the same check, until they expire", async () => {
     const store = postgresVerdictStore();
     const now = new Date("2026-10-30T12:00:00Z");
-    const clear = [{ candidate: 1, verdict: "preference" as const, why: "Both drafts cut the hype." }];
+    const clear = [{ candidate: 1, verdict: "preference" as const, why: "Both drafts cut the hype.", rule: "Keep it." }];
     await store.put("u1", "k1", (await store.claim("u1", "k1", now))!, clear, now);
     expect(await store.get("u1", "k1", now)).toEqual({ kind: "answer", verdicts: clear });
     expect(await store.get("u2", "k1", now)).toBeNull();
@@ -587,11 +587,11 @@ describe("saved repeated-fix answers", () => {
   it("keeps an unclear answer for minutes, and a new check after that replaces it", async () => {
     const store = postgresVerdictStore();
     const now = new Date("2026-10-30T12:00:00Z");
-    await store.put("u1", "k3", (await store.claim("u1", "k3", now))!, [{ candidate: 1, verdict: "unclear", why: "Could be chance." }], now);
+    await store.put("u1", "k3", (await store.claim("u1", "k3", now))!, [{ candidate: 1, verdict: "unclear", why: "Could be chance.", rule: "" }], now);
     const lapsed = new Date(now.getTime() + UNCLEAR_TTL_MS + 1);
     expect(await store.get("u1", "k3", lapsed)).toBeNull();
-    await store.put("u1", "k3", (await store.claim("u1", "k3", lapsed))!, [{ candidate: 1, verdict: "fact", why: "A corrected link." }], lapsed);
-    expect(await store.get("u1", "k3", lapsed)).toEqual({ kind: "answer", verdicts: [{ candidate: 1, verdict: "fact", why: "A corrected link." }] });
+    await store.put("u1", "k3", (await store.claim("u1", "k3", lapsed))!, [{ candidate: 1, verdict: "fact", why: "A corrected link.", rule: "" }], lapsed);
+    expect(await store.get("u1", "k3", lapsed)).toEqual({ kind: "answer", verdicts: [{ candidate: 1, verdict: "fact", why: "A corrected link.", rule: "" }] });
   });
 
   it("lets one check claim the key, shows it busy to the next, and frees an unfinished or lapsed claim", async () => {
@@ -605,7 +605,7 @@ describe("saved repeated-fix answers", () => {
     await store.release("u1", "k4", a!);
     expect(await store.get("u1", "k4", now)).toBeNull();
     const b = await store.claim("u1", "k4", now);
-    await store.put("u1", "k4", b!, [{ candidate: 1, verdict: "preference", why: "Same cut twice." }], now);
+    await store.put("u1", "k4", b!, [{ candidate: 1, verdict: "preference", why: "Same cut twice.", rule: "Keep it." }], now);
     await store.release("u1", "k4", b!);
     expect((await store.get("u1", "k4", now))?.kind).toBe("answer");
     expect(await store.claim("u1", "k4", now)).toBeNull();
@@ -622,9 +622,9 @@ describe("saved repeated-fix answers", () => {
     await store.release("u1", "k5", a!);
     expect(await store.get("u1", "k5", later)).toEqual({ kind: "busy" });
     expect(await store.claim("u1", "k5", later)).toBeNull();
-    const fact = [{ candidate: 1, verdict: "fact" as const, why: "A corrected date." }];
+    const fact = [{ candidate: 1, verdict: "fact" as const, why: "A corrected date.", rule: "" }];
     await store.put("u1", "k5", b!, fact, later);
-    await store.put("u1", "k5", a!, [{ candidate: 1, verdict: "preference", why: "Late and stale." }], later);
+    await store.put("u1", "k5", a!, [{ candidate: 1, verdict: "preference", why: "Late and stale.", rule: "Keep it." }], later);
     expect(await store.get("u1", "k5", later)).toEqual({ kind: "answer", verdicts: fact });
   });
 
@@ -634,7 +634,7 @@ describe("saved repeated-fix answers", () => {
     const a = await store.claim("u1", "k6", t0);
     await store.put("u1", "k7", (await store.claim("u1", "k7", t0))!, [], new Date(t0.getTime() + CLAIM_TTL_MS + 1));
     expect(await store.get("u1", "k6", t0)).toBeNull();
-    await store.put("u1", "k6", a!, [{ candidate: 1, verdict: "preference", why: "Too late." }], t0);
+    await store.put("u1", "k6", a!, [{ candidate: 1, verdict: "preference", why: "Too late.", rule: "Keep it." }], t0);
     expect(await store.get("u1", "k6", t0)).toBeNull();
   });
 });

@@ -14,6 +14,26 @@ const posts = [
   { id: "p3", text: "Unchanged  post. " },
 ];
 
+describe("fixToRule with the author's sentence", () => {
+  it("makes an added ending the author's sentence, flagged and judged by meaning", () => {
+    const fix = { kind: "ends_with" as const, phrase: "https://github.com/oguzserdar/queue-pilot" };
+    expect(fixToRule(fix, "twitter", "ch1", "End posts about qp with the repo link.")).toMatchObject({ kind: "guidance", level: "warn", accountIds: ["ch1"], text: "End posts about qp with the repo link." });
+  });
+
+  it("keeps a swap or a cut as its exact, enforced words, since neither adds anything to a post", () => {
+    expect(fixToRule({ kind: "replace", from: "queue pilot", to: "qp" }, "twitter", undefined, "Say qp.")).toMatchObject({ kind: "replace", from: "queue pilot", to: "qp", level: "block" });
+    expect(fixToRule({ kind: "banned", phrase: "Excited to share" }, "twitter", undefined, "No hype openers.")).toMatchObject({ kind: "banned", level: "block" });
+  });
+
+  it("stops offering a fix once the rule kept from it is in the playbook", () => {
+    const fix = { kind: "ends_with" as const, phrase: "https://github.com/oguzserdar/queue-pilot" };
+    const offer = { fix, network: "twitter", count: 2, examples: [] };
+    const kept = { ...fixToRule(fix, "twitter", undefined, "End posts about qp with the repo link."), id: "r1", learnedFrom: { fix, network: "twitter" } } as Rule;
+    expect(openOffers([offer], [kept], new Set())).toEqual([]);
+    expect(openOffers([offer], [{ ...kept, learnedFrom: { fix: { kind: "ends_with", phrase: "other" } } } as Rule], new Set())).toHaveLength(1);
+  });
+});
+
 describe("editsFrom", () => {
   it("pairs what Queue Pilot wrote with the post's text now, only where the person changed it", () => {
     const edits = editsFrom(written, posts);

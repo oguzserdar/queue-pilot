@@ -25,7 +25,8 @@ describe("playbookAnswer", () => {
   it("drops the no-own-rules line once the person has a rule, and still marks the starting rule", () => {
     const text = playbookAnswer([starting, mine]);
     expect(text).not.toContain("No rules of the user's own yet");
-    expect(text.split("\n")).toHaveLength(2);
+    expect(text.split("\n")).toHaveLength(3);
+    expect(text.split("\n")[0]).toContain("Apply each one where it fits the post");
     expect(text).toContain("ID m: Name the number first. [LinkedIn; enforced");
     expect(text).toContain("ID s: Keep private matters private. [every network; checked: a draft that breaks it is saved and flagged; starting rule");
   });

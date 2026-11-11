@@ -18,11 +18,16 @@ export function editsFrom(written: Written[], posts: { id: string; channelId?: s
   });
 }
 
-/** A fix as a rule: a swap or a cut is enforced, an added ending is flagged, on the network the fix was made on. */
-export function fixToRule(fix: Fix, network: string, channelId?: string): NewRule {
+/**
+ * A fix as a rule, on the network the fix was made on. A swap or a cut keeps its exact words and is enforced: it never
+ * adds anything to a post. An added ending does add content, so with the author's sentence (from confirm-fixes.ts) it
+ * becomes that sentence, flagged and judged by meaning, which says which posts the ending is for.
+ */
+export function fixToRule(fix: Fix, network: string, channelId?: string, sentence?: string): NewRule {
   const channels = network in NETWORKS ? [network] : "all";
   const raw =
-    fix.kind === "replace" ? { kind: "replace", from: fix.from, to: fix.to, channels, level: "block" }
+    fix.kind === "ends_with" && sentence ? { kind: "guidance", text: sentence, channels, level: "warn" }
+    : fix.kind === "replace" ? { kind: "replace", from: fix.from, to: fix.to, channels, level: "block" }
     : fix.kind === "banned" ? { kind: "banned", phrase: fix.phrase, channels, level: "block" }
     : { kind: "ends_with", phrase: fix.phrase, channels, level: "warn" };
   const rule = parseNewRule({ ...raw, ...(channelId ? { accountIds: [channelId] } : {}) });
@@ -36,13 +41,22 @@ export function offerKey(o: FixOffer): string {
   return `${o.network}|${o.channelId ? `account:${o.channelId}|` : ""}${f.kind}|${f.kind === "replace" ? `${f.from}>${f.to}` : f.phrase.toLowerCase()}`;
 }
 
-/** True when an existing rule already covers this fix, on any network. */
+/** True when an existing rule already covers this fix, on any network, including a rule kept from this very fix. */
 function covered(fix: Fix, rules: Rule[]): boolean {
   return rules.some((r) =>
-    fix.kind === "replace" ? r.kind === "replace" && r.from.toLowerCase() === fix.from && r.to.toLowerCase() === fix.to
+    keptFrom(r, fix) ||
+    (fix.kind === "replace" ? r.kind === "replace" && r.from.toLowerCase() === fix.from && r.to.toLowerCase() === fix.to
     : fix.kind === "banned" ? r.kind === "banned" && r.phrases.some((p) => p.toLowerCase() === fix.phrase.toLowerCase())
-    : r.kind === "ends_with" && r.phrase.toLowerCase() === fix.phrase.toLowerCase(),
+    : r.kind === "ends_with" && r.phrase.toLowerCase() === fix.phrase.toLowerCase()),
   );
+}
+
+/** True when the rule was kept from this fix: its saved evidence names the same fix. */
+function keptFrom(r: Rule, fix: Fix): boolean {
+  const e = r.learnedFrom;
+  const f = e && typeof e === "object" && !Array.isArray(e) ? (e as { fix?: Record<string, unknown> }).fix : undefined;
+  if (!f || f.kind !== fix.kind) return false;
+  return fix.kind === "replace" ? f.from === fix.from && f.to === fix.to : typeof f.phrase === "string" && f.phrase.toLowerCase() === fix.phrase.toLowerCase();
 }
 
 /** Repeated fixes still worth offering: not a rule yet, and not set aside with Not now. */

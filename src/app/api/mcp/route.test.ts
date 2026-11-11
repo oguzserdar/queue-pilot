@@ -72,7 +72,7 @@ vi.mock("@/lib/written-store", () => ({
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: (...args: unknown[]) => buffer.q(...args) }))
 vi.mock("@/lib/safe-fetch", () => ({ safeFetch: vi.fn(), BlockedAddressError: class extends Error {} }))
 const confirm = vi.hoisted(() => ({ verdict: "preference" as "preference" | "fact", calls: 0, empty: false, wait: null as Promise<void> | null }));
-vi.mock("@/lib/confirm-fixes", async (original) => ({ ...await original<typeof import("@/lib/confirm-fixes")>(), askVerdicts: async (_model: unknown, offers: object[]) => { confirm.calls++; if (confirm.wait) await confirm.wait; if (confirm.empty) return []; return offers.map((_o, i) => ({ candidate: i + 1, verdict: confirm.verdict, why: "Both drafts make the same change." })); } }));
+vi.mock("@/lib/confirm-fixes", async (original) => ({ ...await original<typeof import("@/lib/confirm-fixes")>(), askVerdicts: async (_model: unknown, offers: object[]) => { confirm.calls++; if (confirm.wait) await confirm.wait; if (confirm.empty) return []; return offers.map((_o, i) => ({ candidate: i + 1, verdict: confirm.verdict, why: "Both drafts make the same change.", rule: confirm.verdict === "preference" ? "Keep the same change." : "" })); } }));
 const savedVerdicts = vi.hoisted(() => new Map<string, unknown>());
 vi.mock("@/lib/fix-verdicts", async (original) => ({ ...await original<typeof import("@/lib/fix-verdicts")>(), postgresVerdictStore: () => ({
   get: async (u: string, k: string) => { const v = savedVerdicts.get(`${u}|${k}`); return v === undefined ? null : typeof v === "string" ? { kind: "busy" } : { kind: "answer", verdicts: v }; },
