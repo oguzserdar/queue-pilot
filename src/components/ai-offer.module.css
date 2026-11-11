@@ -1,5 +1,5 @@
 /* The connect-your-AI offer on Home: text on the left, marks and the one action on the right, × in the corner. */
-.offer { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); flex-wrap: wrap; padding: var(--space-4) calc(var(--space-5) + 28px) var(--space-4) var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
+.offer { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-5); flex-wrap: wrap; padding: var(--space-4) calc(var(--space-5) + 32px) var(--space-4) var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface); }
 .text { display: grid; gap: 2px; min-width: 0; flex: 1 1 280px; }
 .title { margin: 0; font-size: var(--text-base); font-weight: 600; }
 .body { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.5; }
@@ -8,7 +8,7 @@
 .connect { display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: var(--radius-control); background: var(--accent); color: var(--accent-foreground); font-size: var(--text-sm); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .connect:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .connect:hover { background: var(--accent-strong); } }
-.hide { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--radius-control); background: none; color: var(--text-muted); font-size: 18px; line-height: 1; cursor: pointer; }
+.hide { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: var(--radius-control); background: none; color: var(--text-muted); font-size: 18px; line-height: 1; cursor: pointer; }
 .hide:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .hide:disabled { cursor: progress; }
 @media (hover: hover) and (pointer: fine) { .hide:hover:not(:disabled) { background: var(--surface-muted); color: var(--foreground); } }

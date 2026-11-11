@@ -32,13 +32,13 @@ export function AiOffer({ connected }: {
     <aside className={styles.offer} aria-labelledby="ai-offer-title">
       <div className={styles.text}>
         <h2 id="ai-offer-title" className={styles.title}>{next ? "Add another AI" : "Get better drafts with your own AI"}</h2>
-        <p className={styles.body}>{next ? `${connected[0]} is connected. ${next} ${ADDS[next]}` : "It can read your email, docs and posts, not just your links."}</p>
+        <p className={styles.body}>{next ? `${connected[0]} is connected. ${next} ${ADDS[next]}` : "Your AI can draft from your email, docs and posts too."}</p>
       </div>
       <div className={styles.actions}>
         <span className={styles.marks} aria-hidden="true">{(next ? [next] : ["Claude", "ChatGPT", "Grok", "MCP"]).map((n) => <AiMark key={n} name={n} size={18} />)}</span>
         <Link href={next ? `/connect?setup=${encodeURIComponent(next)}` : "/connect"} className={styles.connect}>{next ? `Add ${next}` : "Connect your AI"}</Link>
       </div>
-      <button type="button" className={styles.hide} aria-label="Hide this" disabled={hiding}
+      <button type="button" className={styles.hide} aria-label="Hide AI suggestion" disabled={hiding}
         onClick={() => start(async () => { await setOfferAside(key); router.refresh(); })}>×</button>
     </aside>
   );

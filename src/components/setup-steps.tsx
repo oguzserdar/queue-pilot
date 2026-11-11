@@ -80,11 +80,11 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
         )}
 
         <li className={styles.step}>
-          <h3 className={styles.stepTitle}>Check it is connected</h3>
+          <h3 className={styles.stepTitle}>Check your AI is connected</h3>
           {account ? (
             <p className={styles.fact}>
               <span className={styles.okMark} aria-hidden="true" />
-              <span>Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length} of {account.channels.length} channels connected ({account.channels.filter((c) => !c.disconnected).map((c) => c.name).join(", ")}){account.channels.some((c) => c.disconnected) ? `; ${account.channels.filter((c) => c.disconnected).map((c) => c.name).join(", ")} disconnected` : ""}.{" "}
+              <span>Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length === account.channels.length ? `${account.channels.length} channel${account.channels.length === 1 ? "" : "s"}` : `${account.channels.filter((c) => !c.disconnected).length} of ${account.channels.length} channels`} connected ({account.channels.filter((c) => !c.disconnected).map((c) => c.name).join(", ")}){account.channels.some((c) => c.disconnected) ? `; ${account.channels.filter((c) => c.disconnected).map((c) => c.name).join(", ")} disconnected` : ""}.{" "}
               {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
             </p>
           ) : null}

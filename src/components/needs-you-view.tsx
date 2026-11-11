@@ -17,7 +17,7 @@ export type NeedItem = { id: string; tone: "warning" | "danger" | "success"; tit
 export type ReadinessItem = { id: string; label: string; state: "done" | "todo" | "check"; detail: string; action?: string; href?: string };
 
 /** Home: what needs the user right now, and until setup is complete, the readiness checklist. */
-export function NeedsYouView({ needs, readiness, greeting, triage, live = false, start, welcome = false }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string; triage?: TriageItem[]; live?: boolean; /** The first-drafts panel, shown above everything until Queue Pilot has written a draft. */ start?: ReactNode; /** `start` is the first-visit welcome: it is the page's one setup prompt, so the setup count and strip step back. */ welcome?: boolean }) {
+export function NeedsYouView({ needs, readiness, greeting, triage, live = false, start, welcome = false }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string; triage?: TriageItem[]; live?: boolean; /** The first-drafts panel, shown above everything until Queue Pilot has written a draft. */ start?: ReactNode; /** `start` is the first-visit welcome: it is the whole page until the person picks a path or says Not now, so the count, the setup strip and the list wait. */ welcome?: boolean }) {
   // Empty times are room to fill, not something waiting on the person, so they are left out of the count.
   const open = triage ? triage.filter((t) => t.kind !== "empty") : needs.filter((n) => n.tone !== "success");
   // The list reports what is left as rows are approved, so the title counts down with it.
@@ -33,7 +33,7 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false,
     <div className={styles.page}>
       <header className={styles.head}>
         <p className={styles.greet}>{greeting}</p>
-        <h1 className={styles.title}>{settingUp && welcome ? "Welcome to Queue Pilot" : settingUp ? "Set up Queue Pilot" : left === 0 ? "All caught up." : <><RollingNumber value={left} />{` thing${left === 1 ? "" : "s"} need${left === 1 ? "s" : ""} you.`}</>}</h1>
+        {!welcome && <h1 className={styles.title}>{settingUp ? "Set up Queue Pilot" : left === 0 ? "All caught up." : <><RollingNumber value={left} />{` thing${left === 1 ? "" : "s"} need${left === 1 ? "s" : ""} you.`}</>}</h1>}
         {settingUp && !welcome && <p className={styles.lede}>{done} of {readiness.length} done. Each step takes about a minute, and then your AI fills your week in Buffer.</p>}
       </header>
 
@@ -62,7 +62,7 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false,
         </details>
       )}
 
-      {settingUp ? null : triage ? <TriageList items={triage} live={live} onRemaining={setLeft} /> : needs.length === 0 ? (
+      {settingUp || welcome ? null : triage ? <TriageList items={triage} live={live} onRemaining={setLeft} /> : needs.length === 0 ? (
         <EmptyState
           title="Nothing needs you right now"
           description="A draft that needs a look, or a post Buffer could not send, shows up here."

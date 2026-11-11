@@ -19,12 +19,14 @@ type Path = "own" | "built-in";
  * read more of their work), set up with the same steps as Connect; or Queue Pilot's built-in AI writing from a link.
  * "Not now" sets the welcome aside for good; Connect stays in the sidebar.
  */
-export function WelcomeChoice({ origin, account, approved, count, hasSource, writing }: {
+export function WelcomeChoice({ origin, account, approved, count, empty, hasSource, writing }: {
   origin: string;
   account: SetupAccount;
   approved: ApprovedApp[] | null;
-  /** Empty times next week that a draft can fill. */
+  /** Empty times next week that one fill writes into (at most ten). */
   count: number;
+  /** Every empty time next week, the same number Home's empty-times line shows. */
+  empty: number;
   hasSource: boolean;
   writing: WritingAvailability;
 }) {
@@ -36,8 +38,8 @@ export function WelcomeChoice({ origin, account, approved, count, hasSource, wri
   return (
     <section className={styles.welcome} aria-labelledby="welcome-title">
       <header className={styles.head}>
-        <h2 id="welcome-title" className={styles.title}>Let&apos;s fill your first week</h2>
-        <p className={styles.sub}>{count} empty time{count === 1 ? "" : "s"} next week{live.length ? ` · ${live.join(", ")}` : ""}</p>
+        <h1 id="welcome-title" className={styles.title}>Let&apos;s fill your first week</h1>
+        <p className={styles.sub}>{empty} empty time{empty === 1 ? "" : "s"} next week on {live.length} channel{live.length === 1 ? "" : "s"}</p>
       </header>
 
       <fieldset className={styles.choices}>
@@ -55,7 +57,7 @@ export function WelcomeChoice({ origin, account, approved, count, hasSource, wri
           <input type="radio" name="welcome-path" value="built-in" checked={path === "built-in"} onChange={() => setPath("built-in")} className={styles.radio} />
           <span className={styles.choiceHead}><strong>Use Queue Pilot&apos;s AI</strong></span>
           <span className={styles.body}>Paste a link to your blog, newsletter or releases. We&apos;ll write from that.</span>
-          <span className={styles.foot}>Built in · ready now</span>
+          <span className={styles.foot}>No setup needed</span>
         </label>
       </fieldset>
 

@@ -16,11 +16,11 @@ const writing = { state: "built-in", remaining: 10 } as never;
 const account = { email: "oguz@example.com", channels: [{ name: "OguzSerdar", service: "twitter", disconnected: false }] };
 
 describe("WelcomeChoice", () => {
-  const html = renderToStaticMarkup(<WelcomeChoice origin="https://qp.example" account={account} approved={[]} count={28} hasSource={false} writing={writing} />);
+  const html = renderToStaticMarkup(<WelcomeChoice origin="https://qp.example" account={account} approved={[]} count={10} empty={28} hasSource={false} writing={writing} />);
 
   it("asks once how to fill the first week, with the person's own week", () => {
     expect(text(html)).toContain("Let's fill your first week");
-    expect(text(html)).toContain("28 empty times next week · OguzSerdar");
+    expect(text(html)).toContain("28 empty times next week on 1 channel");
   });
 
   it("offers the person's own AI first, as recommended, and Queue Pilot's AI as the second path", () => {

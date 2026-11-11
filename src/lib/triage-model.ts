@@ -28,7 +28,7 @@ export type TriageKind = (typeof TRIAGE_GROUPS)[number]["kind"];
  * rows run Check again. Other check rows open Next week to read the draft.
  */
 /** `full` and `why`, when present, are the whole post and the whole reason, shown on hover; the row keeps one line of each. */
-export type TriageItem = { id: string; kind: TriageKind; title: string; detail: string; href: string; action: string; postId?: string; run?: "approve" | "recheck"; full?: string; why?: string };
+export type TriageItem = { id: string; kind: TriageKind; title: string; detail: string; href: string; action: string; postId?: string; run?: "approve" | "recheck"; full?: string; why?: string; /** For the empty-times line: how many empty times it stands for. */ count?: number };
 
 const short = (t: string, n = 200) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
 
@@ -77,7 +77,7 @@ export function triageFromBuffer(input: {
     for (let day = 0; day < 7; day++)
       for (const e of cellEntries(week, ch.id, day))
         if (e.slot && !e.posts.some((p) => p.status !== "error")) empty++;
-  if (empty) items.push({ id: "empty-week", kind: "empty", title: `${empty} empty time${empty === 1 ? "" : "s"} next week`, detail: "No posts yet", href: "/week", action: "Open next week" });
+  if (empty) items.push({ id: "empty-week", kind: "empty", title: `${empty} empty time${empty === 1 ? "" : "s"} next week`, count: empty, detail: "No posts yet", href: "/week", action: "Open next week" });
 
   return items;
 }
