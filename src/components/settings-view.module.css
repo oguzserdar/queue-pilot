@@ -28,6 +28,8 @@
   align-items: baseline;
 }
 
+.pager { display: flex; gap: 8px; margin-top: 12px; }
+
 .download {
   align-self: flex-start;
   padding: 7px 12px;

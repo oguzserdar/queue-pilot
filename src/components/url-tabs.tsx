@@ -14,7 +14,7 @@ export function UrlTabs({ initial, first, children }: { initial: string; first: 
     const url = new URL(window.location.href);
     if (v === first) url.searchParams.delete("tab"); else url.searchParams.set("tab", v);
     // A tab change also clears one-time notices like ?saved=, which belong to the tab they were shown on.
-    for (const k of ["saved", "cleared", "error", "field", "problem", "openrouter", "discord"]) url.searchParams.delete(k);
+    for (const k of ["saved", "cleared", "error", "field", "problem", "openrouter", "discord", "before", "after"]) url.searchParams.delete(k);
     window.history.replaceState(null, "", url);
   };
   return <Tabs value={open} onValueChange={choose}>{children}</Tabs>;

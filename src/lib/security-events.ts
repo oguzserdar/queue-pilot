@@ -6,7 +6,7 @@
  *
  * Recording never throws: a failed write is logged and the action it describes still completes.
  */
-import { desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { securityEvent } from "../db/schema";
 import { capAppName } from "./app-identity";
@@ -75,6 +75,70 @@ export async function recordAction(userId: string, event: ActionEventKind, by: A
   await recordSecurityEvent(userId, event, { detail });
 }
 
+/** How many events one page of Security activity shows. */
+export const SECURITY_PAGE_SIZE = 25;
+
+/** One page of events, newest first, with bookmarks for the next older and newer pages (null when there is none). */
+export type SecurityEventPage = { events: SecurityEvent[]; older: string | null; newer: string | null };
+
+/** A timestamptz as Postgres writes it as text, for example 2026-11-10 03:10:12.123456+00. */
+const PG_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/;
+
+/**
+ * Reads a page bookmark: an event's time, as Postgres wrote it, and its id. The time stays as Postgres text because a
+ * JavaScript date drops microseconds, which would skip events recorded in the same millisecond.
+ */
+function readBookmark(mark: string | null | undefined): { at: string; id: string } | null {
+  if (!mark) return null;
+  const cut = mark.lastIndexOf("~");
+  const at = mark.slice(0, cut), id = mark.slice(cut + 1);
+  if (cut < 1 || !id || !PG_TIME.test(at)) return null;
+  return { at, id };
+}
+
+/** Events strictly older (or newer) than the bookmark, in the order time then id. */
+function beyond(mark: { at: string; id: string }, side: "older" | "newer") {
+  const at = sql`${mark.at}::timestamptz`;
+  const cmp = side === "older" ? lt : gt;
+  return or(cmp(securityEvent.createdAt, at), and(eq(securityEvent.createdAt, at), cmp(securityEvent.id, mark.id)));
+}
+
+/**
+ * One page of the person's security events, newest first. Pages by bookmark rather than by offset, so an event
+ * recorded while the person reads never shifts a page or repeats a line.
+ *
+ * @param userId - The signed-in person
+ * @param from - `before`: a bookmark from a page's `older`, for the page after it; `after`: from `newer`, for the page
+ *   before it; neither, or an unreadable bookmark, opens the newest page
+ * @param limit - How many to return
+ * @returns The events and the bookmarks either side
+ */
+export async function securityEventPage(userId: string, from: { before?: string | null; after?: string | null } = {}, limit = SECURITY_PAGE_SIZE): Promise<SecurityEventPage> {
+  const before = readBookmark(from.before);
+  const after = before ? null : readBookmark(from.after);
+  const at = sql<string>`${securityEvent.createdAt}::text`;
+  const mine = eq(securityEvent.userId, userId);
+  // Walking newer reads upward from the bookmark, then turns the rows back to newest first.
+  const rows = await db()
+    .select({ row: securityEvent, at })
+    .from(securityEvent)
+    .where(and(mine, before ? beyond(before, "older") : after ? beyond(after, "newer") : undefined))
+    .orderBy(...(after ? [asc(securityEvent.createdAt), asc(securityEvent.id)] : [desc(securityEvent.createdAt), desc(securityEvent.id)]))
+    .limit(limit + 1);
+  const more = rows.length > limit;
+  const page = after ? rows.slice(0, limit).reverse() : rows.slice(0, limit);
+  const mark = (r: (typeof rows)[number] | undefined) => (r ? `${r.at}~${r.row.id}` : null);
+  const first = page[0], last = page.at(-1);
+  // The side the reader came from always has a page; the far side has one when the extra row came back.
+  const anyNewer = after ? more : Boolean(before && first);
+  const anyOlder = after ? Boolean(last) : more;
+  return {
+    events: page.map(({ row: r }) => ({ event: r.event as SecurityEventKind, detail: r.detail ?? null, ip: r.ip, userAgent: r.userAgent, createdAt: r.createdAt.toISOString() })),
+    older: anyOlder ? mark(last) : null,
+    newer: anyNewer ? mark(first) : null,
+  };
+}
+
 /**
  * The person's most recent security events, newest first.
  *
@@ -82,6 +146,5 @@ export async function recordAction(userId: string, event: ActionEventKind, by: A
  * @param limit - How many to return
  */
 export async function recentSecurityEvents(userId: string, limit = 20): Promise<SecurityEvent[]> {
-  const rows = await db().select().from(securityEvent).where(eq(securityEvent.userId, userId)).orderBy(desc(securityEvent.createdAt)).limit(limit);
-  return rows.map((r) => ({ event: r.event as SecurityEventKind, detail: r.detail ?? null, ip: r.ip, userAgent: r.userAgent, createdAt: r.createdAt.toISOString() }));
+  return (await securityEventPage(userId, {}, limit)).events;
 }

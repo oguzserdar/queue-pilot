@@ -22,7 +22,8 @@ import { remainingOf } from "@/lib/rate-limit-text";
 /** The example account's last RateLimit reading, in the format Buffer sends (developers.buffer.com/guides/api-limits). */
 const EXAMPLE_RATE_LIMIT = [{ policy: "110-in-15min", remaining: 107 }, { policy: "525-in-24h", remaining: 487 }];
 
-import { showSecurityEvent, type ShownSecurityEvent } from "@/lib/security-event-words";
+import { showSecurityEvents, type ShownSecurityEvent } from "@/lib/security-event-words";
+import Link from "next/link";
 import type { SecurityEvent } from "@/lib/security-events";
 export type { ShownSecurityEvent };
 
@@ -41,6 +42,8 @@ export type SettingsAccount = {
   allowance?: { used: number; cap: number; budgetUsd: number; leftUsd: number; resetsAt: string } | null;
   /** Recent sign-ins, AI apps connected or removed, and drafts scheduled or deleted, newest first; null when they could not be read. */
   security?: ShownSecurityEvent[] | null;
+  /** Bookmarks for the security list's next older and newer pages; null where there is none. */
+  securityPages?: { older: string | null; newer: string | null };
   /** A result to show on arrival, e.g. after connecting OpenRouter. */
   notice?: { ok: boolean; text: string } | null;
   /** Whether connected AI apps may approve drafts; "ask" when never set. */
@@ -71,12 +74,12 @@ const EXAMPLE_ACCOUNT: SettingsAccount = {
   allowance: { used: 3, cap: 10, budgetUsd: 100, leftUsd: 96.4, resetsAt: "00:00" },
   devices: [{ id: "example-device", device: "Chrome on Mac", lastActive: "2026-10-28T08:00:00.000Z", current: true }],
   // Worded by the same function as a signed-in person's activity, so the two lists cannot drift apart.
-  security: ([
+  security: showSecurityEvents([
     { event: "drafts_approved", detail: { by: "Claude", via: "ai", count: "3", ids: "example-1,example-2,example-3" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:14:00.000Z" },
     { event: "draft_deleted", detail: { by: "Queue Pilot", via: "app", count: "1", ids: "example-4" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:05:00.000Z" },
     { event: "sign_in", detail: null, ip: null, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140.0 Safari/537.36", createdAt: "2026-10-28T08:00:00.000Z" },
     { event: "app_connected", detail: { by: "Claude", via: "ai" }, ip: null, userAgent: null, createdAt: "2026-10-20T09:00:00.000Z" },
-  ] as SecurityEvent[]).map(showSecurityEvent),
+  ] as SecurityEvent[]),
   notice: null,
   channelsPanel: EXAMPLE_CHANNELS,
 };
@@ -196,6 +199,12 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
               </li>
             ))}
           </ul>
+        )}
+        {account.securityPages && (account.securityPages.older || account.securityPages.newer) && (
+          <nav className={styles.pager} aria-label="Security activity pages">
+            {account.securityPages.newer && <Link className={styles.download} href={`/settings?tab=security&after=${encodeURIComponent(account.securityPages.newer)}#security`} scroll={false}>Newer</Link>}
+            {account.securityPages.older && <Link className={styles.download} href={`/settings?tab=security&before=${encodeURIComponent(account.securityPages.older)}#security`} scroll={false}>Older</Link>}
+          </nav>
         )}
       </section>
           </div>

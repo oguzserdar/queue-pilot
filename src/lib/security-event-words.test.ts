@@ -39,4 +39,21 @@ describe("security event words", () => {
     expect(showSecurityEvent(ev("app_revoked", { app: "Claude", verified: "false" })).what).toBe('Removed an unverified app named "Claude"');
     expect(showSecurityEvent(ev("app_revoked", { app: "Claude", verified: "true" })).what).toBe("Removed Claude");
   });
+
+  it("folds the same action by the same app in the same minute into one line, keeping order", async () => {
+    const { showSecurityEvents } = await import("./security-event-words");
+    const del = (by: string, via: string, at: string) => ({ event: "draft_deleted" as const, detail: { by, via, count: "1" }, ip: null, userAgent: null, createdAt: at });
+    const lines = showSecurityEvents([
+      ...Array.from({ length: 9 }, () => del("Claude", "ai", "2026-11-10T03:10:20.000Z")),
+      del("Queue Pilot", "app", "2026-11-10T03:09:40.000Z"),
+      del("Queue Pilot", "app", "2026-11-10T03:09:10.000Z"),
+      del("Queue Pilot", "app", "2026-11-10T03:08:50.000Z"),
+      { event: "drafts_approved" as const, detail: { by: "Claude", via: "ai", count: "3" }, ip: null, userAgent: null, createdAt: "2026-11-09T06:00:10.000Z" },
+      { event: "drafts_approved" as const, detail: { by: "Claude", via: "ai", count: "2" }, ip: null, userAgent: null, createdAt: "2026-11-09T06:00:40.000Z" },
+      { event: "content_item_deleted" as const, detail: { by: "Claude", via: "ai", count: "2", ids: "ci,p" }, ip: null, userAgent: null, createdAt: "2026-11-09T05:30:00.000Z" },
+      { event: "app_connected" as const, detail: { by: "Claude", via: "ai" }, ip: null, userAgent: null, createdAt: "2026-11-09T05:19:00.000Z" },
+    ]);
+    expect(lines.map((l) => l.what)).toEqual(["Deleted 9 drafts", "Deleted 2 drafts", "Deleted a draft", "Scheduled 5 drafts", "Deleted a post kept before choosing accounts", "Connected Claude"]);
+    expect(lines[0].where).toBe("By Claude, a connected AI app");
+  });
 });

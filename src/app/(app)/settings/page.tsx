@@ -6,8 +6,8 @@ import { maskSecret } from "@/lib/secrets";
 import { allowanceFor } from "@/lib/judge-model";
 import { resetTime } from "@/components/ai-usage";
 import { approvedAiApps, getCurrentUser, signedInDevices, signedInProfile, signedInUserId } from "@/lib/current-user";
-import { recentSecurityEvents } from "@/lib/security-events";
-import { showSecurityEvent } from "@/lib/security-event-words";
+import { securityEventPage } from "@/lib/security-events";
+import { showSecurityEvents } from "@/lib/security-event-words";
 import { postgresEchoStore } from "@/lib/echo-store";
 import { recentDirectPosts } from "../direct-post-actions";
 
@@ -22,8 +22,8 @@ const OPENROUTER_RESULT: Record<string, { ok: boolean; text: string }> = {
   slow: { ok: false, text: "Too many connection attempts in the last hour. Try again later." },
 };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ openrouter?: string; tab?: string; discord?: string }> }) {
-  const { openrouter, tab, discord } = await searchParams;
+export default async function Page({ searchParams }: { searchParams: Promise<{ openrouter?: string; tab?: string; discord?: string; before?: string; after?: string }> }) {
+  const { openrouter, tab, discord, before, after } = await searchParams;
   const notice = openrouter ? OPENROUTER_RESULT[openrouter] ?? null : null;
   const [{ user }, profile, userId, devices] = await Promise.all([getCurrentUser(), signedInProfile(), signedInUserId(), signedInDevices()]);
   const master = process.env.SETTINGS_KEY;
@@ -42,11 +42,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
         })
       : null,
     userId
-      ? recentSecurityEvents(userId).then((l) => l.map(showSecurityEvent)).catch((e) => {
+      ? securityEventPage(userId, { before, after }).then((p) => ({ lines: showSecurityEvents(p.events), older: p.older, newer: p.newer })).catch((e) => {
           console.error(JSON.stringify({ event: "qp-security-read-failed", message: e instanceof Error ? e.message : String(e) }));
           return null;
         })
-      : [],
+      : { lines: [], older: null, newer: null },
     userId ? allowanceFor(userId).catch(() => null) : null,
     userId ? approveMode(userId).catch(() => "ask" as const) : ("ask" as const),
     // The Channels tab's own reads: a failure there shows a note on that tab, never takes down the whole page.
@@ -58,7 +58,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
     <SettingsView
       // The OpenRouter callback's notice shows on the AI tab, so it lands there.
       tab={openrouter ? "ai" : discord ? "channels" : tab}
-      account={user ? { email: user.email, name: profile?.name ?? user.email, image: profile?.image ?? null, channelNames: user.channels.map((c) => c.name), rateLimit: user.rateLimit, apps, devices, security, aiKey, allowance, notice, approveMode: approve, channelsPanel: destinations && posts ? { channels: user.channels, copies: destinations.map((d) => ({ kind: d.kind, label: d.label })), discordResult: discord ?? null, posts } : undefined } : undefined}
+      account={user ? { email: user.email, name: profile?.name ?? user.email, image: profile?.image ?? null, channelNames: user.channels.map((c) => c.name), rateLimit: user.rateLimit, apps, devices, security: security ? security.lines : security, securityPages: security ? { older: security.older, newer: security.newer } : undefined, aiKey, allowance, notice, approveMode: approve, channelsPanel: destinations && posts ? { channels: user.channels, copies: destinations.map((d) => ({ kind: d.kind, label: d.label })), discordResult: discord ?? null, posts } : undefined } : undefined}
     />
   );
 }
