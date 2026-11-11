@@ -52,3 +52,6 @@
 
 /* A channel row leads with the network's own logo, as on Next week. */
 .channel { display: inline-flex; align-items: center; gap: 8px; }
+
+/* An open "Disconnect?" or "Remove?" confirm takes its own full line under the row, so the row's text keeps its width. */
+.row > [data-confirming] { grid-column: 1 / -1 !important; grid-row: auto !important; justify-self: start; flex-wrap: wrap; }

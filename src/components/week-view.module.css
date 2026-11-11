@@ -16,7 +16,7 @@
 .channel { padding: var(--space-3); border-bottom: 1px solid var(--border-subtle); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .chip svg { flex: none; }
-.zone { font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.zone { font-size: var(--text-xs); color: var(--text-muted); }
 .cell { padding: 6px; border-bottom: 1px solid var(--border-subtle); box-shadow: inset 1px 0 0 var(--border-subtle); display: flex; flex-direction: column; gap: 6px; min-height: 112px; }
 
 .empty { all: unset; box-sizing: border-box; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; border: 1px dashed var(--border-control); border-radius: 8px; color: var(--text-muted); font-size: var(--text-xs); padding: 8px; transition: border-color 160ms var(--ease-standard), color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
@@ -44,7 +44,7 @@
 .draft[data-tone="danger"] .state { color: var(--danger); }
 .draft[data-approved="true"] .state { color: var(--success); }
 .text { color: var(--foreground); font-size: var(--text-sm); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.src { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); align-self: flex-start; }
+.src { display: block; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); align-self: flex-start; }
 
 /* The draft opens over the week in a dialog wide enough for the post beside its rules and checks. */
 .dialog { --dialog-width: 1080px; }
