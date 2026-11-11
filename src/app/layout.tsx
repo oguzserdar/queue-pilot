@@ -12,13 +12,22 @@ const DESCRIPTION = "Your own AI fills the empty slots in your Buffer queue, che
 /**
  * Title, description and link previews. The base address is the one the page was served from, so a self-hosted copy
  * shares previews of itself; the preview image comes from opengraph-image.png and twitter-image.png beside this file.
+ * The video is the same card with the Pilot looking around, 8 seconds on a loop; chats that play og:video show it, the
+ * rest show the image, which is its first frame. A new cut gets a new file name, because chats cache by address.
  */
 export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(publicOrigin(await headers())),
     title: "Queue Pilot",
     description: DESCRIPTION,
-    openGraph: { type: "website", siteName: "Queue Pilot", title: "Queue Pilot", description: DESCRIPTION, url: "/" },
+    openGraph: {
+      type: "website",
+      siteName: "Queue Pilot",
+      title: "Queue Pilot",
+      description: DESCRIPTION,
+      url: "/",
+      videos: [{ url: "/og/pilot-v1.mp4", secureUrl: "/og/pilot-v1.mp4", type: "video/mp4", width: 2400, height: 1260 }],
+    },
     twitter: { card: "summary_large_image", title: "Queue Pilot", description: DESCRIPTION },
   };
 }
