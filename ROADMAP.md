@@ -5,15 +5,14 @@ Where Queue Pilot is heading. What has shipped is in [CHANGELOG.md](CHANGELOG.md
 Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it. It approves, changes or deletes
 only drafts it wrote, and keeps Buffer requests per person low.
 
-## Now
+## Shipped
 
-Sign in with Buffer and see your real week: every channel, every posting time, and which slots are still empty.
+Sign in with Buffer and see your real week. Drafts from the AI you already use: Claude, ChatGPT, Grok, and coding agents in your terminal and editor. A playbook that learns from your edits, your team's notes in Buffer and the posts already there. Delivery with Buffer's own reasons, and copies to Telegram and Discord after Buffer publishes. Every step is in [CHANGELOG.md](CHANGELOG.md).
 
-## Toward 1.0
+## Now: 1.0
 
-- **Write from the AI you already use.** Claude, ChatGPT and Grok, then your terminal and your editor.
-- **A playbook that learns.** From your edits, from your team's notes in Buffer, and from the posts already there.
-- **Know what went out.** Failed posts with Buffer's own reason, and copies to Telegram and Discord.
+- **Proven on a brand-new account.** Every step, end to end, on a Buffer account that has never used Queue Pilot.
+- **Run your own copy anywhere.** The Docker version running on its own server, next to the Vercel one.
 
 ## Later
 

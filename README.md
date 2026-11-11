@@ -4,7 +4,9 @@
 
 Your AI writes next week's posts into Buffer as drafts. When you fix the same thing twice, Queue Pilot turns the fix into a rule, and every AI you use follows it from then on.
 
-[Try the example](https://getqueuepilot.com) · [See it work](#see-it-work) · [Use it with your AI](#use-it-with-the-ai-you-already-have) · [Run your own](#run-your-own-copy) · [Roadmap](ROADMAP.md)
+Built from 28 October 2026, the first day of Buffer Commit, with every release since in the [changelog](CHANGELOG.md).
+
+[Try the example](https://getqueuepilot.com/demo) · [See it work](#see-it-work) · [Use it with your AI](#use-it-with-the-ai-you-already-have) · [Run your own](#run-your-own-copy) · [Roadmap](ROADMAP.md)
 
 ![Needs you: the drafts to approve, a fix made twice, a post that would fail, and an empty slot, in one list](docs/media/hero.png)
 
@@ -21,7 +23,7 @@ Teach Queue Pilot your voice by pasting something you've written, or ask your co
   <img alt="Next week: one row per Buffer channel, posting times, the empty times highlighted, and New post, Fill next week, Share for review and Approve" src="docs/media/week.png">
 </picture>
 
-**2. Your AI writes drafts into the empty times.** From your newsletter, your videos and your own past posts. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
+**2. Your AI writes drafts into the empty times.** From your own work, wherever your AI can read it: email, Slack, docs and meeting notes, your posts on X, your blog or videos, and your own past posts. Every draft is saved in Buffer as a draft. Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
 
 ![A draft opened from the week: the post with its tag, the quote from Google's announcement behind each claim, the checks, the rules set for that account, and a Note](docs/media/draft-check.png)
 
@@ -33,7 +35,7 @@ Teach Queue Pilot your voice by pasting something you've written, or ask your co
 
 ![The playbook for one account: the shared and network rules it inherits, each with a switch to turn it off for that account](docs/media/playbook.png)
 
-**5. It tells you what went out.** A failed post shows Buffer's own reason and how to fix it. Sent posts can be copied to your Telegram channel and Discord server.
+**5. It tells you what went out.** A failed post shows Buffer's own reason and how to fix it. Once Buffer has published a post, Queue Pilot can copy it to your Telegram channel and Discord server.
 
 <picture>
   <source media="(max-width: 600px)" srcset="docs/media/delivery-mobile.png">
@@ -93,7 +95,7 @@ Some of these actions Buffer's own MCP has too. Where it does, the tool says so:
 
 ## Telegram and Discord
 
-Connect your Telegram channel and Discord server from Sources. Then write a post just for them, with its own words for each place and a live preview, and send it now or at a time you pick. On a Buffer draft, turn on Telegram and Discord and Queue Pilot sends them once Buffer has published the post, following it if you move it. Queue Pilot can also copy each post Buffer sends. Copies go out once a day and whenever your queue refreshes. On Vercel each scheduled post has its own timer. With Docker, a small check runs every 30 seconds.
+Buffer schedules and publishes. After Buffer publishes a post, Queue Pilot can copy it to your Telegram channel and Discord server, which you connect in Settings, Channels. On a Buffer draft, turn on Telegram and Discord and the copies follow the post if you move it. Buffer does not post to Telegram or Discord, so you can also write a post just for them, with its own words for each place and a live preview, and pick when it goes out. Copies go out once a day and whenever your queue refreshes. On Vercel each scheduled post has its own timer. With Docker, a small check runs every 30 seconds.
 
 ## How it uses Buffer's API
 
@@ -168,11 +170,9 @@ The budget is enforced by Queue Pilot: before each built-in AI action it compare
 
 ## What's next
 
-Next up, on the way to 1.0:
-
-- **Your team's notes count.** A comment on a draft in Buffer shows who left it, Queue Pilot tells a one-off fix from a lasting preference, and a kept preference applies to that account only.
-- **Someone new can use it alone.** Try the example, connect your own Buffer and one AI, and get a useful draft without anyone explaining setup.
-- **1.0, proven from a clean copy.** A fresh build, database, sign-in, AI connection and saved draft, checked automatically.
+- **1.0, proven on a brand-new account.** Every step run end to end on a Buffer account that has never used Queue Pilot, and the Docker version running on its own server.
+- **Learn from results as well as edits.** Which posts did well, as well as what you changed.
+- **One playbook per client,** for agencies.
 
 More in the [roadmap](ROADMAP.md), and what shipped in [CHANGELOG.md](CHANGELOG.md).
 
