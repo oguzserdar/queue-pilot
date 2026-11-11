@@ -2,8 +2,8 @@
  * @fileoverview Live eval of applying playbook rules where they fit, on the production provider path. A rule kept from
  * the author's edits to posts about one project must leave an unrelated post alone, yet still hold on a post about that
  * project; a word swap, a ban, the starting rule and an ending the author set for every post must still be caught, in
- * any language. The writer must not put a project's link under a post about something else. Every case must hold in all
- * but one of TRIALS runs.
+ * any language. The writer must put an ending only under the posts it fits, and an every-post ending under every post.
+ * Every case must hold in all but one of TRIALS runs.
  *
  * Run: pnpm eval   (key and model from .env.eval.local; skipped without them)
  */
@@ -126,33 +126,59 @@ describe.skipIf(!CFG)(`an every-post ending read from the person's words, ${TRIA
   }, 240_000);
 });
 
-// The writer with an ending learned from posts about qp (the rule the product keeps) and two items, one about qp and one AI news story: the news draft must not get
-// the repo link. Which item goes to which slot is the writer's choice; the draft's sourceKey says which it used.
-describe.skipIf(!CFG)(`the writer and a learned, scoped ending, ${TRIALS} trials`, () => {
-  it("never puts the project link under a post about something else", async () => {
-    const model = modelFor(CFG!);
-    const brief = {
-      slots: [
-        { id: "a", local: "Mon 9:00", channel: "@qp", service: "twitter" },
-        { id: "b", local: "Tue 9:00", channel: "@qp", service: "twitter" },
-      ],
-      material: [
-        { key: "release", title: "qp v0.9.0", url: "https://github.com/oguzserdar/queue-pilot/releases/tag/v0.9.0", text: "qp v0.9.0 is out. getqueuepilot.com now opens on a home page instead of dropping you straight into the demo, and every draft is checked against your rules by meaning before it reaches Buffer." },
-        { key: "news", title: "Reasoning effort on a budget", url: "https://example.com/vals-reasoning", text: `${VALS} The gap was smallest on coding tasks and largest on long math proofs. Their advice: start at the lowest setting and raise it only for the tasks that need it.` },
-      ],
-      voice: { note: null, examples: [] },
-      rules: [{ ...legacyLink, id: "scoped", text: "End posts about qp with the repo link." }],
-    };
-    // A writer answer that does not fit the draft schema is recorded, not hidden: it says nothing about the rule.
-    const runs: ({ slot: string; source: string; linked: boolean }[] | string)[] = [];
-    for (let i = 0; i < TRIALS; i++) {
-      runs.push(await writeDrafts(model, brief).then((ds) => ds.map((d) => ({ slot: d.slotId, source: d.sourceKey ?? "", linked: d.text.includes(REPO) })), (e) => `error: ${e instanceof Error ? e.message : String(e)}`));
-    }
-    console.log(JSON.stringify(runs, null, 2));
-    const drafts = runs.flatMap((r) => (typeof r === "string" ? [] : r));
+// The writer with two items, one about qp and one AI news story, and a rule that adds an ending. Which item goes to which
+// slot is the writer's choice; the draft's sourceKey says which it used. A writer answer that does not fit the draft
+// schema is recorded, not hidden, and fails the case: every answer must fit its own schema.
+const WRITER_BRIEF = {
+  slots: [
+    { id: "a", local: "Mon 9:00", channel: "@qp", service: "twitter" },
+    { id: "b", local: "Tue 9:00", channel: "@qp", service: "twitter" },
+  ],
+  material: [
+    { key: "release", title: "qp v0.9.0", url: "https://github.com/oguzserdar/queue-pilot/releases/tag/v0.9.0", text: "qp v0.9.0 is out. getqueuepilot.com now opens on a home page instead of dropping you straight into the demo, and every draft is checked against your rules by meaning before it reaches Buffer." },
+    { key: "news", title: "Reasoning effort on a budget", url: "https://example.com/vals-reasoning", text: `${VALS} The gap was smallest on coding tasks and largest on long math proofs. Their advice: start at the lowest setting and raise it only for the tasks that need it.` },
+  ],
+  voice: { note: null, examples: [] },
+};
+type WriterRun = { slot: string; source: string; text: string }[] | string;
+
+async function writeTrials(rule: Rule): Promise<{ runs: WriterRun[]; drafts: { slot: string; source: string; text: string }[] }> {
+  const model = modelFor(CFG!);
+  const runs = await Promise.all(Array.from({ length: TRIALS }, () =>
+    writeDrafts(model, { ...WRITER_BRIEF, rules: [rule] }).then(
+      (ds): WriterRun => ds.map((d) => ({ slot: d.slotId, source: d.sourceKey ?? "", text: d.text })),
+      (e): WriterRun => `error: ${e instanceof Error ? e.message : String(e)}`,
+    )));
+  console.log(JSON.stringify({ rule: rule.text, runs }, null, 2));
+  return { runs, drafts: runs.flatMap((r) => (typeof r === "string" ? [] : r)) };
+}
+
+describe.skipIf(!CFG)(`the writer and rules that add an ending, ${TRIALS} trials`, () => {
+  it("puts an ending typed with no subject only under the post it fits", async () => {
+    const { runs, drafts } = await writeTrials(legacyLink);
     const news = drafts.filter((d) => d.source === "news");
-    expect(runs.filter((r) => typeof r === "string").length, JSON.stringify(runs)).toBeLessThan(TRIALS);
+    const release = drafts.filter((d) => d.source === "release");
+    expect(runs.filter((r) => typeof r === "string"), JSON.stringify(runs)).toEqual([]);
     expect(news.length, JSON.stringify(runs)).toBeGreaterThan(0);
-    expect(news.filter((d) => d.linked), JSON.stringify(runs)).toEqual([]);
+    expect(news.filter((d) => d.text.includes(REPO)), JSON.stringify(runs)).toEqual([]);
+    expect(release.filter((d) => d.text.trimEnd().endsWith(REPO)).length, JSON.stringify(runs)).toBeGreaterThanOrEqual(Math.max(1, release.length - 1));
+  }, 600_000);
+
+  it("puts an ending the person wrote for every post under every post", async () => {
+    const written = parseNewRule({ kind: "guidance", text: "End every post with #ad", channels: "all", level: "block" }) as NewRule;
+    const rule = { ...(await structureRule(modelFor(CFG!), written)), id: "ad3" } as Rule;
+    const { runs, drafts } = await writeTrials(rule);
+    expect(rule.kind, rule.text).toBe("ends_with");
+    expect(runs.filter((r) => typeof r === "string"), JSON.stringify(runs)).toEqual([]);
+    expect(drafts.length, JSON.stringify(runs)).toBeGreaterThan(0);
+    expect(drafts.filter((d) => !d.text.trimEnd().endsWith("#ad")), JSON.stringify(runs)).toEqual([]);
+  }, 600_000);
+
+  it("never puts a learned, scoped project link under a post about something else", async () => {
+    const { runs, drafts } = await writeTrials({ ...legacyLink, id: "scoped", text: "End posts about qp with the repo link." });
+    const news = drafts.filter((d) => d.source === "news");
+    expect(runs.filter((r) => typeof r === "string"), JSON.stringify(runs)).toEqual([]);
+    expect(news.length, JSON.stringify(runs)).toBeGreaterThan(0);
+    expect(news.filter((d) => d.text.includes(REPO)), JSON.stringify(runs)).toEqual([]);
   }, 600_000);
 });

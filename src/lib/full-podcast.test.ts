@@ -44,7 +44,7 @@ it("saves a 1:59:50 closing quote as a draft, retains both captions, and detects
  expect((await store.sourceById("owner", snapshot.id))?.text).toBe(result.text);
  expect(await store.sourceById("other", snapshot.id)).toBeNull();
  const text = `${quote} ${url}&t=7190`;
- const model = answering({ drafts: [{ slotId: slot.id, text, sourceKey: snapshot.sourceKey, evidence: [{ claim: quote, quote, locator: "t=7190" }] }] });
+ const model = answering({ drafts: [{ slotId: slot.id, sourceKey: snapshot.sourceKey, fit: [], text, evidence: [{ claim: quote, quote, locator: "t=7190" }] }] });
  const drafts = await writeDrafts(model, { slots: [{ ...slot }], material: [{ key: snapshot.sourceKey, title: "Two-hour research interview", url, text: result.text, segments: result.segments }], voice: { note: "Plain, specific.", examples: [] }, rules: [] });
  expect(sentText(model)).toContain("from nine days to three days.");
  const saved = await saveDraftsForUser("owner", "fixture-token", { title: "Closing finding", drafts: drafts.map(d => ({ ...d, snapshotId: snapshot.id })), open: [slot] });

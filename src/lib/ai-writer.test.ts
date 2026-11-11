@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildPrompt, fenced, keepAsked, streamDrafts, writeDrafts, type Brief, type WrittenDraft } from "./ai-writer";
+import * as z from "zod";
+import { buildPrompt, DraftsSchema, ENDING_FIT, fenced, keepAsked, streamDrafts, writeDrafts, type Brief, type WrittenDraft } from "./ai-writer";
 import { answering, sentText, streaming } from "./ai-test-model";
 import { providerOf } from "./ai-key-store";
 import type { Rule } from "./rules";
@@ -57,6 +58,40 @@ describe("buildPrompt", () => {
   });
 });
 
+// A rule that adds an ending, typed with no subject, was followed under every draft. The writer now answers, per draft
+// and before the text, whether each such ending fits that post, and follows its own answer.
+describe("the writer's fit answer for rules that add an ending", () => {
+  const link: Rule = { id: "repo", kind: "ends_with", phrase: "https://example.com/repo", channels: "all", level: "warn", text: 'End with "https://example.com/repo"' };
+  const fitBrief: Brief = { ...brief, rules: [broth, link] };
+
+  it("lists each ending with the id the answer names, and no other rule with one", () => {
+    const { system, prompt } = buildPrompt(fitBrief);
+    expect(system).toContain(ENDING_FIT);
+    expect(prompt).toContain('- [ending repo] End with "https://example.com/repo".');
+    expect(prompt).not.toContain("[ending r]");
+  });
+
+  it("asks for the fit answers on every draft, after the source and before the text", () => {
+    const draft = (z.toJSONSchema(DraftsSchema) as unknown as { properties: { drafts: { items: { properties: Record<string, unknown>; required: string[] } } } }).properties.drafts.items;
+    const order = Object.keys(draft.properties);
+    expect(order.indexOf("sourceKey")).toBeLessThan(order.indexOf("fit"));
+    expect(order.indexOf("fit")).toBeLessThan(order.indexOf("text"));
+    expect(draft.required).toContain("fit");
+    // A draft that leaves the answers out still parses, so one omission never voids a whole fill.
+    expect(DraftsSchema.safeParse({ drafts: [{ slotId, text: "x" }] }).success).toBe(true);
+    const answer = { drafts: [{ slotId, fit: [{ ending: "repo", reason: "This post is about soup, not the project.", fits: false }], text: "x" }] };
+    expect(DraftsSchema.safeParse(answer).success).toBe(true);
+  });
+
+  it("leaves the fit answers behind: a saved draft carries only its text, source and evidence", async () => {
+    const fit = [{ ending: "repo", reason: "About soup, not the project.", fits: false }];
+    const m = answering({ drafts: [{ slotId, sourceKey: "s1:41", fit, text: " White bean soup tonight. " }] });
+    expect(await writeDrafts(m, fitBrief)).toEqual([{ slotId, sourceKey: "s1:41", text: "White bean soup tonight." }]);
+    const s = streaming(JSON.stringify({ elements: [{ slotId, sourceKey: "s1:41", fit, text: "Soup night." }] }));
+    expect(await streamDrafts(s, fitBrief, () => {})).toEqual([{ slotId, sourceKey: "s1:41", text: "Soup night." }]);
+  });
+});
+
 describe("keepAsked", () => {
   it("drops unknown and repeated slots and empty text", () => {
     expect(keepAsked([{ slotId: "a", text: " One " }, { slotId: "a", text: "Two" }, { slotId: "z", text: "X" }, { slotId: "b", text: "  " }], new Set(["a", "b"]))).toEqual([{ slotId: "a", text: "One" }]);
@@ -65,7 +100,7 @@ describe("keepAsked", () => {
 
 describe("writeDrafts", () => {
   it("returns the model's drafts for the asked slots through generateObject", async () => {
-    const m = answering({ drafts: [{ slotId, text: "White bean soup tonight.", sourceKey: "s1:41" }, { slotId: "other", text: "x" }] });
+    const m = answering({ drafts: [{ slotId, fit: [], text: "White bean soup tonight.", sourceKey: "s1:41" }, { slotId: "other", fit: [], text: "x" }] });
     expect(await writeDrafts(m, brief)).toEqual([{ slotId, text: "White bean soup tonight.", sourceKey: "s1:41" }]);
     expect(sentText(m)).toContain("Weeknight Dinners 41");
   });
@@ -113,12 +148,12 @@ it("supplies real timestamp segments and excerpt limits to the writer", () => {
 describe("streamDrafts", () => {
   const second = "c1@2026-10-28T12:00:00.000Z";
   const two: Brief = { ...brief, slots: [...brief.slots, { id: second, local: "Wed 28 Oct 12:00", channel: "Mark Evans", service: "linkedin" }] };
-  const item = (id: string, text: string) => JSON.stringify({ slotId: id, text, sourceKey: "s1:41" });
+  const item = (id: string, text: string) => JSON.stringify({ slotId: id, sourceKey: "s1:41", fit: [], text });
 
   it("hands over each draft as soon as the model has finished writing it, before the next one exists", async () => {
     const seenAt: string[] = [];
     // The second draft is still half written when the first is complete.
-    const model = streaming(`{"elements":[${item(slotId, "Soup night.")},`, `{"slotId":"${second}","text":"Stock, `, `not broth.","sourceKey":"s1:41"}]}`);
+    const model = streaming(`{"elements":[${item(slotId, "Soup night.")},`, `{"slotId":"${second}","sourceKey":"s1:41","fit":[],"text":"Stock, `, `not broth."}]}`);
     const got: WrittenDraft[] = [];
     const all = await streamDrafts(model, two, (d) => { got.push(d); seenAt.push(`${got.length}:${d.slotId}`); });
     expect(seenAt).toEqual([`1:${slotId}`, `2:${second}`]);

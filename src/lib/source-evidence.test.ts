@@ -12,7 +12,7 @@ it("distinguishes a paraphrased draft claim from a fabricated source quote and t
 it("reads an empty timestamp as no timestamp, so one draft without a video time does not void a whole answer", () => {
   const ev = { claim: "Low settings keep most of the score.", quote: "keep a majority of their performance", locator: "" };
   expect(evidenceInput.safeParse(ev).success).toBe(true);
-  expect(DraftsSchema.safeParse({ drafts: [{ slotId: "a", text: "x", sourceKey: "k", evidence: [ev] }] }).success).toBe(true);
+  expect(DraftsSchema.safeParse({ drafts: [{ slotId: "a", fit: [], text: "x", sourceKey: "k", evidence: [ev] }] }).success).toBe(true);
   expect(evidenceInput.safeParse({ ...ev, locator: "t=7190" }).success).toBe(true);
   expect(evidenceInput.safeParse({ ...ev, locator: "7190" }).success).toBe(false);
   expect(evidenceInput.safeParse({ ...ev, locator: "1:59:50" }).success).toBe(false);
