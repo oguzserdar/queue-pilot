@@ -49,7 +49,7 @@ const AIS: AiSetup[] = [
   {
     name: "Claude",
     plan: "Available on every Claude plan. Free allows one custom connector. Remote connectors belong to your Claude account and work across web, desktop and mobile.",
-    does: "Pick \"Fill my week\" and Claude drafts your empty times from your newsletter.",
+    does: "Pick \"Fill my week\" and Claude drafts your empty times from your own work, in your email, docs or blog.",
     steps: [
       "Go to Customize, Connectors, press + Add, then Add custom connector. Name it Queue Pilot",
       "Paste the URL above and press Continue. Review the detected authentication, then Continue again",

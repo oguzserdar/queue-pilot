@@ -29,7 +29,7 @@ export function BriefingView({ mode = "example", ideasPreview, shift = 0 }: { mo
       <div className={styles.page}>
         <header className={styles.head}>
           <h1 className={styles.title}>New material comes from your feeds</h1>
-          <p className={styles.sub}>Add your newsletter, blog, YouTube or GitHub releases feed in Sources. Then pick "Fill my week" in your AI: it reads what is new, writes drafts for the empty slots, and saves them in Buffer for you to approve.</p>
+          <p className={styles.sub}>Add a feed in Sources, or point your AI at your own work in your email, Slack, docs or X. Then pick "Fill my week" in your AI: it reads what is new, writes drafts for the empty slots, and saves them in Buffer for you to approve.</p>
         </header>
         <a className={styles.action} href="/sources">Add a feed in Sources</a>
         <BufferIdeasBoard preview={ideasPreview} />

@@ -11,7 +11,7 @@ type WeekProps = ComponentProps<typeof WeekView>;
 type Target = (root: HTMLElement) => HTMLElement | null | undefined;
 /** One of the five steps the walkthrough explains: which step, its title, and what the screen shows right now. */
 type Step = { n: number; title: string; text: string };
-const STEPS = ["Your empty times", "Drafts from your newsletter", "Every draft is checked", "Problems are caught first", "You approve, Buffer schedules"] as const;
+const STEPS = ["Your empty times", "Drafts from your own work", "Every draft is checked", "Problems are caught first", "You approve, Buffer schedules"] as const;
 
 const byText = (root: ParentNode, test: (s: string) => boolean) =>
   [...root.querySelectorAll<HTMLElement>("button")].find((b) => test((b.textContent ?? "").trim()));
