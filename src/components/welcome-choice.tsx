@@ -19,12 +19,14 @@ type Path = "own" | "built-in";
  * read more of their work), set up with the same steps as Connect; or Queue Pilot's built-in AI writing from a link.
  * "Not now" sets the welcome aside for good; Connect stays in the sidebar.
  */
-export function WelcomeChoice({ origin, account, approved, count, empty, hasSource, writing }: {
+export function WelcomeChoice({ origin, account, approved, count, total, empty, hasSource, writing }: {
   origin: string;
   account: SetupAccount;
   approved: ApprovedApp[] | null;
   /** Empty times next week that one fill writes into (at most ten). */
   count: number;
+  /** Every empty time still ahead next week, the number the fill button reports as "of your N". */
+  total: number;
   /** Every empty time next week, the same number Home's empty-times line shows. */
   empty: number;
   hasSource: boolean;
@@ -64,7 +66,7 @@ export function WelcomeChoice({ origin, account, approved, count, empty, hasSour
       {path === "own"
         ? <SetupSteps title="Connect your AI" origin={origin} account={account} approved={approved} example={false} guides={CHAT_GUIDES}
             openApp={(name) => router.push(`/connect?setup=${encodeURIComponent(name)}`)} />
-        : <HomeStart hasSource={hasSource} writing={writing} count={count} aiLink={false} />}
+        : <HomeStart hasSource={hasSource} writing={writing} count={count} total={total} aiLink={false} />}
 
       <button type="button" className={styles.later} disabled={leaving}
         onClick={() => start(async () => { await setOfferAside("welcome"); router.refresh(); })}>

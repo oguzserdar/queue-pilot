@@ -95,7 +95,7 @@ export function WriteWeekButton({ availability, count, total = count, inlineActi
         ) : week === "this" ? "Fill this week" : "Fill next week"}
       </Button>
       {busy ? <p className={styles.step} role="status">{step}</p> : example ? <p className={styles.help}>Watch this week get written again: each draft lands in its time as it is written. Nothing is saved.</p> :
-      <p className={styles.help}>{total > count ? `Writes ${count} of your ${total} empty times` : `Writes ${count} draft${count === 1 ? "" : "s"} into your Buffer posting times`}{week === "this" ? " still ahead this week" : ""}, spread across the days, using {availability.source}. Saved as drafts in Buffer for your review.{total > count ? " Run it again for the rest." : ""}</p>}
+      <p className={styles.help}>{total > count ? `Writes ${count} of your ${total} empty times` : `Writes ${count} draft${count === 1 ? "" : "s"} into your Buffer posting times`}{week === "this" ? " still ahead this week" : ""}, spread across the days, using {availability.source}. Saved as drafts in Buffer for your review.{total > count ? " Run it again for more." : ""}</p>}
       {result && <div className={styles.result}>
       {result && !result.ok && <Alert tone={example ? "info" : "danger"} title={example ? "Example only" : "No drafts written"}>{result.message}</Alert>}
       {result && result.ok && (

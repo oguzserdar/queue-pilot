@@ -31,7 +31,7 @@ import { dismissedOffers } from "@/lib/offer-store";
 import { headers } from "next/headers";
 import { publicOrigin } from "@/lib/origin";
 import { openSlots } from "@/lib/open-slots";
-import { slotsToWrite } from "@/lib/write-week";
+import { emptyTimesAhead, slotsToWrite } from "@/lib/write-week";
 import { writingAvailabilityFor } from "@/lib/writing-availability";
 export default async function Page() {
   const { user } = await getCurrentUser();
@@ -68,7 +68,9 @@ export default async function Page() {
   for (const [id, reason] of blocks) checks[id] = { state: "check", reason };
   const triage = triageFromBuffer({ channels: user.channels, posts: user.posts, now, timeZone: user.timeZone, checks, comments, repeats });
   // Until Queue Pilot has written a draft for the week shown, Home leads with the shortest way to the first ones.
-  const toFill = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, user.timeZone).length;
+  const open = openSlots(user.channels, user.posts, user.range).slots;
+  const toFill = slotsToWrite(open, now, user.timeZone).length;
+  const emptyAhead = emptyTimesAhead(open, now, user.timeZone);
   // An AI counts as connected once it has really called Queue Pilot, not when its approval was granted.
   const connected = [...new Set((aiApps ?? []).filter((a) => a.lastUsedAt).sort((a, b) => b.lastUsedAt!.localeCompare(a.lastUsedAt!)).map((a) => a.brand ?? a.name))];
   const setAside = userId ? await dismissedOffers(userId).catch((e) => { console.warn(JSON.stringify({ event: "qp-offers-read-failed", message: e instanceof Error ? e.message : String(e) })); return new Set(); }) : new Set();
@@ -78,8 +80,8 @@ export default async function Page() {
   const offer = !firstVisit && userId && !setAside.has(offerKey) ? <AiOffer connected={connected} /> : null;
   const firstDrafts = userId && written.length === 0 && toFill > 0;
   const start = firstVisit
-    ? <WelcomeChoice origin={publicOrigin(await headers())} approved={aiApps} count={toFill} empty={triage.find((t) => t.kind === "empty")?.count ?? toFill} hasSource={sources.length > 0} writing={await writingAvailabilityFor(userId)}
+    ? <WelcomeChoice origin={publicOrigin(await headers())} approved={aiApps} count={toFill} total={emptyAhead} empty={triage.find((t) => t.kind === "empty")?.count ?? emptyAhead} hasSource={sources.length > 0} writing={await writingAvailabilityFor(userId)}
         account={{ email: user.email, channels: user.channels.map((c) => ({ name: c.name, service: c.service, disconnected: c.isDisconnected })) }} />
-    : (offer || firstDrafts) ? <>{offer}{firstDrafts ? <HomeStart hasSource={sources.length > 0} writing={await writingAvailabilityFor(userId!)} count={toFill} aiLink={!offer && connected.length === 0} ai={connected[0]} /> : null}</> : undefined;
+    : (offer || firstDrafts) ? <>{offer}{firstDrafts ? <HomeStart hasSource={sources.length > 0} writing={await writingAvailabilityFor(userId!)} count={toFill} total={emptyAhead} aiLink={!offer && connected.length === 0} ai={connected[0]} /> : null}</> : undefined;
   return <><NeedsYouView needs={needs} readiness={readiness} greeting={`Signed in as ${user.email}`} triage={triage} live start={start} welcome={firstVisit} /><SourceEvidencePanel cards={evidence} timeZone={user.timeZone} /></>;
 }

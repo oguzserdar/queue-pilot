@@ -20,7 +20,7 @@ export const FILL_ASK = "Use Queue Pilot to fill my empty Buffer times next week
  * next week's empty times with the built-in writer. Connecting the person's own AI is offered beside it, never
  * required first.
  */
-export function HomeStart({ hasSource, writing, count, aiLink = true, ai }: { hasSource: boolean; writing: WritingAvailability; count: number; /** The closing "connect your AI" line; off where a connect-your-AI offer already shows. */ aiLink?: boolean; /** The person's connected AI: the panel leads with asking it, and Queue Pilot's own writer comes second. */ ai?: string }) {
+export function HomeStart({ hasSource, writing, count, total = count, aiLink = true, ai }: { hasSource: boolean; writing: WritingAvailability; count: number; /** Every empty time still ahead next week; one run writes at most `count` of them. */ total?: number; /** The closing "connect your AI" line; off where a connect-your-AI offer already shows. */ aiLink?: boolean; /** The person's connected AI: the panel leads with asking it, and Queue Pilot's own writer comes second. */ ai?: string }) {
   const [url, setUrl] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [read, setRead] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export function HomeStart({ hasSource, writing, count, aiLink = true, ai }: { ha
       {!ai && <h2 id="start-title" className={styles.title}>Fill next week from what you publish</h2>}
       {read && <p className={styles.read} role="status">{read}</p>}
       {hasSource ? (
-        <WriteWeekButton availability={writing} count={count} />
+        <WriteWeekButton availability={writing} count={count} total={total} />
       ) : (
         <>
           <p className={styles.muted}>Paste the address of your newsletter, blog, YouTube channel or GitHub releases. Queue Pilot reads what you published, writes one draft for each empty time from it, and saves them in Buffer as drafts.</p>

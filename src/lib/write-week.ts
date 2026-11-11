@@ -37,6 +37,25 @@ export type WriteWeekResult =
   | { kind: "nothing"; reason: "no-slots" | "no-material" }
   | { kind: "done"; saved: SaveResult["saved"]; refused: SaveResult["refused"]; flags: Flag[]; retried: number; check: PlaybookCheck; /** Times left unfilled because the draft stayed over the limit. */ dropped: string[] };
 
+/** The empty times still ahead inside the week shown (or the one `only` names), soonest first, before any cap. */
+function timesAhead(open: OpenSlot[], now: Date, timeZone: string, only: string | undefined, week: "this" | "next"): OpenSlot[] {
+  const range = weekRange(now, timeZone, week === "this" ? 0 : 1);
+  return open.filter((s) => {
+    const t = Date.parse(s.at);
+    return t > now.getTime() && (only ? s.id === only : t >= range.start.getTime() && t < range.end.getTime());
+  }).sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/**
+ * How many empty times are still ahead in the week shown, before the cap one run writes.
+ *
+ * @param week - "next" (the default) for the following Monday to Sunday, "this" for the week today is in
+ * @returns Every empty time a person still has to fill, which can be more than {@link MAX_SLOTS}
+ */
+export function emptyTimesAhead(open: OpenSlot[], now: Date, timeZone: string, week: "this" | "next" = "next"): number {
+  return timesAhead(open, now, timeZone, undefined, week).length;
+}
+
 /**
  * The empty times one run writes into.
  *
@@ -47,12 +66,7 @@ export type WriteWeekResult =
  * @param week - "next" (the default) for the following Monday to Sunday, "this" for the week today is in
  */
 export function slotsToWrite(open: OpenSlot[], now: Date, timeZone: string, only?: string, week: "this" | "next" = "next"): OpenSlot[] {
-  const range = weekRange(now, timeZone, week === "this" ? 0 : 1);
-  const soonest = (a: OpenSlot, b: OpenSlot) => a.at.localeCompare(b.at);
-  const ahead = open.filter((s) => {
-    const t = Date.parse(s.at);
-    return t > now.getTime() && (only ? s.id === only : t >= range.start.getTime() && t < range.end.getTime());
-  }).sort(soonest);
+  const ahead = timesAhead(open, now, timeZone, only, week);
   if (ahead.length <= MAX_SLOTS) return ahead;
   const dayOf = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
   const days = new Map<string, OpenSlot[]>();
@@ -60,7 +74,7 @@ export function slotsToWrite(open: OpenSlot[], now: Date, timeZone: string, only
   const picked: OpenSlot[] = [];
   for (let round = 0; picked.length < MAX_SLOTS; round++)
     for (const list of days.values()) if (list[round] && picked.length < MAX_SLOTS) picked.push(list[round]);
-  return picked.sort(soonest);
+  return picked.sort((a, b) => a.at.localeCompare(b.at));
 }
 
 const keysOf = (drafts: WrittenDraft[]) => [...new Set(drafts.flatMap((d) => (d.sourceKey ? [d.sourceKey] : [])))];

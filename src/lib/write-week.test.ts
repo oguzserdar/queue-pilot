@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { MAX_SLOTS, slotsToWrite, writeWeek, type WriteWeekDeps } from "./write-week";
+import { MAX_SLOTS, emptyTimesAhead, slotsToWrite, writeWeek, type WriteWeekDeps } from "./write-week";
 import { PLAYBOOK_REFUSAL } from "./save-for-user";
 import type { OpenSlot } from "./open-slots";
 
@@ -37,6 +37,12 @@ describe("slotsToWrite", () => {
     expect(perDay).toEqual([2, 2, 2, 1, 1, 1, 1]);
     // Each day's drafts take its earliest times, and the list comes back soonest first.
     expect(got.slice(0, 3).map((s) => s.id)).toEqual(["d0-09", "d0-11", "d1-09"]);
+  });
+
+  it("counts every empty time still ahead in the week, past the cap a run writes", () => {
+    const week = Array.from({ length: 7 }, (_, d) => ["09", "11", "13", "15"].map((h) => slot(`d${d}-${h}`, `2026-11-0${2 + d}T${h}:00:00Z`))).flat();
+    expect(emptyTimesAhead([...week, slot("past", "2026-10-25T09:00:00Z"), slot("after", "2026-11-09T00:00:00Z")], now, "UTC")).toBe(28);
+    expect(slotsToWrite(week, now, "UTC")).toHaveLength(MAX_SLOTS);
   });
 
   it("fills the week today is in from the times still ahead, never a time that has passed", () => {

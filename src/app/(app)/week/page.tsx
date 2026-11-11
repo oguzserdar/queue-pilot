@@ -14,7 +14,7 @@ import { readOr } from "@/lib/read-or";
 import { signedInUserId } from "@/lib/current-user";
 import { writingAvailabilityFor } from "@/lib/writing-availability";
 import { openSlots } from "@/lib/open-slots";
-import { slotsToWrite } from "@/lib/write-week";
+import { emptyTimesAhead, slotsToWrite } from "@/lib/write-week";
 import { postgresFillDraftStore } from "@/lib/fill-draft-store";
 import { recoverFillDrafts } from "@/lib/fill-recovery";
 
@@ -63,6 +63,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ w
   for (const [id, reason] of blocks) readiness[id] = { state: "check", reason };
   const writing = userId ? await writingAvailabilityFor(userId) : undefined;
   // How many drafts one press would write into the week shown: its empty times still ahead, at most ten.
-  const count = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, timeZone, undefined, which).length;
-  return <WeekView which={which} nowIso={now.toISOString()} week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} approvals={approvals} />;
+  const open = openSlots(user.channels, user.posts, user.range).slots;
+  const count = slotsToWrite(open, now, timeZone, undefined, which).length;
+  const writeTotal = emptyTimesAhead(open, now, timeZone, which);
+  return <WeekView which={which} nowIso={now.toISOString()} week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} writeTotal={writeTotal} approvals={approvals} />;
 }

@@ -16,7 +16,7 @@ const writing = { state: "built-in", remaining: 10 } as never;
 const account = { email: "oguz@example.com", channels: [{ name: "OguzSerdar", service: "twitter", disconnected: false }] };
 
 describe("WelcomeChoice", () => {
-  const html = renderToStaticMarkup(<WelcomeChoice origin="https://qp.example" account={account} approved={[]} count={10} empty={28} hasSource={false} writing={writing} />);
+  const html = renderToStaticMarkup(<WelcomeChoice origin="https://qp.example" account={account} approved={[]} count={10} total={28} empty={28} hasSource={false} writing={writing} />);
 
   it("asks once how to fill the first week, with the person's own week", () => {
     expect(text(html)).toContain("Let's fill your first week");
