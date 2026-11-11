@@ -75,8 +75,8 @@ const EXAMPLE_ACCOUNT: SettingsAccount = {
   devices: [{ id: "example-device", device: "Chrome on Mac", lastActive: "2026-10-28T08:00:00.000Z", current: true }],
   // Worded by the same function as a signed-in person's activity, so the two lists cannot drift apart.
   security: showSecurityEvents([
-    { event: "drafts_approved", detail: { by: "Claude", via: "ai", count: "3", ids: "example-1,example-2,example-3" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:14:00.000Z" },
-    { event: "draft_deleted", detail: { by: "Queue Pilot", via: "app", count: "1", ids: "example-4" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:05:00.000Z" },
+    { event: "drafts_approved", detail: { by: "Claude", via: "ai", count: "3", ids: "example-1,example-2,example-3", slots: "LinkedIn|Alex Rivera|2026-11-17T17:00:00.000Z\nX|@alexrivera_ai|2026-11-19T14:00:00.000Z\nInstagram|Alex Rivera|2026-11-20T15:00:00.000Z" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:14:00.000Z" },
+    { event: "draft_deleted", detail: { by: "Queue Pilot", via: "app", count: "1", ids: "example-4", slots: "Instagram|Alex Rivera|2026-11-18T23:00:00.000Z" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:05:00.000Z" },
     { event: "sign_in", detail: null, ip: null, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140.0 Safari/537.36", createdAt: "2026-10-28T08:00:00.000Z" },
     { event: "app_connected", detail: { by: "Claude", via: "ai" }, ip: null, userAgent: null, createdAt: "2026-10-20T09:00:00.000Z" },
   ] as SecurityEvent[]),
@@ -193,9 +193,23 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
           <ul className={styles.events}>
             {account.security.map((e, i) => (
               <li key={i}>
-                <strong>{e.what}</strong>
-                {e.where && <span className={styles.muted}>{e.where}</span>}
-                <time className={styles.muted}>{e.when}</time>
+                {e.items ? (
+                  // Which drafts it was: account and time slot only, never the post's text.
+                  <details className={styles.eventItems}>
+                    <summary>
+                      <strong>{e.what}</strong>
+                      {e.where && <span className={styles.muted}>{e.where}</span>}
+                      <time className={styles.muted}>{e.when}</time>
+                    </summary>
+                    <ul>{e.items.map((t, j) => <li key={j} className={styles.muted}>{t}</li>)}</ul>
+                  </details>
+                ) : (
+                  <>
+                    <strong>{e.what}</strong>
+                    {e.where && <span className={styles.muted}>{e.where}</span>}
+                    <time className={styles.muted}>{e.when}</time>
+                  </>
+                )}
               </li>
             ))}
           </ul>

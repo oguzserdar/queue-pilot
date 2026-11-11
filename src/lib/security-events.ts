@@ -10,6 +10,7 @@ import { and, asc, desc, eq, gt, lt, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { securityEvent } from "../db/schema";
 import { capAppName } from "./app-identity";
+import { NETWORKS } from "./rules";
 
 /** Actions that change what goes out or remove something, recorded with who did them. */
 export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted", "note_deleted", "direct_post_sent"] as const;
@@ -60,9 +61,11 @@ export async function recordSecurityEvent(
  * @param userId - The person whose account it touched
  * @param event - What was done
  * @param by - The connected AI app, or the person in Queue Pilot
- * @param facts - Ids it touched and an optional label name (a tag's name); never post text
+ * @param facts - Ids it touched, an optional label name (a tag's name), and the account and time of each draft
+ *   touched (from {@link draftSlot}); never post text
  */
-export async function recordAction(userId: string, event: ActionEventKind, by: Actor, facts: { ids?: string[]; name?: string } = {}): Promise<void> {
+export async function recordAction(userId: string, event: ActionEventKind, by: Actor, facts: { ids?: string[]; name?: string; slots?: (string | null)[] } = {}): Promise<void> {
+  const slots = (facts.slots ?? []).filter((x): x is string => Boolean(x));
   const ids = facts.ids ?? [];
   const detail: Record<string, string> = {
     by: by.via === "ai" ? capAppName(by.app) || "An AI app" : IN_APP,
@@ -71,8 +74,24 @@ export async function recordAction(userId: string, event: ActionEventKind, by: A
     ...(by.via === "ai" && by.verified === false ? { verified: "false" } : {}),
     ...(ids.length ? { count: String(ids.length), ids: ids.slice(0, MAX_IDS).join(",") } : {}),
     ...(facts.name ? { name: facts.name.slice(0, 100) } : {}),
+    ...(slots.length ? { slots: slots.slice(0, MAX_IDS).join("\n") } : {}),
   };
   await recordSecurityEvent(userId, event, { detail });
+}
+
+/**
+ * Which draft it was, without its text: the network, the account's name and the time slot, as "LinkedIn|Alex|<iso>".
+ * Security activity shows it as "LinkedIn (Alex), Tue 17 Nov 12:00 UTC", so a deleted draft can still be recognised.
+ *
+ * @param post - The draft, read before it was deleted
+ * @param channels - The person's Buffer accounts
+ * @returns The slot, or null when the draft is not in the copy
+ */
+export function draftSlot(post: { channelId: string; dueAt: string | null } | undefined, channels: { id: string; name: string; service: string }[]): string | null {
+  if (!post) return null;
+  const c = channels.find((x) => x.id === post.channelId);
+  const clean = (t: string) => t.replace(/[|\n]/g, " ").slice(0, 60);
+  return [clean(c ? NETWORKS[c.service] ?? c.service : "An account"), clean(c?.name ?? ""), post.dueAt ?? ""].join("|");
 }
 
 /** How many events one page of Security activity shows. */

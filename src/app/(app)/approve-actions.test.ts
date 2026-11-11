@@ -10,7 +10,7 @@ vi.mock("@/lib/written-store", () => ({ wroteIds: vi.fn(), postgresWrittenStore:
 vi.mock("@/lib/rules-store", () => ({ postgresRulesStore: () => ({ list: async () => [] }) }))
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: vi.fn() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
-vi.mock("@/lib/security-events", () => ({ recordAction: vi.fn() }))
+vi.mock("@/lib/security-events", async (orig) => ({ draftSlot: (await orig<typeof import("@/lib/security-events")>()).draftSlot, recordAction: vi.fn() }))
 
 const { freshBufferForCurrentUser, signedInUserId } = await import("@/lib/current-user")
 const { bufferQuery } = await import("@/lib/buffer/client")
@@ -52,7 +52,7 @@ describe("Approve action", () => {
     markScheduled.mockRejectedValue(new Error("snapshot write failed"))
     const result = await approveDrafts(["ours"])
     expect(result).toMatchObject({ ok: true, approved: ["ours"], note: expect.stringMatching(/scheduled in Buffer/i) })
-    expect(recordAction).toHaveBeenCalledWith("person-a", "drafts_approved", { via: "app" }, { ids: ["ours"] })
+    expect(recordAction).toHaveBeenCalledWith("person-a", "drafts_approved", { via: "app" }, { ids: ["ours"], slots: ["LinkedIn|LinkedIn|2099-11-01T09:00:00Z"] })
     expect(log.mock.calls.some(([line]) => String(line).includes("qp-approve-mark-failed"))).toBe(true)
     log.mockRestore()
   })

@@ -123,4 +123,14 @@ describe("removing a connected app on real Postgres", () => {
     expect(await revokeApp("r1", "rm-k4")).toBe(false);
     expect((await recentSecurityEvents("a", 50)).some((e) => e.event === "app_revoked")).toBe(false);
   });
+
+  it("keeps each draft's account and slot, and leaves unknown drafts out", async () => {
+    const { draftSlot } = await import("./security-events");
+    const channels = [{ id: "c1", name: "Alex | Rivera", service: "linkedin" }];
+    const slot = draftSlot({ channelId: "c1", dueAt: "2026-11-17T17:00:00.000Z" }, channels);
+    expect(slot).toBe("LinkedIn|Alex   Rivera|2026-11-17T17:00:00.000Z");
+    await recordAction("b", "draft_deleted", { via: "app" }, { ids: ["d1"], slots: [slot, draftSlot(undefined, channels)] });
+    const [latest] = await recentSecurityEvents("b", 1);
+    expect(latest.detail?.slots).toBe("LinkedIn|Alex   Rivera|2026-11-17T17:00:00.000Z");
+  });
 });

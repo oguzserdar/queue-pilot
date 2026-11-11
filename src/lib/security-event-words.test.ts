@@ -56,4 +56,12 @@ describe("security event words", () => {
     expect(lines.map((l) => l.what)).toEqual(["Deleted 9 drafts", "Deleted 2 drafts", "Deleted a draft", "Scheduled 5 drafts", "Deleted a post kept before choosing accounts", "Connected Claude"]);
     expect(lines[0].where).toBe("By Claude, a connected AI app");
   });
+
+  it("lists each draft's account and slot, never its text, and keeps them when lines fold", async () => {
+    const { showSecurityEvents } = await import("./security-event-words");
+    const del = (slot: string) => ({ event: "draft_deleted" as const, detail: { by: "Claude", via: "ai", count: "1", slots: slot }, ip: null, userAgent: null, createdAt: "2026-11-10T03:10:20.000Z" });
+    const [line] = showSecurityEvents([del("LinkedIn|Alex Rivera|2026-11-17T17:00:00.000Z"), del("Instagram|Alex Rivera|")]);
+    expect(line.what).toBe("Deleted 2 drafts");
+    expect(line.items).toEqual(["LinkedIn (Alex Rivera), Tue 17 Nov 17:00 UTC", "Instagram (Alex Rivera), no time set"]);
+  });
 });

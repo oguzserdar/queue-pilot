@@ -7,7 +7,19 @@ import { deviceName } from "./device-name";
 import type { SecurityEvent } from "./security-events";
 
 /** One line of the security activity list, already worded and dated. */
-export type ShownSecurityEvent = { what: string; where: string | null; when: string };
+export type ShownSecurityEvent = { what: string; where: string | null; when: string; items?: string[] };
+
+const NO_TIME = "no time set";
+
+/** One draft's account and slot, from draftSlot's "LinkedIn|Alex|<iso>", as "LinkedIn (Alex), Tue 17 Nov 12:00 UTC". */
+function slotWords(slot: string): string {
+  const [network, name, at] = slot.split("|");
+  const who = name ? `${network} (${name})` : network;
+  const when = at && !Number.isNaN(Date.parse(at))
+    ? new Date(at).toLocaleString("en-GB", { timeZone: "UTC", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(",", "") + " UTC"
+    : NO_TIME;
+  return `${who}, ${when}`;
+}
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -52,7 +64,8 @@ function where(e: SecurityEvent): string | null {
  */
 export function showSecurityEvent(e: SecurityEvent): ShownSecurityEvent {
   const when = new Date(e.createdAt).toLocaleString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + " UTC";
-  return { what: what(e), where: where(e), when };
+  const slots = e.detail?.slots?.split("\n").filter(Boolean) ?? [];
+  return { what: what(e), where: where(e), when, ...(slots.length ? { items: slots.map(slotWords) } : {}) };
 }
 
 /** Actions that read as one line when the same person or app repeats them within a minute. */
@@ -79,7 +92,8 @@ export function showSecurityEvents(events: SecurityEvent[]): ShownSecurityEvent[
     if (prev && repeats(prev, e)) {
       // Schedules add up their drafts; deletes add up lines, since one delete is one thing.
       const sum = (k: "count" | "times") => (Number(prev.detail?.[k] ?? "1") || 1) + (Number(e.detail?.[k] ?? "1") || 1);
-      folded[folded.length - 1] = { ...prev, detail: { ...prev.detail, ...(prev.event === "drafts_approved" ? { count: String(sum("count")) } : { times: String(sum("times")) }) } };
+      const slots = [prev.detail?.slots, e.detail?.slots].filter(Boolean).join("\n");
+      folded[folded.length - 1] = { ...prev, detail: { ...prev.detail, ...(prev.event === "drafts_approved" ? { count: String(sum("count")) } : { times: String(sum("times")) }), ...(slots ? { slots } : {}) } };
     } else folded.push(e);
   }
   return folded.map(showSecurityEvent);

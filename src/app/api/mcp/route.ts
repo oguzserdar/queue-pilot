@@ -35,7 +35,7 @@ import { ruleScope } from "@/lib/rules";
 import { approvalState, connectedApp, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
 import type { ConnectedApp } from "@/lib/app-identity";
 import { approverFor } from "@/lib/rule-origin";
-import { recordAction, type Actor } from "@/lib/security-events";
+import { draftSlot, recordAction, type Actor } from "@/lib/security-events";
 import { clientIp } from "@/lib/client-ip";
 import { limit, limitHeaders, type Action, type Limited } from "@/lib/rate-limit";
 import { toolErrorMessage } from "@/lib/tool-error";
@@ -349,10 +349,11 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     },
     async ({ postId }) => {
       const b = await bufferFor(auth, userId, { force: true });
+      const slot = draftSlot(b.posts.find((p) => p.id === postId), b.channels);
       const r = await deleteDraft(b.accessToken, postId, b.posts, await wroteIds(userId, postId));
       if (!r.ok) return { ...text(`Not deleted: ${r.reason}`), isError: true };
       await patchSnapshot(userId, (posts) => posts.filter((p) => p.id !== postId));
-      await recordAction(userId, "draft_deleted", await byApp(), { ids: [postId] });
+      await recordAction(userId, "draft_deleted", await byApp(), { ids: [postId], slots: [slot] });
       return text("Draft deleted; its slot is empty again.");
     },
   );
@@ -999,7 +1000,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       const done = new Set(res.approved);
       if (done.size) await recordApprover(userId, res.approved, approverFor(await app()));
       if (done.size) await patchSnapshot(userId, (posts) => posts.map((p) => (done.has(p.id) ? { ...p, status: "scheduled" as const } : p)));
-      if (done.size) await recordAction(userId, "drafts_approved", await byApp(), { ids: res.approved });
+      if (done.size) await recordAction(userId, "drafts_approved", await byApp(), { ids: res.approved, slots: res.approved.map((id) => draftSlot(b.posts.find((p) => p.id === id), b.channels)) });
       const answer = text([`${res.approved.length} scheduled in Buffer, ${res.refused.length} not.`, ...res.refused.map((r) => `Not scheduled: ${r.id} · ${r.reason}`)].join("\n"));
       return res.approved.length === 0 ? { ...answer, isError: true } : answer;
     },

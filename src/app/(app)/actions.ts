@@ -14,7 +14,7 @@ import { listModels, ModelListError } from "@/lib/ai-models";
 import { openSlots, parseSlotId } from "@/lib/open-slots";
 import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
 import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
-import { recordAction } from "@/lib/security-events";
+import { draftSlot, recordAction } from "@/lib/security-events";
 import { wroteIds } from "@/lib/written-store";
 import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
 import { listRecentSent, readPostsNow, type Post } from "@/lib/buffer/queries";
@@ -90,7 +90,7 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
       console.error(JSON.stringify({ event: "qp-approve-mark-failed", message: e instanceof Error ? e.message : String(e) }));
       note = "Scheduled in Buffer. This page may take a minute to show it.";
     }
-    if (approved.length) await recordAction(b.userId, "drafts_approved", { via: "app" }, { ids: approved });
+    if (approved.length) await recordAction(b.userId, "drafts_approved", { via: "app" }, { ids: approved, slots: approved.map((id) => draftSlot(b.posts.find((p) => p.id === id), b.channels)) });
     await recordApprover(b.userId, approved, APPROVED_IN_APP);
     revalidatePath("/", "layout");
     return { ok: true, approved, refused, ...(note ? { note } : {}) };
@@ -753,10 +753,11 @@ export async function deleteMyDraft(postId: string): Promise<SourceActionResult>
   try {
     const b = await bufferForWriting();
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
+    const slot = draftSlot(b.posts.find((p) => p.id === postId), b.channels);
     const r = await deleteDraft(b.token, postId, b.posts, await wroteIds(b.userId, postId));
     if (!r.ok) return { ok: false, message: r.reason };
     await patchSavedQueue(b.userId, (posts) => posts.filter((p) => p.id !== postId));
-    await recordAction(b.userId, "draft_deleted", { via: "app" }, { ids: [postId] });
+    await recordAction(b.userId, "draft_deleted", { via: "app" }, { ids: [postId], slots: [slot] });
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
