@@ -14,6 +14,7 @@ import {
   echo,
   echoDestination,
   fixDismissed,
+  offerDismissed,
   reviewComment,
   reviewLink,
   rule,
@@ -42,7 +43,7 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
   const [person] = await d.select({ name: user.name, email: user.email, image: user.image, createdAt: user.createdAt }).from(user).where(eq(user.id, userId));
   if (!person) return null;
   const [
-    rules, voiceExamples, voiceNotes, sources, sourcesUsed, copies, copiedPosts, drafts, dismissed, ai, usage, security, sessions, snapshot, apps, reviews, inheritance,
+    rules, voiceExamples, voiceNotes, sources, sourcesUsed, copies, copiedPosts, drafts, dismissed, ai, usage, security, sessions, snapshot, apps, reviews, inheritance, offers,
   ] = await Promise.all([
     d.select().from(rule).where(eq(rule.userId, userId)),
     d.select().from(voiceExample).where(eq(voiceExample.userId, userId)),
@@ -61,6 +62,7 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     approvedApps(userId),
     d.select().from(reviewLink).where(eq(reviewLink.userId, userId)).orderBy(asc(reviewLink.createdAt)),
     d.select({ settings: ruleInheritance.settings }).from(ruleInheritance).where(eq(ruleInheritance.userId, userId)),
+    d.select().from(offerDismissed).where(eq(offerDismissed.userId, userId)),
   ]);
   const reviewComments = reviews.length ? await d.select().from(reviewComment).where(inArray(reviewComment.linkId, reviews.map((r) => r.id))).orderBy(asc(reviewComment.createdAt)) : [];
   const strip = <T extends Record<string, unknown>>(rows: T[]) => rows.map(({ userId: _u, ...rest }) => rest);
@@ -70,6 +72,7 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     account: person,
     playbook: { inheritance: inheritance[0]?.settings ?? {}, rules: strip(rules), dismissedOffers: strip(dismissed) },
     voice: { examples: strip(voiceExamples), notes: strip(voiceNotes) },
+    homeOffersSetAside: strip(offers),
     sources: { feeds: strip(sources), used: strip(sourcesUsed) },
     copies: { destinations: strip(copies), sent: strip(copiedPosts) },
     draftsQueuePilotWrote: strip(drafts),

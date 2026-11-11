@@ -247,6 +247,20 @@ export const fixDismissed = pgTable(
 );
 
 /**
+ * Home's offers the person set aside: the first-run welcome ("Not now") and the connect-your-AI card (×). One row per
+ * offer, so a hidden offer stays hidden on every device. Deleted with the account.
+ */
+export const offerDismissed = pgTable(
+  "qp_offer_dismissed",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
+/**
  * A person's own AI key for drafting inside the web app. Stored encrypted (src/lib/secrets.ts, AES-256-GCM under
  * SETTINGS_KEY); only the masked form is ever shown. One key per person.
  */
