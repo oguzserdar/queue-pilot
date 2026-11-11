@@ -18,6 +18,13 @@ describe("pasted writing examples", () => {
     expect((await store.get("a")).examples).toHaveLength(2)
   })
 
+  it("says which AI saved an example, so the person can tell it from one they pasted", async () => {
+    const store = memoryVoiceStore()
+    await addPastedExample(store, "a", "From my sent mail", "Claude")
+    await addPastedExample(store, "a", "Typed in the app")
+    expect((await store.get("a")).examples.map((e) => e.channel)).toEqual(["Added by Claude", "Pasted"])
+  })
+
   it("rejects invisible or oversized text and shares the eight-post cap", async () => {
     const store = memoryVoiceStore()
     await expect(addPastedExample(store, "a", "\u200b")).rejects.toThrow("Paste a post")

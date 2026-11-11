@@ -33,13 +33,17 @@ export type VoiceStore = {
 /** A pasted post failed the shared input checks. */
 export class InvalidVoiceExampleError extends Error {}
 
-/** Saves visible writing without requiring a past Buffer post. */
-export async function addPastedExample(store: VoiceStore, userId: string, text: string): Promise<void> {
+/**
+ * Saves visible writing without requiring a past Buffer post.
+ *
+ * @param by - The AI app that saved it, when one did; the example then reads "Added by Claude" instead of "Pasted"
+ */
+export async function addPastedExample(store: VoiceStore, userId: string, text: string, by?: string): Promise<void> {
   if (typeof text !== "string" || text.length > MAX_PASTED_TEXT)
     throw new InvalidVoiceExampleError(`Use up to ${MAX_PASTED_TEXT} characters for an example.`)
   const clean = visibleText(text).trim()
   if (!clean) throw new InvalidVoiceExampleError("Paste a post you wrote first.")
-  await store.addExample(userId, { postId: `pasted:${randomUUID()}`, channel: "Pasted", text: clean })
+  await store.addExample(userId, { postId: `pasted:${randomUUID()}`, channel: by ? `Added by ${by}` : "Pasted", text: clean })
 }
 
 /** A private voice store for tests, with the same example limit. */

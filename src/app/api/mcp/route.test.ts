@@ -1050,7 +1050,7 @@ describe("connector voice writes", () => {
     expect((await call("add_voice_example", { text: "\u200b " })).isError).toBe(true)
     expect((await call("add_voice_example", { text: "x".repeat(MAX_PASTED_TEXT), userId: "person-b" })).isError).not.toBe(true)
     for (let i = 1; i < MAX_EXAMPLES; i++) await call("add_voice_example", { text: `My post ${i}` })
-    expect(answer(await call("get_my_voice"))).toContain('channel="Pasted"')
+    expect(answer(await call("get_my_voice"))).toContain('channel="Added by ChatGPT"')
     expect((await voices.get("person-b")).examples).toEqual([])
     const result = await call("add_voice_example", { text: "one more" })
     expect(result.isError).toBe(true)
