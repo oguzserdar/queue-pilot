@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
-import { buildPrompt, DraftsSchema, ENDING_FIT, fenced, keepAsked, streamDrafts, writeDrafts, type Brief, type WrittenDraft } from "./ai-writer";
+import { buildPrompt, DraftsSchema, ENDING_FIT, fenced, keepAsked, shortenDraft, streamDrafts, writeDrafts, type Brief, type WrittenDraft } from "./ai-writer";
 import { answering, sentText, streaming } from "./ai-test-model";
 import { providerOf } from "./ai-key-store";
 import type { Rule } from "./rules";
@@ -186,5 +186,26 @@ describe("streamDrafts", () => {
     const model = streaming("{}");
     expect(await streamDrafts(model, { ...brief, slots: [] }, () => {})).toEqual([]);
     expect(model.doStreamCalls).toHaveLength(0);
+  });
+});
+
+describe("shortenDraft", () => {
+  const draft: WrittenDraft = { slotId, text: "White bean soup is back. It takes twenty minutes. Make it tonight.", sourceKey: "s1:41", snapshotId: "snap", evidence: [{ claim: "It takes twenty minutes.", quote: "twenty minutes" }, { claim: "White bean soup is back.", quote: "White bean soup" }] };
+
+  it("states the limit as a hard ceiling and keeps only evidence whose claim is still in the shorter text, word for word", async () => {
+    const model = answering({ text: "White bean soup is back. Make it tonight." });
+    const out = await shortenDraft(model, draft, { service: "twitter", channel: "OguzSerdar" }, 280);
+    expect(sentText(model)).toContain("280");
+    expect(sentText(model)).toContain("for X");
+    expect(sentText(model)).not.toContain("twitter");
+    expect(sentText(model)).toContain(draft.text);
+    expect(out).toEqual({ ...draft, text: "White bean soup is back. Make it tonight.", evidence: [{ claim: "White bean soup is back.", quote: "White bean soup" }] });
+  });
+});
+
+describe("buildPrompt limits", () => {
+  it("gives each slot's limit as a hard ceiling with headroom", () => {
+    const { prompt } = buildPrompt({ ...brief, slots: [{ ...brief.slots[0], service: "twitter" }] });
+    expect(prompt).toContain("(X, max 280 characters, a hard ceiling: aim for 266 or fewer)");
   });
 });

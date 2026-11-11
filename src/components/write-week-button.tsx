@@ -10,7 +10,7 @@ import { useNextSteps } from "./use-next-steps";
 import styles from "./write-week-button.module.css";
 
 /** What a running fill reports to the week. */
-export type FillEvent = { type: "start"; slotIds: string[] } | { type: "draft"; slotId: string; text: string };
+export type FillEvent = { type: "start"; slotIds: string[] } | { type: "draft"; slotId: string; text: string } | { type: "dropped"; slotId: string };
 
 const SAMPLE = "A draft written from what you published appears here, in your voice, with the quote it rests on.";
 
@@ -18,7 +18,7 @@ const SAMPLE = "A draft written from what you published appears here, in your vo
  * Fill the displayed week using either the person's key or the available built-in allowance.
  * The result says what was saved, what the playbook refused, and why.
  */
-export function WriteWeekButton({ availability, count, total = count, inlineActions = false, example = false, week = "next", onWriting, onProgress, samples = [] }: { availability: WritingAvailability; count: number; /** Every empty time still ahead; a run writes at most 10 of them. */ total?: number; inlineActions?: boolean; example?: boolean; /** Which week the button fills. */ week?: "this" | "next"; /** Told when a run starts and ends, so the week can show the times being written. */ onWriting?: (writing: boolean) => void; /** Told what the run reports: the times it will write, each finished draft, and nothing more. */ onProgress?: (event: FillEvent) => void; /** The example's times and the text each is written with; it plays the run on them and writes nothing. */ samples?: { slotId: string; text?: string }[] }) {
+export function WriteWeekButton({ availability, count, total = count, inlineActions = false, example = false, week = "next", onWriting, onProgress, samples = [] }: { availability: WritingAvailability; count: number; /** Every empty time still ahead; a run writes at most 10 of them. */ total?: number; inlineActions?: boolean; example?: boolean; /** Which week the button fills. */ week?: "this" | "next"; /** Told when a run starts and ends, so the week can show the times being written. */ onWriting?: (writing: boolean) => void; /** Told what the run reports: the times it will write, each finished draft, each time left empty, and nothing more. */ onProgress?: (event: FillEvent) => void; /** The example's times and the text each is written with; it plays the run on them and writes nothing. */ samples?: { slotId: string; text?: string }[] }) {
   const [result, setResult] = useState<WriteWeekActionResult | null>(null);
   const [pending, start] = useTransition();
   const [running, setRunning] = useState(false);
@@ -31,7 +31,7 @@ export function WriteWeekButton({ availability, count, total = count, inlineActi
   useEffect(() => { onWriting?.(busy); }, [busy]);
   const report = (event: FillEvent | { type: "saving" }) => {
     if (event.type === "start") setProgress({ total: event.slotIds.length, written: 0, saving: false });
-    if (event.type === "draft") setProgress((p) => ({ ...p, written: p.written + 1 }));
+    if (event.type === "draft" || event.type === "dropped") setProgress((p) => ({ ...p, written: p.written + 1 }));
     if (event.type === "saving") setProgress((p) => ({ ...p, saving: true }));
     if (event.type !== "saving") onProgress?.(event);
   };

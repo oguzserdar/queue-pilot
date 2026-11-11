@@ -15,6 +15,7 @@ function deps(over: Partial<WriteWeekDeps> = {}): WriteWeekDeps {
     rules: async () => [],
     write: vi.fn(async (b) => b.slots.map((s: { id: string }) => ({ slotId: s.id, text: "Soup tonight.", sourceKey: "s1:41" }))),
     save: vi.fn(async (drafts) => done(drafts)),
+    shorten: vi.fn(async () => null),
     ...over,
   };
 }
@@ -113,4 +114,44 @@ it("preserves successful saves when the retry writer throws", async () => {
  const r = await writeWeek([slot("a", "2026-10-27T09:00:00Z"), slot("b", "2026-10-28T09:00:00Z")], now, d);
  expect(r).toMatchObject({ kind: "done", saved: [{ slotId: "a" }], refused: [expect.objectContaining({ slotId: "b" })] });
  expect(d.save).toHaveBeenCalledOnce();
+});
+
+describe("writeWeek, drafts over the slot's limit", () => {
+  const xSlot = (id: string, at: string): OpenSlot => ({ ...slot(id, at), channel: "OguzSerdar", service: "twitter" });
+  const long = "a".repeat(287);
+
+  it("asks once for a shorter version of an over-limit X draft and saves that, with no notice", async () => {
+    const d = deps({
+      write: vi.fn(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }]),
+      shorten: vi.fn(async (draft) => ({ ...draft, text: "a".repeat(250) })),
+    });
+    const r = await writeWeek([xSlot("x", "2026-10-27T09:00:00Z")], now, d);
+    expect(d.shorten).toHaveBeenCalledOnce();
+    expect(d.shorten).toHaveBeenCalledWith(expect.objectContaining({ slotId: "x", text: long }), expect.objectContaining({ service: "twitter" }), 280);
+    expect(d.save).toHaveBeenCalledWith([expect.objectContaining({ slotId: "x", text: "a".repeat(250) })], ["s1:41"]);
+    expect(r).toMatchObject({ kind: "done", saved: [{ slotId: "x" }], refused: [] });
+  });
+
+  it("leaves out a draft that is still too long after shortening, without a Too long notice", async () => {
+    const d = deps({
+      write: vi.fn(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }, { slotId: "y", text: "Fits.", sourceKey: "s1:41" }]),
+      shorten: vi.fn(async (draft) => ({ ...draft, text: "a".repeat(281) })),
+    });
+    const r = await writeWeek([xSlot("x", "2026-10-27T09:00:00Z"), xSlot("y", "2026-10-28T09:00:00Z")], now, d);
+    expect(d.save).toHaveBeenCalledWith([expect.objectContaining({ slotId: "y" })], ["s1:41"]);
+    if (r.kind !== "done") throw new Error("expected done");
+    expect(r.refused).toEqual([]);
+    expect(r.dropped).toEqual(["x"]);
+    expect(JSON.stringify(r)).not.toMatch(/Too long/);
+  });
+
+  it("leaves out an over-limit draft when shortening fails, and never calls the shortener for one that fits", async () => {
+    const d = deps({
+      write: vi.fn(async () => [{ slotId: "x", text: long }, { slotId: "y", text: "a".repeat(280) }]),
+      shorten: vi.fn(async () => { throw new Error("provider down"); }),
+    });
+    const r = await writeWeek([xSlot("x", "2026-10-27T09:00:00Z"), xSlot("y", "2026-10-28T09:00:00Z")], now, d);
+    expect(d.shorten).toHaveBeenCalledOnce();
+    expect(r).toMatchObject({ kind: "done", saved: [{ slotId: "y" }], refused: [], dropped: ["x"] });
+  });
 });

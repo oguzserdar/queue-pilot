@@ -66,6 +66,13 @@ describe("saveDrafts", () => {
     expect(res.refused).toEqual([{ slotId: open[3].id, reason: "Too long for Bluesky: 301 characters; bluesky allows 300." }]);
   });
 
+  it("still refuses an over-limit X post given straight to save, so a connected AI fixes its own text", async () => {
+    const { q } = fakeBuffer(ok);
+    const res = await saveDrafts("t", { title: "t", drafts: [{ slotId: open[0].id, text: "a".repeat(287) }], open }, q);
+    expect(res.saved).toEqual([]);
+    expect(res.refused[0].reason).toMatch(/287 characters; X allows 280/);
+  });
+
   it("keeps only the first draft for a slot given twice, and refuses empty text", async () => {
     const { q } = fakeBuffer(ok);
     const res = await saveDrafts(

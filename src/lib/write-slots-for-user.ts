@@ -3,7 +3,7 @@ import { SourceContextError } from "./source-context";
 import { waitMessage, waitRefusal } from "./buffer/not-sent";
 import type { Channel, Post } from "./buffer/queries";
 import type { Provider } from "./ai-key-store";
-import { streamDrafts, writeDrafts, type BriefMaterial } from "./ai-writer";
+import { shortenDraft, streamDrafts, writeDrafts, type BriefMaterial } from "./ai-writer";
 import type { FillDraftStore } from "./fill-draft-store";
 import { aiErrorMessage } from "./ai-model";
 import { APICallError, NoObjectGeneratedError } from "ai";
@@ -11,6 +11,7 @@ import { ModelListError } from "./ai-models";
 import { slotsToWrite, writeWeek } from "./write-week";
 import { newMaterial } from "./new-material";
 import { openSlots } from "./open-slots";
+import { tooLong } from "./char-limits";
 import { checkNote, saveDraftsForUser } from "./save-for-user";
 import { isYouTubeVideo } from "./transcripts";
 import { transcriptForUser } from "./transcript-for-user";
@@ -31,6 +32,8 @@ export type LiveFill = {
   onStart?: (slotIds: string[]) => void;
   /** A draft the model finished and our store now holds. A rewrite reports the same time again. */
   onDraft?: (draft: { slotId: string; text: string }) => void;
+  /** A time this run leaves empty: its draft stayed over the limit, so it is never shown or saved. */
+  onDropped?: (slotId: string) => void;
   /** The Buffer save is starting. */
   onSaving?: () => void;
 };
@@ -98,14 +101,30 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
         if (!live) return (await writeDrafts(model, brief)).flatMap(d => withSource(d) ?? []);
         // Our own record first, then the report: a draft the person has seen is one we hold.
         const kept: NonNullable<ReturnType<typeof withSource>>[] = [];
+        const service = new Map(brief.slots.map((s) => [s.id, s.service]));
         await streamDrafts(model, brief, async (d) => {
           const draft = withSource(d);
           if (!draft) return;
+          // Over its limit, a draft is kept back for shortening: it is stored and shown only once it fits.
+          if (tooLong(service.get(draft.slotId) ?? "", draft.text)) { kept.push(draft); return; }
           await live.store.written(b.userId, live.runId, draft);
           kept.push(draft);
           live.onDraft?.({ slotId: draft.slotId, text: draft.text });
         });
         return kept;
+      },
+      shorten: (draft, slot, max) => shortenDraft(model, draft, slot, max),
+      // Only a shortened draft that fits is stored and shown, store first, as for any draft.
+      fitted: async (draft) => {
+        if (!live) return;
+        await live.store.written(b.userId, live.runId, draft);
+        live.onDraft?.({ slotId: draft.slotId, text: draft.text });
+      },
+      // A dropped time is closed in our own record at once, so recovery never looks for it in Buffer.
+      dropped: async (slotId) => {
+        if (!live) return;
+        await live.store.finish(b.userId, live.runId, { saved: [], refused: [{ slotId, reason: "Still over the character limit after one shortening; not saved." }] });
+        live.onDropped?.(slotId);
       },
       // The playbook check is part of this one action, so it judges with the same AI instead of taking another.
       save: async (drafts, sourceKeys) => {

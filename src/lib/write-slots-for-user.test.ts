@@ -1,11 +1,11 @@
 import { describe, beforeEach, afterEach, expect, it, vi } from "vitest";
 import type { Brief, BriefMaterial } from "./ai-writer";
-const m = vi.hoisted(() => ({ material: [] as BriefMaterial[], transcript: vi.fn(), capture: vi.fn(), write: vi.fn(), stream: vi.fn(), save: vi.fn(), giveBack: vi.fn(), settle: vi.fn() }));
+const m = vi.hoisted(() => ({ material: [] as BriefMaterial[], transcript: vi.fn(), capture: vi.fn(), write: vi.fn(), stream: vi.fn(), shorten: vi.fn(), save: vi.fn(), giveBack: vi.fn(), settle: vi.fn() }));
 vi.mock("./new-material", () => ({ newMaterial: async () => m.material }));
 vi.mock("./open-slots", () => ({ openSlots: () => ({ slots: ["a", "b"].map(id => ({ id, at: "2026-11-02T09:00:00Z", channelId: "ch", service: "twitter", channel: "Personal", local: "Mon 9:00" })) }) }));
 vi.mock("./transcript-for-user", () => ({ transcriptForUser: m.transcript }));
 vi.mock("./source-store", () => ({ captureSource: m.capture }));
-vi.mock("./ai-writer", () => ({ writeDrafts: m.write, streamDrafts: m.stream }));
+vi.mock("./ai-writer", () => ({ writeDrafts: m.write, streamDrafts: m.stream, shortenDraft: m.shorten }));
 vi.mock("./save-for-user", () => ({ PLAYBOOK_REFUSAL: "Breaks your playbook", checkNote: () => undefined, saveDraftsForUser: (...args: unknown[]) => m.save(...args) }));
 vi.mock("./voice-store", () => ({ postgresVoiceStore: () => ({ get: async () => ({ note: null, examples: [] }) }) }));
 vi.mock("./rules-store", () => ({ postgresRulesStore: () => ({ list: async () => [] }) }));
@@ -63,7 +63,7 @@ describe("a live run", () => {
  const run = () => {
   const log: string[] = [];
   const store = { written: vi.fn(async (_u: string, _r: string, d: { slotId: string }) => { log.push(`stored ${d.slotId}`); }), startCall: vi.fn(async () => { log.push("call started"); }), finish: vi.fn(async () => { log.push("finished"); }) };
-  const live = { runId: "run", store, onStart: (ids: string[]) => log.push(`start ${ids.join(",")}`), onDraft: (d: { slotId: string }) => log.push(`shown ${d.slotId}`), onSaving: () => log.push("saving") };
+  const live = { runId: "run", store, onStart: (ids: string[]) => log.push(`start ${ids.join(",")}`), onDraft: (d: { slotId: string; text: string }) => log.push(`shown ${d.slotId} ${d.text.length}`), onDropped: (slotId: string) => log.push(`dropped ${slotId}`), onSaving: () => log.push("saving") };
   return { log, store, live };
  };
  beforeEach(() => {
@@ -74,7 +74,7 @@ describe("a live run", () => {
  it("stores each draft before showing it, and saves to Buffer once, after the last draft", async () => {
   const { log, store, live } = run();
   expect(await writeSlotsForUser(load, undefined, "next", live)).toMatchObject({ ok: true, saved: [{}, {}] });
-  expect(log).toEqual(["start a,b", "stored a", "shown a", "stored b", "shown b", "call started", "saving", "finished"]);
+  expect(log).toEqual(["start a,b", "stored a", "shown a 7", "stored b", "shown b 7", "call started", "saving", "finished"]);
   expect(m.save).toHaveBeenCalledOnce();
   expect(m.write).not.toHaveBeenCalled();
   expect(store.finish).toHaveBeenCalledWith("u", "run", { saved: [{ slotId: "a", postId: "post-a" }, { slotId: "b", postId: "post-b" }], refused: [] });
@@ -100,5 +100,24 @@ describe("a live run", () => {
   m.stream.mockImplementation(async (_model, b: Brief, onDraft: (d: unknown) => Promise<void>) => { await onDraft({ slotId: b.slots[0].id, text: "Draft", sourceKey: "made-up" }); return []; });
   await writeSlotsForUser(load, undefined, "next", live);
   expect(log.filter((l) => l.startsWith("shown") || l.startsWith("stored"))).toEqual([]);
+ });
+ it("never shows or stores over-limit text: a shortened draft is shown once, at its new length", async () => {
+  const { log, live } = run();
+  m.stream.mockImplementation(async (_model, b: Brief, onDraft: (d: unknown) => Promise<void>) => { await onDraft({ slotId: "a", text: "a".repeat(287), sourceKey: b.material[0].key }); return []; });
+  m.shorten.mockImplementation(async (_model: unknown, d: object) => ({ ...d, text: "a".repeat(250) }));
+  await writeSlotsForUser(load, undefined, "next", live);
+  expect(log.filter((l) => l.startsWith("shown") || l.startsWith("stored"))).toEqual(["stored a", "shown a 250"]);
+  expect(m.save.mock.calls[0][2].drafts).toEqual([expect.objectContaining({ slotId: "a", text: "a".repeat(250) })]);
+ });
+
+ it("closes a draft still too long after shortening the moment it is dropped, and never shows it", async () => {
+  const { log, store, live } = run();
+  m.stream.mockImplementation(async (_model, b: Brief, onDraft: (d: unknown) => Promise<void>) => { await onDraft({ slotId: "a", text: "a".repeat(287), sourceKey: b.material[0].key }); await onDraft({ slotId: "b", text: "Fits.", sourceKey: b.material[0].key }); return []; });
+  m.shorten.mockImplementation(async (_model: unknown, d: object) => ({ ...d, text: "a".repeat(281) }));
+  const r = await writeSlotsForUser(load, undefined, "next", live);
+  expect(log).toEqual(["start a,b", "stored b", "shown b 5", "finished", "dropped a", "call started", "saving", "finished"]);
+  expect(store.finish).toHaveBeenNthCalledWith(1, "u", "run", { saved: [], refused: [expect.objectContaining({ slotId: "a" })] });
+  expect(r).toMatchObject({ ok: true, refused: [] });
+  expect(JSON.stringify(r)).not.toMatch(/Too long/);
  });
 });

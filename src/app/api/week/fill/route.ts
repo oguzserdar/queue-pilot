@@ -36,6 +36,7 @@ export async function POST(request: Request) {
             store: postgresFillDraftStore(),
             onStart: (slotIds) => send({ type: "start", slotIds }),
             onDraft: (draft) => send({ type: "draft", ...draft }),
+            onDropped: (slotId) => send({ type: "dropped", slotId }),
             onSaving: () => send({ type: "saving" }),
           });
         } catch {
