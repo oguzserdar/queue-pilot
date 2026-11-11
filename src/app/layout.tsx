@@ -16,8 +16,11 @@ const DESCRIPTION = "Your own AI fills the empty slots in your Buffer queue, che
  * rest show the image, which is its first frame. A new cut gets a new file name, because chats cache by address.
  */
 export async function generateMetadata(): Promise<Metadata> {
+  const base = new URL(publicOrigin(await headers()));
+  // Next adds the origin to og:image but not to og:video, and chats skip a video whose address is relative.
+  const video = new URL("/og/pilot-v1.mp4", base).toString();
   return {
-    metadataBase: new URL(publicOrigin(await headers())),
+    metadataBase: base,
     title: "Queue Pilot",
     description: DESCRIPTION,
     openGraph: {
@@ -26,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Queue Pilot",
       description: DESCRIPTION,
       url: "/",
-      videos: [{ url: "/og/pilot-v1.mp4", secureUrl: "/og/pilot-v1.mp4", type: "video/mp4", width: 2400, height: 1260 }],
+      videos: [{ url: video, secureUrl: video, type: "video/mp4", width: 2400, height: 1260 }],
     },
     twitter: { card: "summary_large_image", title: "Queue Pilot", description: DESCRIPTION },
   };

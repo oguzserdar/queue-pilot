@@ -7,7 +7,7 @@ vi.mock("next/font/google", () => ({ Schibsted_Grotesk: () => ({ variable: "" })
 vi.mock("@vercel/analytics/next", () => ({ Analytics: () => null }));
 
 describe("link preview", () => {
-  it("points og:video at a file that ships, as an MP4 the size of the card", async () => {
+  it("points og:video at a full address of a file that ships, as an MP4 the size of the card", async () => {
     const { generateMetadata } = await import("./layout");
     const meta = await generateMetadata();
     const videos = [meta.openGraph?.videos].flat().filter(Boolean) as { url: string; type: string; width: number; height: number }[];
@@ -15,6 +15,7 @@ describe("link preview", () => {
     const [video] = videos;
     expect(video.type).toBe("video/mp4");
     expect([video.width, video.height]).toEqual([2400, 1260]);
-    expect(existsSync(join(process.cwd(), "public", video.url))).toBe(true);
+    expect(video.url.startsWith("https://getqueuepilot.com/")).toBe(true);
+    expect(existsSync(join(process.cwd(), "public", new URL(video.url).pathname))).toBe(true);
   });
 });
