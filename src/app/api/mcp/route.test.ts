@@ -1256,6 +1256,16 @@ describe("connector controls", () => {
     expect(after.steps.find((s: { id: string }) => s.id === "approve").state).toBe("done");
     expect(JSON.parse(answer(await call("get_setup_status", {}, "person-b"))).steps.find((s: { id: string }) => s.id === "approve").state).toBe("todo");
   });
+  it("lets an AI see the person has no rules of their own while only the starting rule is there", async () => {
+    await ruleStore.add("person-a", { ...(await import("@/lib/starting-rule")).STARTING_RULE })
+    const playbook = answer(await call("get_playbook"))
+    expect(playbook).toContain("No rules of the user's own yet")
+    expect(playbook).toContain("Keep private matters private")
+    expect(JSON.parse(answer(await call("get_setup_status"))).playbook).toEqual({ ownRules: 0, startingRule: true })
+    await call("add_rule", { kind: "guidance", text: "Name the number first.", channels: "all", level: "warn" })
+    expect(answer(await call("get_playbook"))).not.toContain("No rules of the user's own yet")
+    expect(JSON.parse(answer(await call("get_setup_status"))).playbook).toEqual({ ownRules: 1, startingRule: true })
+  });
   it("keeps and dismisses signed suggestions with tenant isolation and stored evidence", async () => {
     const { signSuggestion } = await import("@/lib/rule-suggestions");
     const token = signSuggestion("person-a", { key: "first:test", rule: { kind: "guidance", text: "Use short sentences.", channels: "all", level: "warn" }, fixes: 2, evidence: [{ before: "Long", after: "Short" }] });

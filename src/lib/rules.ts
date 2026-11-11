@@ -64,7 +64,9 @@ export function ruleHold(rule: Rule): "Blocks drafts" | "Flags drafts" {
 }
 
 const MAX_PHRASE = 120;
-const MAX_TEXT = 200;
+/** The most characters one rule in the person's own words may hold; the rule form says so when the text reaches it. */
+export const MAX_RULE_TEXT = 200;
+const MAX_TEXT = MAX_RULE_TEXT;
 
 /**
  * A stored or read rule as parseNewRule's input, so a rule can be checked again and come back unchanged: a banned rule

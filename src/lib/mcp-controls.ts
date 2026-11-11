@@ -10,6 +10,7 @@ import { setInheritance, setRuleOverride } from "./rule-routing-store";
 import { feedbackForComment } from "./feedback-flow";
 import { allTeamNotes, feedbackForNote, teamNotes } from "./note-feedback";
 import { approverLine, ruleOrigin } from "./rule-origin";
+import { playbookSetup } from "./playbook-answer";
 import type { ConnectedApp } from "./app-identity";
 import { NETWORKS, parseNewRule } from "./rules";
 import { judgeDrafts, rulesFor } from "./judge";
@@ -247,9 +248,10 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     await store.remove(userId, key); return result("Saved research removed. Existing drafts are unchanged.");
   });
   server.registerTool("get_setup_status", { title: "Read my setup progress", description: "Reads the setup steps and count shown on Needs you. Call it once, right after connecting or when asked about setup, not before other tasks. Never invent completion. Approval needs the person: their Approve, or their yes to approve_drafts. It stays incomplete in a drafts-only demo.", annotations: read }, async () => {
-    const [b, sources, apps, voice, approved] = await Promise.all([buffer(), postgresSourceStore().list(userId), approvedApps(userId), postgresVoiceStore().get(userId), hasApprovedDraft(userId).catch(() => false)]);
+    const [b, sources, apps, voice, approved, rules] = await Promise.all([buffer(), postgresSourceStore().list(userId), approvedApps(userId), postgresVoiceStore().get(userId), hasApprovedDraft(userId).catch(() => false), postgresRulesStore().list(userId).catch(() => null)]);
     const steps = setupReadiness(b, sources, apps, voice, approved);
-    return result({ done: steps.filter(s => s.state === "done").length, total: steps.length, steps, next: steps.find(s => s.state !== "done") ?? null });
+    // Beside the steps, not one of them: the screen has no playbook step. The starting rule is not counted as the person's own.
+    return result({ done: steps.filter(s => s.state === "done").length, total: steps.length, steps, next: steps.find(s => s.state !== "done") ?? null, playbook: playbookSetup(rules) });
   });
   server.registerTool("write_my_week", { title: "Write my week with Queue Pilot", description: "Runs Queue Pilot's own writer when the user explicitly asks Queue Pilot to write and save Buffer drafts. It reads the voice, playbook, new material and empty slots itself, so call nothing first except get_ai_usage. Uses the person's key or the metered built-in AI budget, the same writer and playbook gate as the button. Writes at most 10 empty slots next week per run, retries refused drafts once, and returns saved, flagged and refused results. It never schedules or publishes. Do not automatically repeat to fill more slots; report remaining slots and request another run. Read list_my_drafts afterward.", annotations: { ...write, openWorldHint: true } }, async () => {
     const l = await limit("bufferWrite", userId);

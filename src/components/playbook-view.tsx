@@ -20,6 +20,7 @@ import { RewriteFinder } from "./rewrite-finder";
 import { RuleTester } from "./rule-tester";
 import { TeamNotesFinder } from "./team-notes-finder";
 import { exampleNoteRule } from "@/lib/example-notes";
+import { ownRules } from "@/lib/rule-origin";
 import styles from "./playbook-view.module.css";
 
 /** A rule as the Playbook shows it: the rule, and the edits it came from when there were any. */
@@ -37,6 +38,9 @@ const HOLD_TONE = { "Blocks drafts": "danger", "Flags drafts": "warning" } as co
 const HOLD_HINT = { "Blocks drafts": "A draft that breaks it is rewritten once, then not saved", "Flags drafts": "A draft that breaks it is saved and flagged for you" };
 
 const EXAMPLE_NETWORKS = ["twitter", "linkedin", "instagram"];
+
+/** The one plain line that explains the starting rule while it is the only rule in the playbook. */
+export const STARTING_RULE_LINE = "Queue Pilot starts you with one rule that keeps private matters out of your posts. Remove it any time, or add your own wording below.";
 
 const groupName = (r: Rule, accounts: RuleAccount[]) => (r.accountIds?.length ? r.accountIds.map(id => accounts.find(a => a.id === id)?.name ?? "Disconnected account").join(", ") : r.channels === "all" ? "Every network" : r.channels.map((c) => NETWORKS[c] ?? c).join(", "));
 
@@ -75,6 +79,10 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const shown = (live ? initial : rules).map((r) => (except[r.id] ? { ...r, except: except[r.id] } : r));
+  // The starting rule Queue Pilot gave the account is checked like any rule, but it is not one of the person's own: with
+  // only it, the page still invites them to find their first rules.
+  const own = ownRules(shown);
+  const startingOnly = live && shown.length > 0 && !own.length;
   const toggle = (r: ShownRule, network: string) => {
     const off = !(r.except ?? []).includes(network);
     const next = off ? [...(r.except ?? []), network] : (r.except ?? []).filter((n) => n !== network);
@@ -132,11 +140,13 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
             ? "No rules yet. Queue Pilot checks each draft against your rules before saving it in Buffer, so the first ones come from what you already posted."
             : live && !shown.length
             ? "No rules yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike."
+            : startingOnly
+            ? `No rules of your own yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. ${STARTING_RULE_LINE}`
             : accounts.length ? "Pick an account to see what applies there. What you changed for it comes first." : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix Alex made more than once."}`}
         </p>
       </header>
 
-      {live && !shown.length && <FirstRulesFinder open />}
+      {live && !own.length && <FirstRulesFinder open />}
       {!live && firstVisit && <FirstRulesFinder open onExampleKeep={(o) => setRules((rs) => [...rs, { id: o.key, kind: "guidance", channels: o.channels, level: "warn", text: o.text, origin: o.proof.kind === "note" ? "From a note on your post" : `Followed in ${o.proof.followed} of your ${o.proof.of} posts` } as ShownRule])} />}
 
       {offer === "open" && (
@@ -191,7 +201,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
 
       {/* Adding sits right under the rules it adds to; finding and trying rules come after. */}
       <div id="add-rule"><RuleForm accounts={accounts} onAdd={add} read={reader ?? (live ? readRule : undefined)} /></div>
-      {live && shown.length > 0 && <FirstRulesFinder />}
+      {live && own.length > 0 && <FirstRulesFinder />}
       {live && <RewriteFinder />}
       {!firstVisit && <RuleTester live={live} example={EXAMPLE_TRY} accounts={accounts} />}
 

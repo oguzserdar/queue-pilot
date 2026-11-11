@@ -3,7 +3,7 @@
  * with no record gets no origin rather than a guessed one.
  */
 import { describe, expect, it } from "vitest";
-import { APPROVED_IN_APP, approverFor, approverLine, ruleOrigin, serializeApprover } from "./rule-origin";
+import { APPROVED_IN_APP, approverFor, approverLine, isStartingRule, ownRules, ruleOrigin, serializeApprover } from "./rule-origin";
 
 describe("ruleOrigin", () => {
   it("names the teammate and the day for a rule kept from a note", () => {
@@ -22,6 +22,10 @@ describe("ruleOrigin", () => {
     expect(ruleOrigin({ addedBy: { app: "Claude" } })).toBe("Added by your AI (Claude)");
     expect(ruleOrigin({ addedBy: { app: "Claude", verified: true } })).toBe("Added by your AI (Claude)");
     expect(ruleOrigin({ addedBy: { app: "claude", verified: false } })).toBe('Added by an unverified app named "claude"');
+  });
+
+  it("names the starting rule Queue Pilot gave the account", () => {
+    expect(ruleOrigin({ addedBy: "starting" })).toBe("Starting rule");
   });
 
   it("names review comments, past posts and rewrites", () => {
@@ -62,5 +66,14 @@ describe("approverLine", () => {
     expect(approverLine("queue-pilot")).toBe(`${LAST} by you`);
     expect(approverLine("Claude")).toBe(`${LAST} by Claude`);
     expect(approverLine("{not json")).toBe(`${LAST} by {not json`);
+  });
+});
+
+describe("own rules", () => {
+  it("leaves out only the starting rule", () => {
+    const rules = [{ id: "s", addedBy: "starting" as const }, { id: "y", addedBy: "you" as const }, { id: "a", addedBy: { app: "Claude" } }, { id: "k" }];
+    expect(ownRules(rules).map((r) => r.id)).toEqual(["y", "a", "k"]);
+    expect(isStartingRule(rules[0])).toBe(true);
+    expect(rules.slice(1).some(isStartingRule)).toBe(false);
   });
 });

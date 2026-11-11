@@ -32,7 +32,7 @@ import { addPastedExample, InvalidVoiceExampleError, MAX_NOTE, MAX_PASTED_TEXT, 
 import { materialInput, postgresMaterialStore } from "@/lib/material-store"
 import { AiCapError } from "@/lib/judge-model";
 import { TooManyRulesError, postgresRulesStore } from "@/lib/rules-store";
-import { ruleScope } from "@/lib/rules";
+import { playbookAnswer } from "@/lib/playbook-answer";
 import { approvalState, connectedApp, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
 import type { ConnectedApp } from "@/lib/app-identity";
 import { approverFor } from "@/lib/rule-origin";
@@ -1119,8 +1119,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         return null;
       });
       if (rules === null) return { ...text("Could not read the playbook just now. Try again before writing drafts."), isError: true };
-      if (!rules.length) return text("No rules yet. Use add_rule when the user requests a rule, or list_rule_suggestions to learn from their edits.");
-      return text(rules.map((r) => `- ID ${r.id}: ${r.text} [${ruleScope(r)}; ${r.level === "block" ? "enforced: a draft that breaks it is not saved" : "checked: a draft that breaks it is saved and flagged"}]`).join("\n"));
+      return text(playbookAnswer(rules));
     },
   );
 

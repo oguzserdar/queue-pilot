@@ -19,8 +19,35 @@ export const APPROVED_IN_APP: Approver = Object.freeze({ via: "app" as const });
 /** How rows written before approvers were tagged stored the in-app button. Read only, never written. */
 const LEGACY_IN_APP = "queue-pilot";
 
-/** Who added a rule by hand: the person in the app, or a connected AI app by name. Set only by the server. */
-export type AddedBy = "you" | { app: string; verified?: boolean };
+/**
+ * Who added a rule: the person in the app, a connected AI app by name, or Queue Pilot itself with the starting rule every
+ * new account gets (src/lib/starting-rule.ts). Set only by the server.
+ */
+export type AddedBy = "you" | "starting" | { app: string; verified?: boolean };
+
+/** The words the Playbook, the draft window and the connector show for the starting rule's origin. */
+export const STARTING_RULE_ORIGIN = "Starting rule";
+
+/**
+ * Whether a rule is the starting rule Queue Pilot gave the account, rather than one of the person's own.
+ *
+ * @param rule - Any rule with its optional adder
+ * @returns True only for the rule Queue Pilot seeded at account creation
+ */
+export function isStartingRule(rule: { addedBy?: AddedBy }): boolean {
+  return rule.addedBy === "starting";
+}
+
+/**
+ * The person's own rules: everything but the starting rule. "No rules yet" on the Playbook and in the connector means
+ * this list is empty.
+ *
+ * @param rules - The playbook as stored
+ * @returns The rules the person kept, added or had their AI add
+ */
+export function ownRules<R extends { addedBy?: AddedBy }>(rules: R[]): R[] {
+  return rules.filter((r) => !isStartingRule(r));
+}
 
 /**
  * The approver record for a connected AI app.
@@ -63,8 +90,8 @@ const times = (n: number) => (n === 2 ? "twice" : `${n} times`);
  * Where a rule came from, from its stored record.
  *
  * @param rule - A rule with its optional kept evidence and adder
- * @returns "A note from Sam on 1 Nov", "Your edit, twice", "Added by you", "Added by your AI (Claude)", or null when
- *   nothing was recorded
+ * @returns "A note from Sam on 1 Nov", "Your edit, twice", "Added by you", "Added by your AI (Claude)", "Starting rule",
+ *   or null when nothing was recorded
  */
 export function ruleOrigin(rule: { learnedFrom?: unknown; addedBy?: AddedBy }): string | null {
   const e = rule.learnedFrom;
@@ -81,6 +108,7 @@ export function ruleOrigin(rule: { learnedFrom?: unknown; addedBy?: AddedBy }): 
   }
   if (Array.isArray(e) && e.length) return "Your rewrites";
   if (rule.addedBy === "you") return "Added by you";
+  if (rule.addedBy === "starting") return STARTING_RULE_ORIGIN;
   if (rule.addedBy && typeof rule.addedBy === "object" && typeof rule.addedBy.app === "string") {
     return rule.addedBy.verified === false ? `Added by ${appWords({ name: rule.addedBy.app, verified: false })}` : `Added by your AI (${rule.addedBy.app})`;
   }

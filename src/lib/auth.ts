@@ -47,8 +47,18 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
     // a per-credential level; every other path keeps Better Auth's default.
     rateLimit: { enabled: process.env.NODE_ENV === "production", storage: "database", customRules: { "/oauth2/token": { window: 60, max: 500 } } },
     session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
-    // Every new browser session is a sign-in the person can review under Security activity in Settings.
     databaseHooks: {
+      // A new account starts with one rule that keeps private matters out of posts. Better Auth runs this after the
+      // user row is committed, and only when the user is created, so a returning sign-in never adds it again.
+      user: {
+        create: {
+          after: async (u) => {
+            const { seedStartingRuleSafely } = await import("./starting-rule");
+            await seedStartingRuleSafely(u.id);
+          },
+        },
+      },
+      // Every new browser session is a sign-in the person can review under Security activity in Settings.
       session: {
         create: {
           after: async (s) => {
