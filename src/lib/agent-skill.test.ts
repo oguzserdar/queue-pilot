@@ -25,7 +25,7 @@ describe("agent skill", () => {
 
   it("explains how to teach voice and keep research", () => {
     expect(SKILL_TOOL_NAMES).toEqual(expect.arrayContaining(["save_my_voice_note", "add_voice_example", "add_material"]))
-    expect(skillMarkdown(origin)).toContain("Up to 2000 characters and eight examples")
+    expect(skillMarkdown(origin)).toContain("Up to 3000 characters; three to five examples work best, twelve at most.")
   })
 
   it("starts with Agent Skills front matter a YAML parser accepts", () => {

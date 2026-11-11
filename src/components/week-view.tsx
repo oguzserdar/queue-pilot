@@ -443,7 +443,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
             </Popover>
           )}
           {channels.length > 0 && <Button variant="secondary" size="md" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
-          {(open > 0 || (!live && samples.length > 0)) && writing && <WriteWeekButton availability={writing} count={live ? writeCount : samples.length} inlineActions example={!live} week={which} onWriting={setWritingNow} onProgress={onFill} samples={samples} />}
+          {(open > 0 || (!live && samples.length > 0)) && writing && <WriteWeekButton availability={writing} count={live ? writeCount : samples.length} total={live ? open : samples.length} inlineActions example={!live} week={which} onWriting={setWritingNow} onProgress={onFill} samples={samples} />}
           {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (

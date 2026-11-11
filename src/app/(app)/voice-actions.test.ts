@@ -61,7 +61,7 @@ describe("pasted voice action", () => {
   it("offers pasting with no sent posts and keeps example mode read-only", () => {
     const live = renderToStaticMarkup(VoiceView({ mode: "live", note: null, examples: [], candidates: [] }))
     expect(live).toContain("Paste a post")
-    expect(live).toContain('maxLength="2000"')
+    expect(live).toContain('maxLength="3000"')
     const example = renderToStaticMarkup(VoiceView({ mode: "example" }))
     expect(example).not.toContain("textarea")
   })

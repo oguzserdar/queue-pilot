@@ -276,7 +276,7 @@ export async function removeVoiceExample(postId: string): Promise<SourceActionRe
 export async function saveVoiceNote(note: string): Promise<SourceActionResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof note !== "string" || note.length > MAX_NOTE) return { ok: false, message: "That note is too long." }
+  if (typeof note !== "string" || note.length > MAX_NOTE) return { ok: false, message: `Keep the note to ${MAX_NOTE} characters.` }
   try {
     await postgresVoiceStore().setNote(userId, note);
   } catch (e) {

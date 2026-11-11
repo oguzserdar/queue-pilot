@@ -25,10 +25,10 @@ describe("pasted writing examples", () => {
     expect((await store.get("a")).examples.map((e) => e.channel)).toEqual(["Added by Claude", "Pasted"])
   })
 
-  it("rejects invisible or oversized text and shares the eight-post cap", async () => {
+  it("rejects invisible or oversized text and shares the twelve-post cap", async () => {
     const store = memoryVoiceStore()
     await expect(addPastedExample(store, "a", "\u200b")).rejects.toThrow("Paste a post")
-    await expect(addPastedExample(store, "a", "x".repeat(MAX_PASTED_TEXT + 1))).rejects.toThrow("2000")
+    await expect(addPastedExample(store, "a", "x".repeat(MAX_PASTED_TEXT + 1))).rejects.toThrow("3000")
     for (let i = 0; i < MAX_EXAMPLES; i++) await addPastedExample(store, "a", `${i}`)
     await expect(addPastedExample(store, "a", "more")).rejects.toThrow("Remove one")
     expect((await store.get("b")).examples).toEqual([])

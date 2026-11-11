@@ -7,7 +7,7 @@ import { Button } from "@/registry/components/button/button";
 import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { addPastedVoiceExample, addVoiceExample, removeVoiceExample, saveVoiceNote } from "@/app/(app)/actions"
-import { MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT } from "@/lib/voice-limits"
+import { MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT, SUGGESTED_EXAMPLES } from "@/lib/voice-limits"
 import styles from "./voice-view.module.css";
 
 const EXAMPLES = [
@@ -70,7 +70,8 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
 
       <section aria-labelledby="examples" className={styles.block}>
         <div className={styles.blockHead}>
-          <h2 id="examples" className={styles.h2}>Example posts ({examples.length} of 8)</h2>
+          <h2 id="examples" className={styles.h2}>Example posts ({examples.length})</h2>
+          <p className={styles.muted}>{SUGGESTED_EXAMPLES} posts that sound most like you work best. You can save up to {MAX_EXAMPLES}.</p>
         </div>
         {examples.length === 0 ? (
           <p className={styles.muted}>Paste something you wrote or choose a recent post below.</p>
@@ -99,7 +100,7 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
             if (result.ok) setPasted("")
           })
         }}>
-          <Textarea label="A post you wrote" description={`Up to ${MAX_PASTED_TEXT} characters.`} value={pasted} maxLength={MAX_PASTED_TEXT} disabled={pending} onChange={(e) => setPasted(e.target.value)} />
+          <Textarea label="A post you wrote" description={`Up to ${MAX_PASTED_TEXT.toLocaleString("en-US")} characters.`} value={pasted} maxLength={MAX_PASTED_TEXT} disabled={pending} onChange={(e) => setPasted(e.target.value)} />
           <Button type="submit" variant="secondary" disabled={pending || !pasted.trim() || examples.length >= MAX_EXAMPLES}>Add example</Button>
           {pasteMessage && <p className={pasteMessage.ok ? styles.muted : styles.bad} role="status">{pasteMessage.text}</p>}
         </form>
@@ -120,12 +121,12 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
               <li key={c.postId} className={styles.example}>
                 <span className={styles.channel}>{c.channel}</span>
                 <p>{c.text}</p>
-                <Button variant="secondary" size="sm" disabled={pending || examples.length >= 8} onClick={() => run(() => addVoiceExample(c.postId))}>Use as example</Button>
+                <Button variant="secondary" size="sm" disabled={pending || examples.length >= MAX_EXAMPLES} onClick={() => run(() => addVoiceExample(c.postId))}>Use as example</Button>
               </li>
             ))}
           </ul>
         )}
-        {examples.length >= 8 && <p className={styles.muted}>8 examples is the most. Remove one to pick another.</p>}
+        {examples.length >= MAX_EXAMPLES && <p className={styles.muted}>{MAX_EXAMPLES} examples is the most. Remove one to pick another.</p>}
       </section>
       {message && <p className={message.tone === "ok" ? styles.muted : styles.bad} role="status">{message.text}</p>}
     </div>
@@ -147,7 +148,7 @@ function ExampleVoice() {
 
       <section aria-labelledby="examples" className={styles.block}>
         <div className={styles.blockHead}>
-          <h2 id="examples" className={styles.h2}>Example posts ({EXAMPLES.length} of 8)</h2>
+          <h2 id="examples" className={styles.h2}>Example posts ({EXAMPLES.length})</h2>
           <SignInButton>Add from Buffer</SignInButton>
         </div>
         <ul className={styles.examples}>
