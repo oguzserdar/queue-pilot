@@ -29,7 +29,7 @@ import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram
 import { postgresEchoStore, postgresTelegramCodes } from "@/lib/echo-store";
 import { installState, installUrl } from "@/lib/discord";
 import { operatorSetting, operatorSettings } from "@/lib/env";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { publicOrigin } from "@/lib/origin";
 import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
 import { type ApproveResult } from "@/lib/approve-drafts";
@@ -360,6 +360,12 @@ export async function deleteMyAccount(confirm: string): Promise<SourceActionResu
   } catch (e) {
     console.error(JSON.stringify({ event: "qp-delete-account-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Queue Pilot could not delete your account just now. Nothing was removed. Try again in a minute." };
+  }
+  // The account and its sessions are gone, but this browser still holds the sign-in cookie. The router only checks
+  // that the cookie exists, so clear it here or the person stays "signed in" to an empty app instead of the homepage.
+  const jar = await cookies();
+  for (const { name } of jar.getAll()) {
+    if (/^(__Secure-)?better-auth\./.test(name)) jar.set(name, "", { path: "/", maxAge: 0, httpOnly: true, sameSite: "lax", secure: name.startsWith("__Secure-") });
   }
   return { ok: true };
 }
