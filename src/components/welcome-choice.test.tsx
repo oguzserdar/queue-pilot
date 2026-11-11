@@ -54,3 +54,14 @@ describe("AiOffer", () => {
     expect(renderToStaticMarkup(<AiOffer connected={["Grok", "Claude"]} />)).toBe("");
   });
 });
+
+describe("HomeStart with a connected AI", () => {
+  it("leads with asking that AI, and keeps Queue Pilot's own writer second", async () => {
+    const { HomeStart } = await import("./home-start");
+    const t = text(renderToStaticMarkup(<HomeStart hasSource={false} writing={writing} count={10} aiLink={false} ai="Claude" />));
+    expect(t).toContain("Ask Claude to fill next week");
+    expect(t).toContain("Copy for Claude");
+    expect(t.indexOf("Ask Claude")).toBeLessThan(t.indexOf("Or let Queue Pilot's AI write from a link"));
+    expect(t).not.toContain("Fill next week from what you publish");
+  });
+});

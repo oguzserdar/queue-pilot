@@ -6,16 +6,20 @@ import { useRouter } from "next/navigation";
 import { addSource } from "@/app/(app)/actions";
 import { Alert } from "@/registry/components/alert/alert";
 import { Button } from "@/registry/components/button/button";
+import { CopyButton } from "@/registry/components/copy-button/copy-button";
 import type { WritingAvailability } from "@/lib/writing-availability";
 import { WriteWeekButton } from "./write-week-button";
 import styles from "./home-start.module.css";
+
+/** What the person pastes into their connected AI to fill the week: drafts first, saved only on their yes. */
+export const FILL_ASK = "Use Queue Pilot to fill my empty Buffer times next week. Read my voice and playbook, then write from what I did this week: my email, docs and posts. Show me the drafts first and save them only when I say yes.";
 
 /**
  * The first-drafts panel on Home, shown until Queue Pilot has written a draft for the week: add one feed, then fill
  * next week's empty times with the built-in writer. Connecting the person's own AI is offered beside it, never
  * required first.
  */
-export function HomeStart({ hasSource, writing, count, aiLink = true }: { hasSource: boolean; writing: WritingAvailability; count: number; /** The closing "connect your AI" line; off where a connect-your-AI offer already shows. */ aiLink?: boolean }) {
+export function HomeStart({ hasSource, writing, count, aiLink = true, ai }: { hasSource: boolean; writing: WritingAvailability; count: number; /** The closing "connect your AI" line; off where a connect-your-AI offer already shows. */ aiLink?: boolean; /** The person's connected AI: the panel leads with asking it, and Queue Pilot's own writer comes second. */ ai?: string }) {
   const [url, setUrl] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [read, setRead] = useState<string | null>(null);
@@ -35,7 +39,15 @@ export function HomeStart({ hasSource, writing, count, aiLink = true }: { hasSou
 
   return (
     <section className={styles.start} aria-labelledby="start-title">
-      <h2 id="start-title" className={styles.title}>Fill next week from what you publish</h2>
+      {ai && (
+        <>
+          <h2 id="start-title" className={styles.title}>Ask {ai} to fill next week</h2>
+          <p className={styles.muted}>Paste this into {ai}. It writes from your email, docs and posts, and saves each draft only after you say yes.</p>
+          <div className={styles.row}><CopyButton value={FILL_ASK} label={`Copy for ${ai}`} /></div>
+          <p className={styles.or}>Or let Queue Pilot&apos;s AI write from a link</p>
+        </>
+      )}
+      {!ai && <h2 id="start-title" className={styles.title}>Fill next week from what you publish</h2>}
       {read && <p className={styles.read} role="status">{read}</p>}
       {hasSource ? (
         <WriteWeekButton availability={writing} count={count} />

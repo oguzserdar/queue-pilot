@@ -11,7 +11,10 @@ const text = chatHandoff("ChatGPT", "https://qp.test/api/mcp", ["Go to chatgpt.c
 describe("chatHandoff", () => {
   it("connects first, only when the tools are missing, one step at a time, with the address and no key", () => {
     expect(text).toContain("If you can, go to step 3.");
-    expect(text).toContain("help me add Queue Pilot to ChatGPT. Give me one step, wait until I say it is done");
+    expect(text).toContain("help me add Queue Pilot to ChatGPT.");
+    expect(text).toContain("Otherwise give me one step, wait until I say it is done");
+    // After an account deletion the app already lists Queue Pilot and only needs Reconnect.
+    expect(text).toContain("it shows Reconnect), I press Reconnect, then Allow");
     expect(text).toContain("1. Go to chatgpt.com/plugins, press +.");
     expect(text).toContain("2. Paste Queue Pilot's address as the Server URL.");
     expect(text).toContain("Queue Pilot's address: https://qp.test/api/mcp");

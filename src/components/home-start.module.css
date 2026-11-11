@@ -5,4 +5,7 @@
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .input { flex: 1; min-width: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-control, 8px); background: var(--background, transparent); color: inherit; font: inherit; font-size: var(--text-sm); }
 .input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The second way in, under the connected AI's ask: a quiet rule with its label. */
+.or { display: flex; align-items: center; gap: 10px; margin: 4px 0 0; color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
+.or::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 .read { margin: 0; font-size: var(--text-sm); color: var(--success); }
