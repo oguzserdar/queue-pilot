@@ -179,7 +179,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
   // Palette actions: "approve" asks to approve every ready draft, "share" opens the share dialog.
   const [shareSignal, setShareSignal] = useState(0);
   useEffect(() => {
-    const act = (name: unknown) => { if (name === "approve" && ready.length) setConfirmAll(true); if (name === "share" && drafts.length) setShareSignal((n) => n + 1); };
+    const act = (name: unknown) => { if (name === "approve" && ready.length && !writingNow) setConfirmAll(true); if (name === "share" && drafts.length) setShareSignal((n) => n + 1); };
     const q = new URLSearchParams(window.location.search).get("do");
     if (q) { window.history.replaceState(null, "", window.location.pathname); act(q); }
     const on = (e: Event) => act((e as CustomEvent).detail);
@@ -454,7 +454,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
                 </Button>
               </>
             ) : (
-              <Button variant="primary" size="md" disabled={ready.length === 0 || pending} onClick={() => setConfirmAll(true)}>
+              <Button variant="primary" size="md" disabled={ready.length === 0 || pending || writingNow} onClick={() => setConfirmAll(true)}>
                 {pending ? "Approving…" : ready.length > 0 ? `Approve ${ready.length} draft${ready.length === 1 ? "" : "s"}` : waiting > 0 || !approved.size ? "Nothing ready to approve" : "All approved"}
               </Button>
             )

@@ -31,7 +31,7 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 ## Next: for the people who run a copy
 
 - **An admin page for the whole copy.** Workspaces, plans, usage, and pause or restore.
-- **Export and delete.** Any workspace can download or delete everything Queue Pilot keeps.
+- **Export and delete per workspace.** Account export and deletion ship today. Each workspace gets the same.
 - **An API and webhooks,** next to the AI connector.
 
 ## Later

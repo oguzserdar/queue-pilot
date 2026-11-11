@@ -94,15 +94,15 @@ export function ruleOrigin(rule: { learnedFrom?: unknown; addedBy?: AddedBy }): 
  * @param approvedBy - The recorded approver: a tagged Approver, its stored JSON, or an older bare string
  *   ("queue-pilot" for the in-app button, else an AI app's name)
  * @param approvedAt - When it was recorded, if known
- * @returns "Last approved through Queue Pilot: by you in Queue Pilot, 3 Nov", "… by Claude, 3 Nov" or "… by an
+ * @returns "Last approved through Queue Pilot: by you, 3 Nov", "… by Claude, 3 Nov" or "… by an
  *   unverified app named "x"", or null when no approval was recorded here
  */
 export function approverLine(approvedBy: Approver | string | null | undefined, approvedAt?: string | null): string | null {
   if (!approvedBy) return null;
   const a = typeof approvedBy === "string" ? parseApprover(approvedBy) : approvedBy;
   const who = typeof a === "string"
-    ? a === LEGACY_IN_APP ? "you in Queue Pilot" : a
-    : a.via === "app" ? "you in Queue Pilot" : appWords({ name: a.app, verified: a.verified });
+    ? a === LEGACY_IN_APP ? "you" : a
+    : a.via === "app" ? "you" : appWords({ name: a.app, verified: a.verified });
   const on = day(approvedAt);
   return `Last approved through Queue Pilot: by ${who}${on ? `, ${on}` : ""}`;
 }

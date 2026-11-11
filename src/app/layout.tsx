@@ -7,7 +7,7 @@ import "./globals.css";
 
 const schibsted = Schibsted_Grotesk({ variable: "--font-schibsted", subsets: ["latin", "latin-ext"] });
 
-const DESCRIPTION = "Your own AI fills the empty slots in your Buffer queue, checked against a playbook learned from your edits.";
+const DESCRIPTION = "Your own AI fills the empty times in your Buffer queue, checked against a playbook learned from your edits.";
 
 /**
  * Title, description and link previews. The base address is the one the page was served from, so a self-hosted copy

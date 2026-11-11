@@ -35,7 +35,7 @@ const AIS: AiSetup[] = [
   {
     name: "ChatGPT",
     plan: "Set this up on ChatGPT web. Workspace permissions may restrict custom plugins.",
-    does: "See next week and fill the empty slots with drafts, inside a chat.",
+    does: "See next week and fill the empty times with drafts, inside a chat.",
     steps: [
       "Go to chatgpt.com/plugins, press +, then Add custom MCP server. Name it Queue Pilot",
       "Under Connection, paste the URL above as the Server URL. Keep OAuth",

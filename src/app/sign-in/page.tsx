@@ -29,7 +29,7 @@ export default function SignInPage() {
       <p className={styles.sub}>
         {connecting
           ? "Your AI is asking to work with your Buffer queue. Sign in with Buffer first; you will choose what it may do on the next screen."
-          : "Queue Pilot reads your Buffer queue and puts your own AI to work on its empty slots."}
+          : "Queue Pilot reads your Buffer queue and puts your own AI to work on its empty times."}
       </p>
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       <button type="button" className={styles.cta} onClick={signIn} disabled={busy}>
