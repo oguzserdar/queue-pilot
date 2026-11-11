@@ -9,7 +9,7 @@ import { DemoNudge } from "./demo-nudge";
 
 import { MotionConfig } from "motion/react";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { AccountMenu } from "./account-menu";
 import { BufferSyncProvider, SyncBanner, SyncIndicator, type SyncStatus } from "./buffer-sync";
 import { BookTextIcon } from "./animated-icons/book-text";
@@ -85,11 +85,6 @@ export function AppShell({ account, signInOpen, landing = true, children }: { ac
   const path = usePathname();
   // The demo's home lives at /demo, because / is the homepage for anyone not signed in.
   const home = account || !landing ? "/" : "/demo";
-  const navRef = useRef<HTMLElement>(null);
-  // On a phone the tab row scrolls sideways: bring the current page's tab into view, so you can see where you are.
-  useEffect(() => {
-    navRef.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [path]);
   return (
     <MotionConfig reducedMotion="user">
     <ToastStackProvider>
@@ -98,7 +93,7 @@ export function AppShell({ account, signInOpen, landing = true, children }: { ac
     <div className={styles.frame}>
         <aside className={styles.side}>
           <Link href={home} className={styles.brand} aria-label="Queue Pilot home">Queue Pilot<span className={styles.brandDot} aria-hidden="true">.</span></Link>
-          <nav ref={navRef} className={styles.nav} aria-label="Main">
+          <nav className={styles.nav} aria-label="Main">
             {NAV_GROUPS.map((group) => (
               <div key={group.label ?? "home"} className={styles.group}>
                 {group.label && <span className={styles.groupLabel}>{group.label}</span>}

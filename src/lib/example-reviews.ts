@@ -27,7 +27,8 @@ export function exampleReviewLinks(shift: number): (ReviewLink & { comments: Rev
     id: "example",
     createdAt: at("2026-11-01T23:00:00Z"),
     revokedAt: null,
-    expiresAt: at("2026-11-08T23:00:00Z"),
+    // Open two weeks, so it is always still open while the example week is shown.
+    expiresAt: at("2026-11-15T23:00:00Z"),
     drafts: [shared("d1", "linkedin", "Alex Rivera"), shared("d4", "twitter", "@alexrivera_ai"), shared("d5", "linkedin", "Alex Rivera")],
     comments: [
       pinned("c1", "d1", "Isabel", "I want to see it on real repos before I switch", "Which repos? Name one and people will trust the test more.", at("2026-11-02T01:10:00Z")),

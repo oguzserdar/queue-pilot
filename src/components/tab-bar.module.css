@@ -1,6 +1,9 @@
 /* Sized to the iPhone tab bar: 49px of tabs above the home indicator, 24px icons, 10px labels, the current tab in the
    brand colour. Translucent with a hairline edge, so the page reads through it while it stays fixed. Phones only. */
 .bar { display: none; }
+/* Everything else pinned to the bottom of a phone screen sits this far up, above the tab bar. */
+:global(:root) { --above-tabbar: 0px; }
+@media (max-width: 860px) { :global(:root) { --above-tabbar: calc(49px + env(safe-area-inset-bottom, 0px)); } }
 @media (max-width: 860px) {
   .bar { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
     height: calc(49px + env(safe-area-inset-bottom, 0px)); padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);

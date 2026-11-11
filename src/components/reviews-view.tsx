@@ -93,7 +93,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                     })}>Turn on again</Button>
                   )}
                 </div>
-                {!live && <p className={styles.help}>{expired && !isOff ? "This link has expired. Turn it on again for another 7 days." : "Reviewers can no longer open this link. Their comments stay here. Turn it on again to reopen the same link."}</p>}
+                {!live && !example && <p className={styles.help}>{expired && !isOff ? "This link has expired. Turn it on again for another 7 days." : "Reviewers can no longer open this link. Their comments stay here. Turn it on again to reopen the same link."}</p>}
 
                 {commented.length === 0 && <p className={styles.help}>{live ? "No comments yet. Send the link to your reviewer." : "Nobody commented."}</p>}
                 {commented.map((d) => {
