@@ -15,6 +15,13 @@ export const evidenceInput = z.object({
   locator: z.string().regex(/^t=\d+$/).optional().describe("Optional timestamp from the returned transcript segments, e.g. t=7190. Never invent a timestamp."),
 });
 export type EvidenceInput = z.infer<typeof evidenceInput>;
+
+/**
+ * What an AI is told about a draft it saved that cites nothing saved in Queue Pilot. Such a draft may be fine ("we are
+ * closed on Friday"), so it is saved; the words ask the person to check where it came from, because a draft with no
+ * source is also what a post written from someone's inbox looks like.
+ */
+export const NO_SOURCE_REASON = "No source. This draft cites nothing saved in Queue Pilot. Check where it came from before approving.";
 export type SourceMetadata = { kind?: "transcript" | "video-description"; excerptWindow?: "prefix-12000"; segments?: { text: string; seconds: number }[]; captions?: "auto" | "manual" | "unknown"; paidPreview?: boolean; truncated?: boolean; etag?: string; lastModified?: string };
 
 export function evidenceProblem(draft: string, source: string, input: EvidenceInput, metadata: SourceMetadata = {}): string | null {

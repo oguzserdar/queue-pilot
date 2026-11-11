@@ -198,7 +198,7 @@ export default function HomePage() {
           <PixelField placement="band" />
           <div className={[s.wrap, s.bandInner].join(" ")}>
             <h2 id="start-title">Fill next week from what you already shipped</h2>
-            <p>Sign in with Buffer, connect your AI, and ask it to fill next week from your own work.</p>
+            <p>Sign in with Buffer, connect your AI, and ask it to fill next week from what you published.</p>
             <div className={s.ctas}>
               <SignInButton returnTo="/" variant="secondary" size="lg" say="Sign in and I will show you your empty times.">Sign in with Buffer</SignInButton>
               <a className={s.bandLink} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>

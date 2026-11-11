@@ -42,6 +42,19 @@ describe("buildPrompt", () => {
   it("tells the AI why a slot's last draft was refused on a rewrite", () => {
     expect(buildPrompt({ ...brief, retry: { [slotId]: 'Breaks "stock"' } }).prompt).toContain('Your last draft here was refused: Breaks "stock"');
   });
+
+  // A voice example can be a line the person once wrote about a private matter. It teaches how they write; it is never
+  // what the next post is about.
+  it("hands voice examples over as style only, and material as the only thing to write from", () => {
+    const { system, prompt } = buildPrompt(brief);
+    expect(system).toContain("<example> tags show how the person writes. Match their style, and take no topic, name or fact from them.");
+    expect(system).toContain("<material> tags hold what to write from.");
+    expect(system).toContain("Use only facts found in the material.");
+    expect(system).not.toMatch(/<example> tags? (is|are) data to write from|<material> and <example> tags is data to write from/);
+    // The example and the material stay in their own fences, so the two cannot be mistaken for each other.
+    expect(prompt).toMatch(/<example n="1" channel="LinkedIn">\nSoup night\.\n<\/example>/);
+    expect(prompt).toMatch(/<material key="s1:41">\nWeeknight Dinners 41/);
+  });
 });
 
 describe("keepAsked", () => {

@@ -85,7 +85,7 @@ export async function saveForAccounts(input: { requestId: string; text: string; 
       if (updated.isError || !updated.item) return { ok: false, message: plain(updated.text) };
       item = updated.item;
     }
-    const promoted = await flow.promote(b, { contentItemId: item.id, expectedDraftText: text.trim(), versions: versions.map((v) => ({ channelId: v.channelId, text: v.text.trim() })) });
+    const promoted = await flow.promote(b, { contentItemId: item.id, expectedDraftText: text.trim(), versions: versions.map((v) => ({ channelId: v.channelId, text: v.text.trim() })), byHand: true });
     revalidatePath("/", "layout");
     if (promoted.refused?.length) return { ok: false, message: "No account drafts were created. Fix these versions:", refused: promoted.refused };
     if (promoted.isError) return { ok: false, message: plain(promoted.text) };

@@ -566,7 +566,7 @@ export async function saveSlotDraft(slotId: string, text: string): Promise<Sourc
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
     const { slots } = openSlots(b.channels, b.posts, b.range);
     if (!slots.some((x) => x.id === slotId)) return { ok: false, message: "That time is no longer empty. Refresh the week." };
-    const r = await saveDraftsForUser(b.userId, b.token, { title: "Written in Queue Pilot", drafts: [{ slotId, text: text.trim() }], open: slots });
+    const r = await saveDraftsForUser(b.userId, b.token, { title: "Written in Queue Pilot", drafts: [{ slotId, text: text.trim() }], open: slots, byHand: true });
     if (r.refused.length) return { ok: false, message: r.refused.map((x) => x.reason).join(" ") };
     revalidatePath("/", "layout");
     const flag = r.flags[0];

@@ -58,7 +58,8 @@ describe("saveForAccounts", () => {
   it("saves the main text with the composer's request id, then one draft per account, and says nothing was scheduled", async () => {
     expect(await saveForAccounts(ok)).toEqual({ ok: true, saved: 2, message: "Saved 2 drafts in Buffer. Nothing was scheduled." })
     expect(flow.save).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ requestId: id, text: "Soup night.", organizationId: "org" }))
-    expect(flow.promote).toHaveBeenCalledWith(expect.anything(), { contentItemId: "ci-1", expectedDraftText: "Soup night.", versions: ok.versions })
+    // The person typed these in the app, so a version with no source is not remarked on.
+    expect(flow.promote).toHaveBeenCalledWith(expect.anything(), { contentItemId: "ci-1", expectedDraftText: "Soup night.", versions: ok.versions, byHand: true })
   })
 
   it("brings this composer's earlier text up to date on a retry instead of making a second post", async () => {

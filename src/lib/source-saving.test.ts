@@ -40,3 +40,28 @@ it("still rejects a supplied snapshot from another account before writing", asyn
  m.byId.mockResolvedValue(null);
  await expect(saveDraftsForUser("u", "t", { title: "Foreign", drafts: [{ ...draft(), snapshotId: "foreign" }], open })).rejects.toThrow("not in this account"); expect(m.save).not.toHaveBeenCalled();
 });
+// 11 Nov 2026: an AI drafted posts from a person's inbox. A draft like that names no source, and it used to be saved
+// with no word about it.
+const NO_SOURCE = { rule: "Source evidence", verdict: "unsure", reason: "No source. This draft cites nothing saved in Queue Pilot. Check where it came from before approving.", quote: "" };
+it("saves a draft that cites nothing, and says it has no source", async () => {
+ const r = await saveDraftsForUser("u", "t", { title: "From the chat", drafts: [draft(), draft("b")], open });
+ expect(r.saved).toHaveLength(2); expect(r.refused).toEqual([]);
+ expect(r.flags).toEqual([{ slotId: "a", ...NO_SOURCE }, { slotId: "b", ...NO_SOURCE }]);
+});
+it("does not flag a draft the person typed themselves in the app", async () => {
+ const r = await saveDraftsForUser("u", "t", { title: "Written in Queue Pilot", drafts: [draft()], open, byHand: true });
+ expect(r.saved).toHaveLength(1); expect(r.flags).toEqual([]);
+});
+it("does not call a draft unsourced when it carries a source and a matching quote", async () => {
+ const r = await saveDraftsForUser("u", "t", { title: "Release", open, drafts: [{ ...draft(), snapshotId: "snap", evidence: [{ claim: "The limit is 500.", quote: "The limit is 500." }] }] });
+ expect(r.saved).toHaveLength(1); expect(r.flags).toEqual([]);
+});
+it("keeps the material-key warning for a draft that names a key, without also calling it unsourced", async () => {
+ const r = await saveDraftsForUser("u", "t", { title: "Old client", drafts: [draft()], open, sourceKeys: ["material:" + "a".repeat(64)] });
+ expect(r.flags.length).toBeGreaterThan(0); expect(r.flags.map(f => f.reason)).not.toContain(NO_SOURCE.reason);
+});
+it("says nothing about the source of a draft that was not saved", async () => {
+ m.save.mockResolvedValue({ saved: [], refused: [{ slotId: "a", reason: "That time is no longer empty." }], requests: 1 });
+ const r = await saveDraftsForUser("u", "t", { title: "From the chat", drafts: [draft()], open });
+ expect(r.saved).toEqual([]); expect(r.flags).toEqual([]);
+});
