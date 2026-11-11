@@ -3,7 +3,7 @@
  * AI can see the person has no rules of their own yet; an empty playbook still says "No rules yet".
  */
 import { describe, expect, it } from "vitest";
-import { playbookAnswer, playbookSetup } from "./playbook-answer";
+import { accountNames, playbookAnswer, playbookSetup } from "./playbook-answer";
 import type { Rule } from "./rules";
 
 const starting = { id: "s", kind: "guidance", text: "Keep private matters private.", channels: "all", level: "warn", addedBy: "starting" } as Rule;
@@ -29,6 +29,14 @@ describe("playbookAnswer", () => {
     expect(text.split("\n")[0]).toContain("Apply each one where it fits the post");
     expect(text).toContain("ID m: Name the number first. [LinkedIn; enforced");
     expect(text).toContain("ID s: Keep private matters private. [every network; checked: a draft that breaks it is saved and flagged; starting rule");
+  });
+
+  it("names the accounts a rule is limited to, from the saved copy, and counts any it cannot name", () => {
+    const limited = { ...mine, id: "a", channels: "all", accountIds: ["c1", "c2"] } as Rule;
+    const names = accountNames([{ id: "c1", name: "Acme", service: "linkedin" }]);
+    expect(playbookAnswer([limited], names)).toContain("ID a: Name the number first. [Acme (LinkedIn), 1 other selected account; enforced");
+    expect(playbookAnswer([limited])).toContain("[2 selected accounts; enforced");
+    expect(playbookAnswer([{ ...limited, accountIds: ["c1"] } as Rule], names)).toContain("[Acme (LinkedIn); enforced");
   });
 });
 

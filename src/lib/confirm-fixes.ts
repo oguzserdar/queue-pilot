@@ -14,7 +14,7 @@ import type { FixOffer } from "./fixes";
 import { MAX_RULE_TEXT } from "./rules";
 
 /** Bump when the prompt or schema changes, so answers saved for the old check are never reused. */
-export const CONFIRM_VERSION = 2;
+export const CONFIRM_VERSION = 3;
 
 const Verdicts = z.object({
   verdicts: z.array(
@@ -74,23 +74,28 @@ export function preferencesFrom<T extends FixOffer>(offers: T[], verdicts: Verdi
     const why = vs.find((v) => v.why.trim())?.why.trim();
     if (!vs.length || !vs.every((v) => v.verdict === "preference") || !why) return [];
     if (o.fix.kind !== "ends_with") return [{ ...o, why, sentence: "" }];
-    // An added ending is kept as the model's sentence, so it must still carry the exact words the author added.
-    const sentence = oneLine(vs.find((v) => (v.rule ?? "").trim())?.rule ?? "");
-    return sentence.length <= MAX_RULE_TEXT && sentence.toLowerCase().includes(o.fix.phrase.toLowerCase()) ? [{ ...o, why, sentence }] : [];
+    // An added ending reads as the model's sentence, which says which posts it is for. The exact words stay on the rule.
+    const sentence = ruleSentence(vs);
+    return sentence ? [{ ...o, why, sentence }] : [];
   });
 }
 
-/** A model sentence as one plain line. */
-const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+/** The model's rule sentence as one plain line, or "" when it gave none or one too long to keep. */
+function ruleSentence(vs: Verdict[]): string {
+  const sentence = (vs.find((v) => (v.rule ?? "").trim())?.rule ?? "").replace(/\s+/g, " ").trim();
+  return sentence.length <= MAX_RULE_TEXT ? sentence : "";
+}
 
 /**
- * True when the model answered every candidate exactly one way and gave a reason. Only a complete answer is saved,
- * so a skipped or muddled answer is asked again next time instead of hiding a suggestion for a day.
+ * True when the model answered every candidate exactly one way and gave a reason, and an added ending it calls a
+ * preference came with a rule sentence that can be kept. Only a complete answer is saved, so a skipped or muddled
+ * answer is asked again next time instead of hiding a suggestion for a day.
  */
 export function complete(offers: FixOffer[], verdicts: Verdict[]): boolean {
   return offers.every((o, i) => {
     const vs = verdicts.filter((v) => v.candidate === i + 1);
-    return vs.length > 0 && vs.every((v) => v.verdict === vs[0].verdict && v.why.trim() && (v.verdict !== "preference" || o.fix.kind !== "ends_with" || (v.rule ?? "").trim()));
+    const clear = vs.length > 0 && vs.every((v) => v.verdict === vs[0].verdict && v.why.trim());
+    return clear && (vs[0].verdict !== "preference" || o.fix.kind !== "ends_with" || !!ruleSentence(vs));
   });
 }
 

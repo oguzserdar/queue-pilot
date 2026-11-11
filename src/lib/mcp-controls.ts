@@ -86,7 +86,7 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
 
   server.registerTool("add_rule", {
     title: "Add a playbook rule",
-    description: "Add a rule the user requests. Use guidance for their own words, banned for a phrase, replace for a word swap, or ends_with for a required ending. block refuses failing drafts; warn saves and flags them. Return the rule ID. Read get_playbook first to avoid duplicates. Every rule is judged by meaning, including guidance.",
+    description: "Add a rule the user requests. Use guidance for their own words, banned for a phrase, replace for a word swap, or ends_with for an ending every post needs. A rule for only some posts (an ending for posts about one project) goes in as guidance, in the user's own words saying which posts: a typed rule has no field for that. block refuses failing drafts; warn saves and flags them. Return the rule ID. Read get_playbook first to avoid duplicates. Every rule is judged by meaning, including guidance.",
     inputSchema: z.object({ kind: z.enum(["guidance", "banned", "replace", "ends_with"]), text: z.string().max(200).optional(), phrase: z.string().max(120).optional(), from: z.string().max(120).optional(), to: z.string().max(120).optional(), where: z.enum(["start", "end"]).optional(), channels: z.union([z.literal("all"), z.array(network).min(1).max(7)]), level: z.enum(["block", "warn"]), accountIds: z.array(z.string().min(1).max(200)).min(1).max(30).optional().describe("Exact channel IDs from list_channels. Limits this rule to those accounts, overriding the network scope.") }), annotations: write,
   }, async input => {
     let rule = parseNewRule(input);

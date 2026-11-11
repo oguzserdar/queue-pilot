@@ -1,8 +1,9 @@
 /**
  * @fileoverview Live eval of applying playbook rules where they fit, on the production provider path. A rule kept from
  * the author's edits to posts about one project must leave an unrelated post alone, yet still hold on a post about that
- * project; a word swap and an ending the author set for every post must still be caught. Every case must hold in all but
- * one of TRIALS runs.
+ * project; a word swap, a ban, the starting rule and an ending the author set for every post must still be caught, in
+ * any language. The writer must not put a project's link under a post about something else. Every case must hold in all
+ * but one of TRIALS runs.
  *
  * Run: pnpm eval   (key and model from .env.eval.local; skipped without them)
  */
@@ -12,8 +13,11 @@ import { decisionModelFor, modelFor, type AiConfig } from "../src/lib/ai-model";
 import { askVerdicts, preferencesFrom } from "../src/lib/confirm-fixes";
 import { fixToRule } from "../src/lib/fix-offers";
 import type { FixOffer } from "../src/lib/fixes";
+import { writeDrafts } from "../src/lib/ai-writer";
 import { judgeDrafts } from "../src/lib/judge";
-import type { Rule } from "../src/lib/rules";
+import { parseNewRule, type NewRule, type Rule } from "../src/lib/rules";
+import { STARTING_RULE } from "../src/lib/starting-rule";
+import { structureRule } from "../src/lib/structure-rule";
 
 const KEY = process.env.QP_EVAL_KEY ?? "";
 const PROVIDER = providerOf(KEY);
@@ -28,7 +32,17 @@ const signOff: Rule = { id: "sign", kind: "ends_with", phrase: "Recipe in the ne
 const VALS = "Vals AI tested reasoning effort settings. At their lowest setting, frontier models often keep a majority of their performance at a fraction of the cost.";
 const QP_POST = "qp now checks every draft against your rules by meaning, in the draft's own language, before anything reaches Buffer.";
 const everyPostAd: Rule = { id: "ad", kind: "ends_with", phrase: "#ad", channels: "all", level: "block", text: 'End every post with "#ad"', addedBy: "you" };
-const CASES: { name: string; text: string; network: string; rule: Rule; want: "pass" | "fail" }[] = [
+/** A rule kept before rules said which posts they are for: the ending alone, in the default wording. */
+const legacyLink = { ...(parseNewRule({ kind: "ends_with", phrase: REPO, channels: ["twitter"], level: "warn" }) as NewRule), id: "legacy" } as Rule;
+const hype: Rule = { id: "hype", kind: "banned", phrases: ["game changer"], channels: "all", level: "block", text: 'Never "game changer".' };
+const starting = { ...STARTING_RULE, id: "start" } as Rule;
+const CASES: { name: string; text: string; network: string; rule: Rule; want: "pass" | "fail" | "not fail" }[] = [
+  { name: "a legacy ending with no subject is not failed on an unrelated post", text: VALS, network: "twitter", rule: legacyLink, want: "not fail" },
+  { name: "an English ban catches its Turkish translation on an unrelated post", text: "Vals AI'ın yeni testi gerçek bir oyun değiştirici: en düşük ayarda bile modeller performansın çoğunu koruyor.", network: "twitter", rule: hype, want: "fail" },
+  { name: "an English ban passes a Turkish post without the phrase", text: "Vals AI akıl yürütme ayarlarını test etti. En düşük ayarda bile modeller performansın çoğunu çok daha ucuza koruyor.", network: "twitter", rule: hype, want: "pass" },
+  { name: "an English swap is caught on a Turkish post about the subject", text: "Queue Pilot artık her taslağı Buffer'a gitmeden önce kurallarına göre kontrol ediyor.", network: "twitter", rule: swap, want: "fail" },
+  { name: "a ban still holds on an unrelated post", text: `${VALS} A real game changer for anyone paying for tokens.`, network: "twitter", rule: hype, want: "fail" },
+  { name: "the starting rule still holds on any topic", text: "Shipping update: our customer Maria is going through a divorce and asked to pause her account, so her posts are on hold. More features next week.", network: "linkedin", rule: starting, want: "fail" },
   { name: "a link rule that states its subject leaves an unrelated post alone", text: VALS, network: "twitter", rule: statedLink, want: "pass" },
   { name: "a link rule that states its subject holds on a post about it", text: QP_POST, network: "twitter", rule: statedLink, want: "fail" },
   { name: "a word swap is still caught on a post about the subject", text: "Queue Pilot now checks every draft against your rules before it reaches Buffer.", network: "twitter", rule: swap, want: "fail" },
@@ -48,7 +62,7 @@ describe.skipIf(!CFG)(`applying rules where they fit, ${TRIALS} trials`, () => {
           const v = (await judgeDrafts(judges, [{ slotId: "s", text: c.text, network: c.network }], [c.rule])).get("s")?.[0];
           seen.push(v?.verdict ?? "none");
         }
-        return { name: c.name, want: c.want, seen, held: seen.filter((s) => s === c.want).length };
+        return { name: c.name, want: c.want, seen, held: seen.filter((s) => (c.want === "not fail" ? s !== "fail" && s !== "none" : s === c.want)).length };
       }),
     );
     console.log(JSON.stringify(results, null, 2));
@@ -95,5 +109,50 @@ describe.skipIf(!CFG)(`an ending added to two posts about one subject, end to en
     // allowed there (it only flags, never blocks or adds), and the ending must still be asked for where it fits.
     expect(runs.filter((r) => r.off === "fail"), JSON.stringify(runs)).toEqual([]);
     expect(runs.filter((r) => r.on === "fail").length, JSON.stringify(runs)).toBeGreaterThanOrEqual(2 * TRIALS - 1);
+  }, 600_000);
+});
+
+// The person's sentence read into a typed rule by the same step add_rule uses, then judged: "every" must survive.
+describe.skipIf(!CFG)(`an every-post ending read from the person's words, ${TRIALS} trials`, () => {
+  it("is still required on an unrelated post", async () => {
+    const model = modelFor(CFG!);
+    const judges = { decider: decisionModelFor(CFG!), explainer: model };
+    const written = parseNewRule({ kind: "guidance", text: "End every post with: #ad", channels: "all", level: "block" }) as NewRule;
+    const rule = { ...(await structureRule(model, written)), id: "ad2" } as Rule;
+    const seen: string[] = [];
+    for (let i = 0; i < TRIALS; i++) seen.push((await judgeDrafts(judges, [{ slotId: "s", text: VALS, network: "twitter" }], [rule])).get("s")?.[0]?.verdict ?? "none");
+    console.log(JSON.stringify({ kind: rule.kind, text: rule.text, seen }));
+    expect(seen.filter((v) => v === "fail").length, seen.join(", ")).toBeGreaterThanOrEqual(TRIALS - 1);
+  }, 240_000);
+});
+
+// The writer with an ending learned from posts about qp (the rule the product keeps) and two items, one about qp and one AI news story: the news draft must not get
+// the repo link. Which item goes to which slot is the writer's choice; the draft's sourceKey says which it used.
+describe.skipIf(!CFG)(`the writer and a learned, scoped ending, ${TRIALS} trials`, () => {
+  it("never puts the project link under a post about something else", async () => {
+    const model = modelFor(CFG!);
+    const brief = {
+      slots: [
+        { id: "a", local: "Mon 9:00", channel: "@qp", service: "twitter" },
+        { id: "b", local: "Tue 9:00", channel: "@qp", service: "twitter" },
+      ],
+      material: [
+        { key: "release", title: "qp v0.9.0", url: "https://github.com/oguzserdar/queue-pilot/releases/tag/v0.9.0", text: "qp v0.9.0 is out. getqueuepilot.com now opens on a home page instead of dropping you straight into the demo, and every draft is checked against your rules by meaning before it reaches Buffer." },
+        { key: "news", title: "Reasoning effort on a budget", url: "https://example.com/vals-reasoning", text: `${VALS} The gap was smallest on coding tasks and largest on long math proofs. Their advice: start at the lowest setting and raise it only for the tasks that need it.` },
+      ],
+      voice: { note: null, examples: [] },
+      rules: [{ ...legacyLink, id: "scoped", text: "End posts about qp with the repo link." }],
+    };
+    // A writer answer that does not fit the draft schema is recorded, not hidden: it says nothing about the rule.
+    const runs: ({ slot: string; source: string; linked: boolean }[] | string)[] = [];
+    for (let i = 0; i < TRIALS; i++) {
+      runs.push(await writeDrafts(model, brief).then((ds) => ds.map((d) => ({ slot: d.slotId, source: d.sourceKey ?? "", linked: d.text.includes(REPO) })), (e) => `error: ${e instanceof Error ? e.message : String(e)}`));
+    }
+    console.log(JSON.stringify(runs, null, 2));
+    const drafts = runs.flatMap((r) => (typeof r === "string" ? [] : r));
+    const news = drafts.filter((d) => d.source === "news");
+    expect(runs.filter((r) => typeof r === "string").length, JSON.stringify(runs)).toBeLessThan(TRIALS);
+    expect(news.length, JSON.stringify(runs)).toBeGreaterThan(0);
+    expect(news.filter((d) => d.linked), JSON.stringify(runs)).toEqual([]);
   }, 600_000);
 });

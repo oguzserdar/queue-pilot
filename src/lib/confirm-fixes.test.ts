@@ -21,7 +21,7 @@ describe("preferencesFrom", () => {
     expect(kept[0].why).toBe("Both drafts drop a hype opener.");
   });
 
-  it("keeps an added ending as the author's sentence, and drops one that loses the words, is empty or too long", () => {
+  it("keeps an added ending with the author's sentence, even one that names the link in other words", () => {
     const ending = (phrase: string): FixOffer => ({ fix: { kind: "ends_with", phrase }, network: "twitter", count: 2, examples: [] });
     const link = "https://example.com/book";
     const kept = preferencesFrom([ending(link), ending(link), ending(link), ending(link)], [
@@ -30,7 +30,7 @@ describe("preferencesFrom", () => {
       { candidate: 3, verdict: "preference", why: "Same.", rule: " " },
       { candidate: 4, verdict: "preference", why: "Same.", rule: `${"x".repeat(200)} ${link}` },
     ]);
-    expect(kept.map((k) => k.sentence)).toEqual([`End posts about the cookbook with "${link}".`]);
+    expect(kept.map((k) => k.sentence)).toEqual([`End posts about the cookbook with "${link}".`, "End posts about the cookbook with the link."]);
   });
 
   it("keeps a swap or a cut without waiting for a sentence, since its exact words are the rule", () => {
@@ -51,9 +51,11 @@ describe("preferencesFrom", () => {
 });
 
 describe("complete", () => {
-  it("is false when a preference comes without its rule, so it is asked again", () => {
+  it("is false when a preference comes without a rule sentence it can keep, so it is asked again, not hidden", () => {
     const ending: FixOffer = { fix: { kind: "ends_with", phrase: "x" }, network: "twitter", count: 2, examples: [] };
     expect(complete([ending], [{ candidate: 1, verdict: "preference", why: "Same ending.", rule: "" }])).toBe(false);
+    expect(complete([ending], [{ candidate: 1, verdict: "preference", why: "Same ending.", rule: "y".repeat(201) }])).toBe(false);
+    expect(complete([ending], [{ candidate: 1, verdict: "preference", why: "Same ending.", rule: "End posts about the book with the link." }])).toBe(true);
     expect(complete([offer("x")], [{ candidate: 1, verdict: "preference", why: "Same cut.", rule: "" }])).toBe(true);
     expect(complete([offer("x")], [{ candidate: 1, verdict: "fact", why: "Wrong link.", rule: "" }])).toBe(true);
   });

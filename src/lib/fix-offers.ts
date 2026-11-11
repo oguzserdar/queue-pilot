@@ -20,19 +20,24 @@ export function editsFrom(written: Written[], posts: { id: string; channelId?: s
 
 /**
  * A fix as a rule, on the network the fix was made on. A swap or a cut keeps its exact words and is enforced: it never
- * adds anything to a post. An added ending does add content, so with the author's sentence (from confirm-fixes.ts) it
- * becomes that sentence, flagged and judged by meaning, which says which posts the ending is for.
+ * adds anything to a post. An added ending is flagged, keeps the exact words added, and with the author's sentence
+ * (from confirm-fixes.ts) reads as that sentence, which says which posts the ending is for.
+ *
+ * @param fix - The repeated fix
+ * @param network - The network it was made on
+ * @param channelId - The account it was made on, when known
+ * @param sentence - For an added ending, the rule as the author would write it
+ * @returns The rule to offer
  */
 export function fixToRule(fix: Fix, network: string, channelId?: string, sentence?: string): NewRule {
   const channels = network in NETWORKS ? [network] : "all";
   const raw =
-    fix.kind === "ends_with" && sentence ? { kind: "guidance", text: sentence, channels, level: "warn" }
-    : fix.kind === "replace" ? { kind: "replace", from: fix.from, to: fix.to, channels, level: "block" }
+    fix.kind === "replace" ? { kind: "replace", from: fix.from, to: fix.to, channels, level: "block" }
     : fix.kind === "banned" ? { kind: "banned", phrase: fix.phrase, channels, level: "block" }
     : { kind: "ends_with", phrase: fix.phrase, channels, level: "warn" };
   const rule = parseNewRule({ ...raw, ...(channelId ? { accountIds: [channelId] } : {}) });
   if (typeof rule === "string") throw new Error(`A found fix did not make a valid rule: ${rule}`);
-  return rule;
+  return rule.kind === "ends_with" && sentence ? { ...rule, text: sentence } : rule;
 }
 
 /** Stable key for an offer, so a "Not now" is remembered. */
@@ -41,22 +46,13 @@ export function offerKey(o: FixOffer): string {
   return `${o.network}|${o.channelId ? `account:${o.channelId}|` : ""}${f.kind}|${f.kind === "replace" ? `${f.from}>${f.to}` : f.phrase.toLowerCase()}`;
 }
 
-/** True when an existing rule already covers this fix, on any network, including a rule kept from this very fix. */
+/** True when an existing rule already covers this fix, on any network. */
 function covered(fix: Fix, rules: Rule[]): boolean {
   return rules.some((r) =>
-    keptFrom(r, fix) ||
-    (fix.kind === "replace" ? r.kind === "replace" && r.from.toLowerCase() === fix.from && r.to.toLowerCase() === fix.to
+    fix.kind === "replace" ? r.kind === "replace" && r.from.toLowerCase() === fix.from && r.to.toLowerCase() === fix.to
     : fix.kind === "banned" ? r.kind === "banned" && r.phrases.some((p) => p.toLowerCase() === fix.phrase.toLowerCase())
-    : r.kind === "ends_with" && r.phrase.toLowerCase() === fix.phrase.toLowerCase()),
+    : r.kind === "ends_with" && r.phrase.toLowerCase() === fix.phrase.toLowerCase(),
   );
-}
-
-/** True when the rule was kept from this fix: its saved evidence names the same fix. */
-function keptFrom(r: Rule, fix: Fix): boolean {
-  const e = r.learnedFrom;
-  const f = e && typeof e === "object" && !Array.isArray(e) ? (e as { fix?: Record<string, unknown> }).fix : undefined;
-  if (!f || f.kind !== fix.kind) return false;
-  return fix.kind === "replace" ? f.from === fix.from && f.to === fix.to : typeof f.phrase === "string" && f.phrase.toLowerCase() === fix.phrase.toLowerCase();
 }
 
 /** Repeated fixes still worth offering: not a rule yet, and not set aside with Not now. */

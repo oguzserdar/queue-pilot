@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeRule, judgeDrafts, MIN_PROBABILITY, questionsFor, rulesFor } from "./judge";
+import { describeRule, judgeDrafts, MIN_PROBABILITY, questionsFor, RULES_FIT, rulesFor, UNSURE_REASON } from "./judge";
 import { answering, deciding } from "./ai-test-model";
 import type { Rule } from "./rules";
 
@@ -35,11 +35,10 @@ describe("replacement capitalization", () => {
     expect(replacement.instructions).toContain("translations, other word forms");
     const ending: Rule = { id: "end", kind: "ends_with", phrase: "Read the notes", channels: "all", level: "block", text: "End with Read the notes" };
     const required = questionsFor([ending]).rule_end;
-    expect(required.instructions).toContain('End with "Read the notes"');
+    expect(required.instructions).toContain('The words to end with are "Read the notes"');
     expect(required.instructions).not.toContain("does not require the subject");
-    expect(required.criteria.fail).toContain("lacks what the rule requires where it fits this post");
-    expect(required.instructions).toContain("never asks for something unrelated to what the post is about");
-    expect(required.criteria.pass).toContain("asks for something to be added that does not fit this post");
+    expect(required.criteria.fail).toContain("lacks what the rule asks for where it fits this post");
+    expect(required.criteria.pass).toContain("the rule does not fit this post");
   });
 
   it("allows capitalization variants for a wording change but preserves a case-only correction", () => {
@@ -49,6 +48,60 @@ describe("replacement capitalization", () => {
     const capitalization: Rule = { ...broth, from: "openai", to: "OpenAI", text: 'Say "OpenAI", never "openai".' };
     expect(questionsFor([capitalization]).rule_b1.instructions).toContain("require the replacement’s exact capitalization");
     expect(questionsFor([capitalization]).rule_b1.instructions).not.toContain("variants of the replacement are allowed");
+  });
+});
+
+describe("describeRule", () => {
+  const ending = (text: string, phrase = "#ad"): Rule => ({ id: "e", kind: "ends_with", phrase, channels: "all", level: "block", text });
+
+  it("leads with the person's sentence, so its scope is kept, then adds the exact words", () => {
+    expect(describeRule(ending("End every post with: #ad"))).toBe('End every post with: #ad. The words to end with are "#ad", or the same line in the post\'s language.');
+    expect(describeRule(ending('End every post with "#ad"'))).toMatch(/^End every post with "#ad"\. The words to end with are/);
+    expect(describeRule(ending('End posts about qp with "#ad".'))).toMatch(/^End posts about qp with "#ad"\. The words to end with are/);
+    const scoped = describeRule(ending('End posts about qp with "https://github.com/x/qp".', "https://github.com/x/qp"));
+    expect(scoped.startsWith('End posts about qp with "https://github.com/x/qp".')).toBe(true);
+    expect(scoped).toContain('The words to end with are "https://github.com/x/qp"');
+  });
+
+  it("keeps the hardened swap and ban wording after the person's sentence", () => {
+    expect(describeRule(broth)).toMatch(/^Say "stock", never "broth"\. Say "stock", never "broth", when referring to this subject\..*If the post does not refer to this subject, pass this rule/);
+    const ban: Rule = { id: "x", kind: "banned", phrases: ["game changer"], channels: "all", level: "block", text: "No hype in posts about launches" };
+    expect(describeRule(ban)).toMatch(/^No hype in posts about launches\. Never use "game changer", nor a translation of it/);
+  });
+
+  it("gives a rule in the person's own words as written", () => {
+    expect(describeRule(dish)).toBe(dish.text);
+  });
+});
+
+describe("how rules fit a post", () => {
+  it("says the fit principle once per question, in one wording that also keeps prohibitions", () => {
+    const q = questionsFor([broth, dish]);
+    for (const k of Object.keys(q)) expect(q[k as keyof typeof q].instructions.split(RULES_FIT)).toHaveLength(2);
+    expect(RULES_FIT).toContain("A rule that forbids something always applies.");
+  });
+
+  it("asks the strict question for proving a habit: a post that lacks it has not followed it", () => {
+    const strict = questionsFor([dish], true).rule_g1;
+    expect(strict.instructions).not.toContain(RULES_FIT);
+    expect(strict.criteria.pass).toBe("The post follows this rule.");
+    expect(strict.criteria.fail).toContain("lacks what the rule asks for.");
+    expect(strict.criteria.unsure).toContain("must still be present");
+    expect(JSON.stringify(strict.criteria)).not.toContain("does not fit");
+  });
+
+  it("passes the strict question to the decision model when asked", async () => {
+    const d = deciding(() => ({ rule_g1: choice("pass") }));
+    await judgeDrafts({ decider: d.model, explainer: answering({}) }, [german], [dish], { strict: true });
+    expect(JSON.stringify(d.calls[0])).toContain("The post follows this rule.");
+    expect(JSON.stringify(d.calls[0])).not.toContain("does not fit");
+  });
+
+  it("words an unsure rule so the post can stay as it is", async () => {
+    const d = deciding(() => ({ rule_g1: choice("unsure") }));
+    const v = (await judgeDrafts({ decider: d.model, explainer: answering({}) }, [german], [dish])).get("s1")![0];
+    expect(v).toMatchObject({ verdict: "unsure", reason: UNSURE_REASON });
+    expect(UNSURE_REASON).toContain("If it does not fit, the post can stay as it is.");
   });
 });
 

@@ -49,6 +49,18 @@ describe("proposeFirstRules", () => {
     expect(judge.calls).toHaveLength(12 + CONTRAST.length);
   });
 
+  it("proves a habit with the strict question, so a post that lacks it is never counted as following it", async () => {
+    const writer = answering({ rules: [{ rule: "End with a question.", network: "linkedin", from: "posts", posts: [1, 2, 3], note: null }] });
+    const judge = judgeWith(() => "pass");
+    await proposeFirstRules(writer, { decider: judge.model, explainer: explainer() }, linkedin, []);
+    for (const call of judge.calls) {
+      const criteria = Object.values(call.questions).map((q) => JSON.stringify(q)).join(" ");
+      expect(criteria).toContain("The post follows this rule.");
+      expect(criteria).toContain("must still be present");
+      expect(criteria).not.toContain("does not fit");
+    }
+  });
+
   it("drops a habit that ordinary posts in other styles follow too, since it says nothing about this author", async () => {
     const writer = answering({ rules: [{ rule: "Write in full sentences.", network: "linkedin", from: "posts", posts: [1, 2, 3], note: null }] });
     const judge = deciding((ids) => Object.fromEntries(ids.map((id) => [id, choice("pass")])));

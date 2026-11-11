@@ -115,9 +115,7 @@ export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites"
   }
   const bounded = suggestions.filter(s => !dismissed.has(s.key)).map(s => {
     const serialized = JSON.stringify(s.evidence);
-    // A cut-down record keeps the fix it came from, so a kept rule still closes its offer.
-    const fix = s.evidence && typeof s.evidence === "object" && "fix" in s.evidence ? { fix: (s.evidence as { fix: unknown }).fix } : {};
-    return serialized.length > 12_000 ? { ...s, evidence: { ...fix, excerpt: serialized.slice(0, 12_000), truncated: true } } : s;
+    return serialized.length > 12_000 ? { ...s, evidence: { excerpt: serialized.slice(0, 12_000), truncated: true } } : s;
   });
   return { suggestions: bounded.map(s => ({ ...s, token: signSuggestion(userId, s) })), note };
 }

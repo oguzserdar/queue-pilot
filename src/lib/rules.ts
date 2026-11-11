@@ -50,9 +50,21 @@ export function appliesTo(rule: RuleRouting, network: string, accountId?: string
   return resolveRule(rule, network, accountId).applies;
 }
 
-/** Where a rule applies, in plain words: "every network", "every network except X", or the networks it names. */
-export function ruleScope(rule: RuleRouting): string {
-  if (rule.accountIds?.length) return `${rule.accountIds.length} selected account${rule.accountIds.length === 1 ? "" : "s"}`;
+/**
+ * Where a rule applies, in plain words: "every network", "every network except X", the networks it names, or the
+ * accounts it is limited to.
+ *
+ * @param rule - The rule's routing
+ * @param accounts - Account names by account id, when known; an account not in it is counted, not named
+ * @returns The scope as one short phrase
+ */
+export function ruleScope(rule: RuleRouting, accounts?: ReadonlyMap<string, string>): string {
+  if (rule.accountIds?.length) {
+    const named = rule.accountIds.flatMap((id) => accounts?.get(id) ?? []);
+    const others = rule.accountIds.length - named.length;
+    const rest = others ? [`${others} ${named.length ? "other " : ""}selected account${others === 1 ? "" : "s"}`] : [];
+    return [...named, ...rest].join(", ");
+  }
   if (rule.channels !== "all") return rule.channels.map((c) => NETWORKS[c] ?? c).join(", ");
   const off = (rule.except ?? []).map((c) => NETWORKS[c] ?? c);
   return off.length ? `every network except ${off.join(", ")}` : "every network";

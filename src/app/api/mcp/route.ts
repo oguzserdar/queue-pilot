@@ -32,7 +32,7 @@ import { addPastedExample, InvalidVoiceExampleError, MAX_NOTE, MAX_PASTED_TEXT, 
 import { materialInput, postgresMaterialStore } from "@/lib/material-store"
 import { AiCapError } from "@/lib/judge-model";
 import { TooManyRulesError, postgresRulesStore } from "@/lib/rules-store";
-import { playbookAnswer } from "@/lib/playbook-answer";
+import { accountNames, playbookAnswer } from "@/lib/playbook-answer";
 import { approvalState, connectedApp, recordAppUse, revokeApp, UNUSED_DAYS } from "@/lib/ai-access";
 import type { ConnectedApp } from "@/lib/app-identity";
 import { approverFor } from "@/lib/rule-origin";
@@ -292,7 +292,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
       // The post id lets the AI change, delete or approve this draft without another read, whichever week it is in.
       const saved = res.saved.map((x) => `Saved: ${x.local} · ${x.channel}${x.postId ? ` · post id ${x.postId}` : ""}`);
       const refused = res.refused.map((x) => `Not saved: ${x.slotId} · ${x.reason}`);
-      const notes = res.flags.map((f) => `Saved, but check: ${f.slotId} · ${f.verdict === "fail" ? "breaks" : "may break"} "${f.rule}"${f.reason ? `: ${f.reason}` : ""}`);
+      const notes = res.flags.map((f) => `Saved, but check: ${f.slotId} · ${f.verdict === "fail" ? `breaks "${f.rule}"` : `unsure about "${f.rule}"`}${f.reason ? `: ${f.reason}` : ""}`);
       const judged = res.check === "judged" && res.judgedWith ? [`Checked against the user's playbook by a model (${res.judgedWith}).`] : [];
       const unchecked = checkNote(res.check) ? [checkNote(res.check)!] : [];
       const answer = text([`${res.saved.length} saved, ${res.refused.length} not saved, as Buffer drafts (${res.requests} request${res.requests === 1 ? "" : "s"}).`, ...saved, ...notes, ...refused, ...judged, ...unchecked].join("\n"));
@@ -1110,7 +1110,7 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     {
       title: "Read my playbook",
       description:
-        "Read this before writing drafts. It lists the user's playbook rules, each with the networks it covers. Follow each rule for the post's network where it fits the post: a rule never asks you to add something unrelated to what the post is about. save_drafts and update_draft check drafts against the same rules: a draft that breaks a rule marked enforced is not saved, and the answer names the rule.",
+        "Read this before writing drafts. It lists the user's playbook rules, each with the networks or accounts it covers, and how to apply them. save_drafts and update_draft check drafts against the same rules: a draft that breaks a rule marked enforced is not saved, and the answer names the rule.",
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async () => {
@@ -1119,7 +1119,9 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         return null;
       });
       if (rules === null) return { ...text("Could not read the playbook just now. Try again before writing drafts."), isError: true };
-      return text(playbookAnswer(rules));
+      // Account names come from the saved copy of Buffer, never a new request; without it the accounts are counted.
+      const stored = rules.some((r) => r.accountIds?.length) ? await postgresSnapshotStore().get(userId).catch(() => null) : null;
+      return text(playbookAnswer(rules, stored ? accountNames(stored.data.channels) : undefined));
     },
   );
 

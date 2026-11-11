@@ -5,18 +5,30 @@
  */
 import { isStartingRule, ownRules, type AddedBy } from "./rule-origin";
 import { RULES_FIT } from "./judge";
-import { ruleScope, type Rule } from "./rules";
+import { NETWORKS, ruleScope, type Rule } from "./rules";
+import type { Channel } from "./buffer/queries";
+
+/**
+ * Account names by id, as "Name (Network)", for naming the accounts a rule is limited to.
+ *
+ * @param channels - The accounts in the saved copy of Buffer
+ * @returns Names by account id
+ */
+export function accountNames(channels: Pick<Channel, "id" | "name" | "service">[]): Map<string, string> {
+  return new Map(channels.map((c) => [c.id, `${c.name} (${NETWORKS[c.service] ?? c.service})`]));
+}
 
 /**
  * get_playbook's answer: how rules are applied, then one line per rule, with the starting rule marked, and a first line
  * when the person has no rules of their own.
  *
  * @param rules - The playbook as stored
+ * @param accounts - Account names by id from the saved copy of Buffer, so a rule limited to accounts names them
  * @returns Plain text for the connector to return
  */
-export function playbookAnswer(rules: Rule[]): string {
+export function playbookAnswer(rules: Rule[], accounts?: ReadonlyMap<string, string>): string {
   if (!rules.length) return "No rules yet. Use add_rule when the user requests a rule, or list_rule_suggestions to learn from their edits.";
-  const lines = [RULES_FIT, ...rules.map((r) => `- ID ${r.id}: ${r.text} [${ruleScope(r)}; ${r.level === "block" ? "enforced: a draft that breaks it is not saved" : "checked: a draft that breaks it is saved and flagged"}${isStartingRule(r) ? "; starting rule from Queue Pilot, not one of the user's own" : ""}]`)];
+  const lines = [RULES_FIT, ...rules.map((r) => `- ID ${r.id}: ${r.text} [${ruleScope(r, accounts)}; ${r.level === "block" ? "enforced: a draft that breaks it is not saved" : "checked: a draft that breaks it is saved and flagged"}${isStartingRule(r) ? "; starting rule from Queue Pilot, not one of the user's own" : ""}]`)];
   const head = ownRules(rules).length ? [] : ["No rules of the user's own yet: only Queue Pilot's starting rule, which still applies. Use add_rule when the user requests a rule, or list_rule_suggestions to learn from their edits."];
   return [...head, ...lines].join("\n");
 }

@@ -2061,7 +2061,7 @@ describe("where posts come from, through the real connector", () => {
     const saved = await call("save_drafts", { title: "Friday", drafts: [{ slotId, text: "We are closed on Friday." }] })
     expect(saved.isError).not.toBe(true)
     expect(answer(saved)).toContain("1 saved, 0 not saved")
-    expect(answer(saved)).toContain(`Saved, but check: ${slotId} · may break "Source evidence": No source. This draft cites nothing saved in Queue Pilot. Check where it came from before approving.`)
+    expect(answer(saved)).toContain(`Saved, but check: ${slotId} · unsure about "Source evidence": No source. This draft cites nothing saved in Queue Pilot. Check where it came from before approving.`)
     expect(posts).toHaveLength(1)
   })
 
