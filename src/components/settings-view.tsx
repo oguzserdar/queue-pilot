@@ -20,7 +20,7 @@ import styles from "./settings-view.module.css";
 import { remainingOf } from "@/lib/rate-limit-text";
 
 /** The example account's last RateLimit reading, in the format Buffer sends (developers.buffer.com/guides/api-limits). */
-const EXAMPLE_RATE_LIMIT = [{ policy: "100-in-15min", remaining: 97 }, { policy: "250-in-24h", remaining: 212 }];
+const EXAMPLE_RATE_LIMIT = [{ policy: "110-in-15min", remaining: 107 }, { policy: "525-in-24h", remaining: 487 }];
 
 import { showSecurityEvent, type ShownSecurityEvent } from "@/lib/security-event-words";
 import type { SecurityEvent } from "@/lib/security-events";
@@ -99,7 +99,7 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
         <h1 className={styles.title}>Settings</h1>
       </header>
 
-      <UrlTabs initial={open} first="account">
+      <UrlTabs key={open} initial={open} first="account">
         <TabsList aria-label="Settings sections">
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="channels">Channels</TabsTrigger>

@@ -49,15 +49,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
       : [],
     userId ? allowanceFor(userId).catch(() => null) : null,
     userId ? approveMode(userId).catch(() => "ask" as const) : ("ask" as const),
-    userId ? postgresEchoStore().destinations(userId) : [],
-    userId ? recentDirectPosts() : [],
+    // The Channels tab's own reads: a failure there shows a note on that tab, never takes down the whole page.
+    userId ? postgresEchoStore().destinations(userId).catch((e) => { console.error(JSON.stringify({ event: "qp-echo-read-failed", message: e instanceof Error ? e.message : String(e) })); return null; }) : [],
+    userId ? recentDirectPosts().catch((e) => { console.error(JSON.stringify({ event: "qp-direct-posts-read-failed", message: e instanceof Error ? e.message : String(e) })); return null; }) : [],
   ]);
   const allowance = aiKey === null && usage && user ? { ...usage, resetsAt: resetTime(user.timeZone) } : null;
   return (
     <SettingsView
       // The OpenRouter callback's notice shows on the AI tab, so it lands there.
       tab={openrouter ? "ai" : discord ? "channels" : tab}
-      account={user ? { email: user.email, name: profile?.name ?? user.email, image: profile?.image ?? null, channelNames: user.channels.map((c) => c.name), rateLimit: user.rateLimit, apps, devices, security, aiKey, allowance, notice, approveMode: approve, channelsPanel: { channels: user.channels, copies: destinations.map((d) => ({ kind: d.kind, label: d.label })), discordResult: discord ?? null, posts } } : undefined}
+      account={user ? { email: user.email, name: profile?.name ?? user.email, image: profile?.image ?? null, channelNames: user.channels.map((c) => c.name), rateLimit: user.rateLimit, apps, devices, security, aiKey, allowance, notice, approveMode: approve, channelsPanel: destinations && posts ? { channels: user.channels, copies: destinations.map((d) => ({ kind: d.kind, label: d.label })), discordResult: discord ?? null, posts } : undefined } : undefined}
     />
   );
 }
