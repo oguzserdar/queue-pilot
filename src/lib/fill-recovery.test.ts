@@ -32,6 +32,12 @@ describe("settleFillDrafts", () => {
   it("treats a failed post on that time as an empty time", () => {
     expect(settleFillDrafts([row()], [post({ status: "error", text: "Old." })], now)[0]).toMatchObject({ reason: expect.stringContaining("still empty") });
   });
+  it("never fails a save against a queue read before that save could land", () => {
+    // Saved ten minutes ago, but the queue copy is from before the save: wait for a fresher read.
+    const saved = new Date(now.getTime() - 10 * 60_000);
+    const readBefore = new Date(saved.getTime() + 60_000);
+    expect(settleFillDrafts([row({ updatedAt: saved, callStartedAt: saved })], [], readBefore)).toEqual([]);
+  });
   it("leaves a record alone while its run may still be going", () => {
     expect(settleFillDrafts([row({ updatedAt: new Date(now.getTime() - 60_000) })], [post()], now)).toEqual([]);
   });

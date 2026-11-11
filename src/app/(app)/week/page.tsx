@@ -48,10 +48,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ w
     const network = user.channels.find(c => c.id === post?.channelId)?.service ?? w.network;
     return [w.postId, rules ? draftReadiness(w, post?.text ?? "", rules, { network, channelId: post?.channelId }) : { state: "check", reason: "The playbook could not be read. Try again." }];
   }));
-  // A fill that stopped, or whose Buffer save never answered, is settled against the queue as it is now.
+  // A fill that stopped, or whose Buffer save never answered, is settled against the queue as last read. Time is
+  // measured from that read, so a copy fetched before the save landed never marks a saved draft as failed.
   if (userId) {
     const fills = postgresFillDraftStore();
-    await recoverFillDrafts(userId, user.posts, (channelId) => user.channels.find((c) => c.id === channelId)?.service ?? "", { open: fills.open, settle: fills.settle, record: (id, drafts) => postgresWrittenStore().record(id, drafts) })
+    await recoverFillDrafts(userId, user.posts, (channelId) => user.channels.find((c) => c.id === channelId)?.service ?? "", { open: fills.open, settle: fills.settle, record: (id, drafts) => postgresWrittenStore().record(id, drafts) }, user.fetchedAt)
       .catch((e) => console.error(JSON.stringify({ event: "qp-fill-recovery-failed", message: e instanceof Error ? e.message : String(e) })));
   }
   const evidence = userId ? await sourceCards(userId, user.posts, user.channels) : [];
