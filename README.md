@@ -172,9 +172,9 @@ The budget is enforced by Queue Pilot: before each built-in AI action it compare
 
 ## What's next
 
-- **1.0, proven on a brand-new account.** Every step run end to end on a Buffer account that has never used Queue Pilot, and the Docker version running on its own server.
-- **Learn from results as well as edits.** Which posts did well, as well as what you changed.
-- **One playbook per client,** for agencies.
+- **1.0, proven on a brand-new account.** Every step run end to end on an account that has never used Queue Pilot, and the Docker version running on its own server.
+- **Teams and clients.** Workspaces with their own playbook and voice, roles, and client approval through a link.
+- **Plans for your copy.** Whoever runs a copy can set plans, add payments and offer sign-up with a trial. Without payment keys, everything stays open.
 
 More in the [roadmap](ROADMAP.md), and what shipped in [CHANGELOG.md](CHANGELOG.md).
 
