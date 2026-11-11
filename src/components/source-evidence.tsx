@@ -38,8 +38,11 @@ function QuotePair({ c }: { c: EvidenceCard }) {
 /**
  * A draft's sources, each shown once with its quotes inside. The first quote is open; the others are folded unless they
  * have a problem, which always stays open.
+ *
+ * `footerChecks` is true when the window around it already offers "Check again" for this draft. The section then
+ * says nothing about an edit and shows no button of its own, so the person sees one check to run, not two.
  */
-export function DraftSources({ cards, live }: { cards: EvidenceCard[]; live: boolean }) {
+export function DraftSources({ cards, live, footerChecks = false }: { cards: EvidenceCard[]; live: boolean; footerChecks?: boolean }) {
   const [pending, start] = useTransition(); const [message, setMessage] = useState(""); const router = useRouter();
   if (!cards.length) return null;
   const groups = groupBySource(cards);
@@ -49,7 +52,7 @@ export function DraftSources({ cards, live }: { cards: EvidenceCard[]; live: boo
   const recheck = () => live ? start(async () => { const r = await recheckSourceEvidence(cards[0].postId); setMessage(r.message ?? "Checked."); router.refresh(); }) : setMessage("Example account: the quotes above are already checked against the saved issue.");
   return <section className={styles.sources} aria-label="Sources">
     <div className={styles.sourcesHead}><h3>Sources</h3><span className={styles.caption}>{groups.length} {groups.length === 1 ? "source" : "sources"} · {quotes} {quotes === 1 ? "quote" : "quotes"}</span></div>
-    {edited && <div className={styles.edited}><p>{EDITED_DRAFT_LINE}</p><Button variant="secondary" size="sm" disabled={pending} onClick={recheck}><RotateCw size={14} strokeWidth={1.75} aria-hidden="true" />{pending ? "Checking…" : "Check again"}</Button></div>}
+    {edited && !footerChecks && <div className={styles.edited}><p>{EDITED_DRAFT_LINE}</p><Button variant="secondary" size="sm" disabled={pending} onClick={recheck}><RotateCw size={14} strokeWidth={1.75} aria-hidden="true" />{pending ? "Checking…" : "Check again"}</Button></div>}
     {groups.map((g) => {
       const url = g.uri.startsWith("http") ? g.uri : null;
       return <div key={g.key} className={styles.group}>

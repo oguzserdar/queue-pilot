@@ -30,6 +30,14 @@ describe("DraftSources after an edit", () => {
     expect(t).not.toContain("Recheck draft");
   });
 
+  it("stays quiet about the edit when the window's footer already offers the check", () => {
+    const quiet = text(renderToStaticMarkup(<DraftSources cards={edited} live footerChecks />));
+    expect(quiet).not.toContain("You edited this draft");
+    expect(quiet).not.toContain("Check again");
+    expect(quiet).not.toContain("Recheck draft");
+    expect(quiet).toContain("Note: Only part of the source was read");
+  });
+
   it("does not repeat a warning on every quote", () => {
     expect(t).not.toContain("Check this draft against the current source");
     expect(t).not.toContain("Problem:");

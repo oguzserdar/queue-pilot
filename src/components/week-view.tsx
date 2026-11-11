@@ -9,6 +9,7 @@ import { DropdownMenu } from "@/registry/components/dropdown-menu/dropdown-menu"
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveDrafts, deleteMyDraft, editDraftText, recheckMyDrafts } from "@/app/(app)/actions";
+import { recheckSourceEvidence } from "@/app/(app)/source-actions";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { Button } from "@/registry/components/button/button";
 import { Badge } from "@/registry/components/badge/badge";
@@ -131,6 +132,15 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
       if (!posts.some((p) => p.channel === c.id && p.day === Number(day) && p.time === t && p.status !== "error")) samples.push({ slotId: cellId(c.id, Number(day), t) });
   }
   const needsCheck = (id: string) => live && (readiness[id]?.state === "check" || readiness[id]?.state === "breaks");
+  // The footer's "Check again" is the one place a draft is rechecked: against the playbook, then against its sources.
+  const canCheckAgain = (p: { id: string; ours?: boolean }) => p.ours !== false && !approved.has(p.id) && live && (verdicts[p.id] === null || needsCheck(p.id));
+  const checkAgain = async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
+    const rules = await recheckMyDrafts([id]);
+    if (!rules.ok) return rules;
+    if (!evidence.some((e) => e.postId === id && e.needsCheck)) return { ok: true };
+    const sources = await recheckSourceEvidence(id);
+    return sources.ok ? { ok: true } : { ok: false, message: sources.message };
+  };
   const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !needsCheck(p.id) && !approved.has(p.id) && !overdue.has(p.id));
   const blocked = drafts.filter((p) => worstTone(p) === "danger");
   // The title counts what Approve can act on; a post that would fail is named apart, so the two numbers always agree.
@@ -282,7 +292,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
           )}
           {(() => {
             const cards = evidence.filter(e => e.postId === current.id);
-            if (cards.length) return <DraftSources cards={cards} live={live} />;
+            if (cards.length) return <DraftSources cards={cards} live={live} footerChecks={canCheckAgain(current)} />;
             return current.source && (
               <div className={styles.sourceBox}>
                 <div>
@@ -372,7 +382,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
                 : worstTone(current) === "danger" ? <p id="approve-off" className={styles.footNote}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
                 : <p className={[styles.footNote, styles.footState].join(" ")}><CircleCheck size={15} strokeWidth={1.75} aria-hidden="true" />Saved as a draft in Buffer</p>}
               <div className={styles.actions}>
-                {current.ours !== false && !approved.has(current.id) && live && (verdicts[current.id] === null || needsCheck(current.id)) && <Button variant="secondary" disabled={busy} onClick={() => run(() => recheckMyDrafts([current.id]).then((r) => (r.ok ? { ok: true as const } : r)), "Checked against your playbook.")}>Check again</Button>}
+                {canCheckAgain(current) && <Button variant="secondary" disabled={busy} onClick={() => run(() => checkAgain(current.id), "Checked against your playbook and its sources.")}>Check again</Button>}
                 {current.ours !== false && !approved.has(current.id) && (
                   <DropdownMenu label="More" icon={<MoreHorizontal size={16} strokeWidth={1.75} />} items={[{ label: "Delete draft", destructive: true, icon: <Trash2 size={15} strokeWidth={1.75} />, onSelect: () => { setConfirmDelete(true); setEditing(null); setNote(null); } }]} />
                 )}
