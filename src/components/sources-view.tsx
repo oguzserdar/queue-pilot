@@ -36,7 +36,8 @@ const EXAMPLE = {
     { id: "example-newsletter", title: "This Week in AI", url: "https://thisweekinai.example/feed" },
     { id: "example-youtube", title: "This Week in AI on YouTube", url: "https://youtube.example/thisweekinai" },
   ],
-  copies: [{ kind: "telegram" as const, label: "@thisweekinai" }],
+  // Both connected, as Delivery shows each post also going out on Telegram and Discord.
+  copies: [{ kind: "telegram" as const, label: "@thisweekinai" }, { kind: "discord" as const, label: "This Week in AI #announcements" }],
   discordResult: null,
   posts: [{ postId: "example-1", kind: "telegram" as const, label: "@thisweekinai", text: "This week's issue is out: three model releases and what changed for builders.", status: "sent" as const, link: null, error: null, at: "2026-11-06T16:00:00.000Z", sendAt: null, late: false, followsBuffer: false }],
 };
@@ -69,7 +70,11 @@ function LiveSources({ sources }: Extract<SourcesProps, { mode: "live" }>) {
 export type ChannelsPanelProps = { channels: LiveChannel[]; copies: LiveCopy[]; discordResult: string | null; posts: DirectPostView[]; loadTargets?: () => Promise<PostTargets> };
 
 /** The example account's channels and copies, for the same Settings screen a signed-in person sees. */
-export const EXAMPLE_CHANNELS: ChannelsPanelProps = { channels: EXAMPLE.channels, copies: EXAMPLE.copies, discordResult: null, posts: EXAMPLE.posts };
+export const EXAMPLE_CHANNELS: ChannelsPanelProps = {
+  channels: EXAMPLE.channels, copies: EXAMPLE.copies, discordResult: null, posts: EXAMPLE.posts,
+  // The composer lists the example's own channels, the ones the page shows as connected (Telegram allows 4,096 characters, Discord 2,000).
+  loadTargets: async () => ({ telegram: { label: "@thisweekinai", limit: 4096 }, discord: { label: "This Week in AI", limit: 2000, channels: [{ id: "announcements", name: "announcements", canPost: true }], defaultId: "announcements" } }),
+};
 
 /** The Channels tab in Settings: whether each Buffer channel can post, then the Telegram and Discord copies. */
 export function ChannelsPanel({ channels, copies, discordResult, posts, loadTargets }: ChannelsPanelProps) {

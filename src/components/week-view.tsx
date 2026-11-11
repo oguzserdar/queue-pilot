@@ -121,11 +121,12 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
   const onFill = (event: FillEvent) => setFill((f) => event.type === "start" ? { ids: new Set(event.slotIds), texts: {} } : { ids: f.ids, texts: { ...f.texts, [event.slotId]: event.text } });
   const cellId = (c: string, day: number, t: string) => week.slotIds?.[slotKey(c, day, t)] ?? slotKey(c, day, t);
   // The example replays a fill on its own week: its drafts step aside, their times are written again one by one
-  // with the same text, and they come back when the run ends. Its one empty time gets a sample line.
+  // with the same text, and they come back when the run ends. Its one empty time gets a sample line, which stays. A
+  // post that would fail is left out: a fill never writes over a post that is already there.
   const samples: { slotId: string; text?: string }[] = [];
   const replayed = new Set<string>();
   if (!live) {
-    for (const p of [...drafts].sort((x, y) => x.day - y.day || x.time.localeCompare(y.time))) { samples.push({ slotId: cellId(p.channel, p.day, p.time), text: p.text }); replayed.add(p.id); }
+    for (const p of drafts.filter((d) => worstTone(d) !== "danger").sort((x, y) => x.day - y.day || x.time.localeCompare(y.time))) { samples.push({ slotId: cellId(p.channel, p.day, p.time), text: p.text }); replayed.add(p.id); }
     for (const c of channels) for (const [day, times] of Object.entries(slots[c.id] ?? {})) for (const t of times)
       if (!posts.some((p) => p.channel === c.id && p.day === Number(day) && p.time === t && p.status !== "error")) samples.push({ slotId: cellId(c.id, Number(day), t) });
   }
@@ -193,7 +194,8 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
       if (!here.length) {
         const name = `${channels.find((c) => c.id === channelId)?.name ?? ""}, ${FULL_DAY[day]} at ${t}`;
         const id = cellId(channelId, day, t);
-        if (writingNow && fill.ids.has(id)) {
+        // The example keeps its sample line in the empty time after the replay, so the week you watched stays written.
+        if (fill.ids.has(id) && (writingNow || (!live && fill.texts[id] !== undefined))) {
           const text = fill.texts[id];
           return [<div key={t} className={styles.writing} data-written={text !== undefined} aria-label={`${name}: ${text === undefined ? "a draft is being written" : "draft written"}`}>
             <span className={styles.writingHead}><span>{t}</span><span aria-hidden="true">{text === undefined ? "Writing" : "Written"}</span></span>
@@ -310,12 +312,12 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
               return <>
                 {/* A rule the draft breaks always shows in full; the ones it follows fold into one line. */}
                 {problems.map(row)}
-                {v.length === 0 && <p className={styles.muted}>No playbook rules yet. <a className={styles.rulesLink} href="/playbook">Open your playbook</a></p>}
+                {v.length === 0 && <p className={styles.muted}>No playbook rules yet. <a className={styles.rulesLink} href={live ? "/playbook" : "/demo?to=/playbook"}>Open your playbook</a></p>}
                 {passed.length > 0 && (
                   <details className={styles.ruleSummary}>
                     <summary><CircleCheck size={16} strokeWidth={1.75} aria-hidden="true" className={styles.passIcon} /><span>{`${passed.length} playbook rule${passed.length === 1 ? "" : "s"} ${problems.length ? "followed" : "passed"}`}</span><span className={styles.viewRules}>View rules</span></summary>
                     {passed.map(row)}
-                    <a className={styles.rulesLink} href="/playbook">Open your playbook</a>
+                    <a className={styles.rulesLink} href={live ? "/playbook" : "/demo?to=/playbook"}>Open your playbook</a>
                   </details>
                 )}
                 {!live && <p className={styles.muted}>Example verdicts.</p>}

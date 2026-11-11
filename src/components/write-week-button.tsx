@@ -35,7 +35,8 @@ export function WriteWeekButton({ availability, count, inlineActions = false, ex
     if (event.type === "saving") setProgress((p) => ({ ...p, saving: true }));
     if (event.type !== "saving") onProgress?.(event);
   };
-  const step = progress.saving ? "Checking each one against your playbook and saving to Buffer…"
+  // The example shows the same steps as a real run, and says plainly where the real save would happen.
+  const step = progress.saving ? (example ? "Checking each one against your playbook. A real run saves them to Buffer now. The example saves nothing." : "Checking each one against your playbook and saving to Buffer…")
     : !progress.total ? "Reading what you published…"
     : `Writing draft ${Math.min(progress.written + 1, progress.total)} of ${progress.total} in your voice…`;
 

@@ -10,12 +10,18 @@ import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { NETWORKS } from "@/lib/rules";
 import type { ReviewComment, ReviewLink } from "@/lib/review-limits";
 import { LocalTime } from "./local-time";
+import { DEMO_TIME_ZONE } from "@/lib/demo-clock";
 import styles from "./review-ui.module.css";
 import page from "./reviews-view.module.css";
 
 const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
 const WHEN: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" };
 const day = (iso: string) => <LocalTime iso={iso} options={DAY} />;
+/**
+ * The example's dates in its own time zone and the app's "16 Nov" style, the same for every visitor, so the shared
+ * day, the expiry and the comment times always agree with each other and with the example week.
+ */
+const exampleDate = (iso: string, opts: Intl.DateTimeFormatOptions) => <time dateTime={iso}>{new Date(iso).toLocaleString("en-GB", { ...opts, timeZone: DEMO_TIME_ZONE })}</time>;
 
 /** The draft with each commented span marked, so the comment beside it reads in place. */
 function Marked({ text, comments }: { text: string; comments: ReviewComment[] }) {
@@ -46,7 +52,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
     <div className={page.page}>
       <header className={page.head}>
         <h1 className={page.title}>Reviews</h1>
-        <p className={page.sub}>What reviewers said on your drafts. Turn any comment into edits.</p>
+        <p className={page.sub}>{example ? "What reviewers said on your drafts. Signed in, any comment can become edits to the draft." : "What reviewers said on your drafts. Turn any comment into edits."}</p>
         {example && <p className={page.sub}>Alex shared three drafts with Isabel, a client, and Sam, a teammate. They opened the link with no Buffer account and commented on the exact words they meant.</p>}
       </header>
 
@@ -70,8 +76,8 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
               <section key={l.id} className={page.link} aria-label="Review link">
                 <div className={page.linkHead}>
                   <div className={page.linkTitle}>
-                    <h2 className={page.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared `}{day(l.createdAt)}</h2>
-                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : expiresAt ? <>Open until {day(expiresAt)}</> : "Open"}</Badge>
+                    <h2 className={page.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared `}{example ? exampleDate(l.createdAt, DAY) : day(l.createdAt)}</h2>
+                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : expiresAt ? <>Open until {example ? exampleDate(expiresAt, DAY) : day(expiresAt)}</> : "Open"}</Badge>
                     <span className={styles.hint}>{`${l.comments.length} comment${l.comments.length === 1 ? "" : "s"}`}</span>
                   </div>
                   {live && !example && (
@@ -110,7 +116,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                             <div className={page.who}>
                               <span className={page.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>
                               <strong>{c.name}</strong>
-                              <span className={styles.hint}><LocalTime iso={c.createdAt} options={WHEN} relative /></span>
+                              <span className={styles.hint}>{example ? exampleDate(c.createdAt, WHEN) : <LocalTime iso={c.createdAt} options={WHEN} relative />}</span>
                             </div>
                             {c.quote && <q className={page.quote}>{c.quote}</q>}
                             <p className={page.body}>{c.text}</p>

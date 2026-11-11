@@ -18,7 +18,7 @@ import { exampleNeeds } from "@/lib/example-needs";
 const EXAMPLE_READINESS: ReadinessItem[] = [
   { id: "buffer", label: "Buffer connected", state: "done", detail: "3 of 4 channels: LinkedIn, Instagram, X. Threads is disconnected" },
   { id: "source", label: "Your newsletter added", state: "done", detail: "This Week in AI feed" },
-  { id: "voice", label: "Voice picked", state: "done", detail: "5 of Alex's own posts picked as examples" },
+  { id: "voice", label: "Voice picked", state: "done", detail: "3 of Alex's own posts picked as examples" },
   { id: "ai", label: "AI connected", state: "done", detail: "Claude writes the drafts" },
   { id: "rules", label: "First rule kept", state: "todo", detail: "Fix drafts as usual. A fix you repeat becomes a rule", action: "Open playbook", href: "/playbook" },
 ];
@@ -29,7 +29,7 @@ import { slotsToWrite } from "@/lib/write-week";
 import { writingAvailabilityFor } from "@/lib/writing-availability";
 export default async function Page() {
   const { user } = await getCurrentUser();
-  if (!user) return <NeedsYouView needs={exampleNeeds(demoShiftDays())} readiness={EXAMPLE_READINESS} greeting="Good morning, Alex" />;
+  if (!user) return <NeedsYouView needs={exampleNeeds(demoShiftDays())} readiness={EXAMPLE_READINESS} greeting="Hi, Alex" />;
   // Signed in: only facts the Buffer snapshot and the user's saved feeds back.
   const userId = await signedInUserId();
   const [sources, aiApps, voice, approved] = await Promise.all([userId ? postgresSourceStore().list(userId) : [], approvedAiApps(), userId ? postgresVoiceStore().get(userId) : null, userId ? hasApprovedDraft(userId).catch(() => false) : false]);

@@ -17,7 +17,7 @@ const weekDay = (shift: number, day: number) => new Date(Date.parse(DEMO_BASE_ST
 const ideas = (shift: number): Idea[] => [
   { id: "i1", foundBy: "Your newsletter", title: "This Week in AI 41: Terra, Carbon, and 40 agents in Android Studio", why: "Sent Sunday and not posted yet", link: "thisweekinai.example/41", slot: `4 drafts: ${weekDay(shift, 1)} to ${weekDay(shift, 3)}` },
   { id: "i2", foundBy: "Your newsletter", title: "This Week in AI 40: Claude Duet, Kimi K3.1 Pro, DeepSeek 1017", why: "Posted three times; Claude Duet not posted yet", link: "thisweekinai.example/40", slot: `a draft: ${weekDay(shift, 3)}, LinkedIn, 15:00` },
-  { id: "i3", foundBy: "Your YouTube", title: "Video: what NVIDIA's new Vera numbers mean for agents", why: "New video, no open time left this week", link: "youtube.example/thisweekinai" },
+  { id: "i3", foundBy: "Your YouTube", title: "Video: what NVIDIA's new Vera numbers mean for agents", why: "New video. Next week has one empty time left: Friday, LinkedIn, 12:00", link: "youtube.example/thisweekinai" },
 ];
 
 /** Example mode shows what is new in the example feeds; live mode says what works today: the AI reads the user's feeds through the connector. */
