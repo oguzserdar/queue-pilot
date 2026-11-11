@@ -23,6 +23,7 @@ import { approvedApps, removeUnusedApps, renameApp, revokeApp } from "@/lib/ai-a
 import { MAX_LABEL } from "@/lib/ai-app-limits";
 import { getAuth } from "@/lib/auth";
 import { deleteAccount, LastAdminError } from "@/lib/delete-account";
+import { dismissOffer, isOfferKey } from "@/lib/offer-store";
 import { addPastedExample, exampleFromQueue, InvalidVoiceExampleError, MAX_NOTE, postgresVoiceStore, TooManyExamplesError } from "@/lib/voice-store"
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram";
@@ -368,6 +369,16 @@ export async function deleteMyAccount(confirm: string): Promise<SourceActionResu
   for (const { name } of jar.getAll()) {
     if (/^(__Secure-)?better-auth\./.test(name)) jar.set(name, "", { path: "/", maxAge: 0, httpOnly: true, sameSite: "lax", secure: name.startsWith("__Secure-") });
   }
+  return { ok: true };
+}
+
+/** Sets one of Home's offers aside for the signed-in person: "Not now" on the welcome, or × on a connect-your-AI card. */
+export async function setOfferAside(key: unknown): Promise<SourceActionResult> {
+  const userId = await signedInUserId();
+  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (!isOfferKey(key)) return { ok: false, message: "That offer is not one Queue Pilot shows." };
+  await dismissOffer(userId, key);
+  revalidatePath("/");
   return { ok: true };
 }
 

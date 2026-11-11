@@ -31,8 +31,10 @@ const ago = (iso: string) => {
  * check the connection against what Queue Pilot really saw (the Buffer account read from Buffer, and when each AI app
  * last called); then copy a first task that saves nothing. `openApp` opens a chat app's setup steps on the page.
  */
-export function SetupSteps({ origin, account, approved, example, openApp, initialApp = "Claude", guides = {} }: {
+export function SetupSteps({ origin, account, approved, example, openApp, initialApp = "Claude", guides = {}, title = "Finish setting up" }: {
   origin: string;
+  /** The panel's heading; Home's welcome names the step instead of "Finish setting up". */
+  title?: string;
   /** Each chat app's own connection steps, by the name picked here. */
   guides?: Record<string, string[]>;
   account: SetupAccount | null;
@@ -49,7 +51,7 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
   return (
     <section className={styles.setup} aria-labelledby="setup-title">
       <div className={styles.head}>
-        <h2 id="setup-title" className={styles.title}>Finish setting up</h2>
+        <h2 id="setup-title" className={styles.title}>{title}</h2>
         <p className={styles.muted}>No API key: your AI signs in with Buffer through Queue Pilot.</p>
       </div>
       <ol className={styles.steps}>

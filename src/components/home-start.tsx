@@ -15,7 +15,7 @@ import styles from "./home-start.module.css";
  * next week's empty times with the built-in writer. Connecting the person's own AI is offered beside it, never
  * required first.
  */
-export function HomeStart({ hasSource, writing, count }: { hasSource: boolean; writing: WritingAvailability; count: number }) {
+export function HomeStart({ hasSource, writing, count, aiLink = true }: { hasSource: boolean; writing: WritingAvailability; count: number; /** The closing "connect your AI" line; off where a connect-your-AI offer already shows. */ aiLink?: boolean }) {
   const [url, setUrl] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [read, setRead] = useState<string | null>(null);
@@ -50,7 +50,7 @@ export function HomeStart({ hasSource, writing, count }: { hasSource: boolean; w
           {problem && <Alert tone="danger" title="Not added">{problem}</Alert>}
         </>
       )}
-      <p className={styles.muted}>Or have the AI you already use write them: <Link href="/connect">connect your AI</Link>.</p>
+      {aiLink && <p className={styles.muted}>Or have the AI you already use write them: <Link href="/connect">connect your AI</Link>.</p>}
     </section>
   );
 }

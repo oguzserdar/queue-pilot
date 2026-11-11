@@ -5,6 +5,7 @@ export function aiBrand(name: string): string | null {
     "chatgpt.com": "ChatGPT", chatgpt: "ChatGPT", codex: "Codex",
     "grok.com": "Grok", grok: "Grok", "grok web": "Grok", "grok bot desktop": "Grok",
     cursor: "Cursor",
+    mcp: "MCP", "any other mcp app": "MCP",
   };
   return brands[name.trim().toLowerCase()] ?? null;
 }

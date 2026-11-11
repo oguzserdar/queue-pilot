@@ -17,7 +17,7 @@ export type NeedItem = { id: string; tone: "warning" | "danger" | "success"; tit
 export type ReadinessItem = { id: string; label: string; state: "done" | "todo" | "check"; detail: string; action?: string; href?: string };
 
 /** Home: what needs the user right now, and until setup is complete, the readiness checklist. */
-export function NeedsYouView({ needs, readiness, greeting, triage, live = false, start }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string; triage?: TriageItem[]; live?: boolean; /** The first-drafts panel, shown above everything until Queue Pilot has written a draft. */ start?: ReactNode }) {
+export function NeedsYouView({ needs, readiness, greeting, triage, live = false, start, welcome = false }: { needs: NeedItem[]; readiness: ReadinessItem[]; greeting: string; triage?: TriageItem[]; live?: boolean; /** The first-drafts panel, shown above everything until Queue Pilot has written a draft. */ start?: ReactNode; /** `start` is the first-visit welcome: it is the page's one setup prompt, so the setup count and strip step back. */ welcome?: boolean }) {
   // Empty times are room to fill, not something waiting on the person, so they are left out of the count.
   const open = triage ? triage.filter((t) => t.kind !== "empty") : needs.filter((n) => n.tone !== "success");
   // The list reports what is left as rows are approved, so the title counts down with it.
@@ -33,14 +33,14 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false,
     <div className={styles.page}>
       <header className={styles.head}>
         <p className={styles.greet}>{greeting}</p>
-        <h1 className={styles.title}>{settingUp ? "Set up Queue Pilot" : left === 0 ? "All caught up." : <><RollingNumber value={left} />{` thing${left === 1 ? "" : "s"} need${left === 1 ? "s" : ""} you.`}</>}</h1>
-        {settingUp && <p className={styles.lede}>{done} of {readiness.length} done. Each step takes about a minute, and then your AI fills your week in Buffer.</p>}
+        <h1 className={styles.title}>{settingUp && welcome ? "Welcome to Queue Pilot" : settingUp ? "Set up Queue Pilot" : left === 0 ? "All caught up." : <><RollingNumber value={left} />{` thing${left === 1 ? "" : "s"} need${left === 1 ? "s" : ""} you.`}</>}</h1>
+        {settingUp && !welcome && <p className={styles.lede}>{done} of {readiness.length} done. Each step takes about a minute, and then your AI fills your week in Buffer.</p>}
       </header>
 
       {start}
 
       {/* While setup is unfinished it stays at the top as one line with the next step; the full list opens from it. */}
-      {triage && !ready && !settingUp && next && (
+      {triage && !ready && !settingUp && !welcome && next && (
         <details className={styles.setupStrip}>
           <summary>
             <span className={styles.stripText}><strong>Finish setting up</strong><span className={styles.muted}>{done} of {readiness.length} done · Next: {next.label}</span></span>

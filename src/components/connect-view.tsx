@@ -86,14 +86,19 @@ const AIS: AiSetup[] = [
   },
 ];
 
+/** Each chat app's own connection steps, by the name the app picker uses ("Grok" for Grok web). */
+export const CHAT_GUIDES: Record<string, string[]> = Object.fromEntries(AIS.map((a) => [a.name === "Grok web" ? "Grok" : a.name, a.steps]));
+/** The chat apps whose setup steps can be opened from another page with `/connect?setup=<name>`. */
+const OPENABLE = new Set(Object.keys(CHAT_GUIDES).filter((n) => n !== "Grok Bot desktop"));
+
 /**
  * Connect: how to add Queue Pilot to each AI the person already pays for. The address is this deployment's connector.
  * `approved` lists the AI apps the person approved, with when each last called the connector, so "connected" here
  * always means the app really reached Queue Pilot.
  */
-export function ConnectView({ connectorUrl, example = false, approved = null, account = null }: { connectorUrl: string; example?: boolean; approved?: ApprovedApp[] | null; account?: SetupAccount | null }) {
+export function ConnectView({ connectorUrl, example = false, approved = null, account = null, setup }: { connectorUrl: string; example?: boolean; approved?: ApprovedApp[] | null; account?: SetupAccount | null; /** A chat app whose steps open on arrival, from `?setup=`. */ setup?: string }) {
   // Which app's setup is open in the modal; the page itself only lists the apps.
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(setup && OPENABLE.has(setup) ? setup : null);
   const [grokSurface, setGrokSurface] = useState("Grok web");
   const connected = !example && !!approved?.length;
   const current = AIS.find((x) => x.name === (open === "Grok" ? grokSurface : open));
@@ -117,7 +122,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
       {connected ? (
         <details className={styles.another}>
           <summary className={styles.anotherSummary}>Add another AI</summary>
-      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={Object.fromEntries(AIS.map((a) => [a.name === "Grok web" ? "Grok" : a.name, a.steps]))}
+      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={CHAT_GUIDES}
         openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
 
       <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
@@ -141,7 +146,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
       </ul>
         </details>
       ) : <>
-      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={Object.fromEntries(AIS.map((a) => [a.name === "Grok web" ? "Grok" : a.name, a.steps]))}
+      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={CHAT_GUIDES}
         openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
 
       <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
