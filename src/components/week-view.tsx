@@ -255,7 +255,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
               </div>
               <p className={styles.postText}>{current.text}</p>
               {(live || tagsPreview?.[current.id]) && <DraftTags key={`tags-${current.id}`} postId={current.id} preview={tagsPreview?.[current.id]} />}
-              {current.createdAt && <p className={styles.muted}>{createdLine(current.createdAt, current.createdBy ?? null)}</p>}
+              {current.createdAt && <CreatedLine iso={current.createdAt} by={current.createdBy ?? null} className={styles.muted} />}
             </>
           )}
           {editing !== null && (
@@ -534,4 +534,14 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
       {draftWindow}
     </div>
   );
+}
+
+/**
+ * "Created 2 days ago by Alex Rivera", counted in the reader's own time zone. The server can't know that zone (and the
+ * page may be cached), so the line is filled in after load, like LocalTime, instead of rendering a day that may differ.
+ */
+function CreatedLine({ iso, by, className }: { iso: string; by: string | null; className: string }) {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => setText(createdLine(iso, by)), [iso, by]);
+  return <p className={className}>{text ?? "\u00a0"}</p>;
 }
