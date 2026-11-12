@@ -83,7 +83,8 @@ export function NeedsYouView({ needs, readiness, greeting, triage, live = false,
       </ul>
       )}
 
-      {!ready && !(triage && !settingUp) && (
+      {/* On a first visit the welcome is the whole page; its own choice leads to setup. */}
+      {!ready && !welcome && !(triage && !settingUp) && (
         <section className={styles.ready} aria-labelledby="ready-title">
           <div className={styles.readyHead}>
             <h2 id="ready-title" className={settingUp ? "sr-only" : styles.h2}>Finish setting up</h2>
