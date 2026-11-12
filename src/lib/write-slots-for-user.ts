@@ -129,7 +129,12 @@ export async function writeSlotsForUser(loadBuffer: () => Promise<WriteBuffer | 
       // The playbook check is part of this one action, so it judges with the same AI instead of taking another.
       save: async (drafts, sourceKeys) => {
         if (live) { await live.store.startCall(b.userId, live.runId, drafts.map(d => d.slotId)); live.onSaving?.(); }
-        const result = await saveDraftsForUser(b.userId, b.token, { title: "Written by Queue Pilot", drafts, open: slots, sourceKeys }, { ...ai, judges: { decider: ai.decider, explainer: ai.language } });
+        // Writing takes minutes, and another run (a second click, or an AI app) may have filled a time meanwhile, so
+        // the times are read again here and only those still empty are offered to the save.
+        const fresh = await loadBuffer().catch(() => null);
+        const stillOpen = fresh ? new Set(openSlots(fresh.channels, fresh.posts, fresh.range).slots.map((s) => s.id)) : null;
+        const open = stillOpen ? slots.filter((s) => stillOpen.has(s.id)) : slots;
+        const result = await saveDraftsForUser(b.userId, b.token, { title: "Written by Queue Pilot", drafts, open, sourceKeys }, { ...ai, judges: { decider: ai.decider, explainer: ai.language } });
         if (live) await live.store.finish(b.userId, live.runId, { saved: result.saved.map(x => ({ slotId: x.slotId, postId: x.postId })), refused: result.refused });
         const invalid = [...invalidSources].map(([slotId, reason]) => ({ slotId, reason }));
         invalidSources.clear();

@@ -1,8 +1,8 @@
 import { describe, beforeEach, afterEach, expect, it, vi } from "vitest";
 import type { Brief, BriefMaterial } from "./ai-writer";
-const m = vi.hoisted(() => ({ material: [] as BriefMaterial[], transcript: vi.fn(), capture: vi.fn(), write: vi.fn(), stream: vi.fn(), shorten: vi.fn(), save: vi.fn(), giveBack: vi.fn(), settle: vi.fn() }));
+const m = vi.hoisted(() => ({ openIds: ["a", "b"], material: [] as BriefMaterial[], transcript: vi.fn(), capture: vi.fn(), write: vi.fn(), stream: vi.fn(), shorten: vi.fn(), save: vi.fn(), giveBack: vi.fn(), settle: vi.fn() }));
 vi.mock("./new-material", () => ({ newMaterial: async () => m.material }));
-vi.mock("./open-slots", () => ({ openSlots: () => ({ slots: ["a", "b"].map(id => ({ id, at: "2026-11-02T09:00:00Z", channelId: "ch", service: "twitter", channel: "Personal", local: "Mon 9:00" })) }) }));
+vi.mock("./open-slots", () => ({ openSlots: () => ({ slots: m.openIds.map(id => ({ id, at: "2026-11-02T09:00:00Z", channelId: "ch", service: "twitter", channel: "Personal", local: "Mon 9:00" })) }) }));
 vi.mock("./transcript-for-user", () => ({ transcriptForUser: m.transcript }));
 vi.mock("./source-store", () => ({ captureSource: m.capture }));
 vi.mock("./ai-writer", () => ({ writeDrafts: m.write, streamDrafts: m.stream, shortenDraft: m.shorten }));
@@ -14,6 +14,7 @@ const { writeSlotsForUser } = await import("./write-slots-for-user");
 const load = async () => ({ userId: "u", token: "t", channels: [], posts: [], timeZone: "UTC", range: { start: new Date(), end: new Date() } });
 beforeEach(() => {
  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-11-01T12:00:00Z")); vi.resetAllMocks();
+ m.openIds = ["a", "b"];
  m.material = [{ key: "video", title: "Video", url: "https://youtube.com/watch?v=abcdefghijk", text: "Video description." }];
  m.capture.mockResolvedValue({ id: "snap" }); m.transcript.mockResolvedValue({ status: "not-configured" });
  m.write.mockImplementation(async (_model, b: Brief) => b.slots.map(s => ({ slotId: s.id, text: "Draft", sourceKey: b.material[0].key })));
@@ -120,4 +121,12 @@ describe("a live run", () => {
   expect(r).toMatchObject({ ok: true, refused: [] });
   expect(JSON.stringify(r)).not.toMatch(/Too long/);
  });
+});
+
+it("saves only into times still empty when the drafts are done, so a second run cannot double-book a time", async () => {
+ // Another run saved into "a" while this one was writing.
+ m.write.mockImplementation(async (_model, b: Brief) => { m.openIds = ["b"]; return b.slots.map(s => ({ slotId: s.id, text: "Draft", sourceKey: b.material[0].key })); });
+ await writeSlotsForUser(load);
+ const open = (m.save.mock.calls[0][2] as { open: { id: string }[] }).open.map(s => s.id);
+ expect(open).toEqual(["b"]);
 });
