@@ -70,7 +70,7 @@ const issue40 = (shift: number): Source => ({ kind: "newsletter", label: "This W
 
 const draftsAndPosts = (shift: number): Post[] => [
   { id: "p1", channel: "x", day: 0, time: "9:00", status: "scheduled", text: "Issue 41 is out: GPT-6.1 Terra, Gemini 4 Carbon, and coding agents in Android Studio." },
-  { id: "p2", channel: "instagram", day: 4, time: "10:00", status: "scheduled", text: "Friday reading, part two." },
+  { id: "p2", channel: "instagram", day: 4, time: "10:00", status: "scheduled", text: "Sunday reading, part two." },
   {
     id: "d1", channel: "linkedin", day: 1, time: "12:00", status: "draft", source: issue41(shift),
     text: "Gemini 4 Carbon ranks #1 on the Artificial Analysis Intelligence Index, at 59. For now only a subset of cyber defenders can use it. I want to see it on real repos before I switch. More in This Week in AI 41.",

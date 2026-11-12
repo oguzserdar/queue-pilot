@@ -89,7 +89,7 @@ export function DraftTags({ postId, preview }: { postId: string; preview?: Loade
             </PopoverTrigger>
             <PopoverContent className={styles.panel} onOpenAutoFocus={(e) => { e.preventDefault(); search.current?.focus(); }}>
               <input ref={search} className={styles.search} placeholder="Search tags" aria-label="Search tags" value={query} maxLength={100}
-                onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); if (shown.length === 1 && exact) toggle(shown[0]); else void create(); } }} />
+                onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (shown.length === 1 && exact) toggle(shown[0]); else void create(); } }} />
               {state.all.length === 0 && !q ? (
                 <div className={styles.empty}>
                   <span className={styles.emptyIcon} aria-hidden="true"><Tag size={18} strokeWidth={1.6} /></span>

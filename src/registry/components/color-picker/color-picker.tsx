@@ -479,7 +479,7 @@ export function ColorPicker({
                 aria-invalid={invalid || undefined} aria-describedby={invalid ? `${uid}-error` : undefined} data-morphing={morph ? "" : undefined}
                 onChange={event => { setDraft(event.target.value); setInvalid(false); }}
                 onKeyDown={event => {
-                  if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); if (submitDraft()) event.currentTarget.select(); }
+                  if (event.key === "Enter") { event.preventDefault(); if (submitDraft()) event.currentTarget.select(); }
                   if (event.key === "Escape" && draft !== null) { event.stopPropagation(); event.nativeEvent.stopImmediatePropagation(); setDraft(null); setInvalid(false); }
                 }}
                 onBlur={() => { if (!submitDraft()) { setDraft(null); setInvalid(false); } }} />

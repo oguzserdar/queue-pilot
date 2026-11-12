@@ -16,7 +16,7 @@
 .channel { padding: var(--space-3); border-bottom: 1px solid var(--border-subtle); display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
 .chip svg { flex: none; }
-.zone { font-size: var(--text-xs); color: var(--text-muted); }
+.zone { font-size: var(--text-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .cell { padding: 6px; border-bottom: 1px solid var(--border-subtle); box-shadow: inset 1px 0 0 var(--border-subtle); display: flex; flex-direction: column; gap: 6px; min-height: 112px; }
 
 .empty { all: unset; box-sizing: border-box; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; border: 1px dashed var(--border-control); border-radius: 8px; color: var(--text-muted); font-size: var(--text-xs); padding: 8px; transition: border-color 160ms var(--ease-standard), color 160ms var(--ease-standard), transform 160ms var(--ease-standard); }
@@ -44,7 +44,7 @@
 .draft[data-tone="danger"] .state { color: var(--danger); }
 .draft[data-approved="true"] .state { color: var(--success); }
 .text { color: var(--foreground); font-size: var(--text-sm); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.src { display: block; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); align-self: flex-start; }
+.src { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); align-self: flex-start; }
 
 /* The draft opens over the week in a dialog wide enough for the post beside its rules and checks. */
 .dialog { --dialog-width: 1080px; }
@@ -111,9 +111,7 @@
 .connect > svg { flex-shrink: 0; margin-left: 4px; }
 
 /* The "would fail" button and its list: one red dot says what kind of news it is, the list says which posts. */
-/* A warning, not an action: a tinted status chip at the far end of the row, so the buttons never move. */
-.issues { gap: 8px; order: 1; margin-left: auto; color: var(--danger); background: color-mix(in oklab, var(--danger) 9%, transparent); border-radius: 999px; font-weight: 600; }
-@media (hover: hover) and (pointer: fine) { .issues:hover { background: color-mix(in oklab, var(--danger) 14%, transparent); color: var(--danger); } }
+.issues { gap: 8px; }
 .issueDot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex: none; }
 .issueList { width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: var(--space-3); }
 .issue { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: var(--text-sm); line-height: 1.45; color: var(--text-secondary); }
@@ -121,11 +119,8 @@
 .issue + .issue { padding-top: var(--space-3); border-top: 1px solid var(--border); }
 
 /* Share for review dialog. */
-/* The share dialog fills the dialog's body; only the list scrolls, so the expiry and the buttons stay in view on a short window. */
-.shareBody { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
-.shareBody > * { flex: none; }
-.shareBody > .shareList { flex: 0 1 auto; min-height: 96px; max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
-.shareList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.shareBody { display: flex; flex-direction: column; gap: 12px; }
+.shareList { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; max-height: min(50dvh, 420px); overflow-y: auto; }
 .shareRow { display: flex; align-items: center; gap: var(--space-3); min-height: 30px; }
 /* The expiry label and its choice share one row, so the dialog fits a laptop screen. */
 .shareExpiry { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
@@ -157,9 +152,8 @@
 .ruleSummary { display: flex; flex-direction: column; gap: 10px; }
 .passIcon { color: var(--success, #2f7d4f); flex: none; }
 .viewRules { margin-left: auto; color: var(--qp-crimson); font-size: var(--text-xs); }
-/* The dialog body scrolls and has padding; a sticky box stops at its content edge, so the bar reaches past the padding to sit flush. */
-.footer { position: sticky; bottom: calc(-1 * var(--space-6)); display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin: var(--space-6) calc(-1 * var(--space-6)) calc(-1 * var(--space-6)); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border); background: var(--surface-raised); }
-.footNote { color: var(--text-muted); font-size: var(--text-xs); margin: 0; max-width: 52ch; text-wrap: pretty; }
+.footer { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin: var(--space-6) calc(-1 * var(--space-6)) calc(-1 * var(--space-6)); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border); background: var(--surface-raised); }
+.footNote { color: var(--text-muted); font-size: var(--text-xs); margin: 0; max-width: 52ch; }
 /* The plain saved state reads at the buttons' size, with a mark, so the bar's left side is a status, not a stray caption. */
 .footState { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
 .footState svg { color: var(--success, currentColor); flex: none; }

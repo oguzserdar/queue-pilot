@@ -48,7 +48,7 @@ export function needsFromBuffer(channels: Channel[], posts: Post[], now: Date, t
     const open = countOpenSlots(week);
     items.push(open === 0
       ? { id: "filled", tone: "success", title: `Next week: all ${plural(total, "slot")} have a post or draft`, detail: week.label, action: "Open week", href: "/week" }
-      : { id: "open", tone: "warning", title: `${plural(open, "empty time")} next week`, detail: `${total - open} of ${total} filled · ${week.label}`, action: "Write one", href: "/week?new=1" });
+      : { id: "open", tone: "warning", title: `${plural(open, "empty slot")} next week`, detail: `${total - open} of ${total} filled · ${week.label}`, action: "Write one", href: "/week?new=1" });
   }
   return items;
 }

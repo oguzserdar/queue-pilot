@@ -11,7 +11,7 @@ import { publicOrigin } from "@/lib/origin";
 import { limit } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
-  const back = (result: string) => NextResponse.redirect(`${publicOrigin(req.headers)}/settings?tab=channels&discord=${result}`, 303);
+  const back = (result: string) => NextResponse.redirect(`${publicOrigin(req.headers)}/sources?discord=${result}`, 303);
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state") ?? "";
   const { discord_client_id: clientId, discord_client_secret: clientSecret, discord_bot_token: botToken } = await operatorSettings(["discord_client_id", "discord_client_secret", "discord_bot_token"]);

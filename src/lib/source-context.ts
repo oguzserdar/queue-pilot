@@ -5,7 +5,7 @@ import { normalizeSource, verifyEvidence } from "./source-evidence";
 export class SourceContextError extends Error {}
 
 export type ContextSource = { text: string; segments?: { text: string; seconds: number }[] };
-const Passages = z.object({ passages: z.array(z.object({ quote: z.string().min(1), locator: z.string().regex(/^(t=\d+)?$/).optional() })) }); // "" means no timestamp
+const Passages = z.object({ passages: z.array(z.object({ quote: z.string().min(1), locator: z.string().regex(/^t=\d+$/).optional() })) });
 
 /** Split only after the selected provider actually rejects an input's context size.
  * These are processing sections, never a saved-source or episode-duration limit.

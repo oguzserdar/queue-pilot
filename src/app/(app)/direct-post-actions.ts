@@ -5,8 +5,6 @@
  * place, resending a place Telegram or Discord refused, and the recent results. The Discord channel is checked on the
  * server against the bot's real permissions every time, never taken from the browser on trust.
  */
-import { directPostPage } from "@/lib/direct-post-store";
-import type { Page, PageFrom } from "@/lib/page-bookmark";
 import { revalidatePath } from "next/cache";
 import { signedInUserId } from "@/lib/current-user";
 import { postgresEchoStore } from "@/lib/echo-store";
@@ -145,7 +143,6 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
     const scheduled = await scheduleDirectPost(userId, input.key, items, sendAt, deps);
     const note = await startTimerOrNote(scheduled.postId, scheduled.revision, sendAt);
     revalidatePath("/sources");
-  revalidatePath("/settings");
     return { ok: true, results: scheduled.results, note };
   }
   const { results } = await sendDirectPost(userId, input.key, items, deps);
@@ -153,7 +150,6 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
     await recordAction(userId, "direct_post_sent", { via: "app" }, { name: results.filter((r) => r.status !== "failed").map((r) => (r.kind === "telegram" ? "Telegram" : "Discord")).join(" and ") });
   }
   revalidatePath("/sources");
-  revalidatePath("/settings");
   return { ok: true, results };
 }
 
@@ -168,7 +164,6 @@ export async function resendPostAction(postId: string, kind: PostKind): Promise<
   const r = await resendFailed(userId, postId, kind, directPostDeps(() => Promise.resolve(tokens)));
   if (!r) return { ok: false, message: "Only a message Telegram or Discord refused can be sent again. A follow-up is changed on its Buffer draft." };
   revalidatePath("/sources");
-  revalidatePath("/settings");
   return { ok: true, results: [r] };
 }
 
@@ -201,7 +196,6 @@ export async function changeScheduledPostAction(postId: string, change: ChangeSc
   const rows = await postgresDirectPostStore().reschedule(userId, postId, { sendAt, texts }, new Date());
   if (!rows.length) return { ok: false, message: "It already went out or was cancelled, so it cannot be changed." };
   revalidatePath("/sources");
-  revalidatePath("/settings");
   return { ok: true, note: await startTimerOrNote(postId, Math.max(...rows.map((r) => r.revision)), rows[0].sendAt!) };
 }
 
@@ -213,20 +207,18 @@ export async function cancelScheduledPostAction(postId: string): Promise<ActionR
   if (await followsBuffer(userId, postId)) return { ok: false, message: "This one follows a Buffer post. Turn it off on that draft in Next week." };
   const n = await postgresDirectPostStore().cancel(userId, postId, new Date());
   revalidatePath("/sources");
-  revalidatePath("/settings");
   return n ? { ok: true } : { ok: false, message: "It already went out or was cancelled." };
 }
 
-/** The person's post results, newest first, one page at a time, with bookmarks for the pages either side. */
-export async function recentDirectPosts(from: PageFrom = {}): Promise<Page<DirectPostView>> {
+/** The person's recent post results, newest first. */
+export async function recentDirectPosts(): Promise<DirectPostView[]> {
   const userId = await signedInUserId();
-  if (!userId) return { rows: [], older: null, newer: null };
+  if (!userId) return [];
   const now = new Date();
-  const page = await directPostPage(userId, from);
-  return { ...page, rows: page.rows.map((r) => ({
+  return (await postgresDirectPostStore().recent(userId, 12)).map((r) => ({
     postId: r.postId, kind: r.kind, label: r.label, text: r.text, status: shownStatus(r, now), link: r.link, error: r.error, at: r.createdAt.toISOString(),
     sendAt: r.sendAt?.toISOString() ?? null, late: sentLate(r), followsBuffer: !!r.bufferPostId,
-  })) };
+  }));
 }
 
 /** One place of a draft's follow-up, as the draft dialog shows it. */

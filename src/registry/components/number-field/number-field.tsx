@@ -392,7 +392,7 @@ export function NumberField({ label, value, defaultValue = 0, onValueChange, min
     if (move) { event.preventDefault(); if (!event.repeat) startHold(move[0], move[1], "key"); return; }
     // Home and End reach the limits; while a draft is open they move the caret as in any text field.
     if (!editing && ((event.key === "Home" && Number.isFinite(min)) || (event.key === "End" && max < Number.MAX_SAFE_INTEGER))) { event.preventDefault(); commitValue(event.key === "Home" ? min : max, "key"); return; }
-    if (!event.nativeEvent.isComposing && event.key === "Enter") { event.preventDefault(); if (editing) { selectNext.current = true; commitDraft(); } else event.currentTarget.select(); }
+    if (event.key === "Enter") { event.preventDefault(); if (editing) { selectNext.current = true; commitDraft(); } else event.currentTarget.select(); }
     if (event.key === "Escape" && editing) { event.preventDefault(); captureShift(); setEditing(false); clearUnder(); selectNext.current = true; commitValue(editStart.current, "type"); }
   }
   function onChange(text: string) {

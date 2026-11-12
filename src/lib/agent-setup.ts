@@ -92,34 +92,3 @@ Sign in with Buffer from your agent's MCP settings, then ask it to fill your wee
 \`\`\`
 `;
 }
-
-/**
- * Everything one paste gives a chat AI to get the person started: how to connect Queue Pilot in that app (followed
- * one step at a time, only when its tools are missing), a first preview that saves nothing, and Queue Pilot's own
- * fill-week instructions, so an app that cannot install skills still writes the Queue Pilot way.
- *
- * @param app - The app's name as the person picked it, for example "ChatGPT"
- * @param connectorUrl - This deployment's MCP address
- * @param steps - That app's own connection steps, as the Connect page lists them
- * @param skill - The fill-week SKILL.md text
- * @returns The text to paste into the app
- */
-export function chatHandoff(app: string, connectorUrl: string, steps: string[], skill: string): string {
-  const body = skill.replace(/^---[\s\S]*?---\s*/, "").trim();
-  const how = steps.map((s, i) => `   ${i + 1}. ${s.replace(/the URL above/g, "Queue Pilot's address")}.`).join("\n");
-  return `I want to use Queue Pilot with you. Queue Pilot connects you to my Buffer account, so you can write my social posts from what I publish and save them in Buffer as drafts for me to approve. Please guide me through it, one step at a time, in plain words.
-
-1. Check whether you can use Queue Pilot's tools here, for example get_setup_status. If you can, go to step 3.
-2. If you cannot, help me add Queue Pilot to ${app}. If Queue Pilot is already in my connectors but asks me to sign in again (it shows Reconnect), I press Reconnect, then Allow, and we go to step 3. Otherwise give me one step, wait until I say it is done, then give the next:
-${how}
-   Queue Pilot's address: ${connectorUrl}
-   There is no API key. I sign in with my Buffer account, and Queue Pilot shows me what you will be allowed to do before I allow it.
-   When I am done, I will start a new chat and paste this message again.
-3. Call get_setup_status and tell me in two or three plain sentences what is set up and what is still missing.
-4. Then show me one preview post for my next empty time, written from my newest post. Show it here only. Do not save, schedule or publish anything.
-
-When I later ask you to fill my week, follow Queue Pilot's own instructions below.
-
-${body}
-`;
-}

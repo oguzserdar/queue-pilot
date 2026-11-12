@@ -9,7 +9,7 @@ import { TimerRing } from "./timer-ring";
 
 const STEPS = [
   { title: "Your empty times", text: "Queue Pilot reads your Buffer week and finds the times with no post." },
-  { title: "Drafts from your own work", text: "Your AI writes a post for each empty time from what you shipped, wrote or said: on your blog, in your newsletter and releases, or on X." },
+  { title: "Drafts from what you published", text: "Your AI writes a post for each empty time from your newsletter, blog or videos." },
   { title: "Every draft is checked", text: "Against your rules, the quotes in your source, and what Buffer accepts." },
   { title: "Problems are caught first", text: "A post that would fail, here a disconnected Threads channel, is held back with the reason." },
   { title: "You approve, Buffer schedules", text: "Approve one draft or every ready one at once. Approve is what schedules them." },

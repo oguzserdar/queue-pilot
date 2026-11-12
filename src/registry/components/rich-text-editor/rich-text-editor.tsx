@@ -1236,7 +1236,7 @@ export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorPro
         setSlashActive((slashIndex + (event.key === "ArrowDown" ? 1 : -1) + slashResults.length) % slashResults.length);
         return;
       }
-      if (!event.nativeEvent.isComposing && event.key === "Enter" || event.key === "Tab") { event.preventDefault(); chooseSlash(slashResults[slashIndex]); return; }
+      if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); chooseSlash(slashResults[slashIndex]); return; }
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setSlash(null); return; }
     }
     if (mod && key === "z") { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }

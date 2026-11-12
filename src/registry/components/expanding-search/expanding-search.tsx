@@ -275,7 +275,7 @@ export function ExpandingSearch({ label, items, suggestions = [], suggestionsLab
       const step = event.key === "ArrowDown" ? 1 : -1;
       keyboard.current = true;
       setActive(activeIndex < 0 ? (step > 0 ? 0 : flat.length - 1) : (activeIndex + step + flat.length) % flat.length);
-    } else if (!event.nativeEvent.isComposing && event.key === "Enter" && activeItem) {
+    } else if (event.key === "Enter" && activeItem) {
       event.preventDefault();
       choose(activeItem);
     }

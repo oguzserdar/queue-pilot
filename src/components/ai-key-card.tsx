@@ -95,7 +95,7 @@ export function AiKeyCard({ shown, allowance, notice }: { shown: ShownAiKey | un
             });
           }}
         >
-          <PasswordField id="ai-key-input" label="Anthropic (sk-ant-…), OpenAI (sk-…) or OpenRouter (sk-or-…) key" autoComplete="off" spellCheck={false} value={value} onChange={(e) => { setValue(e.target.value); setKeyError(null); }} placeholder="sk-…" error={keyError ?? undefined} description={saved ? "Saved. Press Fill next week on Next week." : undefined} />
+          <PasswordField id="ai-key-input" label="Anthropic (sk-ant-…), OpenAI (sk-…) or OpenRouter (sk-or-…) key" autoComplete="off" spellCheck={false} value={value} onChange={(e) => { setValue(e.target.value); setKeyError(null); }} placeholder="sk-…" error={keyError ?? undefined} description={saved ? "Saved. Use Write drafts with my AI on Next week." : undefined} />
           <div className={styles.deleteActions}>
             <Button type="submit" variant="primary" size="sm" disabled={pending || (!value.trim() && !saved)}>{pending ? "Saving…" : saved ? "✓ Saved" : "Save key"}</Button>
             <a className={styles.muted} href="/api/openrouter/start">Or connect your OpenRouter account</a>

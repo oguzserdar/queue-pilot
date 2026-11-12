@@ -50,21 +50,9 @@ export function appliesTo(rule: RuleRouting, network: string, accountId?: string
   return resolveRule(rule, network, accountId).applies;
 }
 
-/**
- * Where a rule applies, in plain words: "every network", "every network except X", the networks it names, or the
- * accounts it is limited to.
- *
- * @param rule - The rule's routing
- * @param accounts - Account names by account id, when known; an account not in it is counted, not named
- * @returns The scope as one short phrase
- */
-export function ruleScope(rule: RuleRouting, accounts?: ReadonlyMap<string, string>): string {
-  if (rule.accountIds?.length) {
-    const named = rule.accountIds.flatMap((id) => accounts?.get(id) ?? []);
-    const others = rule.accountIds.length - named.length;
-    const rest = others ? [`${others} ${named.length ? "other " : ""}selected account${others === 1 ? "" : "s"}`] : [];
-    return [...named, ...rest].join(", ");
-  }
+/** Where a rule applies, in plain words: "every network", "every network except X", or the networks it names. */
+export function ruleScope(rule: RuleRouting): string {
+  if (rule.accountIds?.length) return `${rule.accountIds.length} selected account${rule.accountIds.length === 1 ? "" : "s"}`;
   if (rule.channels !== "all") return rule.channels.map((c) => NETWORKS[c] ?? c).join(", ");
   const off = (rule.except ?? []).map((c) => NETWORKS[c] ?? c);
   return off.length ? `every network except ${off.join(", ")}` : "every network";
@@ -76,9 +64,7 @@ export function ruleHold(rule: Rule): "Blocks drafts" | "Flags drafts" {
 }
 
 const MAX_PHRASE = 120;
-/** The most characters one rule in the person's own words may hold; the rule form says so when the text reaches it. */
-export const MAX_RULE_TEXT = 200;
-const MAX_TEXT = MAX_RULE_TEXT;
+const MAX_TEXT = 200;
 
 /**
  * A stored or read rule as parseNewRule's input, so a rule can be checked again and come back unchanged: a banned rule

@@ -4,9 +4,6 @@
  */
 import type { EvidenceCard } from "./source-presentation";
 
-/** What to do after editing a draft whose quotes were checked against the old words. Kept here, with no server imports, so the draft window can show it. */
-export const EDITED_DRAFT_LINE = "You edited this draft. Check it again before approving.";
-
 /** One source and the quotes a draft takes from it. */
 export type SourceGroup = {
   key: string;
@@ -48,35 +45,20 @@ export function groupBySource(cards: EvidenceCard[]): SourceGroup[] {
 }
 
 /**
- * Real problems with a quote: its words are missing from the source, the source changed, or a check found the draft no
- * longer matches it. An edited draft that only waits for a fresh check is not a problem with any one quote; the draft
- * window says that once, above its sources.
+ * Every warning about a quote, in plain words: one list decides both what the draft window shows and which quotes stay
+ * open, so a warning can never sit inside a folded quote.
  */
-export function quoteProblems(c: EvidenceCard): string[] {
+export function quoteWarnings(c: EvidenceCard): string[] {
   return [
     !c.quote && "Quote not found in the saved source",
     c.changed && "The source changed after this draft was written",
-    c.needsCheck && !c.changed && !c.edited && "Check this draft against the current source",
-  ].filter((x): x is string => Boolean(x));
-}
-
-/** Notes about how a quote was read, worth knowing but not a fault: part of the source, a description, captions. */
-export function quoteNotes(c: EvidenceCard): string[] {
-  return [
+    c.needsCheck && !c.changed && "Check this draft against the current source",
     c.truncated && "Only part of the source was read",
     c.kind === "video-description" && "Video description only",
     c.captions === "auto" && "Auto captions: check names",
     c.captions === "unknown" && "Caption type unknown: check names",
     c.paidPreview && "Paid preview only",
   ].filter((x): x is string => Boolean(x));
-}
-
-/**
- * Every warning about a quote, in plain words, problems first: one list decides both what the draft window shows and
- * which quotes stay open, so a warning can never sit inside a folded quote.
- */
-export function quoteWarnings(c: EvidenceCard): string[] {
-  return [...quoteProblems(c), ...quoteNotes(c)];
 }
 
 /** Whether a quote has any warning, so it must stay open. */

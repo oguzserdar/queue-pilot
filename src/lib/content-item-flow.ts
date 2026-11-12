@@ -13,7 +13,7 @@ import {
 import { checkText, type TextCheck } from "./check-text";
 import { textLimits } from "./buffer/workspace";
 import { BufferApiError } from "./buffer/client";
-import { evidenceProblem, NO_SOURCE_REASON, type EvidenceInput } from "./source-evidence";
+import { evidenceProblem, type EvidenceInput } from "./source-evidence";
 import { recordEvidence, sourceById } from "./source-store";
 import { limit } from "./rate-limit";
 import { postgresWrittenStore, wroteIds } from "./written-store";
@@ -173,11 +173,8 @@ export function contentItemFlow(userId: string) {
     }
   }
 
-  /**
-   * Turns a channel-less draft into one checked Buffer draft per account. `byHand` is true when the person typed the
-   * versions themselves in the app: a version with no source is then expected and is not remarked on.
-   */
-  async function promote(b: ItemBuffer, { contentItemId, expectedDraftText, versions, byHand }: { contentItemId: string; expectedDraftText: string; versions: Version[]; byHand?: boolean }): Promise<FlowAnswer> {
+  /** Turns a channel-less draft into one checked Buffer draft per account. */
+  async function promote(b: ItemBuffer, { contentItemId, expectedDraftText, versions }: { contentItemId: string; expectedDraftText: string; versions: Version[] }): Promise<FlowAnswer> {
     const item = await ownItem(b, contentItemId);
     if (!item) return notFound;
     const ids = versions.map((v) => v.channelId);
@@ -188,11 +185,7 @@ export function contentItemFlow(userId: string) {
     // Every quoted source must be the person's own before anything is checked or written.
     const evidenceNotes: string[] = [];
     for (const [i, v] of versions.entries()) {
-      if (!v.snapshotId) {
-        if (v.evidence?.length) return result(`${channels[i]!.name}: evidence needs the snapshotId of the source it quotes.`, true);
-        if (!byHand) evidenceNotes.push(`${channels[i]!.name}: ${NO_SOURCE_REASON}`);
-        continue;
-      }
+      if (!v.snapshotId) { if (v.evidence?.length) return result(`${channels[i]!.name}: evidence needs the snapshotId of the source it quotes.`, true); continue; }
       const snapshot = await sourceById(userId, v.snapshotId);
       if (!snapshot) return result(`${channels[i]!.name}: that source is not in this account.`, true);
       if (!v.evidence?.length) evidenceNotes.push(`${channels[i]!.name}: no source quote supplied; check evidence before approving.`);

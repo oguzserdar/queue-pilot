@@ -15,15 +15,15 @@ export function setupReadiness(user: { channels: Channel[] }, sources: Source[],
     { id: "buffer", label: n > 0 ? "Channels in Buffer" : "No channels in your Buffer yet", state: n > 0 ? "done" : "todo", detail: n > 0 ? `${n} channel${n === 1 ? "" : "s"}: ${user.channels.map((c) => c.name).join(", ")}` : "Your Buffer account is connected, but it has 0 channels. Add LinkedIn, X or another network in Buffer, and Queue Pilot fills its empty times.", action: n > 0 ? undefined : "Add a channel", href: n > 0 ? undefined : BUFFER_CHANNELS_URL },
     // Done only once an app has really called Queue Pilot; an approval alone is not a working connection.
     aiApps?.some((a) => a.lastUsedAt)
-      ? { id: "ai", label: "AI connected", state: "done", detail: aiApps.filter((a) => a.lastUsedAt).map((a) => a.name).join(", ") }
+      ? { id: "ai", label: "Connect your AI", state: "done", detail: aiApps.filter((a) => a.lastUsedAt).map((a) => a.name).join(", ") }
       : aiApps?.length
         ? { id: "ai", label: "Connect your AI", state: "todo", detail: `${aiApps.map((a) => a.name).join(", ")} approved, not used yet. Ask it to fill your week.`, action: "Connect", href: "/connect" }
         : { id: "ai", label: "Connect your AI", state: "todo", detail: "ChatGPT, Claude or Grok, on the plan you already pay for", action: "Connect", href: "/connect" },
     voice && voice.examples.length > 0
-      ? { id: "voice", label: "Voice picked", state: "done", detail: `${voice.examples.length} example post${voice.examples.length === 1 ? "" : "s"} picked` }
+      ? { id: "voice", label: "Pick your voice", state: "done", detail: `${voice.examples.length} example post${voice.examples.length === 1 ? "" : "s"} picked` }
       : { id: "voice", label: "Pick your voice", state: "todo", detail: "Pick a few of your own posts so drafts sound like you", action: "Pick posts", href: "/voice" },
     sources.length > 0
-      ? { id: "source", label: "Source added", state: "done", detail: sources.map((x) => x.title).join(", ") }
+      ? { id: "source", label: "Add one source", state: "done", detail: sources.map((x) => x.title).join(", ") }
       : { id: "source", label: "Add one source", state: "todo", detail: "Your newsletter, blog, YouTube or GitHub releases feed", action: "Add a feed", href: "/sources" },
     approved
       ? { id: "approve", label: "Approve your first draft", state: "done", detail: "You approved a draft, and Buffer posts it at its time." }

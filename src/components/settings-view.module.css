@@ -28,15 +28,6 @@
   align-items: baseline;
 }
 
-.eventItems summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  align-items: baseline;
-  cursor: pointer;
-}
-.eventItems ul { list-style: none; margin: 6px 0 0; padding: 0 0 0 16px; display: grid; gap: 2px; font-size: 14px; }
-
 .download {
   align-self: flex-start;
   padding: 7px 12px;

@@ -65,7 +65,7 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
   return (
     <Dialog open={slot !== null} onOpenChange={(o) => { if (o) return; if (text.trim() && !busy) setConfirmDiscard(true); else close(); }}>
       {slot && (
-        <DialogContent className={styles.dialog} title={`New post: ${slot.name}`} description={canSave ? "Saved as a Buffer draft for you to approve." : "This is the example account. Sign in with Buffer to write into your own empty times, yourself or with your AI."}>
+        <DialogContent className={styles.dialog} title={`New post: ${slot.name}`} description={canSave ? "Saved as a Buffer draft for you to approve." : "This is the example account. Sign in with Buffer to write into your own empty slots, yourself or with your AI."}>
           <div className={styles.composer}>
             {!canSave ? (
               <div className={styles.composerActions}>

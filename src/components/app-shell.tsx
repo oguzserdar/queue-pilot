@@ -9,7 +9,7 @@ import { DemoNudge } from "./demo-nudge";
 
 import { MotionConfig } from "motion/react";
 import { usePathname } from "next/navigation";
-import { type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { AccountMenu } from "./account-menu";
 import { BufferSyncProvider, SyncBanner, SyncIndicator, type SyncStatus } from "./buffer-sync";
 import { BookTextIcon } from "./animated-icons/book-text";
@@ -25,7 +25,6 @@ import { SparklesIcon } from "./animated-icons/sparkles";
 import { ToastStack, ToastStackProvider } from "@/registry/components/toast-stack/toast-stack";
 import { KeyboardShortcuts } from "./keyboard-shortcuts";
 import { NavItem } from "./nav-item";
-import { TabBar } from "./tab-bar";
 import styles from "./app-shell.module.css";
 import { ChannelIcon } from "./channel-icon";
 import { channels as exampleChannels } from "@/lib/example-channels";
@@ -69,7 +68,7 @@ export type ShellAccount = {
 function ChannelStatus({ channels }: { channels: NonNullable<ShellAccount>["channels"] }) {
   if (!channels.length) return <span className={styles.statusLine}>No channels in Buffer <a className={styles.statusLink} href={BUFFER_CHANNELS_URL} target="_blank" rel="noreferrer">Add</a></span>;
   const names = channels.map(c => `${c.name} (${c.service})`).join(", ");
-  return <Link href="/settings?tab=channels" className={styles.channelStatus} title={names} aria-label={`Buffer channels: ${names}`}>
+  return <Link href="/sources" className={styles.channelStatus} title={names} aria-label={`Buffer channels: ${names}`}>
     {channels.length <= 2 ? channels.map(c => <span key={c.id} className={styles.channelName}><ChannelIcon service={c.service} /><span>{c.name}</span></span>) :
       <span className={styles.channelSummary}><span className={styles.channelLogos} aria-hidden="true">{channels.slice(0, 4).map(c => <span key={c.id}><ChannelIcon service={c.service} size={14} /></span>)}</span><span>{channels.length} channels</span></span>}
   </Link>;
@@ -85,6 +84,11 @@ export function AppShell({ account, signInOpen, landing = true, children }: { ac
   const path = usePathname();
   // The demo's home lives at /demo, because / is the homepage for anyone not signed in.
   const home = account || !landing ? "/" : "/demo";
+  const navRef = useRef<HTMLElement>(null);
+  // On a phone the tab row scrolls sideways: bring the current page's tab into view, so you can see where you are.
+  useEffect(() => {
+    navRef.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [path]);
   return (
     <MotionConfig reducedMotion="user">
     <ToastStackProvider>
@@ -93,7 +97,7 @@ export function AppShell({ account, signInOpen, landing = true, children }: { ac
     <div className={styles.frame}>
         <aside className={styles.side}>
           <Link href={home} className={styles.brand} aria-label="Queue Pilot home">Queue Pilot<span className={styles.brandDot} aria-hidden="true">.</span></Link>
-          <nav className={styles.nav} aria-label="Main">
+          <nav ref={navRef} className={styles.nav} aria-label="Main">
             {NAV_GROUPS.map((group) => (
               <div key={group.label ?? "home"} className={styles.group}>
                 {group.label && <span className={styles.groupLabel}>{group.label}</span>}
@@ -136,11 +140,6 @@ export function AppShell({ account, signInOpen, landing = true, children }: { ac
           )}
           <main className={styles.main}><SignInNotice />{children}</main>
         </div>
-      <TabBar
-        tabs={NAV_GROUPS[0].items.map(i => ({ ...i, href: i.href === "/" ? home : i.href }))}
-        more={NAV_GROUPS.slice(1)}
-        isActive={(href) => href === home ? path === "/" || path === "/demo" : path.startsWith(href)}
-      />
     </div>
     </MaybeSync>
     {/* Confirms a change after it happens; errors stay next to the button that caused them. */}

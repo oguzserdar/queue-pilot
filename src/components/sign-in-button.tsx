@@ -28,7 +28,7 @@ export function SignInButton({ children = "Sign in with Buffer", returnTo, class
     // An old ?error= from a failed attempt must not ride along and greet the person after this one succeeds.
     const back = withoutSignInError(new URL(returnTo ?? `${window.location.pathname}${window.location.search}`, window.location.origin));
     try {
-      const { error } = await authClient.signIn.social({ provider: "buffer", callbackURL: back.toString(), errorCallbackURL: back.toString() });
+      const { error } = await authClient.signIn.social({ provider: "buffer", callbackURL: back.toString() });
       if (error) {
         setProblem(error.status >= 500 ? "Buffer sign-in is not set up on this deployment yet." : "Buffer sign-in could not start. Try again in a moment.");
         setBusy(false);

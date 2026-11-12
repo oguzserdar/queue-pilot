@@ -93,7 +93,7 @@ export function useNoteMentions({ text, setText, picked, setPicked, field, sourc
       setActive((at + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length);
       return true;
     }
-    if (!e.nativeEvent.isComposing && (e.key === "Enter" || e.key === "Tab") && !e.shiftKey && options.length) {
+    if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && options.length) {
       e.preventDefault();
       choose(options[at]);
       return true;

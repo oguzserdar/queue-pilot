@@ -21,7 +21,7 @@
 .change[data-state="skipped"] { opacity: 0.6; }
 @starting-style { .change { opacity: 0; transform: translateY(6px); } }
 .change { transition: opacity 220ms var(--ease-standard), transform 220ms var(--ease-standard); }
-.change { transition-delay: calc(min(sibling-index() - 1, 5) * 40ms); } /* Browsers without sibling-index() skip the stagger. */
+.change:nth-child(2) { transition-delay: 40ms; } .change:nth-child(3) { transition-delay: 80ms; } .change:nth-child(4) { transition-delay: 120ms; } .change:nth-child(5) { transition-delay: 160ms; } .change:nth-child(6) { transition-delay: 200ms; }
 .diffText { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
 .diffText del { color: var(--danger); background: var(--qp-danger-wash); text-decoration-thickness: 1.5px; border-radius: 3px; }
 .diffText ins { color: var(--success); background: var(--qp-success-wash); text-decoration: none; border-radius: 3px; font-weight: 600; }

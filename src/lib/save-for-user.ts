@@ -8,7 +8,7 @@
 import type { WrittenDraft } from "./ai-writer";
 import { recordEvidence, sourceById } from "./source-store";
 import { resolveSource } from "./resolve-source";
-import { evidenceProblem, NO_SOURCE_REASON } from "./source-evidence";
+import { evidenceProblem } from "./source-evidence";
 import { playbookVersion } from "./playbook-version";
 import { withSavedDrafts } from "./buffer/snapshot";
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
@@ -98,29 +98,16 @@ export const flagsFor = (saved: { slotId: string }[], verdicts: Map<string, Verd
 
 const warn = (event: string) => (e: unknown) => console.warn(JSON.stringify({ event, message: e instanceof Error ? e.message : String(e) }));
 
-/**
- * Saves drafts as Buffer drafts after the playbook check, and records what was written and its source evidence.
- *
- * @param userId - The person the drafts are for
- * @param accessToken - Their Buffer access token
- * @param input - The drafts, the open slots they may fill and the material they came from. `byHand` is true when
- *   the person typed the drafts themselves in the app: a draft with no source is then expected and is not flagged.
- * @param within - The AI an enclosing action already took; the check then judges with it instead of taking another
- * @returns What was saved and refused, the flags to show the person, and how the playbook was applied
- * @throws Error if a draft names a source snapshot that is not in this account
- */
 export async function saveDraftsForUser(
   userId: string,
   accessToken: string,
-  input: { title: string; drafts: WrittenDraft[]; open: OpenSlot[]; sourceKeys?: string[]; byHand?: boolean },
+  input: { title: string; drafts: WrittenDraft[]; open: OpenSlot[]; sourceKeys?: string[] },
   /** The AI an enclosing action already took; the check then judges with it instead of taking another action. */
   within?: JudgeModel,
 ): Promise<SaveResult & { flags: Flag[]; check: PlaybookCheck; judgedWith?: string }> {
   const evidenceWarnings: Flag[] = [];
   const evidenceSources = new Map<string, string[]>();
   const unresolved = new Set<string>();
-  // Drafts that name no snapshot and no material key.
-  const uncited = new Set<string>();
   const resolved = new Map<string, Awaited<ReturnType<typeof resolveSource>>>();
   for (const draft of input.drafts) {
     if (draft.snapshotId) {
@@ -138,7 +125,6 @@ export async function saveDraftsForUser(
       }
       evidenceSources.set(draft.slotId, [...new Set(ids)]);
       if (keys.length) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "Source citation needs review before approving. The draft can still be saved.", quote: "" });
-      else if (!input.byHand) uncited.add(draft.slotId);
     }
     for (const id of evidenceSources.get(draft.slotId) ?? []) {
       const snapshot = await sourceById(userId, id);
@@ -195,9 +181,7 @@ export async function saveDraftsForUser(
     await postgresWrittenStore().record(userId, wrote.filter(w => !missingEvidence.has(w.postId))).catch(warn("qp-record-written-failed"));
     if (input.sourceKeys?.length) await postgresSourceStore().markUsed(userId, input.sourceKeys).catch(warn("qp-mark-used-failed"));
   }
-  // Only a draft that was saved is flagged for having no source; a refused one already has its reason.
-  const noSource: Flag[] = res.saved.filter((x) => uncited.has(x.slotId)).map((x) => ({ slotId: x.slotId, rule: "Source evidence", verdict: "unsure", reason: NO_SOURCE_REASON, quote: "" }));
-  return { saved: res.saved, refused: [...gate.refused, ...res.refused], requests: res.requests, flags: [...flagsFor(res.saved, gate.verdicts), ...evidenceWarnings, ...noSource], check: gate.check, judgedWith: jm?.source };
+  return { saved: res.saved, refused: [...gate.refused, ...res.refused], requests: res.requests, flags: [...flagsFor(res.saved, gate.verdicts), ...evidenceWarnings], check: gate.check, judgedWith: jm?.source };
 }
 
 /** What to tell the person about how their playbook was applied; undefined when it was judged or there are no rules. */
@@ -212,12 +196,12 @@ export function checkNote(check: PlaybookCheck): string | undefined {
  * The playbook check for one changed draft (update_draft), so a draft cannot be saved clean and then edited past a
  * "do not save" rule. Returns the refusal reason, or null when the text may be saved, with how it was checked.
  */
-export async function judgeEdit(userId: string, text: string, network: string, channelId?: string): Promise<{ refusal: string | null; check: PlaybookCheck; verdicts: Verdict[] | null; playbookRevision: string | null }> {
+export async function judgeEdit(userId: string, text: string, network: string, channelId?: string): Promise<{ refusal: string | null; check: PlaybookCheck }> {
   const rules = await postgresRulesStore().list(userId).catch(() => null);
   const { jm, cappedReason } = rules?.length ? await judgeFor(userId) : { jm: null, cappedReason: null };
   const slot = { id: "edit", service: network, channelId } as OpenSlot;
   const gate = await applyPlaybook([{ slotId: "edit", text }], [slot], rules, jm ? (d, r) => judgeDrafts(jm.judges, d, r) : null, cappedReason).finally(() => jm?.settle());
-  return { refusal: gate.refused[0]?.reason ?? null, check: gate.check, verdicts: gate.check === "judged" ? (gate.verdicts.get("edit") ?? []) : rules?.length === 0 ? [] : null, playbookRevision: rules ? playbookVersion(rules) : null };
+  return { refusal: gate.refused[0]?.reason ?? null, check: gate.check };
 }
 
 /**
@@ -233,7 +217,6 @@ export async function recheckDrafts(userId: string, drafts: { postId: string; te
   const slots = drafts.map((d) => ({ id: d.postId, service: d.network, channelId: d.channelId }) as OpenSlot);
   const gate = await applyPlaybook(drafts.map((d) => ({ slotId: d.postId, text: d.text })), slots, rules, jm ? (x, r) => judgeDrafts(jm.judges, x, r) : null, cappedReason).finally(() => jm?.settle());
   if (gate.check === "failed") return { ok: false, message: "The check could not run just now. Try again." };
-  // A check is recorded beside what Queue Pilot wrote, never over it: the person's edit must stay visible as an edit.
-  await postgresWrittenStore().recordCheck(userId, drafts.map((d) => ({ postId: d.postId, text: d.text, playbookRevision: playbookVersion(rules), verdicts: gate.check === "judged" ? (gate.verdicts.get(d.postId) ?? []) : rules.length ? null : [] })));
+  await postgresWrittenStore().record(userId, drafts.map((d) => ({ postId: d.postId, network: d.network, text: d.text, playbookRevision: playbookVersion(rules), verdicts: gate.check === "judged" ? (gate.verdicts.get(d.postId) ?? []) : [] })));
   return { ok: true, checked: drafts.length };
 }

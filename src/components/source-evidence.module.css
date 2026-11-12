@@ -28,18 +28,10 @@
 .groupTitle a { display: inline-flex; align-items: center; gap: 4px; color: var(--accent, #921653); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
 .groupTitle a:hover { text-decoration: underline; }
 .groupTitle .caption { font-size: 12px; line-height: 1.45; }
-/* A quote is neutral; only a real problem tints it. */
-.pair { border-left: 3px solid var(--border-strong, #d3cdd0); background: var(--surface-muted, #f6f4f5); border-radius: 0 8px 8px 0; padding: 8px 12px; display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; row-gap: 4px; align-items: baseline; }
+.pair { border-left: 3px solid var(--accent, #921653); background: var(--qp-crimson-wash); border-radius: 0 8px 8px 0; padding: 8px 12px; display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; row-gap: 4px; align-items: baseline; }
 .pairLabel { margin: 0; font-size: 12px; font-weight: 600; color: var(--foreground); white-space: nowrap; flex: none; }
 .pairText { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
-.pair[data-problem] { border-left-color: var(--danger, #b3261e); background: var(--qp-danger-wash, #fbeeec); }
-.problem, .note { grid-column: 1 / -1; margin: 0; display: flex; align-items: flex-start; gap: 6px; font-size: 12px; line-height: 1.45; }
-.problem { color: var(--danger, #b3261e); font-weight: 600; }
-.note { color: var(--text-secondary, #555); }
-.problem svg, .note svg { flex: none; margin-top: 2px; }
-/* An edited draft: one calm line with its button, above the quotes. */
-.edited { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 12px; border-radius: 8px; background: var(--surface, #fff); box-shadow: 0 0 0 1px var(--border, #e5e1e3); }
-.edited p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--foreground); }
+.pair .warning { grid-column: 1 / -1; margin: 0; font-size: 12px; }
 .folded { border: 1px solid var(--border, #e5e1e3); border-radius: 8px; }
 .folded > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 12px; padding: 8px 12px; min-width: 0; }
 .folded > summary::-webkit-details-marker { display: none; }

@@ -5,22 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/registry/components/button/button";
 import { Select } from "@/registry/components/select/select";
 import { Textarea } from "@/registry/components/textarea/textarea";
-import { MAX_RULE_TEXT, NETWORKS, parseNewRule, type NewRule } from "@/lib/rules";
+import { NETWORKS, parseNewRule, type NewRule } from "@/lib/rules";
 import styles from "./playbook-view.module.css";
 
 /** Wait this long after the last keystroke before reading the rule, so a reading costs one model call per pause. */
 const READ_AFTER_MS = 700;
-
-/**
- * The rule field's hint: says so in plain words once the text reaches the most one rule may hold, since the field then
- * stops taking characters.
- *
- * @param length - Characters typed so far
- * @returns The hint, or undefined below the limit
- */
-export function ruleTextHint(length: number): string | undefined {
-  return length >= MAX_RULE_TEXT ? `${MAX_RULE_TEXT} characters is the most for one rule.` : undefined;
-}
 
 /** The parts of a reading the person sees as tags under the box. */
 function tagsFor(r: NewRule): string[] {
@@ -93,13 +82,12 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
         value={text}
         rows={2}
         placeholder={'Say "open-weights", never "open-source". Name the model and the number in the first line.'}
-        maxLength={MAX_RULE_TEXT}
-        description={ruleTextHint(text.length)}
+        maxLength={200}
         error={fieldProblem ?? undefined}
         onChange={(e) => { setText(e.target.value); setProblem(null); setFieldProblem(null); }}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submit(); } }}
       />
-      {text.length > 150 && text.length < MAX_RULE_TEXT && <p className={styles.count} aria-live="polite"><span className="tnum">{text.length}</span> of {MAX_RULE_TEXT} characters</p>}
+      {text.length > 150 && <p className={styles.count} aria-live="polite"><span className="tnum">{text.length}</span> of 200 characters</p>}
       {read && text.trim().length >= 4 && !(read_ && !pending && !current) && (
         <div className={styles.reading} aria-live="polite">
           <span className={styles.readingLabel}>Reads as</span>

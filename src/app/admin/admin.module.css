@@ -41,9 +41,6 @@
 .step[data-current] .num { border-color: var(--qp-crimson); color: var(--qp-crimson); }
 .stepBody { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
 .stepBody .primary { margin-top: 4px; }
-/* The one-field claim form: the field takes the row, the button sits under it, so it never lines up with the help text. */
-.claim { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); width: 100%; max-width: 420px; }
-.claim > div { width: 100%; }
 
 /* Settings, the reference shape: header, tabs, one card per setting that saves itself. */
 .head { align-items: flex-start; }

@@ -93,11 +93,3 @@
 .followPlace { display: flex; flex-direction: column; gap: 4px; }
 .followPlace .count, .followPlace .bad { align-self: flex-end; }
 .followFoot { display: flex; justify-content: flex-end; }
-/* Phones: the columns stack, so the preview comes after the footer. Keep the footer in the flow there, let the send
-   button take the full width and wrap its words, and keep each chip label on one line. */
-@media (max-width: 860px) {
-  .footer { position: static; }
-  .footRight { width: 100%; }
-  .footRight > * { flex: 1 1 auto; max-width: 100%; white-space: normal; text-align: center; }
-  .chipToggle, .chipChannel { white-space: nowrap; }
-}

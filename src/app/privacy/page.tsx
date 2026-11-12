@@ -12,7 +12,7 @@ export default function PrivacyPage() {
     <main className={styles.page}>
       <Link href="/" className={styles.brand}>Queue Pilot<span>.</span></Link>
       <header className={styles.header}>
-        <p className={styles.date}>Last updated 10 November 2026</p>
+        <p className={styles.date}>Last updated 4 November 2026</p>
         <h1>Privacy</h1>
         <p>This notice covers the Queue Pilot service at getqueuepilot.com. Someone hosting their own copy of Queue Pilot controls that copy and its data separately.</p>
       </header>
@@ -37,7 +37,6 @@ export default function PrivacyPage() {
           <li><strong>AI providers:</strong> writing, checking and learning can send relevant drafts, voice examples, rules, source passages and edit or review evidence to Anthropic, OpenAI, or OpenRouter and the model provider it routes to. The provider depends on the configured built-in key or your own key. These providers have their own data-handling and retention terms.</li>
           <li><strong>Source services:</strong> transcript requests send a video address to Supadata. If Exa search is configured and used, Exa receives search queries or page addresses. Fetching feeds and pages also contacts the source website.</li>
           <li><strong>Hosting:</strong> Vercel serves the app. A hosted PostgreSQL database stores account and application records. Infrastructure providers process request and operational data. Data may be processed outside your country.</li>
-          <li><strong>Gravatar:</strong> when Buffer gives your profile picture as a Gravatar address, your browser loads it from Gravatar, which sees that request.</li>
           <li><strong>Optional destinations:</strong> if you set up copies to Telegram or Discord, the selected content is sent to those services.</li>
         </ul>
         <p>Check the privacy terms of the assistant and providers you use. Removing an app from Queue Pilot stops its future access; it does not erase information it has already received.</p>

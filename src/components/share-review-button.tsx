@@ -38,7 +38,7 @@ export function ShareReviewButton({ drafts, openSignal = 0, example = false }: {
 
   return (
     <>
-      <Button variant="secondary" size="md" onClick={show}>Share for review</Button>
+      <Button variant="secondary" size="lg" onClick={show}>Share for review</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent title={url ? "Review link ready" : "Share drafts for review"} description={url ? "Anyone with this link can read these drafts and comment. Turn it off on the Reviews page." : "No account needed to comment. Comments can become rules you keep. Nothing is posted."}>
           {url ? (

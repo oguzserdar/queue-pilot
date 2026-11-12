@@ -10,7 +10,6 @@ import { setInheritance, setRuleOverride } from "./rule-routing-store";
 import { feedbackForComment } from "./feedback-flow";
 import { allTeamNotes, feedbackForNote, teamNotes } from "./note-feedback";
 import { approverLine, ruleOrigin } from "./rule-origin";
-import { playbookSetup } from "./playbook-answer";
 import type { ConnectedApp } from "./app-identity";
 import { NETWORKS, parseNewRule } from "./rules";
 import { judgeDrafts, rulesFor } from "./judge";
@@ -20,7 +19,6 @@ import { postgresMaterialStore } from "./material-store";
 import { postgresSourceStore } from "./sources-store";
 import { postgresVoiceStore } from "./voice-store";
 import { hasApprovedDraft, postgresWrittenStore } from "./written-store";
-import { checkedTextOf } from "./checked-text";
 import { postgresAiKeyStore } from "./ai-key-store";
 import { listModels, ModelListError } from "./ai-models";
 import { approvedApps } from "./ai-access";
@@ -87,7 +85,7 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
 
   server.registerTool("add_rule", {
     title: "Add a playbook rule",
-    description: "Add a rule the user requests. Use guidance for their own words, banned for a phrase, replace for a word swap, or ends_with for an ending every post needs. A rule for only some posts (an ending for posts about one project) goes in as guidance, in the user's own words saying which posts: a typed rule has no field for that. block refuses failing drafts; warn saves and flags them. Return the rule ID. Read get_playbook first to avoid duplicates. Every rule is judged by meaning, including guidance.",
+    description: "Add a rule the user requests. Use guidance for their own words, banned for a phrase, replace for a word swap, or ends_with for a required ending. block refuses failing drafts; warn saves and flags them. Return the rule ID. Read get_playbook first to avoid duplicates. Every rule is judged by meaning, including guidance.",
     inputSchema: z.object({ kind: z.enum(["guidance", "banned", "replace", "ends_with"]), text: z.string().max(200).optional(), phrase: z.string().max(120).optional(), from: z.string().max(120).optional(), to: z.string().max(120).optional(), where: z.enum(["start", "end"]).optional(), channels: z.union([z.literal("all"), z.array(network).min(1).max(7)]), level: z.enum(["block", "warn"]), accountIds: z.array(z.string().min(1).max(200)).min(1).max(30).optional().describe("Exact channel IDs from list_channels. Limits this rule to those accounts, overriding the network scope.") }), annotations: write,
   }, async input => {
     let rule = parseNewRule(input);
@@ -122,7 +120,7 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     inputSchema: z.object({ target, shared: z.boolean(), network: z.boolean().default(true) }), annotations: { ...write, idempotentHint: true },
   }, async ({ target, shared, network }) => result({ ok: await setInheritance(userId, target, shared, network) }));
   server.registerTool("propose_review_changes", {
-    title: "Turn feedback into proposed edits", description: "Use an owned review link and comment ID from list_review_comments. For postIds, start with only the draft the comment is on (its postId there); add other drafts from list_my_drafts only when the user picks them. Classifies the comment as fact, one-off edit, preference or unclear. Returns checked before/after proposals without saving. Apply selected proposals with update_draft using the exact before as expectedText. Only a preference returns a token for keep_suggestion, and keeping it is a separate choice.",
+    title: "Turn feedback into proposed edits", description: "Use an owned review link and comment ID from list_review_comments and selected draft IDs from list_my_drafts. Classifies the comment as fact, one-off edit, preference or unclear. Returns checked before/after proposals without saving. Apply selected proposals with update_draft using the exact before as expectedText. Only a preference returns a token for keep_suggestion, and keeping it is a separate choice.",
     inputSchema: z.object({ linkId: z.string().min(1).max(200), commentId: z.string().min(1).max(200), postIds: z.array(z.string().min(1).max(200)).min(1).max(30) }), annotations: read,
   }, async ({ linkId, commentId, postIds }) => { const r = await feedbackForComment(userId, linkId, commentId, postIds); return result(r, !r.ok); });
   server.registerTool("propose_note_changes", {
@@ -249,12 +247,11 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     await store.remove(userId, key); return result("Saved research removed. Existing drafts are unchanged.");
   });
   server.registerTool("get_setup_status", { title: "Read my setup progress", description: "Reads the setup steps and count shown on Needs you. Call it once, right after connecting or when asked about setup, not before other tasks. Never invent completion. Approval needs the person: their Approve, or their yes to approve_drafts. It stays incomplete in a drafts-only demo.", annotations: read }, async () => {
-    const [b, sources, apps, voice, approved, rules] = await Promise.all([buffer(), postgresSourceStore().list(userId), approvedApps(userId), postgresVoiceStore().get(userId), hasApprovedDraft(userId).catch(() => false), postgresRulesStore().list(userId).catch(() => null)]);
+    const [b, sources, apps, voice, approved] = await Promise.all([buffer(), postgresSourceStore().list(userId), approvedApps(userId), postgresVoiceStore().get(userId), hasApprovedDraft(userId).catch(() => false)]);
     const steps = setupReadiness(b, sources, apps, voice, approved);
-    // Beside the steps, not one of them: the screen has no playbook step. The starting rule is not counted as the person's own.
-    return result({ done: steps.filter(s => s.state === "done").length, total: steps.length, steps, next: steps.find(s => s.state !== "done") ?? null, playbook: playbookSetup(rules) });
+    return result({ done: steps.filter(s => s.state === "done").length, total: steps.length, steps, next: steps.find(s => s.state !== "done") ?? null });
   });
-  server.registerTool("write_my_week", { title: "Write my week with Queue Pilot", description: "Runs Queue Pilot's own writer when the user explicitly asks Queue Pilot to write and save Buffer drafts. It reads the voice, playbook, new material and empty slots itself, so call nothing first except get_ai_usage. Uses the person's key or the metered built-in AI budget, the same writer and playbook gate as the button. Writes at most 10 empty slots next week per run, retries refused drafts once, and returns saved, flagged and refused results. It never schedules or publishes. Do not automatically repeat to fill more slots; report remaining slots and request another run. Read list_my_drafts afterward.", annotations: { ...write, openWorldHint: true } }, async () => {
+  server.registerTool("write_my_week", { title: "Write my week with Queue Pilot", description: "Runs Queue Pilot's own writer when the user explicitly asks Queue Pilot to write and save Buffer drafts. It reads the voice, playbook, new material and empty slots itself, so call nothing first except get_ai_usage. Uses the person's key or the metered built-in AI budget, the same writer and playbook gate as the button. Writes at most 10 empty slots next week per run, retries refused drafts once, and returns saved, flagged and refused results. It never schedules or publishes. Do not automatically repeat to fill more slots; report remaining slots and request another run.", annotations: { ...write, openWorldHint: true } }, async () => {
     const l = await limit("bufferWrite", userId);
     if (!l.ok) return result("Too many Buffer requests just now. Try again in a minute.", true);
     const r = await writeSlotsForUser(() => buffer(true));
@@ -274,8 +271,8 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     const from = (ruleId: string) => { const r = rules.find(r => r.id === ruleId); return r ? ruleOrigin(r) : null; };
     return result({ asOf: b.fetchedAt.toISOString(), drafts: posts.flatMap(p => {
       const w = written.find(w => w.postId === p.id);
-      const verdicts = w && p.text === checkedTextOf(w) && w.playbookRevision === revision ? w.verdicts ?? null : null;
-      return w ? [{ evidence: evidence.filter(e => e.postId === p.id).map(({ oldText: _old, newText: _new, draftText: _draft, ...citation }) => citation), postId: p.id, channelId: p.channelId, text: p.text, dueAt: p.dueAt, status: p.status, changedSinceCheck: p.text !== checkedTextOf(w), rulesChangedSinceCheck: w.playbookRevision !== revision, verdicts, rulesPassed: verdicts?.filter(v => v.verdict === "pass").map(v => ({ rule: v.rule, from: from(v.ruleId) })) ?? null }] : [];
+      const verdicts = w && p.text === w.text && w.playbookRevision === revision ? w.verdicts ?? null : null;
+      return w ? [{ evidence: evidence.filter(e => e.postId === p.id).map(({ oldText: _old, newText: _new, draftText: _draft, ...citation }) => citation), postId: p.id, channelId: p.channelId, text: p.text, dueAt: p.dueAt, status: p.status, changedSinceCheck: p.text !== w.text, rulesChangedSinceCheck: w.playbookRevision !== revision, verdicts, rulesPassed: verdicts?.filter(v => v.verdict === "pass").map(v => ({ rule: v.rule, from: from(v.ruleId) })) ?? null }] : [];
     }), approved: week.filter(p => p.status !== "draft").flatMap(p => { const w = written.find(w => w.postId === p.id); return w?.approvedBy ? [{ postId: p.id, channelId: p.channelId, status: p.status, approvedBy: approverLine(w.approvedBy, w.approvedAt), approvedAt: w.approvedAt ?? null }] : []; }) });
   });
   server.registerTool("refresh_buffer", { title: "Refresh Buffer data", description: "Refresh the saved queue after a user changes channels or slots in Buffer. Shares the app's request limit and keeps data under 30 seconds old. Use sparingly, then read the relevant tools.", annotations: { ...write, idempotentHint: true, openWorldHint: true } }, async () => { const b = await buffer(true); return result({ refreshedAt: b.fetchedAt.toISOString(), channels: b.channels.length }); });

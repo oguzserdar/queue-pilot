@@ -9,9 +9,9 @@ import { channels as exampleChannels } from "@/lib/example-channels";
 const EXAMPLE_ACCOUNT = { email: "Alex Rivera (example)", channels: exampleChannels.map((c) => ({ name: c.name, service: c.service, disconnected: c.isDisconnected })) };
 const EXAMPLE_APPROVED: ApprovedApp[] = [{ consentId: "example", name: "Claude", brand: "Claude", site: null, approvedAt: "2026-11-01T09:00:00Z", lastUsedAt: "2026-11-01T09:12:00Z", calls: 14, label: null, returnsTo: [], unused: false }];
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ setup?: string }> }) {
-  const [{ user }, h, approved, { setup }] = await Promise.all([getCurrentUser(), headers(), approvedAiApps(), searchParams]);
+export default async function Page() {
+  const [{ user }, h, approved] = await Promise.all([getCurrentUser(), headers(), approvedAiApps()]);
   // Signed out shows the example account, where Claude is connected (matching the sidebar example).
   const account = user ? { email: user.email, channels: user.channels.map((c) => ({ name: c.name, service: c.service, disconnected: c.isDisconnected })) } : EXAMPLE_ACCOUNT;
-  return <ConnectView connectorUrl={`${publicOrigin(h)}/api/mcp`} example={!user} approved={user ? approved : EXAMPLE_APPROVED} account={account} setup={typeof setup === "string" ? setup : undefined} />;
+  return <ConnectView connectorUrl={`${publicOrigin(h)}/api/mcp`} example={!user} approved={user ? approved : EXAMPLE_APPROVED} account={account} />;
 }

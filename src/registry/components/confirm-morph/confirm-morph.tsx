@@ -364,7 +364,7 @@ export function ConfirmMorph({
       return;
     }
     // Enter answers yes from anywhere in the question except a button of its own (Cancel keeps meaning Cancel).
-    if (event.key === "Enter" && !event.nativeEvent.isComposing && state === "confirming" && !event.repeat && !(event.target instanceof HTMLButtonElement)) {
+    if (event.key === "Enter" && state === "confirming" && !event.repeat && !(event.target instanceof HTMLButtonElement)) {
       event.preventDefault();
       if (counting) void perform("confirm");
       else if (confirmMode !== "hold") answer();

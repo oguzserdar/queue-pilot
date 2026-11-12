@@ -7,30 +7,18 @@ import "./globals.css";
 
 const schibsted = Schibsted_Grotesk({ variable: "--font-schibsted", subsets: ["latin", "latin-ext"] });
 
-const DESCRIPTION = "Your own AI fills the empty times in your Buffer queue, checked against a playbook learned from your edits.";
+const DESCRIPTION = "Your own AI fills the empty slots in your Buffer queue, checked against a playbook learned from your edits.";
 
 /**
  * Title, description and link previews. The base address is the one the page was served from, so a self-hosted copy
  * shares previews of itself; the preview image comes from opengraph-image.png and twitter-image.png beside this file.
- * The video is the same card with the Pilot looking around, 8 seconds on a loop; chats that play og:video show it, the
- * rest show the image, which is its first frame. A new cut gets a new file name, because chats cache by address.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  const base = new URL(publicOrigin(await headers()));
-  // Next adds the origin to og:image but not to og:video, and chats skip a video whose address is relative.
-  const video = new URL("/og/pilot-v1.mp4", base).toString();
   return {
-    metadataBase: base,
+    metadataBase: new URL(publicOrigin(await headers())),
     title: "Queue Pilot",
     description: DESCRIPTION,
-    openGraph: {
-      type: "website",
-      siteName: "Queue Pilot",
-      title: "Queue Pilot",
-      description: DESCRIPTION,
-      url: "/",
-      videos: [{ url: video, secureUrl: video, type: "video/mp4", width: 2400, height: 1260 }],
-    },
+    openGraph: { type: "website", siteName: "Queue Pilot", title: "Queue Pilot", description: DESCRIPTION, url: "/" },
     twitter: { card: "summary_large_image", title: "Queue Pilot", description: DESCRIPTION },
   };
 }

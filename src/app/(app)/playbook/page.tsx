@@ -5,7 +5,6 @@ import { demoShiftDays } from "@/lib/demo-clock";
 import { getCurrentUser, signedInUserId } from "@/lib/current-user";
 import { postgresRulesStore } from "@/lib/rules-store";
 import { ruleOrigin } from "@/lib/rule-origin";
-import { waitingRepeats } from "@/lib/read-back";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ first?: string }> }) {
   const userId = await signedInUserId();
@@ -19,11 +18,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
   const [stored, inheritance] = loaded;
   // Where each rule came from, from its record; an older rule with no record says nothing rather than guess.
   const rules: ShownRule[] = stored.map(({ fixes, ...r }) => ({ ...r, origin: ruleOrigin(r) ?? (fixes > 0 ? `From ${fixes} of your fixes` : undefined) }) as ShownRule);
-  // A fix repeated across drafts is found without AI, but only offered as a rule after a model calls it a lasting
-  // preference: the offer at #fixes asks the model when the page opens. A failed read just leaves the offer out.
-  const open = await waitingRepeats(userId).catch(() => []);
+  // Rules from the person's edits are proposed by a model that reads them by meaning (the finder on this page), never
+  // by matching words, so the page offers nothing on its own.
   // The networks the person posts to, from the saved copy of their Buffer, so a shared rule can be switched off per network.
   const { user } = await getCurrentUser().catch(() => ({ user: null }));
   const networks = [...new Set((user?.channels ?? []).map((c) => c.service))];
-  return <PlaybookView mode="live" initial={rules} networks={networks} accounts={user?.channels ?? []} inheritance={inheritance} repeats={open.length ? { count: open.length, edits: open[0].count } : undefined} />;
+  return <PlaybookView mode="live" initial={rules} networks={networks} accounts={user?.channels ?? []} inheritance={inheritance} />;
 }

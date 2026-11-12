@@ -31,7 +31,7 @@ function Row({ hidden }: { hidden?: boolean }) {
 export function AiStrip() {
   return (
     <div className={styles.strip}>
-      <p className={styles.label}>Your rules apply in every one of these</p>
+      <p className={styles.label}>Your kept rules apply in every one of these</p>
       <div className={styles.window}>
         <div className={styles.track}>
           <Row />

@@ -70,11 +70,6 @@ export async function updateDraft(
 export async function deleteDraft(token: string, id: string, posts: Post[], wrote: ReadonlySet<string>, q: Query = bufferQuery): Promise<EditResult> {
   const p = ownDraft(id, posts, wrote);
   if (typeof p === "string") return { ok: false, reason: p };
-  // The queue copy can be up to 30 seconds old, and a draft approved in Buffer meanwhile is a scheduled post: read
-  // this one post right before deleting, as updateDraft does, and delete only while Buffer still calls it a draft.
-  const fresh = await q<{ post: Post }>(token, "query ($input: PostInput!) { post(input: $input) { id channelId text status } }", { input: { id } });
-  const latest = fresh.post;
-  if (!latest || latest.id !== id || latest.status !== "draft") return { ok: false, reason: "This draft moved or is no longer a draft, so it was not deleted. Read it again first." };
   const res = await q<{ deletePost: { __typename: string; message?: string } }>(token, DELETE_POST, { input: { id } });
   // DeletePostPayload is DeletePostSuccess | VoidMutationError (which implements MutationError); only success counts.
   return res.deletePost.__typename === "DeletePostSuccess" ? { ok: true } : { ok: false, reason: res.deletePost.message ?? "Buffer refused to delete it." };

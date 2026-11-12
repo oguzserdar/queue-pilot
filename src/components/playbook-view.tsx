@@ -4,7 +4,7 @@ import { RuleRouting, type RuleAccount } from "./rule-routing";
 import type { Inheritance } from "@/lib/rule-scopes";
 import { DRAFT_CHECKS } from "@/lib/draft-checks";
 
-import { useEffect, useId, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { PAGE_ACTION_EVENT } from "./keyboard-shortcuts";
 import { addRule, readRule, removeRule, setRuleException } from "@/app/(app)/actions";
 import { Badge } from "@/registry/components/badge/badge";
@@ -17,12 +17,9 @@ import { ConfirmButton } from "./confirm-button";
 import { RuleForm } from "./rule-form";
 import { FirstRulesFinder } from "./first-rules-finder";
 import { RewriteFinder } from "./rewrite-finder";
-import { RepeatedFixes } from "./repeated-fixes";
-import type { RepeatedFixesResult } from "@/app/(app)/fix-actions";
 import { RuleTester } from "./rule-tester";
 import { TeamNotesFinder } from "./team-notes-finder";
 import { exampleNoteRule } from "@/lib/example-notes";
-import { ownRules } from "@/lib/rule-origin";
 import styles from "./playbook-view.module.css";
 
 /** A rule as the Playbook shows it: the rule, and the edits it came from when there were any. */
@@ -41,9 +38,6 @@ const HOLD_HINT = { "Blocks drafts": "A draft that breaks it is rewritten once, 
 
 const EXAMPLE_NETWORKS = ["twitter", "linkedin", "instagram"];
 
-/** The one plain line that explains the starting rule while it is the only rule in the playbook. */
-export const STARTING_RULE_LINE = "Queue Pilot starts you with one rule that keeps private matters out of your posts. Remove it any time, or add your own wording below.";
-
 const groupName = (r: Rule, accounts: RuleAccount[]) => (r.accountIds?.length ? r.accountIds.map(id => accounts.find(a => a.id === id)?.name ?? "Disconnected account").join(", ") : r.channels === "all" ? "Every network" : r.channels.map((c) => NETWORKS[c] ?? c).join(", "));
 
 function groups(rules: ShownRule[], accounts: RuleAccount[]): [string, ShownRule[]][] {
@@ -52,61 +46,27 @@ function groups(rules: ShownRule[], accounts: RuleAccount[]): [string, ShownRule
   return [...m.entries()].sort(([a], [b]) => (a === "Every network" ? 1 : b === "Every network" ? -1 : a.localeCompare(b)));
 }
 
-/** What the same-fix offer says: the edit, where it happened, and the rule it would keep. */
-export type SameFixContent = {
-  title: string;
-  /** The words before and after the person's edit. */
-  before: string;
-  after: string;
-  /** Where and when the fix was made, in one sentence. */
-  where: string;
-  /** The rule as it will read in the playbook. */
-  rule: string;
-  /** Why the model judged it a lasting preference, when it said. */
-  why?: string;
-  /** The live edit split around the change, so the cut words are struck and the added words marked in one line. */
-  change?: { lead: string; removed: string; added: string; tail: string };
-};
-
-/** Alex's repeated fix, as the example playbook, the homepage and the demo show it. */
-export const EXAMPLE_SAME_FIX: SameFixContent = {
-  title: "You made the same fix twice",
-  before: "This week felt like a turning point for coding agents.",
-  after: "Android Studio now lets you pick from over 40 coding agents.",
-  where: "On Instagram you replaced a feeling with the result, on Tuesday and last Friday.",
-  rule: OFFERED.text,
-};
-
+/** Example mode: Alex's playbook and one repeated fix waiting for Alex's yes. Live mode: the person's own rules. */
 /**
- * The offer shown after the same fix is made twice: the edit, where it happened, and the rule it would keep. Drawn by
- * the live playbook with the person's own edit, and with {@link EXAMPLE_SAME_FIX} by the example and the homepage.
+ * The offer shown after the same fix is made twice: the edit, where it happened, and the rule it would keep. Drawn by the
+ * playbook and, unchanged, on the homepage.
  */
-export function SameFixOffer({ content, onKeep, onDismiss, pending = false }: { content: SameFixContent; onKeep?: () => void; onDismiss?: () => void; /** While Keep or Not now is saving. */ pending?: boolean }) {
-  const titleId = useId();
+export function SameFixOffer({ onKeep, onDismiss }: { onKeep?: () => void; onDismiss?: () => void }) {
   return (
-    <section className={styles.offer} aria-labelledby={titleId}>
-      <h2 id={titleId} className={styles.h2}>{content.title}</h2>
-      {content.change ? (
-        <p className={styles.diff}>
-          {content.change.lead}{content.change.removed && <> <del><span className="sr-only">Cut: </span>{content.change.removed}</del></>}{content.change.added && <> <ins><span className="sr-only">Added: </span>{content.change.added}</ins></>}{content.change.tail && ` ${content.change.tail}`}
-        </p>
-      ) : (
-        <p className={styles.diff}><del><span className="sr-only">Before: </span>{content.before}</del> <span className="sr-only">After: </span>{content.after}</p>
-      )}
-      <p className={styles.muted}>{content.where}</p>
-      {content.why && <p className={styles.why}>{content.why}</p>}
-      {/* A rule that already quotes its words ("End with "…"") is shown as it is, never inside a second pair of quotes. */}
-      <p className={styles.proposed}>Keep as a rule: {content.rule.includes('"') ? content.rule : `"${content.rule}"`}</p>
+    <section className={styles.offer} aria-labelledby="offer-title">
+      <h2 id="offer-title" className={styles.h2}>You made the same fix twice</h2>
+      <p className={styles.diff}><del><span className="sr-only">Before: </span>This week felt like a turning point for coding agents.</del> <span className="sr-only">After: </span>Android Studio now lets you pick from over 40 coding agents.</p>
+      <p className={styles.muted}>On Instagram you replaced a feeling with the result, on Tuesday and last Friday.</p>
+      <p className={styles.proposed}>Keep as a rule: "{OFFERED.text}"</p>
       <div className={styles.actions}>
-        <Button variant="primary" size="sm" disabled={pending} onClick={onKeep}>Keep as a rule</Button>
-        <Button variant="ghost" size="sm" disabled={pending} onClick={onDismiss}>Not now</Button>
+        <Button variant="primary" size="sm" onClick={onKeep}>Keep as a rule</Button>
+        <Button variant="ghost" size="sm" onClick={onDismiss}>Not now</Button>
       </div>
     </section>
   );
 }
 
-/** Example mode: Alex's playbook and one repeated fix waiting for Alex's yes. Live mode: the person's own rules. */
-export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS, accounts = [], inheritance = {}, demoShift = 0, repeats, fixesPreview }: { mode?: "example" | "live"; /** Live: open repeated fixes found without AI, and the drafts the first was made in. */ repeats?: { count: number; edits: number }; /** Development screens only: the offer's answer, drawn without the server. */ fixesPreview?: RepeatedFixesResult | "reading"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[]; accounts?: RuleAccount[]; inheritance?: Inheritance; /** Days the example note moves with the example week (demoShiftDays() from the page). */ demoShift?: number }) {
+export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS, accounts = [], inheritance = {}, demoShift = 0 }: { mode?: "example" | "live"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[]; accounts?: RuleAccount[]; inheritance?: Inheritance; /** Days the example note moves with the example week (demoShiftDays() from the page). */ demoShift?: number }) {
   const live = mode === "live";
   // Networks a shared rule was switched off for on this screen, ahead of the server's answer.
   const [except, setExcept] = useState<Record<string, string[]>>({});
@@ -114,13 +74,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   const [offer, setOffer] = useState<"open" | "kept" | "dismissed">(live || firstVisit ? "dismissed" : "open");
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  // Kept once shown: keeping the rule clears the repeat on the server, and the confirmation stays on screen.
-  const [fixes] = useState(live && !!repeats?.count ? repeats : null);
   const shown = (live ? initial : rules).map((r) => (except[r.id] ? { ...r, except: except[r.id] } : r));
-  // The starting rule Queue Pilot gave the account is checked like any rule, but it is not one of the person's own: with
-  // only it, the page still invites them to find their first rules.
-  const own = ownRules(shown);
-  const startingOnly = live && shown.length > 0 && !own.length;
   const toggle = (r: ShownRule, network: string) => {
     const off = !(r.except ?? []).includes(network);
     const next = off ? [...(r.except ?? []), network] : (r.except ?? []).filter((n) => n !== network);
@@ -172,24 +126,21 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   return (
     <div className={styles.page}>
       <header className={styles.head}>
-        <h1 className={styles.title}>{live ? (shown.length ? <>Playbook <span className={styles.count}>{shown.length} rule{shown.length === 1 ? "" : "s"}</span></> : "Your playbook") : shown.length ? `Alex's playbook: ${shown.length} rule${shown.length === 1 ? "" : "s"} across 4 accounts` : "Alex's first visit"}</h1>
+        <h1 className={styles.title}>{live ? (shown.length ? <>Playbook <span className={styles.count}>{shown.length} rule{shown.length === 1 ? "" : "s"}</span></> : "Your playbook") : shown.length ? `Alex's playbook has ${shown.length} rule${shown.length === 1 ? "" : "s"}` : "Alex's first visit"}</h1>
         <p className={styles.sub}>
           {!live && firstVisit && !shown.length
             ? "No rules yet. Queue Pilot checks each draft against your rules before saving it in Buffer, so the first ones come from what you already posted."
             : live && !shown.length
             ? "No rules yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike."
-            : startingOnly
-            ? `No rules of your own yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. ${STARTING_RULE_LINE}`
             : accounts.length ? "Pick an account to see what applies there. What you changed for it comes first." : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix Alex made more than once."}`}
         </p>
       </header>
 
-      {fixes && <RepeatedFixes repeats={fixes.count} edits={fixes.edits} preview={fixesPreview} />}
-      {live && !own.length && <FirstRulesFinder open />}
+      {live && !shown.length && <FirstRulesFinder open />}
       {!live && firstVisit && <FirstRulesFinder open onExampleKeep={(o) => setRules((rs) => [...rs, { id: o.key, kind: "guidance", channels: o.channels, level: "warn", text: o.text, origin: o.proof.kind === "note" ? "From a note on your post" : `Followed in ${o.proof.followed} of your ${o.proof.of} posts` } as ShownRule])} />}
 
       {offer === "open" && (
-        <SameFixOffer content={EXAMPLE_SAME_FIX} onKeep={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }} onDismiss={() => setOffer("dismissed")} />
+        <SameFixOffer onKeep={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }} onDismiss={() => setOffer("dismissed")} />
       )}
       {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the result.</p>}
       {(live || !firstVisit) && <TeamNotesFinder example={!live} shift={demoShift} onExampleKeep={() => setRules((rs) => { const rule = exampleNoteRule(demoShift); return rs.some((r) => r.id === rule.id) ? rs : [...rs, rule]; })} />}
@@ -240,7 +191,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
 
       {/* Adding sits right under the rules it adds to; finding and trying rules come after. */}
       <div id="add-rule"><RuleForm accounts={accounts} onAdd={add} read={reader ?? (live ? readRule : undefined)} /></div>
-      {live && own.length > 0 && <FirstRulesFinder />}
+      {live && shown.length > 0 && <FirstRulesFinder />}
       {live && <RewriteFinder />}
       {!firstVisit && <RuleTester live={live} example={EXAMPLE_TRY} accounts={accounts} />}
 

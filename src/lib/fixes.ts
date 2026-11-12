@@ -30,8 +30,6 @@ const clean = (w: string) => emoji.test(w) ? w : w.replace(/^[^\p{L}\p{N}]+|[^\p
 /** Compare words without case or edge punctuation, preserving symbols so different emoji stay distinct. */
 const norm = (w: string) => clean(w).toLowerCase() || w;
 const bare = (ws: string[]) => ws.map(clean).filter(Boolean).join(" ");
-/** A cut keeps a hashtag's # and a mention's @: cutting "#AI" is about the tag, not every use of the word AI. */
-const cutWords = (ws: string[]) => ws.map((w) => /^[#@][\p{L}\p{N}_]/u.test(w) ? w.replace(/[^\p{L}\p{N}_]+$/u, "") : clean(w)).filter(Boolean).join(" ");
 
 type Hunk = { removed: string[]; added: string[]; atEnd: boolean };
 
@@ -77,7 +75,7 @@ export function fixesIn(before: string, after: string): Fix[] {
     if (!h.removed.length && h.atEnd && h.added.length <= MAX_ENDING_WORDS) fixes.push({ kind: "ends_with", phrase: h.added.join(" ") });
     else if (h.removed.length && h.added.length && h.removed.length <= MAX_SWAP_WORDS && h.added.length <= MAX_SWAP_WORDS)
       fixes.push({ kind: "replace", from: bare(h.removed).toLowerCase(), to: bare(h.added).toLowerCase() });
-    else if (h.removed.length && h.removed.length <= MAX_CUT_WORDS) fixes.push({ kind: "banned", phrase: cutWords(h.removed) });
+    else if (h.removed.length && h.removed.length <= MAX_CUT_WORDS) fixes.push({ kind: "banned", phrase: bare(h.removed) });
   }
   return fixes;
 }

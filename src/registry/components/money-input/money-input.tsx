@@ -343,7 +343,7 @@ export const MoneyInput = forwardRef<HTMLInputElement, MoneyInputProps>(function
       nudge(amount, "key");
       return;
     }
-    if (!event.nativeEvent.isComposing && event.key === "Enter") { setDraft(settle(draft, info.digits)); pendingCaret.current = Number.MAX_SAFE_INTEGER; return; }
+    if (event.key === "Enter") { setDraft(settle(draft, info.digits)); pendingCaret.current = Number.MAX_SAFE_INTEGER; return; }
     const start = input.selectionStart ?? 0, end = input.selectionEnd ?? 0;
     if (start !== end || event.metaKey || event.ctrlKey || event.altKey) return;
     // Deleting a group separator deletes the digit before it instead of doing nothing.

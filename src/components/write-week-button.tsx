@@ -10,7 +10,7 @@ import { useNextSteps } from "./use-next-steps";
 import styles from "./write-week-button.module.css";
 
 /** What a running fill reports to the week. */
-export type FillEvent = { type: "start"; slotIds: string[] } | { type: "draft"; slotId: string; text: string } | { type: "dropped"; slotId: string };
+export type FillEvent = { type: "start"; slotIds: string[] } | { type: "draft"; slotId: string; text: string };
 
 const SAMPLE = "A draft written from what you published appears here, in your voice, with the quote it rests on.";
 
@@ -18,7 +18,7 @@ const SAMPLE = "A draft written from what you published appears here, in your vo
  * Fill the displayed week using either the person's key or the available built-in allowance.
  * The result says what was saved, what the playbook refused, and why.
  */
-export function WriteWeekButton({ availability, count, total = count, inlineActions = false, example = false, week = "next", onWriting, onProgress, samples = [] }: { availability: WritingAvailability; count: number; /** Every empty time still ahead; a run writes at most 10 of them. */ total?: number; inlineActions?: boolean; example?: boolean; /** Which week the button fills. */ week?: "this" | "next"; /** Told when a run starts and ends, so the week can show the times being written. */ onWriting?: (writing: boolean) => void; /** Told what the run reports: the times it will write, each finished draft, each time left empty, and nothing more. */ onProgress?: (event: FillEvent) => void; /** The example's times and the text each is written with; it plays the run on them and writes nothing. */ samples?: { slotId: string; text?: string }[] }) {
+export function WriteWeekButton({ availability, count, inlineActions = false, example = false, week = "next", onWriting, onProgress, samples = [] }: { availability: WritingAvailability; count: number; inlineActions?: boolean; example?: boolean; /** Which week the button fills. */ week?: "this" | "next"; /** Told when a run starts and ends, so the week can show the times being written. */ onWriting?: (writing: boolean) => void; /** Told what the run reports: the times it will write, each finished draft, and nothing more. */ onProgress?: (event: FillEvent) => void; /** The example's times and the text each is written with; it plays the run on them and writes nothing. */ samples?: { slotId: string; text?: string }[] }) {
   const [result, setResult] = useState<WriteWeekActionResult | null>(null);
   const [pending, start] = useTransition();
   const [running, setRunning] = useState(false);
@@ -31,12 +31,11 @@ export function WriteWeekButton({ availability, count, total = count, inlineActi
   useEffect(() => { onWriting?.(busy); }, [busy]);
   const report = (event: FillEvent | { type: "saving" }) => {
     if (event.type === "start") setProgress({ total: event.slotIds.length, written: 0, saving: false });
-    if (event.type === "draft" || event.type === "dropped") setProgress((p) => ({ ...p, written: p.written + 1 }));
+    if (event.type === "draft") setProgress((p) => ({ ...p, written: p.written + 1 }));
     if (event.type === "saving") setProgress((p) => ({ ...p, saving: true }));
     if (event.type !== "saving") onProgress?.(event);
   };
-  // The example shows the same steps as a real run, and says plainly where the real save would happen.
-  const step = progress.saving ? (example ? "Checking each one against your playbook. A real run saves them to Buffer now. The example saves nothing." : "Checking each one against your playbook and saving to Buffer…")
+  const step = progress.saving ? "Checking each one against your playbook and saving to Buffer…"
     : !progress.total ? "Reading what you published…"
     : `Writing draft ${Math.min(progress.written + 1, progress.total)} of ${progress.total} in your voice…`;
 
@@ -78,7 +77,7 @@ export function WriteWeekButton({ availability, count, total = count, inlineActi
   if (!count) return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>No empty times are left to fill {week === "this" ? "this week" : "next week"}.</p>;
   return (
     <div className={inlineActions ? styles.inline : styles.group}>
-      <Button variant="secondary" size={inlineActions ? "md" : "lg"} disabled={busy} onClick={() => example ? play() : start(async () => {
+      <Button variant="secondary" size="lg" disabled={busy} onClick={() => example ? play() : start(async () => {
         setResult(null); setRunning(true); setProgress({ total: 0, written: 0, saving: false });
         const r = await fill();
         setRunning(false);
@@ -95,7 +94,7 @@ export function WriteWeekButton({ availability, count, total = count, inlineActi
         ) : week === "this" ? "Fill this week" : "Fill next week"}
       </Button>
       {busy ? <p className={styles.step} role="status">{step}</p> : example ? <p className={styles.help}>Watch this week get written again: each draft lands in its time as it is written. Nothing is saved.</p> :
-      <p className={styles.help}>{total > count ? `Writes ${count} of your ${total} empty times` : `Writes ${count} draft${count === 1 ? "" : "s"} into your Buffer posting times`}{week === "this" ? " still ahead this week" : ""}, spread across the days, using {availability.source}. Saved as drafts in Buffer for your review.{total > count ? " Run it again for more." : ""}</p>}
+      <p className={styles.help}>Writes {count} draft{count === 1 ? "" : "s"} into your Buffer posting times{week === "this" ? " still ahead this week" : ""}, spread across the days, using {availability.source}. At most 10 a run. Saved as drafts in Buffer for your review.</p>}
       {result && <div className={styles.result}>
       {result && !result.ok && <Alert tone={example ? "info" : "danger"} title={example ? "Example only" : "No drafts written"}>{result.message}</Alert>}
       {result && result.ok && (

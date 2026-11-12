@@ -43,15 +43,6 @@ export function proxy(request: NextRequest) {
 
   if (path === "/home") return to(request, "/");
   if (path === "/demo") {
-    // "/demo?to=/playbook" enters the demo on one of its screens, so a link on the homepage can open the example's
-    // Playbook directly. Only the app's own screens are allowed, so it can never send anyone elsewhere.
-    const screen = request.nextUrl.searchParams.get("to");
-    if (screen && APP_SCREENS.includes(screen)) {
-      if (signedIn) return to(request, screen);
-      const res = to(request, screen);
-      res.cookies.set(DEMO_COOKIE, "1", { path: "/", httpOnly: true, sameSite: "lax", secure: request.nextUrl.protocol === "https:", maxAge: DEMO_DAYS * 86_400 });
-      return res;
-    }
     if (signedIn) return to(request, "/");
     const app = request.nextUrl.clone();
     app.pathname = "/";

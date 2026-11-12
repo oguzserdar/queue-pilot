@@ -9,8 +9,6 @@ import { DropdownMenu } from "@/registry/components/dropdown-menu/dropdown-menu"
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveDrafts, deleteMyDraft, editDraftText, recheckMyDrafts } from "@/app/(app)/actions";
-import { approveProblem } from "@/lib/approve-problem";
-import { recheckSourceEvidence } from "@/app/(app)/source-actions";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { Button } from "@/registry/components/button/button";
 import { Badge } from "@/registry/components/badge/badge";
@@ -56,7 +54,7 @@ const RESULT_TONE = { pass: "success", fail: "danger", unsure: "warning" } as co
  * `live` is true for a signed-in user: Approve schedules the drafts in Buffer. Example data only marks them on screen.
  * `verdicts` are the playbook verdicts each draft was saved with, by post id; null means it was saved unchecked.
  */
-export function WeekView({ week, which = "next", nowIso, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, writeTotal, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {}, showDraft }: { week: WeekModel; /** The moment the page was built (ISO), from the server. Times before it have passed: no draft can be written into them and a draft sitting on one is overdue. Absent in the example. */ nowIso?: string; /** Which week is drawn: the one today is in, or the following one (the default). */ which?: "this" | "next"; /** Draw only this draft's window, inline in the page, as the homepage shows it. */ showDraft?: string; approvals?: Record<string, string>; notesPreview?: Record<string, NotesPreview>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number; /** Every empty time the fill can still write to (channels Queue Pilot can write to); absent, the count of empty times shown. */ writeTotal?: number }) {
+export function WeekView({ week, which = "next", nowIso, live = false, verdicts = live ? {} : EXAMPLE_VERDICTS, writing, writeCount = 0, rules = [], checkNotes = {}, readiness = {}, evidence = [], notesPreview, tagsPreview, approvals = {}, showDraft }: { week: WeekModel; /** The moment the page was built (ISO), from the server. Times before it have passed: no draft can be written into them and a draft sitting on one is overdue. Absent in the example. */ nowIso?: string; /** Which week is drawn: the one today is in, or the following one (the default). */ which?: "this" | "next"; /** Draw only this draft's window, inline in the page, as the homepage shows it. */ showDraft?: string; approvals?: Record<string, string>; notesPreview?: Record<string, NotesPreview>; tagsPreview?: Record<string, { selected: DraftTag[]; all: DraftTag[]; canEdit: boolean }>; evidence?: EvidenceCard[]; readiness?: Record<string, Readiness>; rules?: Rule[]; checkNotes?: Record<string, string>; live?: boolean; verdicts?: Record<string, Verdict[] | null>; writing?: WritingAvailability; writeCount?: number }) {
   const { label: WEEK_LABEL, days: DAYS, channels, slots } = week;
   const NAME = which === "this" ? "This week" : "Next week";
   /** A day gets a full column when any channel has a slot or a post on it. */
@@ -114,41 +112,24 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
   const overdue = new Set(drafts.filter((p) => passed(p.channel, p.day, p.time)).map((p) => p.id));
   const passedEmpty = channels.reduce((n, c) => n + Object.entries(slots[c.id] ?? {}).reduce((m, [day, times]) => m + times.filter((t) => passed(c.id, Number(day), t) && !posts.some((p) => p.channel === c.id && p.day === Number(day) && p.time === t && p.status !== "error")).length, 0), 0);
   const open = countOpenSlots({ ...week, posts }) - passedEmpty;
-  // No times at all is not a full week: the queue is paused, or Buffer has no posting times for it.
-  const hasTimes = channels.some((c) => Object.values(slots[c.id] ?? {}).some((times) => times.length));
   // While a fill runs, the times it writes into show it, and each fills in when its draft arrives. A time is known
   // by its slot id; the example has none, so it uses the cell's own key and plays on the times a run would pick.
   const [writingNow, setWritingNow] = useState(false);
   const [fill, setFill] = useState<{ ids: Set<string>; texts: Record<string, string> }>({ ids: new Set(), texts: {} });
   // The page knows a fill is on, so the example's sign-in card steps aside and does not cover the week.
   useEffect(() => { document.body.toggleAttribute("data-filling", writingNow); return () => document.body.removeAttribute("data-filling"); }, [writingNow]);
-  // A dropped time goes back to empty: its placeholder is cleared and no text was ever shown for it.
-  const onFill = (event: FillEvent) => setFill((f) => {
-    if (event.type === "start") return { ids: new Set(event.slotIds), texts: {} };
-    if (event.type === "dropped") { const ids = new Set(f.ids); ids.delete(event.slotId); const { [event.slotId]: _gone, ...texts } = f.texts; return { ids, texts }; }
-    return { ids: f.ids, texts: { ...f.texts, [event.slotId]: event.text } };
-  });
+  const onFill = (event: FillEvent) => setFill((f) => event.type === "start" ? { ids: new Set(event.slotIds), texts: {} } : { ids: f.ids, texts: { ...f.texts, [event.slotId]: event.text } });
   const cellId = (c: string, day: number, t: string) => week.slotIds?.[slotKey(c, day, t)] ?? slotKey(c, day, t);
   // The example replays a fill on its own week: its drafts step aside, their times are written again one by one
-  // with the same text, and they come back when the run ends. Its one empty time gets a sample line, which stays. A
-  // post that would fail is left out: a fill never writes over a post that is already there.
+  // with the same text, and they come back when the run ends. Its one empty time gets a sample line.
   const samples: { slotId: string; text?: string }[] = [];
   const replayed = new Set<string>();
   if (!live) {
-    for (const p of drafts.filter((d) => worstTone(d) !== "danger").sort((x, y) => x.day - y.day || x.time.localeCompare(y.time))) { samples.push({ slotId: cellId(p.channel, p.day, p.time), text: p.text }); replayed.add(p.id); }
+    for (const p of [...drafts].sort((x, y) => x.day - y.day || x.time.localeCompare(y.time))) { samples.push({ slotId: cellId(p.channel, p.day, p.time), text: p.text }); replayed.add(p.id); }
     for (const c of channels) for (const [day, times] of Object.entries(slots[c.id] ?? {})) for (const t of times)
       if (!posts.some((p) => p.channel === c.id && p.day === Number(day) && p.time === t && p.status !== "error")) samples.push({ slotId: cellId(c.id, Number(day), t) });
   }
   const needsCheck = (id: string) => live && (readiness[id]?.state === "check" || readiness[id]?.state === "breaks");
-  // The footer's "Check again" is the one place a draft is rechecked: against the playbook, then against its sources.
-  const canCheckAgain = (p: { id: string; ours?: boolean }) => p.ours !== false && !approved.has(p.id) && live && (verdicts[p.id] === null || needsCheck(p.id));
-  const checkAgain = async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
-    const rules = await recheckMyDrafts([id]);
-    if (!rules.ok) return rules;
-    if (!evidence.some((e) => e.postId === id && e.needsCheck)) return { ok: true };
-    const sources = await recheckSourceEvidence(id);
-    return sources.ok ? { ok: true } : { ok: false, message: sources.message };
-  };
   const ready = drafts.filter((p) => p.ours !== false && worstTone(p) !== "danger" && !needsCheck(p.id) && !approved.has(p.id) && !overdue.has(p.id));
   const blocked = drafts.filter((p) => worstTone(p) === "danger");
   // The title counts what Approve can act on; a post that would fail is named apart, so the two numbers always agree.
@@ -184,20 +165,20 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
     setProblem(null);
     startApprove(async () => {
       const res = await approveDrafts(ids);
-      const trouble = approveProblem(res);
-      setProblem(trouble);
-      // The page's alert sits behind an open draft window, so the window's own footer says it too.
-      if (trouble && dialogOpen) setNote({ ok: false, text: `${trouble.title}. ${trouble.text}` });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setProblem({ title: "Nothing was scheduled", text: res.kind === "limited" ? "Buffer's request limit is reached. Try again in a few minutes." : res.kind === "signedOut" ? "Your session ended. Sign in with Buffer again." : "Buffer could not be reached." });
+        return;
+      }
       markApproved(res.approved);
       if (res.approved.length) toast({ type: "success", title: `${res.approved.length} post${res.approved.length === 1 ? "" : "s"} scheduled in Buffer`, ...(res.note ? { description: res.note } : {}) });
+      if (res.refused.length) setProblem({ title: `${res.refused.length} draft${res.refused.length === 1 ? " was" : "s were"} not scheduled`, text: res.refused.map((r) => r.reason).join(" ") });
     });
   };
 
   // Palette actions: "approve" asks to approve every ready draft, "share" opens the share dialog.
   const [shareSignal, setShareSignal] = useState(0);
   useEffect(() => {
-    const act = (name: unknown) => { if (name === "approve" && ready.length && !writingNow) setConfirmAll(true); if (name === "share" && drafts.length) setShareSignal((n) => n + 1); };
+    const act = (name: unknown) => { if (name === "approve" && ready.length) setConfirmAll(true); if (name === "share" && drafts.length) setShareSignal((n) => n + 1); };
     const q = new URLSearchParams(window.location.search).get("do");
     if (q) { window.history.replaceState(null, "", window.location.pathname); act(q); }
     const on = (e: Event) => act((e as CustomEvent).detail);
@@ -212,8 +193,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
       if (!here.length) {
         const name = `${channels.find((c) => c.id === channelId)?.name ?? ""}, ${FULL_DAY[day]} at ${t}`;
         const id = cellId(channelId, day, t);
-        // The example keeps its sample line in the empty time after the replay, so the week you watched stays written.
-        if (fill.ids.has(id) && (writingNow || (!live && fill.texts[id] !== undefined))) {
+        if (writingNow && fill.ids.has(id)) {
           const text = fill.texts[id];
           return [<div key={t} className={styles.writing} data-written={text !== undefined} aria-label={`${name}: ${text === undefined ? "a draft is being written" : "draft written"}`}>
             <span className={styles.writingHead}><span>{t}</span><span aria-hidden="true">{text === undefined ? "Writing" : "Written"}</span></span>
@@ -275,7 +255,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
               </div>
               <p className={styles.postText}>{current.text}</p>
               {(live || tagsPreview?.[current.id]) && <DraftTags key={`tags-${current.id}`} postId={current.id} preview={tagsPreview?.[current.id]} />}
-              {current.createdAt && <CreatedLine iso={current.createdAt} by={current.createdBy ?? null} className={styles.muted} />}
+              {current.createdAt && <p className={styles.muted}>{createdLine(current.createdAt, current.createdBy ?? null)}</p>}
             </>
           )}
           {editing !== null && (
@@ -300,7 +280,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
           )}
           {(() => {
             const cards = evidence.filter(e => e.postId === current.id);
-            if (cards.length) return <DraftSources cards={cards} live={live} footerChecks={canCheckAgain(current)} />;
+            if (cards.length) return <DraftSources cards={cards} live={live} />;
             return current.source && (
               <div className={styles.sourceBox}>
                 <div>
@@ -330,12 +310,12 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
               return <>
                 {/* A rule the draft breaks always shows in full; the ones it follows fold into one line. */}
                 {problems.map(row)}
-                {v.length === 0 && <p className={styles.muted}>No playbook rules yet. <a className={styles.rulesLink} href={live ? "/playbook" : "/demo?to=/playbook"}>Open your playbook</a></p>}
+                {v.length === 0 && <p className={styles.muted}>No playbook rules yet. <a className={styles.rulesLink} href="/playbook">Open your playbook</a></p>}
                 {passed.length > 0 && (
                   <details className={styles.ruleSummary}>
                     <summary><CircleCheck size={16} strokeWidth={1.75} aria-hidden="true" className={styles.passIcon} /><span>{`${passed.length} playbook rule${passed.length === 1 ? "" : "s"} ${problems.length ? "followed" : "passed"}`}</span><span className={styles.viewRules}>View rules</span></summary>
                     {passed.map(row)}
-                    <a className={styles.rulesLink} href={live ? "/playbook" : "/demo?to=/playbook"}>Open your playbook</a>
+                    <a className={styles.rulesLink} href="/playbook">Open your playbook</a>
                   </details>
                 )}
                 {!live && <p className={styles.muted}>Example verdicts.</p>}
@@ -384,22 +364,18 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
           ) : (
             <>
               {note ? <p className={styles.footNote} role={note.ok ? "status" : "alert"}>{note.text}</p>
-                // A post that left the drafts (approved, or scheduled in Buffer) has no writing record on this page, so
-                // its state is said before the "did not write" line, which is only about drafts.
-                : current.status === "scheduled" && !approved.has(current.id) ? <p className={styles.footNote}>Scheduled in Buffer.</p>
-                : current.status === "sent" ? <p className={styles.footNote}>Published by Buffer.</p>
-                : current.ours === false && current.status === "draft" && !approved.has(current.id) ? <p id="approve-foreign" className={styles.footNote}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>
+                : current.ours === false ? <p id="approve-foreign" className={styles.footNote}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>
                 : approved.has(current.id) ? <p className={styles.footNote}>{`Scheduled in Buffer. ${approverLine(APPROVED_IN_APP, new Date().toISOString())}${live ? "" : " (example)"}.`}</p>
                 : needsCheck(current.id) ? <p id="approve-playbook" className={styles.footNote}>{approveOffNote(readiness[current.id])}</p>
                 : worstTone(current) === "danger" ? <p id="approve-off" className={styles.footNote}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
                 : <p className={[styles.footNote, styles.footState].join(" ")}><CircleCheck size={15} strokeWidth={1.75} aria-hidden="true" />Saved as a draft in Buffer</p>}
               <div className={styles.actions}>
-                {canCheckAgain(current) && <Button variant="secondary" disabled={busy} onClick={() => run(() => checkAgain(current.id), "Checked against your playbook and its sources.")}>Check again</Button>}
+                {current.ours !== false && !approved.has(current.id) && live && (verdicts[current.id] === null || needsCheck(current.id)) && <Button variant="secondary" disabled={busy} onClick={() => run(() => recheckMyDrafts([current.id]).then((r) => (r.ok ? { ok: true as const } : r)), "Checked against your playbook.")}>Check again</Button>}
                 {current.ours !== false && !approved.has(current.id) && (
                   <DropdownMenu label="More" icon={<MoreHorizontal size={16} strokeWidth={1.75} />} items={[{ label: "Delete draft", destructive: true, icon: <Trash2 size={15} strokeWidth={1.75} />, onSelect: () => { setConfirmDelete(true); setEditing(null); setNote(null); } }]} />
                 )}
-                <Button variant="primary" disabled={current.status !== "draft" || current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.status === "scheduled" || approved.has(current.id) ? undefined : current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
-                  {approved.has(current.id) ? "Approved" : current.status === "scheduled" ? "Scheduled" : "Approve & schedule"}
+                <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
+                  {approved.has(current.id) ? "Approved" : "Approve & schedule"}
                 </Button>
               </div>
             </>
@@ -425,17 +401,14 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
                   held && `${held} held back`,
                   overdue.size && `${overdue.size} overdue`,
                   drafts.length - waiting - overdue.size > 0 && `${drafts.length - waiting - overdue.size} approved`,
-                  open ? `${open} empty time${open === 1 ? "" : "s"}` : "every time filled",
+                  open ? `${open} empty slot${open === 1 ? "" : "s"}` : "every slot filled",
                 ].filter(Boolean).join(", ")}`
-              : open === 0 && !posts.length && !hasTimes ? `${NAME}: ${channels.length && channels.every((c) => c.isQueuePaused) ? "your Buffer queue is paused" : "no posting times set in Buffer"}`
-              : open === 0 ? `${NAME}: every time has a post` : `${NAME}: ${open} empty time${open === 1 ? "" : "s"}`}
+              : open === 0 ? `${NAME}: every slot has a post` : `${NAME}: ${open} empty slot${open === 1 ? "" : "s"}`}
           </h1>
           <p className={styles.sub}>
             <span className="tnum">{WEEK_LABEL}</span>.{" "}
             {channels.length === 0
               ? "Nothing to fill yet."
-              : !hasTimes && !posts.length
-              ? (channels.every((c) => c.isQueuePaused) ? "Resume your queue in Buffer, and its posting times show here to fill." : "Add posting times to your channels in Buffer, and they show here to fill.")
               : drafts.length > 0
               ? `${live ? (waiting ? `${waiting} waiting for your approval` : "No drafts from Queue Pilot are waiting for approval") : "Written from your newsletter, each one checked against your playbook"}${blocked.length ? `. ${blocked.length} can't go out until ${blocked.length === 1 ? "its" : "their"} problem is fixed` : ""}.`
               : writing?.ready ? `Fill ${which} week writes drafts into your empty Buffer posting times. Or connect your AI and ask it to fill your week.` : "Connect your AI and ask it to fill your week."}
@@ -451,7 +424,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
           {blocked.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="md" className={styles.issues}>
+                <Button variant="secondary" size="lg" className={styles.issues}>
                   <span className={styles.issueDot} aria-hidden="true" />
                   {`${blocked.length} post${blocked.length === 1 ? "" : "s"} would fail`}
                 </Button>
@@ -467,19 +440,19 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
               </PopoverContent>
             </Popover>
           )}
-          {channels.length > 0 && <Button variant="secondary" size="md" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
-          {(open > 0 || (!live && samples.length > 0)) && writing && <WriteWeekButton availability={writing} count={live ? writeCount : samples.length} total={live ? (writeTotal ?? open) : samples.length} inlineActions example={!live} week={which} onWriting={setWritingNow} onProgress={onFill} samples={samples} />}
+          {channels.length > 0 && <Button variant="secondary" size="lg" onClick={() => (live ? setNewPostOpen(true) : toast({ type: "info", title: "Sign in with Buffer to write a new post", description: "On your own queue it is saved as a draft for each account you pick." }))}>New post</Button>}
+          {(open > 0 || (!live && samples.length > 0)) && writing && <WriteWeekButton availability={writing} count={live ? writeCount : samples.length} inlineActions example={!live} week={which} onWriting={setWritingNow} onProgress={onFill} samples={samples} />}
           {drafts.length > 0 && <ShareReviewButton example={!live} openSignal={shareSignal} drafts={drafts.map((d) => ({ id: d.id, label: `${channels.find((c) => c.id === d.channel)?.name ?? ""}, ${FULL_DAY[d.day]} at ${d.time}`, when: `${FULL_DAY[d.day].slice(0, 3)} ${d.time}`, text: d.text }))} />}
           {drafts.length > 0 && (
             confirmAll ? (
               <>
-                <Button variant="ghost" size="md" autoFocus onClick={() => setConfirmAll(false)}>Cancel</Button>
-                <Button variant="primary" size="md" onClick={() => { setConfirmAll(false); approve(ready.map((p) => p.id)); }}>
+                <Button variant="ghost" size="lg" autoFocus onClick={() => setConfirmAll(false)}>Cancel</Button>
+                <Button variant="primary" size="lg" onClick={() => { setConfirmAll(false); approve(ready.map((p) => p.id)); }}>
                   {`Schedule ${ready.length} post${ready.length === 1 ? "" : "s"} in Buffer`}
                 </Button>
               </>
             ) : (
-              <Button variant="primary" size="md" disabled={ready.length === 0 || pending || writingNow} onClick={() => setConfirmAll(true)}>
+              <Button variant="primary" size="lg" disabled={ready.length === 0 || pending} onClick={() => setConfirmAll(true)}>
                 {pending ? "Approving…" : ready.length > 0 ? `Approve ${ready.length} draft${ready.length === 1 ? "" : "s"}` : waiting > 0 || !approved.size ? "Nothing ready to approve" : "All approved"}
               </Button>
             )
@@ -561,14 +534,4 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
       {draftWindow}
     </div>
   );
-}
-
-/**
- * "Created 2 days ago by Alex Rivera", counted in the reader's own time zone. The server can't know that zone (and the
- * page may be cached), so the line is filled in after load, like LocalTime, instead of rendering a day that may differ.
- */
-function CreatedLine({ iso, by, className }: { iso: string; by: string | null; className: string }) {
-  const [text, setText] = useState<string | null>(null);
-  useEffect(() => setText(createdLine(iso, by)), [iso, by]);
-  return <p className={className}>{text ?? "\u00a0"}</p>;
 }

@@ -18,7 +18,7 @@ export type Voice = { examples: VoiceExample[]; note: string | null };
 /** The user must remove an example before adding another. */
 export class TooManyExamplesError extends Error {
   constructor() {
-    super(`You can save up to ${MAX_EXAMPLES} examples; your AI reads every one before each draft. Remove one to add another.`);
+    super(`Up to ${MAX_EXAMPLES} example posts. Remove one to add another.`);
   }
 }
 
@@ -33,17 +33,13 @@ export type VoiceStore = {
 /** A pasted post failed the shared input checks. */
 export class InvalidVoiceExampleError extends Error {}
 
-/**
- * Saves visible writing without requiring a past Buffer post.
- *
- * @param by - The AI app that saved it, when one did; the example then reads "Added by Claude" instead of "Pasted"
- */
-export async function addPastedExample(store: VoiceStore, userId: string, text: string, by?: string): Promise<void> {
+/** Saves visible writing without requiring a past Buffer post. */
+export async function addPastedExample(store: VoiceStore, userId: string, text: string): Promise<void> {
   if (typeof text !== "string" || text.length > MAX_PASTED_TEXT)
     throw new InvalidVoiceExampleError(`Use up to ${MAX_PASTED_TEXT} characters for an example.`)
   const clean = visibleText(text).trim()
   if (!clean) throw new InvalidVoiceExampleError("Paste a post you wrote first.")
-  await store.addExample(userId, { postId: `pasted:${randomUUID()}`, channel: by ? `Added by ${by}` : "Pasted", text: clean })
+  await store.addExample(userId, { postId: `pasted:${randomUUID()}`, channel: "Pasted", text: clean })
 }
 
 /** A private voice store for tests, with the same example limit. */
@@ -56,7 +52,7 @@ export function memoryVoiceStore(): VoiceStore {
       const voice = get(userId)
       if (voice.examples.some((e) => e.postId === example.postId)) return
       if (voice.examples.length >= MAX_EXAMPLES) throw new TooManyExamplesError()
-      voices.set(userId, { ...voice, examples: [...voice.examples, { ...example, text: visibleText(example.text).slice(0, MAX_PASTED_TEXT) }] })
+      voices.set(userId, { ...voice, examples: [...voice.examples, { ...example, text: visibleText(example.text).slice(0, 5000) }] })
     },
     async removeExample(userId, postId) {
       const voice = get(userId)
@@ -87,7 +83,7 @@ export function postgresVoiceStore(): VoiceStore {
         if (existing) return;
         const [{ c }] = await tx.select({ c: count() }).from(voiceExample).where(eq(voiceExample.userId, userId));
         if (c >= MAX_EXAMPLES) throw new TooManyExamplesError();
-        await tx.insert(voiceExample).values({ userId, postId: e.postId, channel: e.channel, text: visibleText(e.text).slice(0, MAX_PASTED_TEXT) });
+        await tx.insert(voiceExample).values({ userId, postId: e.postId, channel: e.channel, text: visibleText(e.text).slice(0, 5000) });
       });
     },
     async removeExample(userId, postId) {

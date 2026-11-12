@@ -25,8 +25,7 @@
 .tile > button { margin-top: auto; max-width: 100%; height: auto; min-height: 32px; white-space: normal; text-align: left; }
 /* Doubled so it outranks the dialog's own 440px width: the address and steps need the room. */
 .dialog { --dialog-width: 600px; display: flex; flex-direction: column; gap: var(--space-4); }
-/* In the setup window the address gets its own full-width line under its label and Copy, never broken mid-word. */
-.dialog .code { flex: 1 1 100%; order: 3; white-space: nowrap; overflow-x: auto; }
+.dialog .code { word-break: break-all; }
 .shot { width: 100%; height: auto; border-radius: var(--radius-control); border: 1px solid var(--border-subtle); display: block; }
 
 /* The coding-agent path first: one line to copy, the agent does the rest. */
@@ -60,9 +59,3 @@
 .canCol[data-group="asks"] .canDot { background: var(--warning); }
 .canList { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); line-height: 1.45; }
 @media (max-width: 860px) { .canGrid { grid-template-columns: minmax(0, 1fr); } }
-
-/* Connected: the setup steps sit behind one quiet row, closed by default. */
-.another { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding-block: var(--space-3); display: grid; gap: var(--space-5); }
-.anotherSummary { cursor: pointer; font-weight: 600; color: var(--text-secondary); list-style-position: inside; border-radius: 6px; }
-.anotherSummary:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
-.another[open] { padding-bottom: var(--space-6); }

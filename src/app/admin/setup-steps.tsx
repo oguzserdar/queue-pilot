@@ -46,7 +46,7 @@ export function SetupSteps({ email, needsCode, ready, problem }: { email: string
                 <AdminRecovery />
               </>
             ) : email ? (
-              <form action={claimAdmin} className={styles.claim}>
+              <form action={claimAdmin} className={styles.field}>
                 {needsCode ? <PasswordField name="code" label="Setup code" description="The ADMIN_SETUP_CODE value from this deployment's settings." autoComplete="off" required /> : null}
                 <Button type="submit" variant="primary" size="md">Become the admin</Button>
               </form>

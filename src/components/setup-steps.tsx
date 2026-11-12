@@ -6,8 +6,7 @@ import { useState } from "react";
 import { Button } from "@/registry/components/button/button";
 import { ChipGroup } from "@/registry/components/chip-group/chip-group";
 import { CopyButton } from "@/registry/components/copy-button/copy-button";
-import { chatHandoff, setupLine } from "@/lib/agent-setup";
-import { PLUGIN_SKILLS } from "@/lib/plugin-skills";
+import { setupLine } from "@/lib/agent-setup";
 import styles from "./setup-steps.module.css";
 
 /** The Buffer account the person signed in with, as Buffer returned it. */
@@ -18,7 +17,7 @@ const TERMINAL = ["Claude Code", "Codex", "Cursor"];
 const APPS = ["Claude", "ChatGPT", "Grok", ...TERMINAL, "Other"];
 
 const CONNECTION_CHECK = "Use Queue Pilot to read my setup status and list my drafts. Show the real draft count. Do not change, schedule or publish anything.";
-const FIRST_TASK = "Then show me one preview post for my next empty time, written from my newest post. Show it here and do not save anything.";
+const FIRST_TASK = "Use Queue Pilot to preview one post for my next empty time, written from my newest post. Show it here and do not save anything.";
 
 const ago = (iso: string) => {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -31,12 +30,8 @@ const ago = (iso: string) => {
  * check the connection against what Queue Pilot really saw (the Buffer account read from Buffer, and when each AI app
  * last called); then copy a first task that saves nothing. `openApp` opens a chat app's setup steps on the page.
  */
-export function SetupSteps({ origin, account, approved, example, openApp, initialApp = "Claude", guides = {}, title = "Finish setting up" }: {
+export function SetupSteps({ origin, account, approved, example, openApp, initialApp = "Claude" }: {
   origin: string;
-  /** The panel's heading; Home's welcome names the step instead of "Finish setting up". */
-  title?: string;
-  /** Each chat app's own connection steps, by the name picked here. */
-  guides?: Record<string, string[]>;
   account: SetupAccount | null;
   approved: ApprovedApp[] | null;
   example: boolean;
@@ -51,21 +46,25 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
   return (
     <section className={styles.setup} aria-labelledby="setup-title">
       <div className={styles.head}>
-        <h2 id="setup-title" className={styles.title}>{title}</h2>
+        <h2 id="setup-title" className={styles.title}>Finish setting up</h2>
         <p className={styles.muted}>No API key: your AI signs in with Buffer through Queue Pilot.</p>
       </div>
       <ol className={styles.steps}>
         <li className={styles.step}>
-          <h3 className={styles.stepTitle}>Pick your AI, then paste one message into it</h3>
+          <h3 className={styles.stepTitle}>Pick your AI</h3>
           <ChipGroup label="Your AI app" multiple={false} options={APPS.map((a) => ({ value: a, label: a }))}
             value={[app]} onValueChange={(v) => v[0] && setApp(v[0])} />
-          <div className={styles.action}>
-            <p className={styles.muted}>{terminal
-              ? `Paste this into ${app}. It installs Queue Pilot's skills, connects itself, then writes one preview post. Nothing is saved.`
-              : `Paste this into ${app}. ${app === "Other" ? "Your AI" : app} walks you through connecting Queue Pilot, then writes one preview post. Nothing is saved.`}</p>
-            <CopyButton value={terminal ? `${setupLine(origin)}\n\n${FIRST_TASK}` : chatHandoff(app === "Other" ? "this app" : app, `${origin}/api/mcp`, guides[app] ?? guides["Any other MCP app"] ?? [], PLUGIN_SKILLS["queue-pilot-fill-week"] ?? "")} label={`Copy for ${app === "Other" ? "your AI" : app}`} />
-            {!terminal && <Button variant="secondary" size="sm" onClick={() => openApp(app === "Other" ? "Any other MCP app" : app)}>Or follow the steps yourself</Button>}
-          </div>
+          {terminal ? (
+            <div className={styles.action}>
+              <p className={styles.muted}>Paste this into {app}. It installs the Queue Pilot skills and connects itself.</p>
+              <CopyButton value={setupLine(origin)} label="Copy setup prompt" />
+            </div>
+          ) : (
+            <div className={styles.action}>
+              <p className={styles.muted}>{app === "Other" ? "Any app that can add a remote MCP server." : `${app} adds Queue Pilot as a connector, in a few clicks.`}</p>
+              <Button variant="secondary" size="sm" onClick={() => openApp(app === "Other" ? "Any other MCP app" : app)}>Show the steps for {app}</Button>
+            </div>
+          )}
         </li>
 
         {terminal && (
@@ -80,18 +79,11 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
         )}
 
         <li className={styles.step}>
-          <h3 className={styles.stepTitle}>Check your AI is connected</h3>
-          {account && !account.channels.length ? (
-            <p className={styles.fact}>
-              {/* The line is a two-column grid: an empty first cell keeps the words in the wide column, without a check. */}
-              <span aria-hidden="true" />
-              <span>Buffer: {account.email}, no channels yet. Add one in Buffer, then come back.{" "}
-              {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
-            </p>
-          ) : account ? (
+          <h3 className={styles.stepTitle}>Check it is connected</h3>
+          {account ? (
             <p className={styles.fact}>
               <span className={styles.okMark} aria-hidden="true" />
-              <span>Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length === account.channels.length ? `${account.channels.length} channel${account.channels.length === 1 ? "" : "s"}` : `${account.channels.filter((c) => !c.disconnected).length} of ${account.channels.length} channels`} connected ({account.channels.filter((c) => !c.disconnected).map((c) => c.name).join(", ")}){account.channels.some((c) => c.disconnected) ? `; ${account.channels.filter((c) => c.disconnected).map((c) => c.name).join(", ")} disconnected` : ""}.{" "}
+              <span>Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length} of {account.channels.length} channels connected ({account.channels.map((c) => c.name).join(", ")}).{" "}
               {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
             </p>
           ) : null}
@@ -108,6 +100,14 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
           )}
         </li>
 
+        <li className={styles.step}>
+          <h3 className={styles.stepTitle}>Try a first task</h3>
+          <p className={styles.muted}>A preview from your newest post. Nothing is saved to Buffer.</p>
+          <div className={styles.command}>
+            <span>{FIRST_TASK}</span>
+            <CopyButton value={FIRST_TASK} label="Copy" />
+          </div>
+        </li>
       </ol>
     </section>
   );

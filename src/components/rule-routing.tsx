@@ -3,14 +3,12 @@ import { useState, useTransition } from "react";
 import { changeInheritance, changeRuleOverride } from "@/app/(app)/review-actions";
 import { resolveRule, type Inheritance } from "@/lib/rule-scopes";
 import { NETWORKS, type Rule } from "@/lib/rules";
-import { isStartingRule, STARTING_RULE_ORIGIN } from "@/lib/rule-origin";
 import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
 import { Select } from "@/registry/components/select/select";
 import { Switch } from "@/registry/components/switch/switch";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { ConfirmButton } from "./confirm-button";
-import { Term } from "./term";
 import styles from "./rule-routing.module.css";
 
 export type RuleAccount = { id: string; name: string; service: string };
@@ -60,9 +58,9 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd, exa
     : [
         { key: "changed", title: `Changed for ${level === "account" ? "this account" : where}`, rules: mine.filter(r => origin(r) !== "account" && overrideOf(r) !== undefined) },
         { key: "own", title: "This account's own", rules: mine.filter(r => origin(r) === "account") },
-        { key: "inherited", title: "Also applies here", rules: mine.filter(r => origin(r) !== "account" && overrideOf(r) === undefined) },
+        { key: "inherited", title: "Inherited", rules: mine.filter(r => origin(r) !== "account" && overrideOf(r) === undefined) },
       ].filter(g => g.rules.length > 0 || g.key === "inherited");
-  const source = (r: Rule) => origin(r) === "shared" ? "All accounts" : origin(r) === "network" ? (r.channels as string[]).map(c => NETWORKS[c] ?? c).join(", ") : r.accountIds!.map(a => accounts.find(x => x.id === a)?.name ?? "Disconnected account").join(", ");
+  const source = (r: Rule) => origin(r) === "shared" ? "Shared" : origin(r) === "network" ? (r.channels as string[]).map(c => NETWORKS[c] ?? c).join(", ") : r.accountIds!.map(a => accounts.find(x => x.id === a)?.name ?? "Disconnected account").join(", ");
 
   const save = (fn: () => Promise<{ ok?: boolean; message?: string } | undefined>, done: string) => start(async () => {
     try { const r = await fn(); setMessage(r?.ok === false ? { ok: false, text: r.message ?? "That didn't save. Try again." } : { ok: true, text: done }); }
@@ -82,10 +80,9 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd, exa
           <span className={styles.ruleText}>{r.text}</span>
           <span className={styles.meta}>
             <span className={styles.tag}>{source(r)}</span>
-            <span>{r.level === "block" ? <Term term="Blocks" note="A draft that breaks this rule is rewritten once, then not saved.">Stops a draft</Term> : <Term term="Flags" note="A draft that breaks this rule is saved and marked for you to check.">Warns you</Term>}</span>
+            <span>{r.level === "block" ? "Blocks" : "Flags"}</span>
             {evidence && <span>From a review</span>}
-            {isStartingRule(r) && <span>{STARTING_RULE_ORIGIN}</span>}
-            {!all && !on && <span className={styles.warn}>{origin(r) === "shared" && !netShared ? `All-account rules are off for every ${net} account` : "Set not used here"}</span>}
+            {!all && !on && <span className={styles.warn}>{origin(r) === "shared" && !netShared ? `Shared is off for every ${net} account` : "Set not used here"}</span>}
             {!all && on && override === false && <span className={styles.warn}>Off here</span>}
             {!all && on && override === true && <span>On here</span>}
             {!all && on && override === undefined && !d.applies && <span className={styles.warn}>{`Off for every ${net} account`}</span>}
@@ -100,7 +97,7 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd, exa
             toast({ type: "success", title: `Turned off for ${where}`, description: r.text, duration: 8000, action: { label: "Undo", onClick: () => void setOverride(r.id, { level, id }, null) } });
           })}>Turn off here</Button>}
           {canChange && override === undefined && !d.applies && level === "account" && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => setOverride(r.id, { level, id }, true), `Turned on for ${where}.`)}>Turn on here</Button>}
-          {canChange && override !== undefined && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => setOverride(r.id, { level, id }, null), "Back to the setting it follows.")}>Reset</Button>}
+          {canChange && override !== undefined && <Button variant="ghost" size="sm" disabled={pending} onClick={() => save(() => setOverride(r.id, { level, id }, null), "Back to the inherited setting.")}>Reset</Button>}
           {(all || origin(r) === "account") && <ConfirmButton label="Delete" ariaLabel={`Delete rule: ${r.text}`} question="Delete this rule?" confirmLabel="Delete rule" onConfirm={() => onDelete(r)} />}
         </div>
       </li>
@@ -135,15 +132,15 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd, exa
       {groups.map(g => (
         <div key={g.key} className={styles.group}>
           <div className={styles.groupHead}>
-            <h3 className={styles.groupTitle}>{g.key === "inherited" ? <Term term="Inherited rules" note="Rules set for all your accounts, or for every account on one network. This account follows them unless you turn one off here.">{g.title}</Term> : g.title}<span className={styles.count}>{g.rules.length}</span></h3>
+            <h3 className={styles.groupTitle}>{g.title}<span className={styles.count}>{g.rules.length}</span></h3>
             {g.key === "inherited" && (
               <div className={styles.switches}>
-                <Switch label="All-account rules" checked={next.shared} disabled={pending} onCheckedChange={v => setPreview({ ...next, shared: v === true })} />
+                <Switch label="Shared" checked={next.shared} disabled={pending} onCheckedChange={v => setPreview({ ...next, shared: v === true })} />
                 {level === "account" && <Switch label={net} checked={next.network} disabled={pending} onCheckedChange={v => setPreview({ ...next, network: v === true })} />}
               </div>
             )}
           </div>
-          {g.key === "inherited" && !netShared && <p className={styles.help}>{`All-account rules are off for every ${net} account, so this account can't turn one back on. Change it under "Every ${net} account".`}</p>}
+          {g.key === "inherited" && !netShared && <p className={styles.help}>{`Shared rules are off for every ${net} account, so this account can't turn one back on. Change it under "Every ${net} account".`}</p>}
           {g.rules.length ? <ul className={styles.rules}>{g.rules.map(row)}</ul> : <p className={styles.help}>{`Nothing inherited by ${where}.`}</p>}
         </div>
       ))}
