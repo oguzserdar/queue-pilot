@@ -23,6 +23,11 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 - **Proven on a brand-new account.** Every step, end to end, on an account that has never used Queue Pilot.
 - **Runs anywhere.** Vercel and Docker both start from the README, and every change is checked by starting the Docker copy.
 
+## Right after 1.0: keeping up with Buffer's API
+
+- **Team notes from the new field.** Buffer deprecated `Post.notes` on 9 Nov ("Legacy Notes. Use collaborationNotes."). Queue Pilot still reads it in one place, where it learns rules from the notes on your sent posts. That read moves to `collaborationNotes`, which every other notes feature already uses, one aliased request for all posts so it costs no more of Buffer's limit.
+- **A check for deprecated fields.** The schema test already catches a renamed field. It will also flag any field Queue Pilot reads that Buffer marks deprecated, so the next one shows up in the tests, not in Discord.
+
 ## Next: teams and clients
 
 - **Workspaces.** One per team or client, each with its own accounts, playbook and voice.

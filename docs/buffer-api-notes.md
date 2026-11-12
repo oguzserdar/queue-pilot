@@ -72,7 +72,7 @@ Not used, on purpose:
 
 ## Watching for changes
 
-- Buffer announces schema updates in the `api-notifications` channel of the Buffer Community Discord. Recent examples: `ChannelAction.approvePosts` (15 Oct), the daily posting limit definition (19 Oct), replies and reactions configuration (21 and 22 Oct).
+- Buffer announces schema updates in the `api-notifications` channel of the Buffer Community Discord. Recent examples: `ChannelAction.approvePosts` (15 Oct), the daily posting limit definition (19 Oct), replies and reactions configuration (21 and 22 Oct). On 9 Nov Buffer deprecated `Post.notes` with the reason "Legacy Notes. Use collaborationNotes." Queue Pilot still reads it when it learns rules from sent posts, and moves to `collaborationNotes` right after 1.0 ([ROADMAP.md](../ROADMAP.md)). `collaborationNotes` takes one post per call, so several posts go in one request as aliases.
 - A test that checks the fields you query against Buffer's published reference catches a renamed field before it reaches people (`src/lib/buffer/schema-fields.test.ts`).
 
 For how Queue Pilot exposes these writes to an AI safely, see [Giving an AI safe write access to Buffer](agent-write-tools.md).
