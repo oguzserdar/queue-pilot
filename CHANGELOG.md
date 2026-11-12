@@ -41,6 +41,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - A draft Buffer did save could be marked failed after a fill that stopped halfway. Recovery reads the queue again before deciding.
 - Settings stays up when a Telegram, Discord or channel read fails.
 - On a phone, the approve bar and toasts sit above the tab bar.
+- On a phone, the Write a post window kept the send button inside the window and the preview above the footer. The setup window shows Queue Pilot's address on its own line instead of breaking it mid-word. In the example account, a sign-in message no longer covers the example card, and the failing-post row says it opens Next week.
 - Deleting a draft that had just been approved in Buffer could delete the scheduled post. Queue Pilot reads the post again first and deletes it only while it is still a draft.
 - A Telegram or Discord post sent with Send now stayed scheduled forever if the platform asked it to wait. It goes out once the wait is over.
 - Disconnecting Telegram or Discord cancels the posts still waiting to go there, so reconnecting later does not send them.

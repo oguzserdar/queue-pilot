@@ -25,7 +25,8 @@
 .tile > button { margin-top: auto; max-width: 100%; height: auto; min-height: 32px; white-space: normal; text-align: left; }
 /* Doubled so it outranks the dialog's own 440px width: the address and steps need the room. */
 .dialog { --dialog-width: 600px; display: flex; flex-direction: column; gap: var(--space-4); }
-.dialog .code { word-break: break-all; }
+/* In the setup window the address gets its own full-width line under its label and Copy, never broken mid-word. */
+.dialog .code { flex: 1 1 100%; order: 3; white-space: nowrap; overflow-x: auto; }
 .shot { width: 100%; height: auto; border-radius: var(--radius-control); border: 1px solid var(--border-subtle); display: block; }
 
 /* The coding-agent path first: one line to copy, the agent does the rest. */
