@@ -41,6 +41,7 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 ## Next: for the people who run a copy
 
 - **An admin page for the whole copy.** Workspaces, plans, usage, and pause or restore.
+- **The admin side through your AI.** The same connector, for whoever runs the copy: settings, budget and usage, with the same checks as the admin page.
 - **Export and delete per workspace.** Account export and deletion ship today. Each workspace gets the same.
 - **An API and webhooks,** next to the AI connector.
 
