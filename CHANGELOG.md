@@ -41,6 +41,17 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - A draft Buffer did save could be marked failed after a fill that stopped halfway. Recovery reads the queue again before deciding.
 - Settings stays up when a Telegram, Discord or channel read fails.
 - On a phone, the approve bar and toasts sit above the tab bar.
+- After Approve, the draft window said Queue Pilot did not write the post. It now says the post is scheduled in Buffer, and Approve stays off for anything that is not a draft.
+- Pressing Fill next week again while a fill was running could put two drafts in one time. Each run reads the empty times again just before saving.
+- When Buffer refuses an Approve, for example because the time has passed, the open draft window says why.
+- Cutting a hashtag or mention from two drafts offered a rule against the plain word. The offer keeps the # or @.
+- A first visit shows only the welcome, without the setup list under it.
+- Connect says an AI app is connected once it has called Queue Pilot. After Allow alone it says the app is allowed and not used yet.
+- A Buffer account with no channels was shown with a check mark and "0 channels connected". Setup says to add a channel in Buffer.
+- A week with a paused Buffer queue, or no posting times, said every time had a post. It says why there are no times.
+- A sign-in that failed, for example because Buffer was busy, ended on a blank error page. It comes back to the page it started from with the reason.
+- The approval date in the draft window no longer splits "12 Nov." across two lines.
+- The count of Buffer operations Queue Pilot uses was two too high. It uses 37 of the 49.
 
 ## [0.9.0] - 2026-11-10 Queue Pilot has a home page, and you can watch it write your week
 
