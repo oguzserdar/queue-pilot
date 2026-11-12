@@ -29,6 +29,8 @@ describe("SetupSteps", () => {
     const out = html({ account: { email: "sam@example.com", channels: [] } });
     expect(out).toContain("Buffer: sam@example.com, no channels yet. Add one in Buffer, then come back.");
     expect(out).not.toContain("()");
+    // The setup line is a grid of mark and words; without the empty mark cell the words fall into the 7px column.
+    expect(out).toMatch(/<span aria-hidden="true"><\/span><span>Buffer: sam@example.com, no channels yet/);
   });
 
   it("calls an app connected only after it reached Queue Pilot, and offers the check before that", () => {

@@ -83,6 +83,8 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
           <h3 className={styles.stepTitle}>Check your AI is connected</h3>
           {account && !account.channels.length ? (
             <p className={styles.fact}>
+              {/* The line is a two-column grid: an empty first cell keeps the words in the wide column, without a check. */}
+              <span aria-hidden="true" />
               <span>Buffer: {account.email}, no channels yet. Add one in Buffer, then come back.{" "}
               {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
             </p>
