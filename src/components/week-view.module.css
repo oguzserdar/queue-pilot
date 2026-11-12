@@ -159,7 +159,7 @@
 .viewRules { margin-left: auto; color: var(--qp-crimson); font-size: var(--text-xs); }
 /* The dialog body scrolls and has padding; a sticky box stops at its content edge, so the bar reaches past the padding to sit flush. */
 .footer { position: sticky; bottom: calc(-1 * var(--space-6)); display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; margin: var(--space-6) calc(-1 * var(--space-6)) calc(-1 * var(--space-6)); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--border); background: var(--surface-raised); }
-.footNote { color: var(--text-muted); font-size: var(--text-xs); margin: 0; max-width: 52ch; }
+.footNote { color: var(--text-muted); font-size: var(--text-xs); margin: 0; max-width: 52ch; text-wrap: pretty; }
 /* The plain saved state reads at the buttons' size, with a mark, so the bar's left side is a status, not a stray caption. */
 .footState { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--text-secondary); }
 .footState svg { color: var(--success, currentColor); flex: none; }
