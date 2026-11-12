@@ -48,7 +48,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - A first visit shows only the welcome, without the setup list under it.
 - Connect says an AI app is connected once it has called Queue Pilot. After Allow alone it says the app is allowed and not used yet.
 - A Buffer account with no channels was shown with a check mark and "0 channels connected". Setup says to add a channel in Buffer.
-- A week with a paused Buffer queue, or no posting times, said every time had a post. It says why there are no times.
+- A week with a paused Buffer queue, or no posting times, said every time had a post and asked you to fill it. It says why there are no times and what to change in Buffer.
 - A sign-in that failed, for example because Buffer was busy, ended on a blank error page. It comes back to the page it started from with the reason.
 - The approval date in the draft window no longer splits "12 Nov." across two lines.
 - The count of Buffer operations Queue Pilot uses was two too high. It uses 37 of the 49.

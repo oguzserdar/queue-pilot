@@ -79,6 +79,8 @@ describe("a week with no posting times", () => {
     const html = renderToStaticMarkup(<WeekView week={paused} live verdicts={{}} />)
     expect(html).not.toContain("every time has a post")
     expect(html).toContain("your Buffer queue is paused")
+    expect(html).toContain("Resume your queue in Buffer")
+    expect(html).not.toContain("ask it to fill your week")
   })
 
   it("says no posting times are set when the schedule is empty", () => {
@@ -86,5 +88,6 @@ describe("a week with no posting times", () => {
     const html = renderToStaticMarkup(<WeekView week={empty} live verdicts={{}} />)
     expect(html).not.toContain("every time has a post")
     expect(html).toContain("no posting times set in Buffer")
+    expect(html).toContain("Add posting times to your channels in Buffer")
   })
 })

@@ -434,6 +434,8 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
             <span className="tnum">{WEEK_LABEL}</span>.{" "}
             {channels.length === 0
               ? "Nothing to fill yet."
+              : !hasTimes && !posts.length
+              ? (channels.every((c) => c.isQueuePaused) ? "Resume your queue in Buffer, and its posting times show here to fill." : "Add posting times to your channels in Buffer, and they show here to fill.")
               : drafts.length > 0
               ? `${live ? (waiting ? `${waiting} waiting for your approval` : "No drafts from Queue Pilot are waiting for approval") : "Written from your newsletter, each one checked against your playbook"}${blocked.length ? `. ${blocked.length} can't go out until ${blocked.length === 1 ? "its" : "their"} problem is fixed` : ""}.`
               : writing?.ready ? `Fill ${which} week writes drafts into your empty Buffer posting times. Or connect your AI and ask it to fill your week.` : "Connect your AI and ask it to fill your week."}
