@@ -172,9 +172,7 @@ The budget is enforced by Queue Pilot: before each built-in AI action it compare
 
 ## What's next
 
-- **1.0, proven on a brand-new account.** Every step run end to end on an account that has never used Queue Pilot, and the Docker version running on its own server.
-- **Teams and clients.** Workspaces with their own playbook and voice, roles, and client approval through a link.
-- **Plans for your copy.** Whoever runs a copy can set plans, add payments and offer sign-up with a trial. Without payment keys, everything stays open.
+Queue Pilot is meant to be a starting point for anyone who wants to build on Buffer. Take it and make it yours. The admin page, running your own copy and the checks on every Buffer write are already here. Next I'm adding teams and clients, then plans for whoever runs a copy, and I'll keep it current as Buffer's API changes.
 
 More in the [roadmap](ROADMAP.md), and what shipped in [CHANGELOG.md](CHANGELOG.md).
 

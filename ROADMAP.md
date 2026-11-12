@@ -4,6 +4,16 @@ Where Queue Pilot is heading. What has shipped is in [CHANGELOG.md](CHANGELOG.md
 
 Free and open source, from the first draft to the post going out. Nothing goes out until you approve it.
 
+Queue Pilot is meant to be where you start when you want to build something on Buffer. Take it, run your own copy, change what you like. It's MIT, and nothing is held back for a paid version.
+
+A lot of the machinery is already here for whoever runs a copy: Sign in with Buffer, an admin page for the keys, the AI budget and the daily limits, Vercel or Docker from one guide, and a test behind every write to Buffer. The rest of this page is the plan. I'll keep building it, and keep it current as Buffer's API grows.
+
+## All along: a starting point for Buffer apps
+
+- **Parts you can swap.** Buffer, the AI, the sources and the places to publish each live in their own part of the code, and the work is to keep them that way, so you can change one without touching the rest.
+- **Following Buffer's API.** When Buffer adds or changes something, Queue Pilot follows, and the changelog says what changed and why.
+- **A guide to building your own.** How to start a new Buffer app from this one: what to keep, what to change, and where each piece lives.
+
 ## Shipped
 
 Sign in with Buffer and see your real week. Drafts from the AI you already use: Claude, ChatGPT, Grok, and coding agents in your terminal and editor. A playbook that learns from your edits, your team's notes in Buffer and the posts already there. Delivery with Buffer's own reasons, and copies to Telegram and Discord after Buffer publishes. Every step is in [CHANGELOG.md](CHANGELOG.md).
