@@ -27,7 +27,7 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 
 - **Workspaces.** One per team or client, each with its own accounts, playbook and voice.
 - **Roles.** Invite people as admin, writer or reviewer.
-- **Client approval.** A client opens a link, comments and approves their drafts. Nothing is scheduled until they do.
+- **Client approval.** Review links already take comments. Next, the client approves their drafts from the link, and nothing is scheduled until they do.
 - **Activity per workspace.** Who wrote, changed, approved or deleted what, and through which AI.
 
 ## Next: plans for your copy

@@ -101,7 +101,7 @@ Buffer schedules and publishes. After Buffer publishes a post, Queue Pilot can c
 
 ![How Queue Pilot uses Buffer's API: screens and AI apps read one saved copy of your queue, it refreshes when old, re-reads before writing, and new posts are saved as drafts](docs/media/diagram-api.png)
 
-- **Drafts first.** Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
+- **Drafts first.** Drafts only. Your Approve schedules.
 - **Only its own drafts.** It approves, edits or deletes a single draft only when it wrote that draft. Deleting a whole content item removes the posts in it, and your AI is told to get your yes first.
 - **One saved copy per person.** Channels, posting times and posts from 7 days back to 14 days ahead. Screens and the connector read the copy, so browsing costs no requests.
 - **Every request is counted.** All Queue Pilot users share one Buffer allowance, so each request is counted before it's sent, across every server. Assistant and background requests pause at 15 left in a known window. When the allowance isn't known yet, they go one at a time until Buffer reports it.
@@ -146,7 +146,7 @@ This runs the app and Postgres, applies migrations on start, and runs the daily 
 
 When the health check answers, open `/admin` and become the admin as in step 4 above. Step 5's command cannot reach this database from outside Docker. To add or restore an admin later, run it inside: `docker compose exec db psql -U queuepilot queuepilot -c "update \"user\" set role = 'admin' where lower(email) = lower('you@example.com')"`. It answers `UPDATE 1` when it worked, and `UPDATE 0` when that person has not signed in yet.
 
-You can also skip the build. Each release publishes the app as an image at `ghcr.io/oguzserdar/queue-pilot`, for amd64 and arm64, tagged with the version, such as `0.9.0`. Run it on any container host with the variables from `.env.example`, `DATABASE_URL` included, and with a restart policy, because the app stops when the database is not up yet. It applies migrations when it starts and listens on port 3000. Have the host make the two calls the `cron` service in `docker-compose.yml` makes, each with `Authorization: Bearer <CRON_SECRET>`. They are `/api/cron/due` every 30 seconds and `/api/cron/echo` once a day.
+You can also skip the build. Each release publishes the app as an image at `ghcr.io/oguzserdar/queue-pilot`, for amd64 and arm64, tagged with the version, such as `1.0.0`. Run it on any container host with the variables from `.env.example`, `DATABASE_URL` included, and with a restart policy, because the app stops when the database is not up yet. It applies migrations when it starts and listens on port 3000. Have the host make the two calls the `cron` service in `docker-compose.yml` makes, each with `Authorization: Bearer <CRON_SECRET>`. They are `/api/cron/due` every 30 seconds and `/api/cron/echo` once a day.
 
 ### Updating and backups
 
@@ -182,7 +182,7 @@ The budget is enforced by Queue Pilot: before each built-in AI action it compare
 
 ## What's next
 
-Queue Pilot is meant to be a starting point for anyone who wants to build on Buffer. Take it and make it yours. The admin page, running your own copy and the checks on every Buffer write are already here. Next I'm adding teams and clients, then plans for whoever runs a copy, and I'll keep it current as Buffer's API changes.
+Next: teams and clients, then plans for whoever runs a copy.
 
 More in the [roadmap](ROADMAP.md), and what shipped in [CHANGELOG.md](CHANGELOG.md).
 

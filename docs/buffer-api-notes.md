@@ -25,7 +25,7 @@ Not used, on purpose:
 
 | Operation | Why not |
 |---|---|
-| `aggregatedPostMetrics` | Queue Pilot learns from your edits today. Learning from results is next on the roadmap |
+| `aggregatedPostMetrics` | Queue Pilot learns from your edits today. Learning from results is on the roadmap, under Later |
 | `instagramAudio`, `instagramAudioCatalog`, `searchInstagramAudio`, `searchInstagramAudioCatalog`, `trendingInstagramAudio` | Queue Pilot writes text posts, not reels |
 | `createPostTemplate`, `updatePostTemplate`, `deletePostTemplate` | Templates are yours. Queue Pilot reads them and never changes them |
 | `movePostInQueue` | Queue Pilot never reorders your queue |
@@ -62,7 +62,7 @@ Not used, on purpose:
 ## Changing only your own drafts
 
 - Every post has `via: api | buffer | network`, but this field does not identify the app that owns a draft. During QP testing, drafts it created were labelled `buffer`. Approve, edit and delete require a saved writing record for the signed-in person (`src/lib/written-store.ts`). A draft from another app or typed in Buffer is refused.
-- Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it. The Approve action uses `editPost` with `saveToDraft: false` and keeps the slot time (`src/lib/approve-drafts.ts`). Among connector tools only `approve_drafts` can schedule, after the person's yes to the exact drafts shown, and they can turn it off in Settings.
+- Drafts only. Your Approve schedules. The Approve action uses `editPost` with `saveToDraft: false` and keeps the slot time (`src/lib/approve-drafts.ts`). Among connector tools only `approve_drafts` can schedule, after the person's yes to the exact drafts shown, and they can turn it off in Settings.
 - `editPost` with `saveToDraft: true` keeps the post a draft at its slot. `deletePost` returns `DeletePostSuccess` or an error, so count only success.
 
 ## Reading failures

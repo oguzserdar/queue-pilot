@@ -17,7 +17,7 @@ you staged, and checks the message format. Each push runs the full test suite.
 - Add a line under Unreleased in `CHANGELOG.md`, written for the people who use Queue Pilot.
 - The pull request title follows Conventional Commits: `feat: ...`, `fix: ...`, `docs: ...`. It becomes the commit
   message on main.
-- `pnpm check:copy` passes for any text people read.
+- `pnpm check:copy` passes. It checks README, CHANGELOG, ROADMAP and CONTRIBUTING.
 
 ## Three rules the code keeps
 

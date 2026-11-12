@@ -1,6 +1,6 @@
 # Connector controls
 
-The connector exposes 76 tools. OAuth supplies the account ID; tool inputs cannot select another account. The browser and connector share the built-in writer and the signed-in setup-step builder.
+The connector exposes 76 tools. OAuth supplies the account ID; tool inputs cannot select another account. The app and the connector use the same writer and the same setup steps.
 
 | Area | Tools |
 | --- | --- |
@@ -18,13 +18,13 @@ The connector exposes 76 tools. OAuth supplies the account ID; tool inputs canno
 | Hashtag sets | `list_snippets`, `save_snippet`, `delete_snippet` |
 | Content items | `list_content_items`, `get_content_item`, `save_channel_less_draft`, `promote_to_draft_posts`, `update_content_item`, `delete_content_item`, `link_post_to_content_item`, `unlink_post_from_content_item` |
 
-`write_my_week` calls the same service as the app button. It reads real material, voice and rules, uses the person's key or the metered built-in key, and saves only Buffer drafts. Each run handles at most ten empty slots next week and rewrites refused drafts once. It reports saved drafts, flags and refusals. More slots may remain; never claim the entire week is full unless readback proves it.
+`write_my_week` calls the same service as the app button. It reads real material, voice and rules, uses the person's key or the metered built-in key, and saves only Buffer drafts. Each run handles at most ten empty slots next week and rewrites refused drafts once. It reports saved drafts, flags and refusals. More empty times may remain after a run, so read the week back before saying it is full.
 
-`check_draft` uses the same judge and AI allowance without saving anything. It distinguishes passed, refused, flagged, uncertain and not checked. Checks are repeated when saving. AI actions share the existing three-per-minute burst allowance; a rule reading plus two draft checks can require a pause before writing.
+`check_draft` uses the same judge and AI allowance without saving anything. It distinguishes passed, refused, flagged, uncertain and not checked. Checks are repeated when saving. AI actions share one allowance of three per minute; a rule reading plus two draft checks can require a pause before writing.
 
-Learning offers have four modes: small repeated fixes from the saved queue, AI inference from larger rewrites, AI inference from past posts, and AI inference from review comments. Inferred proposals use existing evidence-verifying routines. Queue Pilot's own generated posts are excluded from past-post learning. Keeping a suggestion requires its signed account-bound token, valid for one hour. The evidence is stored in the existing rule JSON. Long evidence is clearly marked as an excerpt. Older and manually added rules may have no recorded evidence.
+Learning offers have four modes: small repeated fixes from the saved queue, AI inference from larger rewrites, AI inference from past posts, and AI inference from review comments. Inferred proposals are checked against their evidence before they are shown. Queue Pilot's own generated posts are excluded from past-post learning. Keeping a suggestion requires its signed account-bound token, valid for one hour. The evidence is stored with the rule. Long evidence is clearly marked as an excerpt. Older and manually added rules may have no recorded evidence.
 
-Setup progress uses exactly the same helper as the signed-in home screen. Its fifth step is human approval, not keeping a rule. A drafts-only run can reach 4/5 after channel, AI, voice and source setup; it must not claim 5/5. The existing approval-step behavior is preserved.
+Setup progress uses exactly the same helper as the signed-in home screen. Its fifth step is human approval, not keeping a rule. Setup shows 4 of 5 after channel, AI, voice and source. The fifth step is your first approval.
 
 Only drafts recorded as Queue Pilot's own are returned by `list_my_drafts`. Stored verdicts are hidden when the text has changed since the recorded check. Rule, source, example and research cleanup is scoped to the token owner. Removing sources or research leaves existing drafts intact; research usage history remains.
 
@@ -32,7 +32,7 @@ Only drafts recorded as Queue Pilot's own are returned by `list_my_drafts`. Stor
 
 ## Verification
 
-- 215 test files, 1,731 tests passed (11 Nov 2026).
+- 218 test files, 1,751 tests passed (12 Nov 2026).
 - Type checking, copy checks and diff whitespace checks passed.
 - Connector integration exercises refusal, correction, Buffer draft save and verdict readback with simulated AI and Buffer responses.
 - Cross-account removal/read tests, signed-proposal tampering and expiry tests, real Postgres-compatible material cleanup checks, and AI settlement/refund checks pass.
@@ -55,4 +55,4 @@ Review links expire after 1, 7 (default), or 30 days and can be turned off earli
 
 Account boundaries also apply to learning: repeated edits, rewrite evidence and past-post inference are grouped by exact connected account. Two LinkedIn profiles cannot pool their examples to meet the evidence minimum. The resulting suggestions keep that account scope. Saved repeat verdicts include the account ID in their key.
 
-A review comment produces proposals, not automatic writes. `propose_review_changes` checks selected Queue Pilot drafts against their effective rules. Apply a chosen edit with `update_draft`, including its `expected_text`; keep a lasting preference with its signed suggestion token in a separate call. Facts and unclear requests have no rule token. A fresh Buffer read immediately before the mutation detects intervening text/status/account changes, but Buffer has no atomic conditional-write operation: a concurrent external write between that read and the mutation remains possible.
+A review comment produces proposals, not automatic writes. `propose_review_changes` checks selected Queue Pilot drafts against their effective rules. Apply a chosen edit with `update_draft`, including its `expectedText`; keep a lasting preference with its signed suggestion token in a separate call. Facts and unclear requests have no rule token. A fresh Buffer read immediately before the mutation detects intervening text/status/account changes, but Buffer has no atomic conditional-write operation: a concurrent external write between that read and the mutation remains possible.
