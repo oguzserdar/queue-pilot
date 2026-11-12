@@ -59,6 +59,11 @@ describe("emoji edits", () => {
   });
   it("keeps different emoji distinct and detects emoji attached to words", () => {
     expect(fixesIn("A useful release for builders today🚀", "A useful release for builders today")).toEqual([{ kind: "banned", phrase: "🚀" }]);
+  });
+
+  it("keeps a cut hashtag or mention as written, so the rule does not ban the plain word", () => {
+    expect(fixesIn("New release out now #AI", "New release out now")).toEqual([{ kind: "banned", phrase: "#AI" }]);
+    expect(fixesIn("Thanks @buffer for the API.", "Thanks for the API.")).toEqual([{ kind: "banned", phrase: "@buffer" }]);
     expect(fixesIn("A useful release for builders today 🚀", "A useful release for builders today 🎉")).toEqual([{ kind: "replace", from: "🚀", to: "🎉" }]);
   });
   it("does not turn punctuation-only cuts into empty rules", () => {
