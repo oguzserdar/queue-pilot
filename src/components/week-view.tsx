@@ -396,7 +396,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
                 {current.ours !== false && !approved.has(current.id) && (
                   <DropdownMenu label="More" icon={<MoreHorizontal size={16} strokeWidth={1.75} />} items={[{ label: "Delete draft", destructive: true, icon: <Trash2 size={15} strokeWidth={1.75} />, onSelect: () => { setConfirmDelete(true); setEditing(null); setNote(null); } }]} />
                 )}
-                <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.status === "scheduled" || approved.has(current.id) ? undefined : current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
+                <Button variant="primary" disabled={current.status !== "draft" || current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.status === "scheduled" || approved.has(current.id) ? undefined : current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
                   {approved.has(current.id) ? "Approved" : current.status === "scheduled" ? "Scheduled" : "Approve & schedule"}
                 </Button>
               </div>

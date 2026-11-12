@@ -55,6 +55,11 @@ describe("the draft window's footer", () => {
     expect(html).toContain("Scheduled in Buffer")
   })
 
+  it("offers no Approve on a post that is already scheduled, even on the example page", () => {
+    const html = renderToStaticMarkup(<WeekView week={{ ...scheduled, posts: [{ ...scheduled.posts[0], ours: true }] }} showDraft="sched" />)
+    expect(html).toMatch(/disabled=""><span[^>]*><span[^>]*><span[^>]*>Scheduled<\/span>/)
+  })
+
   it("calls a published post published", () => {
     const sent = { ...demoWeek, posts: [{ ...demoWeek.posts[0], id: "out", status: "sent" as const, checks: [] }] }
     const html = renderToStaticMarkup(<WeekView week={sent} live verdicts={{}} showDraft="out" />)
