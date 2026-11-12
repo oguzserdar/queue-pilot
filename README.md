@@ -79,17 +79,17 @@ Then ask, for example: *"Fill my empty Buffer times next week from my newsletter
 - **Learn your voice and use your material.** Save a style note and writing examples with `save_my_voice_note` and `add_voice_example`, add feeds with `add_source`, or keep research with `add_material`.
 - **Follow your playbook.** Read, add or remove rules when you ask, and try a draft against them with `check_draft` before saving it.
 - **Write your week.** Read the open slots, run Queue Pilot's writer with `write_my_week` for up to ten drafts, then read the drafts and their checks with `list_my_drafts`. It can also edit or delete drafts Queue Pilot wrote.
-- **Use more of Buffer.** Start from Buffer's post templates (`list_post_templates`, `fill_post_template`), write a post once and save a checked draft for each account (`save_channel_less_draft`, `promote_to_draft_posts`), read and add Notes with teammate mentions, create, rename and apply tags, save ideas, and read saved hashtag sets where Buffer enables them for your account. The same templates, hashtags and per-account versions are in the app's New post composer.
+- **Use more of Buffer.** Start from Buffer's post templates (`list_post_templates`, `fill_post_template`), write a post once and save a checked draft for each account (`save_channel_less_draft`, `promote_to_draft_posts`), read, add, edit and delete Notes with teammate mentions, create, rename, apply and delete tags, save ideas, read and save hashtag sets where Buffer enables them for your account, and update or delete content items. The same templates, hashtags and per-account versions are in the app's New post composer.
 
 Give your AI the skills for the steps to follow once connected: the setup line on the Connect page installs all five: the four task skills and one for connecting. In Claude Code you can add the [plugin](plugin/skills) instead, which ships the four task skills. The [Fill my week skill](plugin/skills/queue-pilot-fill-week/SKILL.md) is the one to start with.
 
-The connector schedules only drafts Queue Pilot wrote, only when you ask, and asks you first unless you change that in Settings. It edits or deletes a single draft only when Queue Pilot wrote it. Organization tools work only inside your own Buffer organizations, and the ones that remove something your team shares (a tag, a hashtag set, or a content item with every post in it) ask you first. Account settings, AI keys and app access stay with you.
+The connector schedules only drafts Queue Pilot wrote, only when you ask, and asks you first unless you change that in Settings. It edits or deletes a single draft only when Queue Pilot wrote it. Organization tools work only inside your own Buffer organizations. The ones that remove something your team shares (a tag, a hashtag set, or a content item with every post in it) are marked as destructive, and your AI is told to name the thing and get your yes first. Queue Pilot checks a confirmation itself only for scheduling. Account settings, AI keys and app access stay with you.
 
 Some of these actions Buffer's own MCP has too. Where it does, the tool says so: if you have Buffer's connector, use one of them for that action, not both. Drafting, the checks against your rules and the source quotes stay in Queue Pilot.
 
 ## Your AI key, or ours
 
-- **Your own key** (Anthropic, OpenAI or OpenRouter) always works, with no limit from Queue Pilot. It is stored encrypted and shown masked. Your provider bills you.
+- **Your own key** (Anthropic, OpenAI or OpenRouter) always works, with no daily allowance or budget from Queue Pilot. One burst limit applies to every key: three AI actions a minute. It is stored encrypted and shown masked. Your provider bills you.
 - **No key?** The hosted copy writes with its own key, within a budget its operator sets, and a small daily allowance per person.
 - **Connect OpenRouter** in one click instead of pasting a key.
 
@@ -102,10 +102,10 @@ Buffer schedules and publishes. After Buffer publishes a post, Queue Pilot can c
 ![How Queue Pilot uses Buffer's API: screens and AI apps read one saved copy of your queue, it refreshes when old, re-reads before writing, and new posts are saved as drafts](docs/media/diagram-api.png)
 
 - **Drafts first.** Queue Pilot never schedules or publishes on its own. Only your Approve schedules, or your AI when you ask it.
-- **Only its own drafts.** It approves, edits or deletes a single draft only when it wrote that draft. Deleting a whole content item, which you confirm first, removes the posts in it.
+- **Only its own drafts.** It approves, edits or deletes a single draft only when it wrote that draft. Deleting a whole content item removes the posts in it, and your AI is told to get your yes first.
 - **One saved copy per person.** Channels, posting times and posts from 7 days back to 14 days ahead. Screens and the connector read the copy, so browsing costs no requests.
 - **Every request is counted.** All Queue Pilot users share one Buffer allowance, so each request is counted before it's sent, across every server. Assistant and background requests pause at 15 left in a known window. When the allowance isn't known yet, they go one at a time until Buffer reports it.
-- **Polling, not webhooks.** Buffer has no webhooks, so the copy refreshes when it is older than 5 minutes, from the Refresh button, and once a day. A refresh is one request: the account, channels and posts together. Tools that only need an ID, like looking up teammates, use the saved copy instead.
+- **Polling, not webhooks.** Buffer has no webhooks, so the copy refreshes when a screen or your AI reads it and it is older than 5 minutes, and from the Refresh button. People with Telegram or Discord copies turned on also get one refresh a day, so a published post is copied even when they never open the app. A refresh is one request: the account, channels and posts together. Tools that only need an ID, like looking up teammates, use the saved copy instead.
 - **Within Buffer's limits.** Each app gets 500 requests a day plus 25 for every person who signs in, and 15,000 every 30 days plus 100 per person ([API limits](https://developers.buffer.com/guides/api-limits)). In our test with 3 channels and 15 drafts, a whole first session costs 13:
 
 | Step | Requests |
@@ -129,8 +129,8 @@ Building your own MCP server on Buffer? [Giving an AI safe write access to Buffe
 ### On Vercel
 
 1. In Buffer, open **Settings → API → App Clients** and create a client. Set its redirect URI to `https://<your address>/api/auth/callback/buffer`.
-2. Create a Postgres database (Neon works) and set the variables from [`.env.example`](.env.example), including the Buffer client ID and secret. Each line says how to generate its value.
-3. Deploy. Migrations run on every deploy.
+2. Add a Postgres database. Neon from the Vercel Marketplace sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED` for you. With any other Postgres, set `DATABASE_URL` yourself. Then set the other variables from [`.env.example`](.env.example), including the Buffer client ID and secret. Each line says how to generate its value.
+3. Deploy. Migrations run on every production deploy, over the direct address when it is set.
 4. Open `/admin`, sign in with Buffer, enter your `ADMIN_SETUP_CODE`, and press **Become the admin**. In production the code is required, 24 characters or more: without it nobody can claim the deployment from the web, even after the last admin is gone. The code keeps anyone else from claiming it first.
 5. Manage the other keys in `/admin`. To add or restore an admin later: `DATABASE_URL=<your database> pnpm admin:grant you@example.com`.
 
@@ -142,13 +142,13 @@ docker compose up -d
 curl localhost:3000/api/health/ready
 ```
 
-This runs the app and Postgres, applies migrations on start, and runs the daily job. `BUFFER_REDIRECT_URI` is this copy's address followed by `/api/auth/callback/buffer` (`http://localhost:3000/...` on your own machine), and it must match the redirect URI in your Buffer app exactly. Behind a reverse proxy that appends to `x-forwarded-for`, set `TRUSTED_PROXIES` so each visitor gets their own rate limit.
+This runs the app and Postgres, applies migrations on start, and runs the daily job. `BUFFER_REDIRECT_URI` is this copy's address followed by `/api/auth/callback/buffer` (`http://localhost:3000/...` on your own machine), and it must match the redirect URI in your Buffer app exactly. Behind a reverse proxy that appends to `x-forwarded-for`, set `TRUSTED_PROXY_HOP_COUNT` to the number of proxies, or list their addresses in `TRUSTED_PROXIES`, so each visitor gets their own rate limit. Signed-out visitors see the example app at `/` until you set `LANDING_PAGE=on`, which shows the homepage.
 
 ### Settings
 
 The settings in the table below can be changed in `/admin`: Buffer app keys, the hosted AI key and its budget, the daily allowance per person, source keys, and the five Telegram and Discord bot fields. For each one, a value saved in `/admin` wins over the server's environment variable, which wins over the default, and `/admin` shows which one is in use. Removing a saved value goes back to the environment's. Secrets are encrypted and shown masked. Every change is logged with the admin who made it, never with a secret's value.
 
-Startup values stay in the server's environment only and are not in `/admin`: `DATABASE_URL`, `SESSION_SECRET`, `SETTINGS_KEY`, `ADMIN_SETUP_CODE`, `CRON_SECRET`, `BUFFER_REDIRECT_URI` and `TRUSTED_PROXIES`. The server needs them before `/admin` can open, and a key never lives in the database it unlocks.
+Startup values stay in the server's environment only and are not in `/admin`: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `SESSION_SECRET`, `SETTINGS_KEY`, `ADMIN_SETUP_CODE`, `CRON_SECRET`, `BUFFER_REDIRECT_URI`, `TRUSTED_PROXY_HOP_COUNT`, `TRUSTED_PROXIES`, `LANDING_PAGE` and, with Docker, `POSTGRES_PASSWORD`. The server needs them before `/admin` can open, and a key never lives in the database it unlocks.
 
 **Upgrading from 0.7 or earlier.** Before 0.8 the environment won over a saved value. So that an upgrade changes nothing, a value saved before 0.8 does not replace a value set in the environment: the environment's value stays in use, and `/admin` lists each one. Choose **Use the saved value**, save a new value, or remove the saved one. A value saved before 0.8 with no environment value is still used. Values saved from 0.8 on win as described above.
 

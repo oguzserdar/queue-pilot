@@ -8,6 +8,12 @@ All notable changes to Queue Pilot are recorded here. The format follows
 ### Added
 - Connect gives one message for each AI app. Pasted into a chat app, it walks you through adding Queue Pilot one step at a time, then shows one preview post and saves nothing. It carries the fill-week instructions, so an app that cannot install skills still writes the Queue Pilot way.
 - The example account's Reviews page shows a shared link with comments from a client and a teammate, each pinned to the words it is about.
+- A new account starts with one playbook rule that flags a draft about someone's private matters, such as health, a legal or immigration case, money, family, staff or customers, unless it is already public.
+- Make the same fix to two drafts and the app offers it as a rule. Home lists it under Fixes you repeated, and the Playbook shows the edit with Keep as a rule and Not now.
+- The first visit asks how to fill the week: with your own AI, or with Queue Pilot's built-in AI writing from a link. A choice of Not now holds on every device.
+- Long lists page with Newer and Older: Reviews, the Channels post list, saved research and Security activity. Security activity folds repeats and names each draft by account and slot.
+- A link can open the example on one of the app's own screens. Each copy serves its own robots.txt and sitemap.xml, and the footer links Privacy.
+- Shared links show a new preview card with the Pilot.
 
 ### Changed
 - Sources holds only your material. Whether each Buffer channel can post, and the Telegram and Discord copies, moved to a new Settings tab, Channels.
@@ -16,6 +22,24 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - On the Week page the action buttons share one size, and a post that would fail shows as a status at the end of the row.
 - On a phone, four tabs sit at the bottom of the screen and More opens the rest. Before, the tab row scrolled and hid seven pages.
 - The example's New material dates follow the shown week, Connect names a disconnected channel as disconnected, finished setup steps read as done, and an empty Buffer time is called an empty time everywhere in the app.
+- Posts are written from what you publish and follow. Email and chats are never a source, and your AI reads your own writing there only to learn your style, when you ask. A draft an AI saves with no source is flagged No source.
+- A rule applies where it fits the post. An ending you add to posts about one subject, such as a project link, stays off posts about anything else.
+- A draft over a network's limit is shortened once before saving, and one that still does not fit is left out. Fill next week used to show Not saved: Too long.
+- Home counts every empty time ahead. It used to count only the ten that one run writes.
+- An edited draft has one Check again button, which rechecks the playbook and the sources.
+- Voice examples say three to five work best and stop at twelve, and each one says who added it. Every limit a person can reach says what it is.
+- Once an AI app has connected, Home leads with it. The first visit is one page until you choose how to fill the week.
+- Suggest changes starts with the commented draft only, and a dialog's buttons stay in view in a short window.
+
+### Fixed
+- A fill lost every draft when the AI answered an empty video timestamp for one post.
+- A failed session lookup could sign a live person out. Only a session that is gone does now.
+- After an account was deleted, its old sign-in showed an empty app. It goes to the home page.
+- The only admin of a copy can no longer delete their account and leave nobody to manage its keys.
+- Grok's sign-in pop-up keeps Allow and Deny in view.
+- A draft Buffer did save could be marked failed after a fill that stopped halfway. Recovery reads the queue again before deciding.
+- Settings stays up when a Telegram, Discord or channel read fails.
+- On a phone, the approve bar and toasts sit above the tab bar.
 
 ## [0.9.0] - 2026-11-10 Queue Pilot has a home page, and you can watch it write your week
 

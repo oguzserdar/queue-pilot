@@ -4,14 +4,19 @@ The connector exposes 76 tools. OAuth supplies the account ID; tool inputs canno
 
 | Area | Tools |
 | --- | --- |
-| Setup and account reads | `get_setup_status`, `list_channels`, `refresh_buffer`, `get_ai_usage`, `list_ai_models`, `set_ai_model` |
+| Setup and account reads | `get_setup_status`, `list_channels`, `get_channel_settings`, `list_team_members`, `refresh_buffer`, `get_buffer_limits`, `get_ai_usage`, `list_ai_models`, `set_ai_model` |
 | Voice | `get_my_voice`, `save_my_voice_note`, `add_voice_example`, `remove_voice_example` |
 | Playbook | `get_playbook`, `add_rule`, `remove_rule`, `read_rule`, `check_draft`, `get_effective_rules`, `set_rule_override`, `set_rule_inheritance` |
 | Learning | `list_rule_suggestions`, `keep_suggestion`, `dismiss_suggestion`, `propose_rule_fixes` |
 | Review | `share_for_review`, `list_review_comments`, `turn_off_review`, `propose_review_changes`, `propose_note_changes` |
-| Material | `list_sources`, `add_source`, `remove_source`, `add_material`, `remove_material`, `list_new_material`, `read_material` |
+| Material | `list_sources`, `add_source`, `remove_source`, `add_material`, `remove_material`, `list_new_material`, `read_material`, `get_transcript`, `search_context`, `add_web_page`, `list_sources_to_check`, `report_source_version` |
 | Buffer notes | `list_draft_notes`, `add_draft_note`, `update_draft_note`, `delete_draft_note` |
-| Drafts and delivery | `list_open_slots`, `write_my_week`, `save_drafts`, `list_my_drafts`, `update_draft`, `delete_draft`, `show_next_week`, `show_last_week_delivery` |
+| Drafts and delivery | `list_open_slots`, `write_my_week`, `save_drafts`, `list_my_drafts`, `update_draft`, `delete_draft`, `approve_drafts`, `show_next_week`, `show_last_week_delivery` |
+| Ideas | `list_buffer_ideas`, `save_idea` |
+| Tags | `list_tags`, `create_tag`, `rename_tag`, `delete_tag`, `tag_draft` |
+| Templates | `list_post_templates`, `get_post_template`, `fill_post_template` |
+| Hashtag sets | `list_snippets`, `save_snippet`, `delete_snippet` |
+| Content items | `list_content_items`, `get_content_item`, `save_channel_less_draft`, `promote_to_draft_posts`, `update_content_item`, `delete_content_item`, `link_post_to_content_item`, `unlink_post_from_content_item` |
 
 `write_my_week` calls the same service as the app button. It reads real material, voice and rules, uses the person's key or the metered built-in key, and saves only Buffer drafts. Each run handles at most ten empty slots next week and rewrites refused drafts once. It reports saved drafts, flags and refusals. More slots may remain; never claim the entire week is full unless readback proves it.
 
@@ -27,7 +32,7 @@ Only drafts recorded as Queue Pilot's own are returned by `list_my_drafts`. Stor
 
 ## Verification
 
-- 88 test files, 581 tests passed.
+- 215 test files, 1,731 tests passed (11 Nov 2026).
 - Type checking, copy checks and diff whitespace checks passed.
 - Connector integration exercises refusal, correction, Buffer draft save and verdict readback with simulated AI and Buffer responses.
 - Cross-account removal/read tests, signed-proposal tampering and expiry tests, real Postgres-compatible material cleanup checks, and AI settlement/refund checks pass.

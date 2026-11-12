@@ -21,7 +21,7 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 ## Now: 1.0
 
 - **Proven on a brand-new account.** Every step, end to end, on an account that has never used Queue Pilot.
-- **Runs anywhere.** Vercel or Docker, from one guide.
+- **Runs anywhere.** Vercel and Docker both start from the README, and every change is checked by starting the Docker copy.
 
 ## Next: teams and clients
 
