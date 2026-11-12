@@ -397,7 +397,7 @@ export const JsonViewer = forwardRef<HTMLDivElement, JsonViewerProps>(function J
   };
 
   const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") { event.preventDefault(); stepMatch(event.shiftKey ? -1 : 1); }
+    if (!event.nativeEvent.isComposing && event.key === "Enter") { event.preventDefault(); stepMatch(event.shiftKey ? -1 : 1); }
     else if (event.key === "Escape" && query) { event.preventDefault(); event.stopPropagation(); onQuery(""); }
     else if (event.key === "ArrowDown" && !event.altKey) { event.preventDefault(); moveTo(active, true); }
   };
