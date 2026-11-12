@@ -52,6 +52,33 @@ describe("postgres post store", () => {
   });
 });
 
+describe("postgres send-now retry", () => {
+  it("picks a send-now post up again after Telegram or Discord said wait", async () => {
+    const s = postgresDirectPostStore();
+    const tgNow = { kind: "telegram" as const, target: "-200", label: "Now news", text: "Out now." };
+    await s.claim("u1", "now1", tgNow, now);
+    const until = new Date(now.getTime() + 30_000);
+    await s.retryLater("u1", "now1", "telegram", until, now);
+    const due = await s.claimDue(new Date(until.getTime() + 1_000), 25);
+    expect(due.map((d) => d.postId)).toContain("now1");
+  });
+});
+
+describe("postgres disconnect", () => {
+  it("cancels only that kind of place's waiting posts, and only for that person", async () => {
+    const s = postgresDirectPostStore();
+    const later = new Date("2026-12-01T09:00:00Z");
+    const dc = { kind: "discord" as const, target: "c9", label: "#news", text: "Soon." };
+    const tgItem = { kind: "telegram" as const, target: "-9", label: "News", text: "Soon." };
+    await s.schedule("u1", "k1", dc, later, now);
+    await s.schedule("u1", "k1", tgItem, later, now);
+    await s.schedule("u2", "k2", dc, later, now);
+    expect(await s.cancelKind("u1", "discord", now)).toBe(1);
+    expect((await s.rows("u1", "k1")).map((r) => `${r.kind}:${r.status}`).sort()).toEqual(["discord:cancelled", "telegram:scheduled"]);
+    expect((await s.rows("u2", "k2")).map((r) => r.status)).toEqual(["scheduled"]);
+  });
+});
+
 describe("postgres due claims", () => {
   const at = new Date("2026-11-08T18:00:00Z");
   const after = new Date("2026-11-08T18:00:05Z");

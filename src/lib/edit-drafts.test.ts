@@ -41,14 +41,21 @@ describe("updateDraft", () => {
 
 describe("deleteDraft", () => {
   it("deletes only a draft", async () => {
-    const q = vi.fn().mockResolvedValue({ deletePost: { __typename: "DeletePostSuccess" } });
+    const q = vi.fn().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ deletePost: { __typename: "DeletePostSuccess" } });
     expect(await deleteDraft("tok", "d1", posts, wrote, q)).toEqual({ ok: true });
-    expect(q.mock.calls[0][2]).toEqual({ input: { id: "d1" } });
+    expect(q.mock.calls[1][2]).toEqual({ input: { id: "d1" } });
     const never = vi.fn();
     expect((await deleteDraft("tok", "s1", posts, wrote, never)).ok).toBe(false);
-    const refused = vi.fn().mockResolvedValue({ deletePost: { __typename: "VoidMutationError", message: "Post not found" } });
+    const refused = vi.fn().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ deletePost: { __typename: "VoidMutationError", message: "Post not found" } });
     expect(await deleteDraft("tok", "d1", posts, wrote, refused)).toEqual({ ok: false, reason: "Post not found" });
     expect(never).not.toHaveBeenCalled();
+  });
+  it("does not delete a draft that was approved in Buffer since the queue was read", async () => {
+    // The queue copy still says draft; Buffer itself now says scheduled.
+    const q = vi.fn().mockResolvedValueOnce({ post: { ...posts[0], status: "scheduled" } });
+    const res = await deleteDraft("tok", "d1", posts, wrote, q);
+    expect(res.ok).toBe(false);
+    expect(q).toHaveBeenCalledTimes(1);
   });
 });
 

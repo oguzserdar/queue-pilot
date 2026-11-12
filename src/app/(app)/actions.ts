@@ -28,6 +28,7 @@ import { addPastedExample, exampleFromQueue, InvalidVoiceExampleError, MAX_NOTE,
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram";
 import { postgresEchoStore, postgresTelegramCodes } from "@/lib/echo-store";
+import { postgresDirectPostStore } from "@/lib/direct-post-store";
 import { installState, installUrl } from "@/lib/discord";
 import { operatorSetting, operatorSettings } from "@/lib/env";
 import { cookies, headers } from "next/headers";
@@ -207,6 +208,8 @@ export async function disconnectEcho(kind: "telegram" | "discord"): Promise<Sour
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (kind !== "telegram" && kind !== "discord") return { ok: false, message: "Unknown destination." };
   await postgresEchoStore().removeDestination(userId, kind);
+  // Posts still waiting to go there would otherwise go out if the same channel or server were connected again later.
+  await postgresDirectPostStore().cancelKind(userId, kind, new Date());
   revalidatePath("/sources");
   revalidatePath("/settings");
   return { ok: true };

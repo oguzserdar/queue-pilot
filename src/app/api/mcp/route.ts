@@ -150,6 +150,12 @@ const TOOL_LIMIT: Record<string, Action> = {
   rename_tag: "bufferWrite",
   delete_tag: "bufferWrite",
   unlink_post_from_content_item: "bufferWrite",
+  tag_draft: "bufferWrite",
+  create_tag: "bufferWrite",
+  add_draft_note: "bufferWrite",
+  update_draft_note: "bufferWrite",
+  delete_draft_note: "bufferWrite",
+  save_idea: "bufferWrite",
 };
 
 function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = "unknown") {

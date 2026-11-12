@@ -86,6 +86,8 @@ export type DirectPostStore = {
   reschedule(userId: string, postId: string, change: ScheduleChange, now: Date): Promise<DirectPostRow[]>;
   /** Cancels this person's scheduled destinations; returns how many were cancelled. */
   cancel(userId: string, postId: string, now: Date): Promise<number>;
+  /** Cancels every scheduled send of this person's to one kind of place, when they disconnect it; returns how many. */
+  cancelKind(userId: string, kind: PostKind, now: Date): Promise<number>;
   /**
    * Claims rows that are due: scheduled at or before now, or claimed earlier by a worker that died before calling
    * Telegram or Discord. With `only`, just that post, at that revision or older (a place added later than the
@@ -431,7 +433,8 @@ export function memoryDirectPostStore(): DirectPostStore {
     },
     async retryLater(userId, postId, kind, until, now) {
       const r = rows.get(key(postId, kind));
-      if (r && r.userId === userId && r.status === "pending") Object.assign(r, { status: "scheduled", claimedUntil: until, callStartedAt: null, updatedAt: now });
+      // A "send now" post has no send time; without one the due check would never pick the retry up again.
+      if (r && r.userId === userId && r.status === "pending") Object.assign(r, { status: "scheduled", sendAt: r.sendAt ?? until, claimedUntil: until, callStartedAt: null, updatedAt: now });
     },
     async waitingFollowUps(userId, bufferPostIds) {
       const want = new Set(bufferPostIds);
@@ -453,6 +456,11 @@ export function memoryDirectPostStore(): DirectPostStore {
         r.updatedAt = now;
       }
       return mine.map(out);
+    },
+    async cancelKind(userId, kind, now) {
+      let n = 0;
+      for (const r of rows.values()) if (r.userId === userId && r.kind === kind && r.status === "scheduled") { Object.assign(r, { status: "cancelled", revision: r.revision + 1, updatedAt: now }); n++; }
+      return n;
     },
     async cancel(userId, postId, now) {
       const mine = [...rows.values()].filter((r) => r.userId === userId && r.postId === postId && r.status === "scheduled");

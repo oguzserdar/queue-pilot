@@ -8,12 +8,18 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { session, user } from "../db/auth-schema";
 import {
+  aiAppLabel,
+  aiAppUse,
   aiKey,
   aiUsage,
   bufferSnapshot,
+  directPostSend,
+  draftEvidence,
   echo,
   echoDestination,
+  fillDraft,
   fixDismissed,
+  material,
   offerDismissed,
   reviewComment,
   reviewLink,
@@ -21,6 +27,7 @@ import {
   ruleInheritance,
   securityEvent,
   source,
+  sourceSnapshot,
   sourceUsed,
   voiceExample,
   voiceNote,
@@ -64,6 +71,16 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     d.select({ settings: ruleInheritance.settings }).from(ruleInheritance).where(eq(ruleInheritance.userId, userId)),
     d.select().from(offerDismissed).where(eq(offerDismissed.userId, userId)),
   ]);
+  // Everything else the person put in or Queue Pilot wrote for them, read separately so the list above stays readable.
+  const [materials, snapshots, evidence, fills, posts, appLabels, appUse] = await Promise.all([
+    d.select().from(material).where(eq(material.userId, userId)),
+    d.select().from(sourceSnapshot).where(eq(sourceSnapshot.userId, userId)),
+    d.select().from(draftEvidence).where(eq(draftEvidence.userId, userId)),
+    d.select().from(fillDraft).where(eq(fillDraft.userId, userId)),
+    d.select().from(directPostSend).where(eq(directPostSend.userId, userId)),
+    d.select().from(aiAppLabel).where(eq(aiAppLabel.userId, userId)),
+    d.select().from(aiAppUse).where(eq(aiAppUse.userId, userId)),
+  ]);
   const reviewComments = reviews.length ? await d.select().from(reviewComment).where(inArray(reviewComment.linkId, reviews.map((r) => r.id))).orderBy(asc(reviewComment.createdAt)) : [];
   const strip = <T extends Record<string, unknown>>(rows: T[]) => rows.map(({ userId: _u, ...rest }) => rest);
   return {
@@ -73,12 +90,16 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     playbook: { inheritance: inheritance[0]?.settings ?? {}, rules: strip(rules), dismissedOffers: strip(dismissed) },
     voice: { examples: strip(voiceExamples), notes: strip(voiceNotes) },
     homeOffersSetAside: strip(offers),
-    sources: { feeds: strip(sources), used: strip(sourcesUsed) },
-    copies: { destinations: strip(copies), sent: strip(copiedPosts) },
+    sources: { feeds: strip(sources), used: strip(sourcesUsed), material: strip(materials), snapshots: strip(snapshots) },
+    copies: { destinations: strip(copies), sent: strip(copiedPosts), posts: strip(posts) },
     draftsQueuePilotWrote: strip(drafts),
+    draftEvidence: strip(evidence),
+    fillRuns: strip(fills),
     reviewLinks: strip(reviews).map((l) => ({ ...l, comments: reviewComments.filter((c) => c.linkId === l.id) })),
     ai: { ownKey: ai[0] ?? null, builtInUsage: strip(usage) },
     aiApps: apps,
+    aiAppNames: strip(appLabels),
+    aiAppActivity: strip(appUse),
     securityActivity: strip(security),
     signedInBrowsers: sessions,
     bufferCopy: snapshot[0] ?? null,

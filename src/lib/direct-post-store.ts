@@ -79,7 +79,7 @@ export function postgresDirectPostStore(): DirectPostStore {
       // Only after Telegram or Discord refused with "wait": nothing was posted, so the call mark is cleared.
       await db()
         .update(directPostSend)
-        .set({ status: "scheduled", claimedUntil: until, callStartedAt: null, updatedAt: now })
+        .set({ status: "scheduled", sendAt: sql`coalesce(${directPostSend.sendAt}, ${until})`, claimedUntil: until, callStartedAt: null, updatedAt: now })
         .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending")));
     },
     async waitingFollowUps(userId, bufferPostIds) {
@@ -96,6 +96,14 @@ export function postgresDirectPostStore(): DirectPostStore {
           sql`not (${directPostSend.status} = 'failed' and ${directPostSend.callStartedAt} is null)`,
         ));
       return new Set(rows.map((r) => `${r.id}|${r.kind}`));
+    },
+    async cancelKind(userId, kind, now) {
+      const rows = await db()
+        .update(directPostSend)
+        .set({ status: "cancelled", revision: sql`${directPostSend.revision} + 1`, updatedAt: now })
+        .where(and(eq(directPostSend.userId, userId), eq(directPostSend.kind, kind), eq(directPostSend.status, "scheduled")))
+        .returning({ id: directPostSend.postId });
+      return rows.length;
     },
     async cancel(userId, postId, now) {
       const rows = await db()
