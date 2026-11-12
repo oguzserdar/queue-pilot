@@ -1,7 +1,8 @@
 /**
  * @fileoverview Checks that keep the README true to the repository: every image and file it links exists, every image
  * says what it shows, screenshots carry no hidden metadata, no screenshot sits unused, every connector tool it names
- * exists, and the first-session cost table adds up. Copy rules and the settings table have their own tests.
+ * exists, and the first-session cost table adds up. The connector's own tool table in docs/connector-controls.md is
+ * held to the code the same way. Copy rules and the settings table have their own tests.
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -11,6 +12,13 @@ const root = join(__dirname, "../..");
 const readme = readFileSync(join(root, "README.md"), "utf8");
 const images = [...readme.matchAll(/!\[([^\]]*)\]\(([^)]+)\)|<img alt="([^"]*)" src="([^"]+)"|srcset="([^"]+)"/g)].map((m) => ({ alt: m[1] ?? m[3] ?? null, src: m[2] ?? m[4] ?? m[5] }));
 const localLinks = [...readme.matchAll(/\]\((?!https?:|#|mailto:)([^)\s]+)\)/g)].map((m) => m[1].split("#")[0]);
+
+/** Every tool the connector registers, read from its source files. */
+function registeredTools(): Set<string> {
+  const sources = readdirSync(join(root, "src/lib")).filter((f) => f.startsWith("mcp-") && f.endsWith(".ts") && !f.endsWith(".test.ts")).map((f) => join(root, "src/lib", f));
+  const code = [join(root, "src/app/api/mcp/route.ts"), ...sources].map((f) => readFileSync(f, "utf8")).join("\n");
+  return new Set([...code.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((m) => m[1]));
+}
 
 /** PNG chunk types other than the ones needed to draw the image (text, time, EXIF, XMP and the like). */
 function metadataChunks(file: string): string[] {
@@ -49,9 +57,7 @@ describe("README", () => {
   });
 
   it("names only connector tools that exist", () => {
-    const sources = readdirSync(join(root, "src/lib")).filter((f) => f.startsWith("mcp-") && f.endsWith(".ts")).map((f) => join(root, "src/lib", f));
-    const code = [join(root, "src/app/api/mcp/route.ts"), ...sources].map((f) => readFileSync(f, "utf8")).join("\n");
-    const registered = new Set([...code.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((m) => m[1]));
+    const registered = registeredTools();
     const named = [...new Set([...readme.matchAll(/`([a-z]+(?:_[a-z]+)+)`/g)].map((m) => m[1]))];
     expect(registered.size).toBeGreaterThan(20);
     expect(named.filter((t) => !registered.has(t))).toEqual([]);
@@ -62,5 +68,17 @@ describe("README", () => {
     const total = Number(readme.match(/\| \*\*First session\*\* \| \*\*(\d+)\*\* \|/)?.[1]);
     expect(rows.length).toBeGreaterThan(3);
     expect(rows.reduce((a, b) => a + b, 0)).toBe(total);
+  });
+});
+
+describe("docs/connector-controls.md", () => {
+  it("lists exactly the tools the connector registers, and says how many", () => {
+    const doc = readFileSync(join(root, "docs/connector-controls.md"), "utf8");
+    const rows = doc.split("\n").filter((l) => l.startsWith("| "));
+    const listed = new Set(rows.flatMap((l) => [...l.matchAll(/`([a-z]+(?:_[a-z]+)+)`/g)].map((m) => m[1])));
+    const registered = registeredTools();
+    expect([...registered].filter((t) => !listed.has(t))).toEqual([]);
+    expect([...listed].filter((t) => !registered.has(t))).toEqual([]);
+    expect(Number(doc.match(/exposes (\d+) tools/)?.[1])).toBe(registered.size);
   });
 });

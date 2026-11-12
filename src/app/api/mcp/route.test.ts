@@ -7,6 +7,8 @@ vi.mock("@/lib/transcript-for-user", () => ({ transcriptForUser: (...a: unknown[
 vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ id: "snapshot-test" }), captureSource: async (_u: string, data: { text: string }, metadata: unknown = {}) => { sourceCalls.captured.push([data, metadata]); return { id: "snapshot-test", ...data, metadata }; }, sourceById: async (user: string, id: string) => ["saved-podcast", "long-podcast"].includes(id) ? (user === "person-a" ? { id, sourceKey: "yt:abcdefghijk", uri: "https://youtube.com/watch?v=abcdefghijk", text: id === "long-podcast" ? "Whole transcript. ".repeat(5000) + "Closing evidence." : "Intro. Closing evidence.", metadata: { kind: "transcript", truncated: false, segments: [{ text: "Intro.", seconds: 0 }, { text: "Closing evidence.", seconds: 7190 }] } } : null) : ({ text: "CSV export is live. Includes archived rows.", metadata: {} }), recordEvidence: vi.fn(async () => {}), replaceDraftEvidence: (...a: unknown[]) => sourceCalls.repair(...a as []), sourceHoldsForPosts: async () => new Map() }));
 vi.mock("@/lib/source-presentation", () => ({ sourceCards: vi.fn(async () => []) }));
 import { BUFFER_ONLY_NOTE } from "@/lib/buffer-routing";
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Channel, Post } from "@/lib/buffer/queries"
 import type { Written } from "@/lib/written-store"
@@ -1015,6 +1017,9 @@ describe("connector voice writes", () => {
       const t = tools.find((x) => x.name === name)
       expect(t?.annotations, name).toMatchObject({ readOnlyHint: false, openWorldHint: true })
     }
+    // The write-tools doc promises a row for every Buffer write, so a write tool with no row fails here.
+    const writeDoc = readFileSync(join(__dirname, "../../../..", "docs/agent-write-tools.md"), "utf8")
+    for (const name of bufferWrites) expect(writeDoc.includes(`\`${name}\``), `${name} has a row in docs/agent-write-tools.md`).toBe(true)
     for (const name of ["delete_draft", "delete_draft_note", "delete_snippet", "delete_tag", "delete_content_item"]) expect(tools.find((x) => x.name === name)?.annotations, name).toMatchObject({ destructiveHint: true })
   })
 
