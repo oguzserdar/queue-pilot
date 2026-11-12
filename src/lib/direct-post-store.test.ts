@@ -65,17 +65,30 @@ describe("postgres send-now retry", () => {
 });
 
 describe("postgres disconnect", () => {
+  // Users of their own: earlier tests leave claimed rows for u1.
+  beforeAll(async () => { await pg.query(`insert into "user" (id, name, email) values ('d1', 'c', 'c@x'), ('d2', 'd', 'd@x')`); });
   it("cancels only that kind of place's waiting posts, and only for that person", async () => {
     const s = postgresDirectPostStore();
     const later = new Date("2026-12-01T09:00:00Z");
     const dc = { kind: "discord" as const, target: "c9", label: "#news", text: "Soon." };
     const tgItem = { kind: "telegram" as const, target: "-9", label: "News", text: "Soon." };
-    await s.schedule("u1", "k1", dc, later, now);
-    await s.schedule("u1", "k1", tgItem, later, now);
-    await s.schedule("u2", "k2", dc, later, now);
-    expect(await s.cancelKind("u1", "discord", now)).toBe(1);
-    expect((await s.rows("u1", "k1")).map((r) => `${r.kind}:${r.status}`).sort()).toEqual(["discord:cancelled", "telegram:scheduled"]);
-    expect((await s.rows("u2", "k2")).map((r) => r.status)).toEqual(["scheduled"]);
+    await s.schedule("d1", "k1", dc, later, now);
+    await s.schedule("d1", "k1", tgItem, later, now);
+    await s.schedule("d2", "k2", dc, later, now);
+    expect(await s.cancelKind("d1", "discord", now)).toBe(1);
+    expect((await s.rows("d1", "k1")).map((r) => `${r.kind}:${r.status}`).sort()).toEqual(["discord:cancelled", "telegram:scheduled"]);
+    expect((await s.rows("d2", "k2")).map((r) => r.status)).toEqual(["scheduled"]);
+  });
+  it("also stops a claimed send whose call has not started, and never one that has", async () => {
+    const s = postgresDirectPostStore();
+    const dc = { kind: "discord" as const, target: "c8", label: "#news", text: "Now." };
+    await s.claim("d1", "k3", dc, now);
+    await s.claim("d1", "k4", dc, now);
+    expect(await s.startCall("d1", "k4", "discord", now)).toBe(true);
+    expect(await s.cancelKind("d1", "discord", now)).toBe(1);
+    // The worker holding k3 can no longer start its call.
+    expect(await s.startCall("d1", "k3", "discord", now)).toBe(false);
+    expect((await s.rows("d1", "k4")).map((r) => r.status)).toEqual(["pending"]);
   });
 });
 

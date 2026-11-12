@@ -4,7 +4,7 @@
  * Each person may take their data with them (GDPR Article 20). The export reads only rows that belong to the person and
  * leaves out every secret: the encrypted AI key, Buffer and AI-app tokens, and session tokens.
  */
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { session, user } from "../db/auth-schema";
 import {
@@ -74,7 +74,9 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
   // Everything else the person put in or Queue Pilot wrote for them, read separately so the list above stays readable.
   const [materials, snapshots, evidence, fills, posts, appLabels, appUse] = await Promise.all([
     d.select().from(material).where(eq(material.userId, userId)),
-    d.select().from(sourceSnapshot).where(eq(sourceSnapshot.userId, userId)),
+    // Every changed version is kept, so only the latest one per source is exported, without timed transcript segments
+    // (the same words as its text): an account with long transcripts would otherwise make a file of hundreds of MB.
+    d.selectDistinctOn([sourceSnapshot.sourceKey]).from(sourceSnapshot).where(eq(sourceSnapshot.userId, userId)).orderBy(sourceSnapshot.sourceKey, desc(sourceSnapshot.fetchedAt)),
     d.select().from(draftEvidence).where(eq(draftEvidence.userId, userId)),
     d.select().from(fillDraft).where(eq(fillDraft.userId, userId)),
     d.select().from(directPostSend).where(eq(directPostSend.userId, userId)),
@@ -90,7 +92,7 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     playbook: { inheritance: inheritance[0]?.settings ?? {}, rules: strip(rules), dismissedOffers: strip(dismissed) },
     voice: { examples: strip(voiceExamples), notes: strip(voiceNotes) },
     homeOffersSetAside: strip(offers),
-    sources: { feeds: strip(sources), used: strip(sourcesUsed), material: strip(materials), snapshots: strip(snapshots) },
+    sources: { feeds: strip(sources), used: strip(sourcesUsed), material: strip(materials), snapshots: strip(snapshots).map(({ metadata, ...s }) => { const { segments: _s, ...rest } = (metadata ?? {}) as Record<string, unknown>; return { ...s, metadata: rest }; }) },
     copies: { destinations: strip(copies), sent: strip(copiedPosts), posts: strip(posts) },
     draftsQueuePilotWrote: strip(drafts),
     draftEvidence: strip(evidence),

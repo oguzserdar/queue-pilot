@@ -86,7 +86,7 @@ export type DirectPostStore = {
   reschedule(userId: string, postId: string, change: ScheduleChange, now: Date): Promise<DirectPostRow[]>;
   /** Cancels this person's scheduled destinations; returns how many were cancelled. */
   cancel(userId: string, postId: string, now: Date): Promise<number>;
-  /** Cancels every scheduled send of this person's to one kind of place, when they disconnect it; returns how many. */
+  /** Cancels this person's sends to one kind of place that have not started, when they disconnect it; returns how many. */
   cancelKind(userId: string, kind: PostKind, now: Date): Promise<number>;
   /**
    * Claims rows that are due: scheduled at or before now, or claimed earlier by a worker that died before calling
@@ -459,7 +459,7 @@ export function memoryDirectPostStore(): DirectPostStore {
     },
     async cancelKind(userId, kind, now) {
       let n = 0;
-      for (const r of rows.values()) if (r.userId === userId && r.kind === kind && r.status === "scheduled") { Object.assign(r, { status: "cancelled", revision: r.revision + 1, updatedAt: now }); n++; }
+      for (const r of rows.values()) if (r.userId === userId && r.kind === kind && (r.status === "scheduled" || (r.status === "pending" && !r.callStartedAt))) { Object.assign(r, { status: "cancelled", revision: r.revision + 1, updatedAt: now }); n++; }
       return n;
     },
     async cancel(userId, postId, now) {

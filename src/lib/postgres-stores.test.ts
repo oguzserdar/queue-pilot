@@ -561,11 +561,18 @@ describe("download my data on real Postgres", () => {
     await postgresAiKeyStore("ab".repeat(32)).set("ex1", "anthropic", key, "claude-a");
     await pg.query(`insert into session (id, token, user_id, expires_at, created_at, updated_at, ip_address) values ('sx', 'session-token-secret', 'ex1', now() + interval '1 day', now(), now(), '203.0.113.9')`);
     await pg.query(`insert into qp_material (user_id, key, title, text) values ('ex1', 'm1', 'My launch notes', 'We shipped the calendar.'), ('ex2', 'm2', 'Theirs', 'Not yours.')`);
+    // Two versions of one transcript: only the latest is exported, and without its timed segments.
+    await pg.query(`insert into qp_source_snapshot (id, user_id, source_key, uri, content_hash, text, checked_by, metadata, fetched_at) values
+      ('sn1', 'ex1', 'yt1', 'https://y/1', 'h1', 'Old transcript words.', 'x', '{"kind":"transcript","segments":[{"t":0,"text":"seg-old"}]}', '2026-11-01'),
+      ('sn2', 'ex1', 'yt1', 'https://y/1', 'h2', 'New transcript words.', 'x', '{"kind":"transcript","segments":[{"t":0,"text":"seg-new"}]}', '2026-11-05')`);
     const data = await exportUserData("ex1", new Date("2026-11-09T10:00:00Z"));
     const text = JSON.stringify(data);
     // Material the person saved is part of their data; another person's is not.
     expect(text).toContain("We shipped the calendar.");
     expect(text).not.toContain("Not yours.");
+    expect(text).toContain("New transcript words.");
+    expect(text).not.toContain("Old transcript words.");
+    expect(text).not.toContain("seg-new");
     expect(data?.account).toMatchObject({ name: "Mark", email: "mark@x" });
     expect(data?.playbook.rules).toHaveLength(1);
     expect(JSON.stringify(data?.playbook.rules)).toContain("Name the dish first.");

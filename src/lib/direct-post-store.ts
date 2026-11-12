@@ -101,7 +101,8 @@ export function postgresDirectPostStore(): DirectPostStore {
       const rows = await db()
         .update(directPostSend)
         .set({ status: "cancelled", revision: sql`${directPostSend.revision} + 1`, updatedAt: now })
-        .where(and(eq(directPostSend.userId, userId), eq(directPostSend.kind, kind), eq(directPostSend.status, "scheduled")))
+        // A claimed row whose call has not started is cancelled too: startCall then refuses it and the worker stops.
+        .where(and(eq(directPostSend.userId, userId), eq(directPostSend.kind, kind), or(eq(directPostSend.status, "scheduled"), and(eq(directPostSend.status, "pending"), isNull(directPostSend.callStartedAt)))))
         .returning({ id: directPostSend.postId });
       return rows.length;
     },
