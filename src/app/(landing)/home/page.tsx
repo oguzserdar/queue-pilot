@@ -18,8 +18,6 @@ import s from "./page.module.css";
 export const metadata: Metadata = {
   title: "Queue Pilot",
   description: "The AI you already use fills the empty times in your Buffer week with drafts from your own work, and every draft is checked against your rules before it reaches Buffer, whichever AI writes it through Queue Pilot.",
-  // Kept out of search until v0.9 launches the homepage.
-  robots: { index: false },
   // Signed out, `/` serves this page (src/proxy.ts); /home is only where its file lives.
   alternates: { canonical: "/" },
 };
@@ -188,7 +186,7 @@ export default function HomePage() {
             <ol className={s.loop}>
               <li className={s.step}><SetupScene step={0} className={s.stepArt} /><span className={s.meta}>Buffer</span><p>Add an app client in Buffer's API settings, with your address as its redirect.</p></li>
               <li className={s.step}><SetupScene step={1} className={s.stepArt} /><span className={s.meta}>Database</span><p>Create a Postgres database, then fill in <code>.env.example</code>. Each line says how.</p></li>
-              <li className={s.step}><SetupScene step={2} className={s.stepArt} /><span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every start.</p></li>
+              <li className={s.step}><SetupScene step={2} className={s.stepArt} /><span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every deploy or start.</p></li>
               <li className={s.step}><SetupScene step={3} className={s.stepArt} /><span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim it with your setup code.</p></li>
             </ol>
           </div>

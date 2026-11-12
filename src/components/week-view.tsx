@@ -143,8 +143,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
   // The footer's "Check again" is the one place a draft is rechecked: against the playbook, then against its sources.
   const canCheckAgain = (p: { id: string; ours?: boolean }) => p.ours !== false && !approved.has(p.id) && live && (verdicts[p.id] === null || needsCheck(p.id));
   const checkAgain = async (id: string): Promise<{ ok: true } | { ok: false; message: string }> => {
-    // An edit's own check is kept, so the playbook is only asked again when that check is missing or stale.
-    const rules = verdicts[id] === null || readiness[id]?.state === "breaks" ? await recheckMyDrafts([id]) : { ok: true as const };
+    const rules = await recheckMyDrafts([id]);
     if (!rules.ok) return rules;
     if (!evidence.some((e) => e.postId === id && e.needsCheck)) return { ok: true };
     const sources = await recheckSourceEvidence(id);

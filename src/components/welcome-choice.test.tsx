@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: 
 const { WelcomeChoice } = await import("./welcome-choice");
 const { AiOffer } = await import("./ai-offer");
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;|&apos;/g, "'").replace(/\s+/g, " ");
-const writing = { state: "built-in", remaining: 10 } as never;
+const writing = { ready: true, source: "built-in AI" } as const;
 const account = { email: "oguz@example.com", channels: [{ name: "OguzSerdar", service: "twitter", disconnected: false }] };
 
 describe("WelcomeChoice", () => {
@@ -63,5 +63,11 @@ describe("HomeStart with a connected AI", () => {
     expect(t).toContain("Copy for Claude");
     expect(t.indexOf("Ask Claude")).toBeLessThan(t.indexOf("Or let Queue Pilot's AI write from a link"));
     expect(t).not.toContain("Fill next week from what you publish");
+  });
+  it("says why Queue Pilot's AI cannot write yet instead of promising no setup", () => {
+    const off = text(renderToStaticMarkup(<WelcomeChoice origin="https://qp.example" account={account} approved={[]} count={10} total={28} empty={28} hasSource={false} writing={{ ready: false, message: "Built-in AI is off. You can add your own key in Settings." }} />));
+    expect(off).toContain("Built-in AI is off");
+    expect(off).not.toContain("No setup needed");
+    expect(text(renderToStaticMarkup(<WelcomeChoice origin="https://qp.example" account={account} approved={[]} count={10} total={28} empty={28} hasSource={false} writing={writing} />))).toContain("No setup needed");
   });
 });

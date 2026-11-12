@@ -54,7 +54,7 @@ export function HomeStart({ hasSource, writing, count, total = count, aiLink = t
         <WriteWeekButton availability={writing} count={count} total={total} />
       ) : (
         <>
-          <p className={styles.muted}>Paste the address of your newsletter, blog, YouTube channel or GitHub releases. Queue Pilot reads what you published, writes one draft for each empty time from it, and saves them in Buffer as drafts.</p>
+          <p className={styles.muted}>Paste the address of your newsletter, blog, YouTube channel or GitHub releases. Queue Pilot reads what you published, writes a draft for up to 10 empty times from it, and saves them in Buffer as drafts.</p>
           <form className={styles.row} onSubmit={(e) => { e.preventDefault(); if (url.trim()) add(); }}>
             <label htmlFor="start-feed" className="sr-only">Address of your newsletter, blog or channel</label>
             <input id="start-feed" className={styles.input} type="text" inputMode="url" autoComplete="url" placeholder="yourname.substack.com" value={url} onChange={(e) => setUrl(e.target.value)} />

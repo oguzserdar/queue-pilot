@@ -32,7 +32,7 @@ export default function SignInPage() {
       <h1 className={styles.title}>{connecting ? "Sign in to connect your AI" : "Sign in to Queue Pilot"}</h1>
       <p className={styles.sub}>
         {connecting
-          ? "Your AI is asking to work with your Buffer queue. Sign in with Buffer first; you will choose what it may do on the next screen."
+          ? "Your AI is asking to work with your Buffer queue. Sign in with Buffer first; on the next screen you will see what it may do, and allow or deny it."
           : "Queue Pilot reads your Buffer queue and puts your own AI to work on its empty times."}
       </p>
       <SignInNotice />

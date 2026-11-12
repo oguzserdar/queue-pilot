@@ -41,6 +41,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - A draft Buffer did save could be marked failed after a fill that stopped halfway. Recovery reads the queue again before deciding.
 - Settings stays up when a Telegram, Discord or channel read fails.
 - On a phone, the approve bar and toasts sit above the tab bar.
+- On a copy with no AI allowance, the first screen promised Queue Pilot's AI needed no setup. It says why it cannot write yet. Several lines named a button that does not exist or a choice the sign-in screen does not offer. They now match the app.
 - Pressing Check again after editing a draft erased the record of what Queue Pilot wrote, so the same fix made twice was never offered as a rule. What Queue Pilot wrote is now kept, and each check is stored beside it. The check that runs on every edit is kept too, so a draft you edited and that passes your playbook can be approved without checking again. An AI app revising its own draft no longer counts as your fix.
 - After Approve, the draft window said Queue Pilot did not write the post. It now says the post is scheduled in Buffer, and Approve stays off for anything that is not a draft.
 - Pressing Fill next week again while a fill was running could put two drafts in one time. Each run reads the empty times again just before saving.

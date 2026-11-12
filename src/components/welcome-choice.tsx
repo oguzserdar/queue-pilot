@@ -59,7 +59,7 @@ export function WelcomeChoice({ origin, account, approved, count, total, empty, 
           <input type="radio" name="welcome-path" value="built-in" checked={path === "built-in"} onChange={() => setPath("built-in")} className={styles.radio} />
           <span className={styles.choiceHead}><strong>Use Queue Pilot&apos;s AI</strong></span>
           <span className={styles.body}>Paste a link to your blog, newsletter or releases. We&apos;ll write from that.</span>
-          <span className={styles.foot}>No setup needed</span>
+          <span className={styles.foot}>{writing.ready ? "No setup needed" : writing.message}</span>
         </label>
       </fieldset>
 

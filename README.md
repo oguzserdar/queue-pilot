@@ -118,7 +118,7 @@ Buffer schedules and publishes. After Buffer publishes a post, Queue Pilot can c
 | Refresh | 1 |
 | **First session** | **13** |
 
-Queue Pilot uses 37 of the 49 operations in Buffer's API. [Every operation it uses](docs/buffer-api-notes.md#every-buffer-operation-queue-pilot-uses) is listed with what it does, along with why the other 10 are not used, and a test keeps that list matched to the code.
+Queue Pilot uses 37 of the 49 operations in Buffer's API. [Every operation it uses](docs/buffer-api-notes.md#every-buffer-operation-queue-pilot-uses) is listed with what it does, along with why the other 12 are not used, and a test keeps that list matched to the code.
 
 Measured by `src/lib/session-cost.test.ts`, which runs the real code against a fake Buffer that counts every call. Sign-in is counted as 1. On the live site on 7 Nov, looking up teammates took 1 request, down from 4.
 

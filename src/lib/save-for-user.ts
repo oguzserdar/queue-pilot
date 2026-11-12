@@ -234,6 +234,6 @@ export async function recheckDrafts(userId: string, drafts: { postId: string; te
   const gate = await applyPlaybook(drafts.map((d) => ({ slotId: d.postId, text: d.text })), slots, rules, jm ? (x, r) => judgeDrafts(jm.judges, x, r) : null, cappedReason).finally(() => jm?.settle());
   if (gate.check === "failed") return { ok: false, message: "The check could not run just now. Try again." };
   // A check is recorded beside what Queue Pilot wrote, never over it: the person's edit must stay visible as an edit.
-  await postgresWrittenStore().recordCheck(userId, drafts.map((d) => ({ postId: d.postId, text: d.text, playbookRevision: playbookVersion(rules), verdicts: gate.check === "judged" ? (gate.verdicts.get(d.postId) ?? []) : [] })));
+  await postgresWrittenStore().recordCheck(userId, drafts.map((d) => ({ postId: d.postId, text: d.text, playbookRevision: playbookVersion(rules), verdicts: gate.check === "judged" ? (gate.verdicts.get(d.postId) ?? []) : rules.length ? null : [] })));
   return { ok: true, checked: drafts.length };
 }
