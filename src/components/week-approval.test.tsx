@@ -72,3 +72,19 @@ describe("the draft window's footer", () => {
     expect(html).toContain("Queue Pilot did not write this draft")
   })
 })
+
+describe("a week with no posting times", () => {
+  it("says the queue is paused instead of calling the week full", () => {
+    const paused = { ...demoWeek, posts: [], slots: {}, channels: demoWeek.channels.map((c) => ({ ...c, isQueuePaused: true })) }
+    const html = renderToStaticMarkup(<WeekView week={paused} live verdicts={{}} />)
+    expect(html).not.toContain("every time has a post")
+    expect(html).toContain("your Buffer queue is paused")
+  })
+
+  it("says no posting times are set when the schedule is empty", () => {
+    const empty = { ...demoWeek, posts: [], slots: {}, channels: demoWeek.channels.map((c) => ({ ...c, isQueuePaused: false })) }
+    const html = renderToStaticMarkup(<WeekView week={empty} live verdicts={{}} />)
+    expect(html).not.toContain("every time has a post")
+    expect(html).toContain("no posting times set in Buffer")
+  })
+})

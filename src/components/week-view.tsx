@@ -114,6 +114,8 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
   const overdue = new Set(drafts.filter((p) => passed(p.channel, p.day, p.time)).map((p) => p.id));
   const passedEmpty = channels.reduce((n, c) => n + Object.entries(slots[c.id] ?? {}).reduce((m, [day, times]) => m + times.filter((t) => passed(c.id, Number(day), t) && !posts.some((p) => p.channel === c.id && p.day === Number(day) && p.time === t && p.status !== "error")).length, 0), 0);
   const open = countOpenSlots({ ...week, posts }) - passedEmpty;
+  // No times at all is not a full week: the queue is paused, or Buffer has no posting times for it.
+  const hasTimes = channels.some((c) => Object.values(slots[c.id] ?? {}).some((times) => times.length));
   // While a fill runs, the times it writes into show it, and each fills in when its draft arrives. A time is known
   // by its slot id; the example has none, so it uses the cell's own key and plays on the times a run would pick.
   const [writingNow, setWritingNow] = useState(false);
@@ -425,6 +427,7 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
                   drafts.length - waiting - overdue.size > 0 && `${drafts.length - waiting - overdue.size} approved`,
                   open ? `${open} empty time${open === 1 ? "" : "s"}` : "every time filled",
                 ].filter(Boolean).join(", ")}`
+              : open === 0 && !posts.length && !hasTimes ? `${NAME}: ${channels.length && channels.every((c) => c.isQueuePaused) ? "your Buffer queue is paused" : "no posting times set in Buffer"}`
               : open === 0 ? `${NAME}: every time has a post` : `${NAME}: ${open} empty time${open === 1 ? "" : "s"}`}
           </h1>
           <p className={styles.sub}>
