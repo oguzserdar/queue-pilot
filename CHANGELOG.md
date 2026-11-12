@@ -5,6 +5,8 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-12 Stable enough
+
 ### Added
 - Connect gives one message for each AI app. Pasted into a chat app, it walks you through adding Queue Pilot one step at a time, then shows one preview post and saves nothing. It carries the fill-week instructions, so an app that cannot install skills still writes the Queue Pilot way.
 - The example account's Reviews page shows a shared link with comments from a client and a teammate, each pinned to the words it is about.
