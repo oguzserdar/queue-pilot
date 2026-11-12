@@ -5,6 +5,7 @@ import { getSessionCookie } from "better-auth/cookies";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentUser, signedInProfile, signedInUserId } from "@/lib/current-user";
+import { getAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 // Writing a week runs AI calls of up to a couple of minutes inside a server action on these pages.
@@ -15,8 +16,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // Signed in, but no Buffer data to show: say so. The example account is for signed-out visitors only.
   if (unreadable) return <BufferUnreadable retryAt={unreadable.retryAt} />;
   // A sign-in cookie with no session behind it (account deleted, session expired, signed out elsewhere) would show an
-  // empty app where the homepage belongs. Clear it and go home.
-  if (!user && process.env.LANDING_PAGE === "on" && getSessionCookie(await headers()) && !(await signedInUserId())) redirect("/auth/expired");
+  // empty app where the homepage belongs. Clear it and go home. Only when sign-in is set up: without it, the expired
+  // page cannot check the session and sends the visitor straight back, a redirect loop.
+  if (!user && process.env.LANDING_PAGE === "on" && getSessionCookie(await headers()) && (await getAuth()) && !(await signedInUserId())) redirect("/auth/expired");
   return (
     <AppShell account={user ? { email: user.email, channels: user.channels.map(({ id, name, service }) => ({ id, name, service })), fetchedAt: user.fetchedAt.toISOString(), needsRefresh: user.needsRefresh, name: profile?.name ?? user.email, image: profile?.image ?? null, isAdmin: profile?.isAdmin } : null} signInOpen={signInOpen} landing={process.env.LANDING_PAGE === "on"}>
       {children}

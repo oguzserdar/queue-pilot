@@ -5,7 +5,6 @@
  * was written with its verdicts. Bookkeeping after Buffer accepted the drafts never turns into an error, so a caller
  * does not retry a save that already happened.
  */
-import type { AddedBy } from "./rule-origin";
 import type { WrittenDraft } from "./ai-writer";
 import { recordEvidence, sourceById } from "./source-store";
 import { resolveSource } from "./resolve-source";
@@ -84,12 +83,9 @@ export async function applyPlaybook(
  * The judge for this person's playbook check. A missing key gives no judge; a used-up daily allowance also gives no
  * judge but keeps the reason, so "do not save" rules refuse the draft instead of being skipped.
  */
-/** True when the only rules are Queue Pilot's own starting rule, whose check takes none of the person's daily actions. */
-const onlyStarting = (rules: { addedBy?: AddedBy }[]) => rules.every((r) => r.addedBy === "starting");
-
-async function judgeFor(userId: string, rules: { addedBy?: AddedBy }[]) {
+async function judgeFor(userId: string) {
   try {
-    return { jm: await judgeModelFor(userId, { noAction: onlyStarting(rules) }), cappedReason: null };
+    return { jm: await judgeModelFor(userId), cappedReason: null };
   } catch (e) {
     const capped = e instanceof AiCapError ? `Not saved: your "do not save" rules could not be checked. ${e.message}` : null;
     return { jm: null, cappedReason: capped };
@@ -158,7 +154,7 @@ export async function saveDraftsForUser(
     console.error(JSON.stringify({ event: "qp-rules-read-failed", message: e instanceof Error ? e.message : String(e) }));
     return null;
   });
-  const { jm, cappedReason } = !rules?.length ? { jm: null, cappedReason: null } : within ? { jm: within, cappedReason: null } : await judgeFor(userId, rules);
+  const { jm, cappedReason } = !rules?.length ? { jm: null, cappedReason: null } : within ? { jm: within, cappedReason: null } : await judgeFor(userId);
   // Only drafts for real open slots are judged: the rest are refused by saveDrafts anyway, and judging them would spend
   // the AI budget on drafts that can never be saved.
   const open = new Set(input.open.map((o) => o.id));
@@ -218,7 +214,7 @@ export function checkNote(check: PlaybookCheck): string | undefined {
  */
 export async function judgeEdit(userId: string, text: string, network: string, channelId?: string): Promise<{ refusal: string | null; check: PlaybookCheck; verdicts: Verdict[] | null; playbookRevision: string | null }> {
   const rules = await postgresRulesStore().list(userId).catch(() => null);
-  const { jm, cappedReason } = rules?.length ? await judgeFor(userId, rules) : { jm: null, cappedReason: null };
+  const { jm, cappedReason } = rules?.length ? await judgeFor(userId) : { jm: null, cappedReason: null };
   const slot = { id: "edit", service: network, channelId } as OpenSlot;
   const gate = await applyPlaybook([{ slotId: "edit", text }], [slot], rules, jm ? (d, r) => judgeDrafts(jm.judges, d, r) : null, cappedReason).finally(() => jm?.settle());
   return { refusal: gate.refused[0]?.reason ?? null, check: gate.check, verdicts: gate.check === "judged" ? (gate.verdicts.get("edit") ?? []) : rules?.length === 0 ? [] : null, playbookRevision: rules ? playbookVersion(rules) : null };
@@ -232,7 +228,7 @@ export async function recheckDrafts(userId: string, drafts: { postId: string; te
   if (!drafts.length) return { ok: true, checked: 0 };
   const rules = await postgresRulesStore().list(userId).catch(() => null);
   if (rules === null) return { ok: false, message: "Your playbook could not be read just now. Try again." };
-  const { jm, cappedReason } = rules.length ? await judgeFor(userId, rules) : { jm: null, cappedReason: null };
+  const { jm, cappedReason } = rules.length ? await judgeFor(userId) : { jm: null, cappedReason: null };
   if (rules.length && !jm) return { ok: false, message: cappedReason ?? "AI is unavailable. Check the allowance or your own key in Settings." };
   const slots = drafts.map((d) => ({ id: d.postId, service: d.network, channelId: d.channelId }) as OpenSlot);
   const gate = await applyPlaybook(drafts.map((d) => ({ slotId: d.postId, text: d.text })), slots, rules, jm ? (x, r) => judgeDrafts(jm.judges, x, r) : null, cappedReason).finally(() => jm?.settle());

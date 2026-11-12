@@ -68,10 +68,8 @@ async function budgetMicros(): Promise<number> {
  * and the person has actions left today (AiCapError otherwise). Null when there is no usable key at all.
  * A person with their own key never falls back to the built-in key, even when their model list cannot be read.
  * `ownKeyOnly` is for things the person did not ask for, such as a live preview, which must not spend the built-in key.
- * `noAction` checks the shared budget and records the cost but takes none of the person's daily actions: for checking
- * Queue Pilot's own starting rule, which every new account has and which must not use up their day.
  */
-export async function aiFor(userId: string, now: Date = new Date(), opts: { ownKeyOnly?: boolean; noAction?: boolean } = {}): Promise<Ai | null> {
+export async function aiFor(userId: string, now: Date = new Date(), opts: { ownKeyOnly?: boolean } = {}): Promise<Ai | null> {
   const master = process.env.SETTINGS_KEY;
   if (!master || !hasDatabase()) return null;
   const own = await postgresAiKeyStore(master).get(userId).catch(() => null);
@@ -100,10 +98,8 @@ export async function aiFor(userId: string, now: Date = new Date(), opts: { ownK
   if ((await store.spentMicros()) >= budget) throw new AiCapError("This deployment's built-in AI is used up for now. Add your own key in Settings to keep going.");
   const limits = await caps();
   const day = utcDay(now);
-  if (!opts.noAction) {
-    const taken = await store.take(userId, day, limits);
-    if (taken !== "ok") throw new AiCapError(capMessage(taken, limits));
-  }
+  const taken = await store.take(userId, day, limits);
+  if (taken !== "ok") throw new AiCapError(capMessage(taken, limits));
   const cfg = { provider, key: fallback, model };
   const m = meter(price);
   let settled = false;
@@ -114,12 +110,12 @@ export async function aiFor(userId: string, now: Date = new Date(), opts: { ownK
     decider: m.decider(decisionModelFor(cfg)),
     // Recorded once, after the action, so every model call it made is counted together.
     settle: async () => { if (!settled) { settled = true; await store.addCost(userId, day, m.spent()).catch(() => {}); } },
-    giveBack: async () => { if (!opts.noAction) await store.giveBack(userId, day).catch(() => {}); },
+    giveBack: async () => { await store.giveBack(userId, day).catch(() => {}); },
   };
 }
 
 /** The decide and explain models for one action by this person; see aiFor for which key and limits apply. */
-export async function judgeModelFor(userId: string, opts: { ownKeyOnly?: boolean; noAction?: boolean } = {}): Promise<JudgeModel | null> {
+export async function judgeModelFor(userId: string, opts: { ownKeyOnly?: boolean } = {}): Promise<JudgeModel | null> {
   const ai = await aiFor(userId, new Date(), opts);
   return ai ? { ...ai, judges: { decider: ai.decider, explainer: ai.language } } : null;
 }

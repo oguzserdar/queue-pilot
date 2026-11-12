@@ -12,9 +12,9 @@ import { clearSignInCookies } from "@/lib/sign-in-cookies";
 export async function GET(req: NextRequest) {
   const res = new NextResponse(null, { status: 303, headers: { location: "/" } });
   const auth = await getAuth();
-  // With sign-in switched off no session can be live, so the cookie is cleared. Leaving it would send the visitor
-  // back to the app, which sends them here again: a redirect loop.
-  if (!auth) { clearSignInCookies(req.cookies.getAll(), res.cookies); return res; }
+  // No auth can also mean the settings read failed for a moment, which says nothing about the session, so nothing is
+  // cleared. The app layout only sends people here when sign-in is set up, so this cannot loop.
+  if (!auth) return res;
   // A lookup that fails says nothing about the session, so nothing is cleared: a database hiccup must not sign a
   // live person out. Only a lookup that succeeds and finds no session clears the cookies.
   let live: unknown;

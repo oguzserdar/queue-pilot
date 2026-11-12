@@ -30,11 +30,11 @@ describe("GET /auth/expired", () => {
     expect(cleared.join()).not.toMatch(/theme=/);
   });
 
-  it("clears the cookie when sign-in is switched off, so the app and this page never send the visitor in a loop", async () => {
+  it("clears nothing when sign-in is not set up or its settings could not be read, so a hiccup never signs anyone out", async () => {
     authOn.value = false;
     const res = await GET(req());
     expect(res.headers.get("location")).toBe("/");
-    expect(res.headers.getSetCookie()).toHaveLength(2);
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 
   it("clears nothing when the session lookup fails, so a database hiccup never signs anyone out", async () => {
