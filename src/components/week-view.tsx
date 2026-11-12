@@ -9,6 +9,7 @@ import { DropdownMenu } from "@/registry/components/dropdown-menu/dropdown-menu"
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveDrafts, deleteMyDraft, editDraftText, recheckMyDrafts } from "@/app/(app)/actions";
+import { approveProblem } from "@/lib/approve-problem";
 import { recheckSourceEvidence } from "@/app/(app)/source-actions";
 import { Textarea } from "@/registry/components/textarea/textarea";
 import { Button } from "@/registry/components/button/button";
@@ -181,13 +182,13 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
     setProblem(null);
     startApprove(async () => {
       const res = await approveDrafts(ids);
-      if (!res.ok) {
-        setProblem({ title: "Nothing was scheduled", text: res.kind === "limited" ? "Buffer's request limit is reached. Try again in a few minutes." : res.kind === "signedOut" ? "Your session ended. Sign in with Buffer again." : "Buffer could not be reached." });
-        return;
-      }
+      const trouble = approveProblem(res);
+      setProblem(trouble);
+      // The page's alert sits behind an open draft window, so the window's own footer says it too.
+      if (trouble && dialogOpen) setNote({ ok: false, text: `${trouble.title}. ${trouble.text}` });
+      if (!res.ok) return;
       markApproved(res.approved);
       if (res.approved.length) toast({ type: "success", title: `${res.approved.length} post${res.approved.length === 1 ? "" : "s"} scheduled in Buffer`, ...(res.note ? { description: res.note } : {}) });
-      if (res.refused.length) setProblem({ title: `${res.refused.length} draft${res.refused.length === 1 ? " was" : "s were"} not scheduled`, text: res.refused.map((r) => r.reason).join(" ") });
     });
   };
 
