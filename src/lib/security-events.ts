@@ -6,10 +6,12 @@
  *
  * Recording never throws: a failed write is logged and the action it describes still completes.
  */
-import { desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { readPage, timeText, type PageFrom } from "./page-bookmark";
 import { db } from "../db";
 import { securityEvent } from "../db/schema";
 import { capAppName } from "./app-identity";
+import { NETWORKS } from "./rules";
 
 /** Actions that change what goes out or remove something, recorded with who did them. */
 export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted", "note_deleted", "direct_post_sent"] as const;
@@ -60,9 +62,11 @@ export async function recordSecurityEvent(
  * @param userId - The person whose account it touched
  * @param event - What was done
  * @param by - The connected AI app, or the person in Queue Pilot
- * @param facts - Ids it touched and an optional label name (a tag's name); never post text
+ * @param facts - Ids it touched, an optional label name (a tag's name), and the account and time of each draft
+ *   touched (from {@link draftSlot}); never post text
  */
-export async function recordAction(userId: string, event: ActionEventKind, by: Actor, facts: { ids?: string[]; name?: string } = {}): Promise<void> {
+export async function recordAction(userId: string, event: ActionEventKind, by: Actor, facts: { ids?: string[]; name?: string; slots?: (string | null)[] } = {}): Promise<void> {
+  const slots = (facts.slots ?? []).filter((x): x is string => Boolean(x));
   const ids = facts.ids ?? [];
   const detail: Record<string, string> = {
     by: by.via === "ai" ? capAppName(by.app) || "An AI app" : IN_APP,
@@ -71,8 +75,55 @@ export async function recordAction(userId: string, event: ActionEventKind, by: A
     ...(by.via === "ai" && by.verified === false ? { verified: "false" } : {}),
     ...(ids.length ? { count: String(ids.length), ids: ids.slice(0, MAX_IDS).join(",") } : {}),
     ...(facts.name ? { name: facts.name.slice(0, 100) } : {}),
+    ...(slots.length ? { slots: slots.slice(0, MAX_IDS).join("\n") } : {}),
   };
   await recordSecurityEvent(userId, event, { detail });
+}
+
+/**
+ * Which draft it was, without its text: the network, the account's name and the time slot, as "LinkedIn|Alex|<iso>".
+ * Security activity shows it as "LinkedIn (Alex), Tue 17 Nov 12:00 UTC", so a deleted draft can still be recognised.
+ *
+ * @param post - The draft, read before it was deleted
+ * @param channels - The person's Buffer accounts
+ * @returns The slot, or null when the draft is not in the copy
+ */
+export function draftSlot(post: { channelId: string; dueAt: string | null } | undefined, channels: { id: string; name: string; service: string }[]): string | null {
+  if (!post) return null;
+  const c = channels.find((x) => x.id === post.channelId);
+  const clean = (t: string) => t.replace(/[|\n]/g, " ").slice(0, 60);
+  return [clean(c ? NETWORKS[c.service] ?? c.service : "An account"), clean(c?.name ?? ""), post.dueAt ?? ""].join("|");
+}
+
+/** How many events one page of Security activity shows. */
+export const SECURITY_PAGE_SIZE = 25;
+
+/** One page of events, newest first, with bookmarks for the next older and newer pages (null when there is none). */
+export type SecurityEventPage = { events: SecurityEvent[]; older: string | null; newer: string | null };
+
+/**
+ * One page of the person's security events, newest first.
+ *
+ * @param userId - The signed-in person
+ * @param from - A bookmark from the page before or after; neither, or an unreadable one, opens the newest page
+ * @param limit - How many to return
+ * @returns The events and the bookmarks either side
+ */
+export async function securityEventPage(userId: string, from: PageFrom = {}, limit = SECURITY_PAGE_SIZE): Promise<SecurityEventPage> {
+  const page = await readPage({
+    time: securityEvent.createdAt,
+    key: securityEvent.id,
+    from,
+    limit,
+    read: async (where, order, count) =>
+      (await db().select({ row: securityEvent, at: timeText(securityEvent.createdAt) }).from(securityEvent).where(and(eq(securityEvent.userId, userId), where)).orderBy(...order).limit(count))
+        .map((r) => ({ ...r, key: r.row.id })),
+  });
+  return {
+    events: page.rows.map((r) => ({ event: r.event as SecurityEventKind, detail: r.detail ?? null, ip: r.ip, userAgent: r.userAgent, createdAt: r.createdAt.toISOString() })),
+    older: page.older,
+    newer: page.newer,
+  };
 }
 
 /**
@@ -82,6 +133,5 @@ export async function recordAction(userId: string, event: ActionEventKind, by: A
  * @param limit - How many to return
  */
 export async function recentSecurityEvents(userId: string, limit = 20): Promise<SecurityEvent[]> {
-  const rows = await db().select().from(securityEvent).where(eq(securityEvent.userId, userId)).orderBy(desc(securityEvent.createdAt)).limit(limit);
-  return rows.map((r) => ({ event: r.event as SecurityEventKind, detail: r.detail ?? null, ip: r.ip, userAgent: r.userAgent, createdAt: r.createdAt.toISOString() }));
+  return (await securityEventPage(userId, {}, limit)).events;
 }

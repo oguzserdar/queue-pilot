@@ -16,5 +16,8 @@
 @media (hover: hover) { .close:hover { background: var(--surface-muted); color: var(--foreground) } }
 .later:focus-visible, .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
 @media (max-width: 520px) { .card { right: 16px; bottom: 16px } }
+@media (max-width: 860px) { .card { bottom: calc(16px + var(--above-tabbar, 0px)) } }
 /* While the example replays a fill, the card steps aside so the week is in view. */
 :global(body[data-filling]) .card { display: none; }
+/* A toast sits in the same corner; while one is showing, the card steps out of its way. */
+:global(body:has(button[aria-label="Dismiss notification"])) .card { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 150ms ease, visibility 0s 150ms }

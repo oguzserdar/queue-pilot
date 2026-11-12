@@ -20,7 +20,7 @@ export function ConfirmButton({ label, question, confirmLabel, onConfirm, pendin
   const [asking, setAsking] = useState(false);
   if (!asking) return <Button variant={variant} size="sm" aria-label={ariaLabel} disabled={pending} onClick={() => setAsking(true)}>{label}</Button>;
   return (
-    <span className={styles.confirm} role="group" aria-label={question} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setAsking(false); } }}>
+    <span className={styles.confirm} data-confirming="" role="group" aria-label={question} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setAsking(false); } }}>
       <span className={styles.question}>{question}</span>
       <Button variant="danger" size="sm" disabled={pending} onClick={() => { onConfirm(); setAsking(false); }}>{confirmLabel}</Button>
       <Button variant="ghost" size="sm" autoFocus disabled={pending} onClick={() => setAsking(false)}>Cancel</Button>

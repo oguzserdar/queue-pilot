@@ -223,7 +223,10 @@ export const written = pgTable(
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     postId: text("post_id").notNull(),
     network: text("network").notNull(),
+    /** What Queue Pilot wrote. Never replaced by a later check, so the person's edits stay visible as edits. */
     text: text("text").notNull(),
+    /** The text the verdicts below were given for: the person's edited text after a check. Null means `text`. */
+    checkedText: text("checked_text"),
     /** The playbook verdicts the draft was saved with (src/lib/judge.ts); null when it was saved unchecked. */
     verdicts: jsonb("verdicts"),
     playbookRevision: text("playbook_revision"),
@@ -238,6 +241,20 @@ export const written = pgTable(
 /** Repeated fixes the person set aside with "Not now", so the Playbook does not offer them again. */
 export const fixDismissed = pgTable(
   "qp_fix_dismissed",
+  {
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
+/**
+ * Home's offers the person set aside: the first-run welcome ("Not now") and the connect-your-AI card (×). One row per
+ * offer, so a hidden offer stays hidden on every device. Deleted with the account.
+ */
+export const offerDismissed = pgTable(
+  "qp_offer_dismissed",
   {
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     key: text("key").notNull(),

@@ -47,8 +47,18 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
     // a per-credential level; every other path keeps Better Auth's default.
     rateLimit: { enabled: process.env.NODE_ENV === "production", storage: "database", customRules: { "/oauth2/token": { window: 60, max: 500 } } },
     session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
-    // Every new browser session is a sign-in the person can review under Security activity in Settings.
     databaseHooks: {
+      // A new account starts with one rule that keeps private matters out of posts. Better Auth runs this after the
+      // user row is committed, and only when the user is created, so a returning sign-in never adds it again.
+      user: {
+        create: {
+          after: async (u) => {
+            const { seedStartingRuleSafely } = await import("./starting-rule");
+            await seedStartingRuleSafely(u.id);
+          },
+        },
+      },
+      // Every new browser session is a sign-in the person can review under Security activity in Settings.
       session: {
         create: {
           after: async (s) => {
@@ -94,10 +104,17 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
             // Buffer has no userinfo endpoint; the GraphQL account query is the identity.
             getUserInfo: async (tokens) => {
               if (!tokens.accessToken) return null;
-              const { account } = await bufferQuery<{ account: { id: string; email: string; name: string | null; avatar: string } }>(
+              // A busy or failing Buffer must not end sign-in on a blank error page: returning nothing sends the person
+              // back with ?error=unable_to_get_user_info, which the page explains.
+              const read = await bufferQuery<{ account: { id: string; email: string; name: string | null; avatar: string } }>(
                 tokens.accessToken,
                 "{ account { id email name avatar } }",
-              );
+              ).catch((e: unknown) => {
+                console.error(JSON.stringify({ event: "qp-sign-in-account-read-failed", message: e instanceof Error ? e.message : String(e) }));
+                return null;
+              });
+              if (!read) return null;
+              const { account } = read;
               // Buffer's account name is optional; without one, the part of the email before the @ reads better than the address.
               const name = account.name?.trim() || account.email.split("@")[0];
               // The picture is checked once here, at sign-in, so pages never wait on Gravatar: none means initials.

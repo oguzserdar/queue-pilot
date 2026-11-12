@@ -4,22 +4,30 @@
  * Each person may take their data with them (GDPR Article 20). The export reads only rows that belong to the person and
  * leaves out every secret: the encrypted AI key, Buffer and AI-app tokens, and session tokens.
  */
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { session, user } from "../db/auth-schema";
 import {
+  aiAppLabel,
+  aiAppUse,
   aiKey,
   aiUsage,
   bufferSnapshot,
+  directPostSend,
+  draftEvidence,
   echo,
   echoDestination,
+  fillDraft,
   fixDismissed,
+  material,
+  offerDismissed,
   reviewComment,
   reviewLink,
   rule,
   ruleInheritance,
   securityEvent,
   source,
+  sourceSnapshot,
   sourceUsed,
   voiceExample,
   voiceNote,
@@ -42,7 +50,7 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
   const [person] = await d.select({ name: user.name, email: user.email, image: user.image, createdAt: user.createdAt }).from(user).where(eq(user.id, userId));
   if (!person) return null;
   const [
-    rules, voiceExamples, voiceNotes, sources, sourcesUsed, copies, copiedPosts, drafts, dismissed, ai, usage, security, sessions, snapshot, apps, reviews, inheritance,
+    rules, voiceExamples, voiceNotes, sources, sourcesUsed, copies, copiedPosts, drafts, dismissed, ai, usage, security, sessions, snapshot, apps, reviews, inheritance, offers,
   ] = await Promise.all([
     d.select().from(rule).where(eq(rule.userId, userId)),
     d.select().from(voiceExample).where(eq(voiceExample.userId, userId)),
@@ -61,6 +69,19 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     approvedApps(userId),
     d.select().from(reviewLink).where(eq(reviewLink.userId, userId)).orderBy(asc(reviewLink.createdAt)),
     d.select({ settings: ruleInheritance.settings }).from(ruleInheritance).where(eq(ruleInheritance.userId, userId)),
+    d.select().from(offerDismissed).where(eq(offerDismissed.userId, userId)),
+  ]);
+  // Everything else the person put in or Queue Pilot wrote for them, read separately so the list above stays readable.
+  const [materials, snapshots, evidence, fills, posts, appLabels, appUse] = await Promise.all([
+    d.select().from(material).where(eq(material.userId, userId)),
+    // Every changed version is kept, so only the latest one per source is exported, without timed transcript segments
+    // (the same words as its text): an account with long transcripts would otherwise make a file of hundreds of MB.
+    d.selectDistinctOn([sourceSnapshot.sourceKey]).from(sourceSnapshot).where(eq(sourceSnapshot.userId, userId)).orderBy(sourceSnapshot.sourceKey, desc(sourceSnapshot.fetchedAt)),
+    d.select().from(draftEvidence).where(eq(draftEvidence.userId, userId)),
+    d.select().from(fillDraft).where(eq(fillDraft.userId, userId)),
+    d.select().from(directPostSend).where(eq(directPostSend.userId, userId)),
+    d.select().from(aiAppLabel).where(eq(aiAppLabel.userId, userId)),
+    d.select().from(aiAppUse).where(eq(aiAppUse.userId, userId)),
   ]);
   const reviewComments = reviews.length ? await d.select().from(reviewComment).where(inArray(reviewComment.linkId, reviews.map((r) => r.id))).orderBy(asc(reviewComment.createdAt)) : [];
   const strip = <T extends Record<string, unknown>>(rows: T[]) => rows.map(({ userId: _u, ...rest }) => rest);
@@ -70,12 +91,17 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     account: person,
     playbook: { inheritance: inheritance[0]?.settings ?? {}, rules: strip(rules), dismissedOffers: strip(dismissed) },
     voice: { examples: strip(voiceExamples), notes: strip(voiceNotes) },
-    sources: { feeds: strip(sources), used: strip(sourcesUsed) },
-    copies: { destinations: strip(copies), sent: strip(copiedPosts) },
+    homeOffersSetAside: strip(offers),
+    sources: { feeds: strip(sources), used: strip(sourcesUsed), material: strip(materials), snapshots: strip(snapshots).map(({ metadata, ...s }) => { const { segments: _s, ...rest } = (metadata ?? {}) as Record<string, unknown>; return { ...s, metadata: rest }; }) },
+    copies: { destinations: strip(copies), sent: strip(copiedPosts), posts: strip(posts) },
     draftsQueuePilotWrote: strip(drafts),
+    draftEvidence: strip(evidence),
+    fillRuns: strip(fills),
     reviewLinks: strip(reviews).map((l) => ({ ...l, comments: reviewComments.filter((c) => c.linkId === l.id) })),
     ai: { ownKey: ai[0] ?? null, builtInUsage: strip(usage) },
     aiApps: apps,
+    aiAppNames: strip(appLabels),
+    aiAppActivity: strip(appUse),
     securityActivity: strip(security),
     signedInBrowsers: sessions,
     bufferCopy: snapshot[0] ?? null,

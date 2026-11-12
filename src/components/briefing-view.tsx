@@ -3,19 +3,25 @@
 import { useState } from "react";
 import { Button } from "@/registry/components/button/button";
 import styles from "./briefing-view.module.css";
+import { DEMO_BASE_START, DEMO_TIME_ZONE } from "@/lib/demo-clock";
 import { BufferIdeasBoard } from "./buffer-ideas-board";
 import type { IdeaBoard } from "@/app/(app)/idea-actions";
 
 type Idea = { id: string; foundBy: string; title: string; why: string; link: string; slot?: string };
 
-const IDEAS: Idea[] = [
-  { id: "i1", foundBy: "Your newsletter", title: "This Week in AI 41: Terra, Carbon, and 40 agents in Android Studio", why: "Sent Sunday and not posted yet", link: "thisweekinai.example/41", slot: "4 drafts: Tue 3 to Thu 5" },
-  { id: "i2", foundBy: "Your newsletter", title: "This Week in AI 40: Claude Duet, Kimi K3.1 Pro, DeepSeek 1017", why: "Posted three times; Claude Duet not posted yet", link: "thisweekinai.example/40", slot: "a draft: Thu 5, LinkedIn, 15:00" },
-  { id: "i3", foundBy: "Your YouTube", title: "Video: what NVIDIA's new Vera numbers mean for agents", why: "New video, no open time left this week", link: "youtube.example/thisweekinai" },
+/** "Tue 17": a day of the example's shown week, which moves on with the calendar like the Week page. */
+const weekDay = (shift: number, day: number) => new Date(Date.parse(DEMO_BASE_START) + (shift + day) * 86_400_000 + 12 * 3_600_000)
+  .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", timeZone: DEMO_TIME_ZONE }).replace(",", "");
+
+/** The example ideas for a shown week; the shift comes from the server, so server and browser agree on the dates. */
+const ideas = (shift: number): Idea[] => [
+  { id: "i1", foundBy: "Your newsletter", title: "This Week in AI 41: Terra, Carbon, and 40 agents in Android Studio", why: "Sent Sunday and not posted yet", link: "thisweekinai.example/41", slot: `4 drafts: ${weekDay(shift, 1)} to ${weekDay(shift, 3)}` },
+  { id: "i2", foundBy: "Your newsletter", title: "This Week in AI 40: Claude Duet, Kimi K3.1 Pro, DeepSeek 1017", why: "Posted three times; Claude Duet not posted yet", link: "thisweekinai.example/40", slot: `a draft: ${weekDay(shift, 3)}, LinkedIn, 15:00` },
+  { id: "i3", foundBy: "Your YouTube", title: "Video: what NVIDIA's new Vera numbers mean for agents", why: "New video. Next week has one empty time left: Friday, LinkedIn, 12:00", link: "youtube.example/thisweekinai" },
 ];
 
 /** Example mode shows what is new in the example feeds; live mode says what works today: the AI reads the user's feeds through the connector. */
-export function BriefingView({ mode = "example", ideasPreview }: { mode?: "example" | "live"; ideasPreview?: IdeaBoard[] }) {
+export function BriefingView({ mode = "example", ideasPreview, shift = 0 }: { mode?: "example" | "live"; ideasPreview?: IdeaBoard[]; /** Days the example week has moved on (demoShiftDays, read on the server). */ shift?: number }) {
   // Hooks run before any early return, so switching mode never changes the hook order.
   const [saved, setSaved] = useState<Set<string>>(new Set());
   if (mode === "live") {
@@ -23,7 +29,7 @@ export function BriefingView({ mode = "example", ideasPreview }: { mode?: "examp
       <div className={styles.page}>
         <header className={styles.head}>
           <h1 className={styles.title}>New material comes from your feeds</h1>
-          <p className={styles.sub}>Add your newsletter, blog, YouTube or GitHub releases feed in Sources. Then pick "Fill my week" in your AI: it reads what is new, writes drafts for the empty slots, and saves them in Buffer for you to approve.</p>
+          <p className={styles.sub}>Add a feed in Sources, save an idea in Buffer, or give your AI a page or doc to write from. Then pick "Fill my week" in your AI: it reads what is new, writes drafts for your empty times, and saves them in Buffer for you to approve.</p>
         </header>
         <a className={styles.action} href="/sources">Add a feed in Sources</a>
         <BufferIdeasBoard preview={ideasPreview} />
@@ -38,7 +44,7 @@ export function BriefingView({ mode = "example", ideasPreview }: { mode?: "examp
       </header>
 
       <ol className={styles.list}>
-        {IDEAS.map((idea) => (
+        {ideas(shift).map((idea) => (
           <li key={idea.id} className={styles.item}>
             <div className={styles.main}>
               <span className={styles.by}>{idea.foundBy}</span>

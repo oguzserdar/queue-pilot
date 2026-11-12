@@ -10,6 +10,7 @@ import { CopyButton } from "@/registry/components/copy-button/copy-button";
 import { aiBrand } from "@/lib/ai-brand";
 import { APP_ONLY, CONNECTOR_CATALOG } from "@/lib/connector-catalog";
 import { SetupSteps, type SetupAccount } from "./setup-steps";
+import { Term } from "./term";
 import styles from "./connect-view.module.css";
 
 /** One chat app's setup, shown in its modal. Coding agents set themselves up from the copied prompt instead. */
@@ -34,7 +35,7 @@ const AIS: AiSetup[] = [
   {
     name: "ChatGPT",
     plan: "Set this up on ChatGPT web. Workspace permissions may restrict custom plugins.",
-    does: "See next week and fill the empty slots with drafts, inside a chat.",
+    does: "See next week and fill the empty times with drafts, inside a chat.",
     steps: [
       "Go to chatgpt.com/plugins, press +, then Add custom MCP server. Name it Queue Pilot",
       "Under Connection, paste the URL above as the Server URL. Keep OAuth",
@@ -48,7 +49,7 @@ const AIS: AiSetup[] = [
   {
     name: "Claude",
     plan: "Available on every Claude plan. Free allows one custom connector. Remote connectors belong to your Claude account and work across web, desktop and mobile.",
-    does: "Pick \"Fill my week\" and Claude drafts your empty times from your newsletter.",
+    does: "Pick \"Fill my week\" and Claude drafts your empty times from your sources, in your voice.",
     steps: [
       "Go to Customize, Connectors, press + Add, then Add custom connector. Name it Queue Pilot",
       "Paste the URL above and press Continue. Review the detected authentication, then Continue again",
@@ -62,7 +63,7 @@ const AIS: AiSetup[] = [
     name: "Grok web",
     mark: "Grok",
     plan: "These steps are for grok.com. Grok Bot desktop needs its own connection.",
-    does: "Use Queue Pilot in a chat on grok.com.",
+    does: "Use Queue Pilot in a chat on grok.com. Grok can also bring in what you and people in your field are posting on X.",
     steps: ["Go to grok.com/connectors, press New Connector, then Custom", "Name it Queue Pilot, paste the URL above into Server URL, then press Add Connector", "On Queue Pilot's connection page, check the account and press Allow. Sign in with Buffer first if asked", "In a new Grok chat, send the connection check below"],
     help: "These are the browser steps. For the Grok Bot app, use the separate desktop guide. Business and Enterprise accounts may need an admin to add the connector first.",
     docs: "https://docs.x.ai/grok/connectors",
@@ -85,38 +86,52 @@ const AIS: AiSetup[] = [
   },
 ];
 
+/** Each chat app's own connection steps, by the name the app picker uses ("Grok" for Grok web). */
+export const CHAT_GUIDES: Record<string, string[]> = Object.fromEntries(AIS.map((a) => [a.name === "Grok web" ? "Grok" : a.name, a.steps]));
+/** The chat apps whose setup steps can be opened from another page with `/connect?setup=<name>`. */
+const OPENABLE = new Set(Object.keys(CHAT_GUIDES).filter((n) => n !== "Grok Bot desktop"));
+
 /**
  * Connect: how to add Queue Pilot to each AI the person already pays for. The address is this deployment's connector.
  * `approved` lists the AI apps the person approved, with when each last called the connector, so "connected" here
  * always means the app really reached Queue Pilot.
  */
-export function ConnectView({ connectorUrl, example = false, approved = null, account = null }: { connectorUrl: string; example?: boolean; approved?: ApprovedApp[] | null; account?: SetupAccount | null }) {
+export function ConnectView({ connectorUrl, example = false, approved = null, account = null, setup }: { connectorUrl: string; example?: boolean; approved?: ApprovedApp[] | null; account?: SetupAccount | null; /** A chat app whose steps open on arrival, from `?setup=`. */ setup?: string }) {
   // Which app's setup is open in the modal; the page itself only lists the apps.
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(setup && OPENABLE.has(setup) ? setup : null);
   const [grokSurface, setGrokSurface] = useState("Grok web");
+  // Allow alone is not a connection: an app counts once it has called Queue Pilot, as Home and setup readiness count it.
+  const used = example ? [] : (approved ?? []).filter((a) => a.lastUsedAt);
+  const waiting = example ? [] : (approved ?? []).filter((a) => !a.lastUsedAt);
+  const connected = used.length > 0;
+  const names = (apps: ApprovedApp[]) => [...new Set(apps.map((a) => a.brand ?? a.name))].join(", ");
   const current = AIS.find((x) => x.name === (open === "Grok" ? grokSurface : open));
 
   return (
     <div className={styles.page}>
       <header className={styles.head}>
         <h1 className={styles.title}>Connect your AI</h1>
-        <p className={styles.sub}>Your AI does the writing. Queue Pilot gives it your Buffer slots, your schedule and your material, and checks what it writes before you approve.</p>
+        <p className={styles.sub}>Your AI does the writing. Queue Pilot gives it your empty Buffer times and your material, and checks what it writes before you approve.</p>
         {/* Connections are managed in one place, Settings; here a single line confirms what is connected. */}
-        {!example && !!approved?.length && (
+        {(used.length > 0 || waiting.length > 0) && (
           <p className={styles.connectedLine}>
-            <span className={styles.connectedMarks} aria-hidden="true">{[...new Set(approved.map((a) => a.brand).filter((b): b is string => !!b))].map((b) => <AiMark key={b} name={b} size={16} />)}</span>
-            <span>Connected: {[...new Set(approved.map((a) => a.brand ?? a.name))].join(", ")}</span>
+            <span className={styles.connectedMarks} aria-hidden="true">{[...new Set([...used, ...waiting].map((a) => a.brand).filter((b): b is string => !!b))].map((b) => <AiMark key={b} name={b} size={16} />)}</span>
+            <span>{[used.length ? `Connected: ${names(used)}` : "", waiting.length ? `Allowed, not used yet: ${names(waiting)}` : ""].filter(Boolean).join(". ")}</span>
             <a href="/settings?tab=ai">Manage</a>
           </p>
         )}
       </header>
 
-      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example}
+      {/* Once an AI has really reached Queue Pilot, setup folds away: the page leads with what it can do. */}
+      {connected ? (
+        <details className={styles.another}>
+          <summary className={styles.anotherSummary}>Add another AI</summary>
+      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={CHAT_GUIDES}
         openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
 
       <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
       <div className={styles.address}>
-        <span className={styles.label}>Connector URL</span>
+        <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
         <code className={styles.code}>{connectorUrl}</code>
         <CopyButton value={connectorUrl} label="Copy" />
       </div>
@@ -133,6 +148,31 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
           </li>
         ))}
       </ul>
+        </details>
+      ) : <>
+      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={CHAT_GUIDES}
+        openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
+
+      <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
+      <div className={styles.address}>
+        <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
+        <code className={styles.code}>{connectorUrl}</code>
+        <CopyButton value={connectorUrl} label="Copy" />
+      </div>
+
+      <ul className={styles.tiles}>
+        {AIS.filter((a) => a.name !== "Grok Bot desktop").map((a) => (
+          <li key={a.name} className={styles.tile}>
+            <div className={styles.cardHead}>
+              <strong className={styles.name}><AiMark name={a.mark ?? a.name} size={20} />{a.name === "Grok web" ? "Grok" : a.name}</strong>
+              {example && a.name === "Claude" ? <span className={styles.ok}><span className={styles.okMark} aria-hidden="true" />Connected</span> : null}
+            </div>
+            <p className={styles.does}>{a.name === "Grok web" ? "Connect on grok.com or in Grok Bot desktop." : a.does}</p>
+            <Button variant="secondary" size="sm" onClick={() => { setGrokSurface("Grok web"); setOpen(a.name === "Grok web" ? "Grok" : a.name); }} aria-label={`Set up ${a.name === "Grok web" ? "Grok" : a.name}`}>Set up</Button>
+          </li>
+        ))}
+      </ul>
+      </>}
 
 
       <section className={styles.can} aria-labelledby="can-title">
@@ -167,7 +207,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
             </div>}
             {current.image && <img className={styles.shot} src={current.image} alt={`Where Queue Pilot is added in ${current.name}`} width={1200} height={750} />}
             <div className={styles.address}>
-              <span className={styles.label}>Connector URL</span>
+              <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
               <code className={styles.code}>{connectorUrl}</code>
               <CopyButton value={connectorUrl} label="Copy" />
             </div>

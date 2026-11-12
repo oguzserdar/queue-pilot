@@ -176,7 +176,7 @@ export const Combobox = forwardRef<HTMLInputElement, ComboboxProps>(function Com
       setActiveIndex(enabledIndices[nextPosition]!);
       return;
     }
-    if (event.key === "Enter" && open && activeIndex >= 0) {
+    if (!event.nativeEvent.isComposing && event.key === "Enter" && open && activeIndex >= 0) {
       event.preventDefault();
       const option = filteredOptions[activeIndex];
       if (option) choose(option);

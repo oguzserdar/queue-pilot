@@ -1,5 +1,7 @@
 "use client";
 
+import { ChannelsPanel, EXAMPLE_CHANNELS, type ChannelsPanelProps } from "./sources-view";
+
 
 import { SignInButton } from "./sign-in-button";
 import { UrlTabs } from "./url-tabs";
@@ -18,9 +20,10 @@ import styles from "./settings-view.module.css";
 import { remainingOf } from "@/lib/rate-limit-text";
 
 /** The example account's last RateLimit reading, in the format Buffer sends (developers.buffer.com/guides/api-limits). */
-const EXAMPLE_RATE_LIMIT = [{ policy: "100-in-15min", remaining: 97 }, { policy: "250-in-24h", remaining: 212 }];
+const EXAMPLE_RATE_LIMIT = [{ policy: "110-in-15min", remaining: 107 }, { policy: "525-in-24h", remaining: 487 }];
 
-import { showSecurityEvent, type ShownSecurityEvent } from "@/lib/security-event-words";
+import { showSecurityEvents, type ShownSecurityEvent } from "@/lib/security-event-words";
+import { Pager } from "./pager";
 import type { SecurityEvent } from "@/lib/security-events";
 export type { ShownSecurityEvent };
 
@@ -39,6 +42,8 @@ export type SettingsAccount = {
   allowance?: { used: number; cap: number; budgetUsd: number; leftUsd: number; resetsAt: string } | null;
   /** Recent sign-ins, AI apps connected or removed, and drafts scheduled or deleted, newest first; null when they could not be read. */
   security?: ShownSecurityEvent[] | null;
+  /** Bookmarks for the security list's next older and newer pages; null where there is none. */
+  securityPages?: { older: string | null; newer: string | null };
   /** A result to show on arrival, e.g. after connecting OpenRouter. */
   notice?: { ok: boolean; text: string } | null;
   /** Whether connected AI apps may approve drafts; "ask" when never set. */
@@ -49,6 +54,8 @@ export type SettingsAccount = {
   channelNames: string[];
   /** Buffer's RateLimit windows from the last sync, e.g. { policy: "250-in-24h", remaining: 212 }. */
   rateLimit?: { policy: string; remaining: number }[];
+  /** Buffer channels and the Telegram and Discord copies, for the Channels tab. */
+  channelsPanel?: ChannelsPanelProps;
 };
 
 /** Settings: the example account when signed out, the person's own tabs when signed in. */
@@ -67,13 +74,14 @@ const EXAMPLE_ACCOUNT: SettingsAccount = {
   allowance: { used: 3, cap: 10, budgetUsd: 100, leftUsd: 96.4, resetsAt: "00:00" },
   devices: [{ id: "example-device", device: "Chrome on Mac", lastActive: "2026-10-28T08:00:00.000Z", current: true }],
   // Worded by the same function as a signed-in person's activity, so the two lists cannot drift apart.
-  security: ([
-    { event: "drafts_approved", detail: { by: "Claude", via: "ai", count: "3", ids: "example-1,example-2,example-3" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:14:00.000Z" },
-    { event: "draft_deleted", detail: { by: "Queue Pilot", via: "app", count: "1", ids: "example-4" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:05:00.000Z" },
+  security: showSecurityEvents([
+    { event: "drafts_approved", detail: { by: "Claude", via: "ai", count: "3", ids: "example-1,example-2,example-3", slots: "LinkedIn|Alex Rivera|2026-11-17T17:00:00.000Z\nX|@alexrivera_ai|2026-11-19T14:00:00.000Z\nInstagram|Alex Rivera|2026-11-20T15:00:00.000Z" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:14:00.000Z" },
+    { event: "draft_deleted", detail: { by: "Queue Pilot", via: "app", count: "1", ids: "example-4", slots: "Instagram|Alex Rivera|2026-11-18T23:00:00.000Z" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:05:00.000Z" },
     { event: "sign_in", detail: null, ip: null, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140.0 Safari/537.36", createdAt: "2026-10-28T08:00:00.000Z" },
     { event: "app_connected", detail: { by: "Claude", via: "ai" }, ip: null, userAgent: null, createdAt: "2026-10-20T09:00:00.000Z" },
-  ] as SecurityEvent[]).map(showSecurityEvent),
+  ] as SecurityEvent[]),
   notice: null,
+  channelsPanel: EXAMPLE_CHANNELS,
 };
 
 /** Settings: the person's own tabs when signed in, the same screen with the example account when not. */
@@ -82,7 +90,7 @@ export function SettingsView({ account, tab }: { account?: SettingsAccount; tab?
 }
 
 /** The settings tabs; the open one lives in the address (?tab=ai) so a reload or a shared link opens it again. */
-const TABS = ["account", "ai", "security"] as const;
+const TABS = ["account", "channels", "ai", "security"] as const;
 type Tab = (typeof TABS)[number];
 
 function LiveSettings({ account, tab, example = false }: { account: SettingsAccount; tab?: string; example?: boolean }) {
@@ -94,9 +102,10 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
         <h1 className={styles.title}>Settings</h1>
       </header>
 
-      <UrlTabs initial={open} first="account">
+      <UrlTabs key={open} initial={open} first="account">
         <TabsList aria-label="Settings sections">
           <TabsTrigger value="account">Account</TabsTrigger>
+          <TabsTrigger value="channels">Channels</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
@@ -162,6 +171,11 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
       </section>
           </div>
         </TabsContent>
+        <TabsContent value="channels">
+          <div className={styles.tab}>
+            {account.channelsPanel ? <ChannelsPanel {...account.channelsPanel} /> : <p className={styles.muted}>Your channels could not be read just now.</p>}
+          </div>
+        </TabsContent>
         <TabsContent value="security">
           <div className={styles.tab}>
       <section className={styles.block} aria-labelledby="devices">
@@ -179,13 +193,28 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
           <ul className={styles.events}>
             {account.security.map((e, i) => (
               <li key={i}>
-                <strong>{e.what}</strong>
-                {e.where && <span className={styles.muted}>{e.where}</span>}
-                <time className={styles.muted}>{e.when}</time>
+                {e.items ? (
+                  // Which drafts it was: account and time slot only, never the post's text.
+                  <details className={styles.eventItems}>
+                    <summary>
+                      <strong>{e.what}</strong>
+                      {e.where && <span className={styles.muted}>{e.where}</span>}
+                      <time className={styles.muted}>{e.when}</time>
+                    </summary>
+                    <ul>{e.items.map((t, j) => <li key={j} className={styles.muted}>{t}</li>)}</ul>
+                  </details>
+                ) : (
+                  <>
+                    <strong>{e.what}</strong>
+                    {e.where && <span className={styles.muted}>{e.where}</span>}
+                    <time className={styles.muted}>{e.when}</time>
+                  </>
+                )}
               </li>
             ))}
           </ul>
         )}
+        {account.securityPages && <Pager path="/settings" query={{ tab: "security" }} older={account.securityPages.older} newer={account.securityPages.newer} label="Security activity pages" hash="security" />}
       </section>
           </div>
         </TabsContent>

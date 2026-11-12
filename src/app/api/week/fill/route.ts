@@ -17,7 +17,8 @@ export const maxDuration = 300;
 export async function POST(request: Request) {
   // A cookie-authenticated write: only our own pages may start it.
   const origin = request.headers.get("origin");
-  if (!origin || new URL(origin).host !== new URL(request.url).host) return new Response(null, { status: 403 });
+  const sameHost = (() => { try { return !!origin && new URL(origin).host === new URL(request.url).host; } catch { return false; } })();
+  if (!sameHost) return new Response(null, { status: 403 });
   const body = await request.json().catch(() => null) as { week?: unknown } | null;
   const week = body?.week === "this" ? "this" : "next";
 
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
             store: postgresFillDraftStore(),
             onStart: (slotIds) => send({ type: "start", slotIds }),
             onDraft: (draft) => send({ type: "draft", ...draft }),
+            onDropped: (slotId) => send({ type: "dropped", slotId }),
             onSaving: () => send({ type: "saving" }),
           });
         } catch {

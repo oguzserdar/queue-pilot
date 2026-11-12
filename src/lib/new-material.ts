@@ -17,7 +17,7 @@ const PER_FEED = 3;
  */
 export async function newMaterial(userId: string): Promise<BriefMaterial[]> {
   const store = postgresSourceStore();
-  const [sources, used, material] = await Promise.all([store.list(userId), store.usedKeys(userId), postgresMaterialStore().list(userId)])
+  const [sources, used, material] = await Promise.all([store.list(userId), store.usedKeys(userId), postgresMaterialStore().list(userId).then((p) => p.rows)])
   const feeds = await Promise.allSettled(sources.map((s) => readFeed(s.url)));
   const toMaterial = (title: string, it: FeedItem): BriefMaterial => ({ key: it.key, title: `${title}: ${it.title}`, url: it.url, text: it.body || it.summary, published: it.published, ...(it.truncated ? { truncated: true } : {}) });
   const research = material.filter((item) => !used.has(item.key)).map((item) => ({ key: item.key, title: item.title, url: item.link ?? null, text: item.text }));

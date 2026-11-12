@@ -93,8 +93,8 @@ export function MultiSelect({ label, options, value, defaultValue = [], onValueC
   const enabled = options.map((option, index) => option.disabled ? -1 : index).filter((index) => index >= 0);
   const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (disabled) return;
-    if (event.key === "Enter" && open && activeIndex >= 0) { event.preventDefault(); toggle(options[activeIndex]!); return; }
-    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen((current) => !current); return; }
+    if (!event.nativeEvent.isComposing && event.key === "Enter" && open && activeIndex >= 0) { event.preventDefault(); toggle(options[activeIndex]!); return; }
+    if (!event.nativeEvent.isComposing && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setOpen((current) => !current); return; }
     if (event.key === "Escape") { setOpen(false); return; }
     if ((event.key === "ArrowDown" || event.key === "ArrowUp") && enabled.length) {
       event.preventDefault(); setOpen(true);

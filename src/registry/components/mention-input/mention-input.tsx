@@ -292,7 +292,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         if (suggestions.length) setActive((activeIndex + (event.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length);
         return;
       }
-      if ((event.key === "Enter" || event.key === "Tab") && suggestions.length && !event.shiftKey) {
+      if (!event.nativeEvent.isComposing && (event.key === "Enter" || event.key === "Tab") && suggestions.length && !event.shiftKey) {
         event.preventDefault();
         choose(suggestions[activeIndex]);
         return;

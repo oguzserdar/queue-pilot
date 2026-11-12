@@ -10,11 +10,12 @@ import { approverLine } from "@/lib/rule-origin";
 import { postsBetween } from "@/lib/posts-between";
 import { nextWeekRange, thisWeekRange, weekFromBuffer } from "@/lib/week-from-buffer";
 import { postgresWrittenStore } from "@/lib/written-store";
+import { checkedTextOf } from "@/lib/checked-text";
 import { readOr } from "@/lib/read-or";
 import { signedInUserId } from "@/lib/current-user";
 import { writingAvailabilityFor } from "@/lib/writing-availability";
 import { openSlots } from "@/lib/open-slots";
-import { slotsToWrite } from "@/lib/write-week";
+import { emptyTimesAhead, slotsToWrite } from "@/lib/write-week";
 import { postgresFillDraftStore } from "@/lib/fill-draft-store";
 import { recoverFillDrafts } from "@/lib/fill-recovery";
 
@@ -39,19 +40,20 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ w
   const rules = userId ? await readOr(postgresRulesStore().list(userId), null, "week-rules") : null;
   const revision = rules ? playbookVersion(rules) : null;
   const checkNotes = Object.fromEntries(written.map(w => [w.postId,
-    week.posts.find(p => p.id === w.postId)?.text !== w.text ? "This draft changed since its last check. Check it again before relying on that result." :
+    week.posts.find(p => p.id === w.postId)?.text !== checkedTextOf(w) ? "This draft changed since its last check. Check it again before relying on that result." :
     revision && w.playbookRevision !== revision ? "The rules or where they apply changed. This draft needs a fresh check." :
     "No current playbook check is available for this draft."]));
-  const verdicts = Object.fromEntries(written.map((w) => [w.postId, revision && w.playbookRevision === revision && week.posts.find(p => p.id === w.postId)?.text === w.text ? w.verdicts ?? null : null]));
+  const verdicts = Object.fromEntries(written.map((w) => [w.postId, revision && w.playbookRevision === revision && week.posts.find(p => p.id === w.postId)?.text === checkedTextOf(w) ? w.verdicts ?? null : null]));
   const readiness: Record<string, Readiness> = Object.fromEntries(written.map(w => {
     const post = user.posts.find(p => p.id === w.postId);
     const network = user.channels.find(c => c.id === post?.channelId)?.service ?? w.network;
     return [w.postId, rules ? draftReadiness(w, post?.text ?? "", rules, { network, channelId: post?.channelId }) : { state: "check", reason: "The playbook could not be read. Try again." }];
   }));
-  // A fill that stopped, or whose Buffer save never answered, is settled against the queue as it is now.
+  // A fill that stopped, or whose Buffer save never answered, is settled against the queue as last read. Time is
+  // measured from that read, so a copy fetched before the save landed never marks a saved draft as failed.
   if (userId) {
     const fills = postgresFillDraftStore();
-    await recoverFillDrafts(userId, user.posts, (channelId) => user.channels.find((c) => c.id === channelId)?.service ?? "", { open: fills.open, settle: fills.settle, record: (id, drafts) => postgresWrittenStore().record(id, drafts) })
+    await recoverFillDrafts(userId, user.posts, (channelId) => user.channels.find((c) => c.id === channelId)?.service ?? "", { open: fills.open, settle: fills.settle, record: (id, drafts) => postgresWrittenStore().record(id, drafts) }, user.fetchedAt)
       .catch((e) => console.error(JSON.stringify({ event: "qp-fill-recovery-failed", message: e instanceof Error ? e.message : String(e) })));
   }
   const evidence = userId ? await sourceCards(userId, user.posts, user.channels) : [];
@@ -62,6 +64,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ w
   for (const [id, reason] of blocks) readiness[id] = { state: "check", reason };
   const writing = userId ? await writingAvailabilityFor(userId) : undefined;
   // How many drafts one press would write into the week shown: its empty times still ahead, at most ten.
-  const count = slotsToWrite(openSlots(user.channels, user.posts, user.range).slots, now, timeZone, undefined, which).length;
-  return <WeekView which={which} nowIso={now.toISOString()} week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} approvals={approvals} />;
+  const open = openSlots(user.channels, user.posts, user.range).slots;
+  const count = slotsToWrite(open, now, timeZone, undefined, which).length;
+  const writeTotal = emptyTimesAhead(open, now, timeZone, which);
+  return <WeekView which={which} nowIso={now.toISOString()} week={week} evidence={evidence} live readiness={readiness} rules={rules ?? []} checkNotes={checkNotes} verdicts={verdicts} writing={writing} writeCount={count} writeTotal={writeTotal} approvals={approvals} />;
 }

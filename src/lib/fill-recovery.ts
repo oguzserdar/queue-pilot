@@ -23,7 +23,8 @@ export const SETTLE_AFTER_MS = 6 * 60_000;
  *
  * @param open - Records still "written"
  * @param posts - The person's current Buffer posts
- * @param now - The current time
+ * @param now - When `posts` was read from Buffer. A record is settled only if that read came long enough after its
+ *   last change, so a queue read before a save could land never counts as proof the save failed.
  * @returns One decision per record old enough to settle; younger ones are left alone
  */
 export function settleFillDrafts(open: OpenFillDraft[], posts: Post[], now: Date): FillSettlement[] {
@@ -53,7 +54,7 @@ export async function recoverFillDrafts(userId: string, posts: Post[], networkOf
   open(userId: string): Promise<OpenFillDraft[]>;
   settle(userId: string, decisions: FillSettlement[]): Promise<void>;
   record(userId: string, drafts: { postId: string; network: string; text: string; verdicts: null }[]): Promise<void>;
-}, now = new Date()): Promise<number> {
+}, /** When `posts` was read from Buffer; see settleFillDrafts. */ now = new Date()): Promise<number> {
   const open = await deps.open(userId);
   if (!open.length) return 0;
   const decisions = settleFillDrafts(open, posts, now);

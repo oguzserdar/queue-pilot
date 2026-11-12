@@ -1,1 +1,1 @@
-Queue Pilot: your AI writes your Buffer drafts, each checked against a playbook learned from your own edits, shown next to a week of drafts in Buffer.
+Queue Pilot: your AI writes your Buffer week. Fix a draft twice and it becomes a rule that every AI you use follows. The Queue Pilot mascot, in a flying cap and goggles, looks out from a pink pixel field.
