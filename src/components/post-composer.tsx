@@ -1,5 +1,6 @@
 "use client";
 
+import { Pager } from "./pager";
 import { useRef, useState, useTransition } from "react";
 import { cancelScheduledPostAction, changeScheduledPostAction, postTargets, resendPostAction, sendPostAction, type DirectPostView, type PostTargets, type SendPostResult } from "@/app/(app)/direct-post-actions";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/registry/components/popover/popover";
@@ -63,7 +64,7 @@ export function resultWords(r: { status: string; error: string | null; sendAt?: 
  * with a tab per place for different text, a live preview of what each place will show, and one button that sends
  * now or at the time picked beside it.
  */
-export function PostComposer({ recent, loadTargets = postTargets }: { recent: DirectPostView[]; loadTargets?: () => Promise<PostTargets> }) {
+export function PostComposer({ recent, pages, loadTargets = postTargets }: { recent: DirectPostView[]; pages?: { older: string | null; newer: string | null }; loadTargets?: () => Promise<PostTargets> }) {
   const [open, setOpen] = useState(false);
   const [targets, setTargets] = useState<PostTargets | null>(null);
   const [message, setMessage] = useState("");
@@ -152,6 +153,7 @@ export function PostComposer({ recent, loadTargets = postTargets }: { recent: Di
         <span className={styles.hint}>Post straight to your Telegram channel or a Discord channel, now or later, with no Buffer post needed.</span>
       </div>
       {recent.length > 0 && <Recent rows={recent} />}
+      {pages && <Pager path="/settings" query={{ tab: "channels" }} older={pages.older} newer={pages.newer} label="Recent post pages" names={{ before: "postsBefore", after: "postsAfter" }} />}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className={styles.dialog} title="New post" description="Telegram and Discord get exactly what the preview shows.">
           {loading || !targets ? (

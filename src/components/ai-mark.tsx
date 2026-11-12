@@ -1,6 +1,6 @@
 "use client";
 
-import { Claude, Cursor, Grok, OpenAI } from "@lobehub/icons";
+import { Claude, Cursor, Grok, MCP, OpenAI } from "@lobehub/icons";
 import type { ComponentType } from "react";
 import { aiBrand } from "@/lib/ai-brand";
 
@@ -19,6 +19,8 @@ const MARKS: Record<string, ComponentType<MarkProps>> = {
   "Claude Code": ({ size = 14, className }) => <Claude.Color size={size} className={className} />,
   Codex: ({ size = 14, className }) => <OpenAI size={size} className={className} />,
   Cursor: ({ size = 14, className }) => <Cursor size={size} className={className} />,
+  // Any app that adds a remote MCP server: the protocol's own mark.
+  MCP: ({ size = 14, className }) => <MCP size={size} className={className} />,
 };
 
 /** The logo for an AI by its display name, or nothing when we ship no logo for it. */

@@ -119,7 +119,7 @@ export function CommandPalette({ items, placeholder = "Search commands", onSelec
     if (event.key === "End") { event.preventDefault(); setActiveIndex(Math.max(filtered.length - 1, 0)); }
     // Enter runs the highlighted result; after typing, with nothing highlighted yet, it runs the top match.
     const target = filtered[safeActiveIndex] ?? (query ? filtered[0] : undefined);
-    if (event.key === "Enter" && target) { event.preventDefault(); choose(target); }
+    if (!event.nativeEvent.isComposing && event.key === "Enter" && target) { event.preventDefault(); choose(target); }
     if (event.key === "Escape") {
       event.preventDefault();
       if (query) { setQuery(""); setActiveIndex(null); }

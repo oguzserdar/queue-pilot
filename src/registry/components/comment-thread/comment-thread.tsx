@@ -341,7 +341,7 @@ function Composer({ people, initial = "", placeholder, submitLabel, autoFocus, f
   const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (open) {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setActive(index => (index + (event.key === "ArrowDown" ? 1 : -1) + suggestions.length) % suggestions.length); return; }
-      if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); insert(suggestions[active]!); return; }
+      if (!event.nativeEvent.isComposing && event.key === "Enter" || event.key === "Tab") { event.preventDefault(); insert(suggestions[active]!); return; }
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setQuery(null); return; }
     }
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); send(); return; }

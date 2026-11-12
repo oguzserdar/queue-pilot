@@ -18,8 +18,18 @@ export function editsFrom(written: Written[], posts: { id: string; channelId?: s
   });
 }
 
-/** A fix as a rule: a swap or a cut is enforced, an added ending is flagged, on the network the fix was made on. */
-export function fixToRule(fix: Fix, network: string, channelId?: string): NewRule {
+/**
+ * A fix as a rule, on the network the fix was made on. A swap or a cut keeps its exact words and is enforced: it never
+ * adds anything to a post. An added ending is flagged, keeps the exact words added, and with the author's sentence
+ * (from confirm-fixes.ts) reads as that sentence, which says which posts the ending is for.
+ *
+ * @param fix - The repeated fix
+ * @param network - The network it was made on
+ * @param channelId - The account it was made on, when known
+ * @param sentence - For an added ending, the rule as the author would write it
+ * @returns The rule to offer
+ */
+export function fixToRule(fix: Fix, network: string, channelId?: string, sentence?: string): NewRule {
   const channels = network in NETWORKS ? [network] : "all";
   const raw =
     fix.kind === "replace" ? { kind: "replace", from: fix.from, to: fix.to, channels, level: "block" }
@@ -27,7 +37,7 @@ export function fixToRule(fix: Fix, network: string, channelId?: string): NewRul
     : { kind: "ends_with", phrase: fix.phrase, channels, level: "warn" };
   const rule = parseNewRule({ ...raw, ...(channelId ? { accountIds: [channelId] } : {}) });
   if (typeof rule === "string") throw new Error(`A found fix did not make a valid rule: ${rule}`);
-  return rule;
+  return rule.kind === "ends_with" && sentence ? { ...rule, text: sentence } : rule;
 }
 
 /** Stable key for an offer, so a "Not now" is remembered. */

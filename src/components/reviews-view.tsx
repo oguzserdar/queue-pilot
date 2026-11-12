@@ -10,12 +10,19 @@ import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { NETWORKS } from "@/lib/rules";
 import type { ReviewComment, ReviewLink } from "@/lib/review-limits";
 import { LocalTime } from "./local-time";
+import { DEMO_TIME_ZONE } from "@/lib/demo-clock";
 import styles from "./review-ui.module.css";
 import page from "./reviews-view.module.css";
+import { Pager } from "./pager";
 
 const DAY: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
 const WHEN: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" };
 const day = (iso: string) => <LocalTime iso={iso} options={DAY} />;
+/**
+ * The example's dates in its own time zone and the app's "16 Nov" style, the same for every visitor, so the shared
+ * day, the expiry and the comment times always agree with each other and with the example week.
+ */
+const exampleDate = (iso: string, opts: Intl.DateTimeFormatOptions) => <time dateTime={iso}>{new Date(iso).toLocaleString("en-GB", { ...opts, timeZone: DEMO_TIME_ZONE })}</time>;
 
 /** The draft with each commented span marked, so the comment beside it reads in place. */
 function Marked({ text, comments }: { text: string; comments: ReviewComment[] }) {
@@ -35,7 +42,7 @@ function Marked({ text, comments }: { text: string; comments: ReviewComment[] })
  * Reviews: the links the person shared, what people said on each draft beside the words they meant, and, from any
  * comment, proposed changes to the drafts it is about. `links` is null for someone signed out.
  */
-export function ReviewsView({ origin, links, candidates = [], candidatesUnavailable = false }: { candidatesUnavailable?: boolean; candidates?: ReviewCandidate[]; origin: string; links: (ReviewLink & { comments: ReviewComment[] })[] | null }) {
+export function ReviewsView({ origin, links, candidates = [], candidatesUnavailable = false, example = false, pages }: { /** Bookmarks for the next older and newer pages of links. */ pages?: { older: string | null; newer: string | null }; /** The example account: read-only, no link actions. */ example?: boolean; candidatesUnavailable?: boolean; candidates?: ReviewCandidate[]; origin: string; links: (ReviewLink & { comments: ReviewComment[] })[] | null }) {
   const [off, setOff] = useState<Set<string>>(new Set());
   // Links turned back on here, with their expiry, until the page reloads from the server.
   const [on, setOn] = useState<Map<string, string>>(new Map());
@@ -46,7 +53,8 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
     <div className={page.page}>
       <header className={page.head}>
         <h1 className={page.title}>Reviews</h1>
-        <p className={page.sub}>What reviewers said on your drafts. Turn any comment into edits.</p>
+        <p className={page.sub}>{example ? "What reviewers said on your drafts. Signed in, any comment can become edits to the draft." : "What reviewers said on your drafts. Turn any comment into edits."}</p>
+        {example && <p className={page.sub}>Alex shared three drafts with Isabel, a client, and Sam, a teammate. They opened the link with no Buffer account and commented on the exact words they meant.</p>}
       </header>
 
       {links === null ? (
@@ -69,11 +77,11 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
               <section key={l.id} className={page.link} aria-label="Review link">
                 <div className={page.linkHead}>
                   <div className={page.linkTitle}>
-                    <h2 className={page.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared `}{day(l.createdAt)}</h2>
-                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : expiresAt ? <>Open until {day(expiresAt)}</> : "Open"}</Badge>
+                    <h2 className={page.h2}>{`${l.drafts.length} draft${l.drafts.length === 1 ? "" : "s"}, shared `}{example ? exampleDate(l.createdAt, DAY) : day(l.createdAt)}</h2>
+                    <Badge tone={live ? "success" : "neutral"} size="sm">{isOff ? "Turned off" : expired ? "Expired" : expiresAt ? <>Open until {example ? exampleDate(expiresAt, DAY) : day(expiresAt)}</> : "Open"}</Badge>
                     <span className={styles.hint}>{`${l.comments.length} comment${l.comments.length === 1 ? "" : "s"}`}</span>
                   </div>
-                  {live && (
+                  {live && !example && (
                     <div className={styles.row}>
                       <CopyButton value={url} label="Copy link" />
                       <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
@@ -82,7 +90,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                       })}>Turn off</Button>
                     </div>
                   )}
-                  {!live && (
+                  {!live && !example && (
                     <Button variant="secondary" size="sm" disabled={pending} onClick={() => start(async () => {
                       const r = await turnOnReview(l.id);
                       if (!r.ok) return setMessage(r.message);
@@ -92,7 +100,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                     })}>Turn on again</Button>
                   )}
                 </div>
-                {!live && <p className={styles.help}>{expired && !isOff ? "This link has expired. Turn it on again for another 7 days." : "Reviewers can no longer open this link. Their comments stay here. Turn it on again to reopen the same link."}</p>}
+                {!live && !example && <p className={styles.help}>{expired && !isOff ? "This link has expired. Turn it on again for another 7 days." : "Reviewers can no longer open this link. Their comments stay here. Turn it on again to reopen the same link."}</p>}
 
                 {commented.length === 0 && <p className={styles.help}>{live ? "No comments yet. Send the link to your reviewer." : "Nobody commented."}</p>}
                 {commented.map((d) => {
@@ -109,11 +117,11 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
                             <div className={page.who}>
                               <span className={page.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>
                               <strong>{c.name}</strong>
-                              <span className={styles.hint}><LocalTime iso={c.createdAt} options={WHEN} relative /></span>
+                              <span className={styles.hint}>{example ? exampleDate(c.createdAt, WHEN) : <LocalTime iso={c.createdAt} options={WHEN} relative />}</span>
                             </div>
                             {c.quote && <q className={page.quote}>{c.quote}</q>}
                             <p className={page.body}>{c.text}</p>
-                            {!candidatesUnavailable && candidates.length > 0 && <ReviewFeedback linkId={l.id} commentId={c.id} channelId={d.channelId} reviewer={c.name} candidates={candidates} />}
+                            {!candidatesUnavailable && candidates.length > 0 && <ReviewFeedback linkId={l.id} commentId={c.id} postId={c.postId} reviewer={c.name} candidates={candidates} />}
                           </li>
                         ))}
                       </ol>
@@ -124,6 +132,7 @@ export function ReviewsView({ origin, links, candidates = [], candidatesUnavaila
               </section>
             );
           })}
+          {pages && <Pager path="/reviews" older={pages.older} newer={pages.newer} label="Review link pages" />}
         </>
       )}
     </div>

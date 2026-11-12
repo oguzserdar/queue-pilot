@@ -14,22 +14,24 @@ import { listModels, ModelListError } from "@/lib/ai-models";
 import { openSlots, parseSlotId } from "@/lib/open-slots";
 import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
 import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
-import { recordAction } from "@/lib/security-events";
-import { wroteIds } from "@/lib/written-store";
+import { draftSlot, recordAction } from "@/lib/security-events";
+import { postgresWrittenStore, wroteIds } from "@/lib/written-store";
 import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
 import { listRecentSent, readPostsNow, type Post } from "@/lib/buffer/queries";
 import { FeedError, findFeed } from "@/lib/feeds"
 import { approvedApps, removeUnusedApps, renameApp, revokeApp } from "@/lib/ai-access";
 import { MAX_LABEL } from "@/lib/ai-app-limits";
 import { getAuth } from "@/lib/auth";
-import { deleteAccount } from "@/lib/delete-account";
+import { deleteAccount, LastAdminError } from "@/lib/delete-account";
+import { dismissOffer, isOfferKey } from "@/lib/offer-store";
 import { addPastedExample, exampleFromQueue, InvalidVoiceExampleError, MAX_NOTE, postgresVoiceStore, TooManyExamplesError } from "@/lib/voice-store"
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram";
 import { postgresEchoStore, postgresTelegramCodes } from "@/lib/echo-store";
+import { postgresDirectPostStore } from "@/lib/direct-post-store";
 import { installState, installUrl } from "@/lib/discord";
 import { operatorSetting, operatorSettings } from "@/lib/env";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { publicOrigin } from "@/lib/origin";
 import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
 import { type ApproveResult } from "@/lib/approve-drafts";
@@ -90,7 +92,7 @@ export async function approveDrafts(ids: string[]): Promise<ApproveActionResult>
       console.error(JSON.stringify({ event: "qp-approve-mark-failed", message: e instanceof Error ? e.message : String(e) }));
       note = "Scheduled in Buffer. This page may take a minute to show it.";
     }
-    if (approved.length) await recordAction(b.userId, "drafts_approved", { via: "app" }, { ids: approved });
+    if (approved.length) await recordAction(b.userId, "drafts_approved", { via: "app" }, { ids: approved, slots: approved.map((id) => draftSlot(b.posts.find((p) => p.id === id), b.channels)) });
     await recordApprover(b.userId, approved, APPROVED_IN_APP);
     revalidatePath("/", "layout");
     return { ok: true, approved, refused, ...(note ? { note } : {}) };
@@ -155,6 +157,7 @@ export async function removeSource(id: string): Promise<SourceActionResult> {
   if (typeof id !== "string" || id.length > 100) return { ok: false, message: "Unknown feed." };
   await postgresSourceStore().remove(userId, id);
   revalidatePath("/sources");
+  revalidatePath("/settings");
   return { ok: true };
 }
 
@@ -187,6 +190,7 @@ export async function checkTelegramConnect(): Promise<SourceActionResult> {
       if (chat) {
         await postgresEchoStore().setDestination(userId, { kind: "telegram", label: chat.title, target: String(chat.chatId) });
         revalidatePath("/sources");
+  revalidatePath("/settings");
         return { ok: true, title: chat.title };
       }
     }
@@ -204,7 +208,10 @@ export async function disconnectEcho(kind: "telegram" | "discord"): Promise<Sour
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (kind !== "telegram" && kind !== "discord") return { ok: false, message: "Unknown destination." };
   await postgresEchoStore().removeDestination(userId, kind);
+  // Posts still waiting to go there would otherwise go out if the same channel or server were connected again later.
+  await postgresDirectPostStore().cancelKind(userId, kind, new Date());
   revalidatePath("/sources");
+  revalidatePath("/settings");
   return { ok: true };
 }
 
@@ -272,7 +279,7 @@ export async function removeVoiceExample(postId: string): Promise<SourceActionRe
 export async function saveVoiceNote(note: string): Promise<SourceActionResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof note !== "string" || note.length > MAX_NOTE) return { ok: false, message: "That note is too long." }
+  if (typeof note !== "string" || note.length > MAX_NOTE) return { ok: false, message: `Keep the note to ${MAX_NOTE} characters.` }
   try {
     await postgresVoiceStore().setNote(userId, note);
   } catch (e) {
@@ -355,9 +362,26 @@ export async function deleteMyAccount(confirm: string): Promise<SourceActionResu
   try {
     await deleteAccount(userId, process.env.SESSION_SECRET);
   } catch (e) {
+    if (e instanceof LastAdminError) return { ok: false, message: e.message };
     console.error(JSON.stringify({ event: "qp-delete-account-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Queue Pilot could not delete your account just now. Nothing was removed. Try again in a minute." };
   }
+  // The account and its sessions are gone, but this browser still holds the sign-in cookie. The router only checks
+  // that the cookie exists, so clear it here or the person stays "signed in" to an empty app instead of the homepage.
+  const jar = await cookies();
+  for (const { name } of jar.getAll()) {
+    if (/^(__Secure-)?better-auth\./.test(name)) jar.set(name, "", { path: "/", maxAge: 0, httpOnly: true, sameSite: "lax", secure: name.startsWith("__Secure-") });
+  }
+  return { ok: true };
+}
+
+/** Sets one of Home's offers aside for the signed-in person: "Not now" on the welcome, or × on a connect-your-AI card. */
+export async function setOfferAside(key: unknown): Promise<SourceActionResult> {
+  const userId = await signedInUserId();
+  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (!isOfferKey(key)) return { ok: false, message: "That offer is not one Queue Pilot shows." };
+  await dismissOffer(userId, key);
+  revalidatePath("/");
   return { ok: true };
 }
 
@@ -545,7 +569,7 @@ export async function saveSlotDraft(slotId: string, text: string): Promise<Sourc
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
     const { slots } = openSlots(b.channels, b.posts, b.range);
     if (!slots.some((x) => x.id === slotId)) return { ok: false, message: "That time is no longer empty. Refresh the week." };
-    const r = await saveDraftsForUser(b.userId, b.token, { title: "Written in Queue Pilot", drafts: [{ slotId, text: text.trim() }], open: slots });
+    const r = await saveDraftsForUser(b.userId, b.token, { title: "Written in Queue Pilot", drafts: [{ slotId, text: text.trim() }], open: slots, byHand: true });
     if (r.refused.length) return { ok: false, message: r.refused.map((x) => x.reason).join(" ") };
     revalidatePath("/", "layout");
     const flag = r.flags[0];
@@ -727,12 +751,15 @@ export async function editDraftText(postId: string, text: string, expectedText?:
     const b = await bufferForWriting();
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
     let note: string | undefined;
+    let check: Awaited<ReturnType<typeof judgeEdit>> | undefined;
     const r = await updateDraft(b.token, postId, text.trim(), b.posts, b.channels, await wroteIds(b.userId, postId), undefined, async (t, network, channelId) => {
-      const j = await judgeEdit(b.userId, t, network, channelId);
-      note = checkNote(j.check);
-      return j.refusal;
+      check = await judgeEdit(b.userId, t, network, channelId);
+      note = checkNote(check.check);
+      return check.refusal;
     }, expectedText);
     if (!r.ok) return { ok: false, message: r.reason };
+    // The edit was just checked: keep that check beside what Queue Pilot wrote, so Approve needs no second check.
+    if (check?.verdicts) await postgresWrittenStore().recordCheck(b.userId, [{ postId, text: text.trim(), verdicts: check.verdicts, playbookRevision: check.playbookRevision }]).catch((e: unknown) => console.error(JSON.stringify({ event: "qp-edit-check-not-recorded", message: e instanceof Error ? e.message : String(e) })));
     await patchSavedQueue(b.userId, (posts) => posts.map((p) => (p.id === postId ? { ...p, text: text.trim() } : p)));
     revalidatePath("/", "layout");
     return { ok: true, title: note };
@@ -750,10 +777,11 @@ export async function deleteMyDraft(postId: string): Promise<SourceActionResult>
   try {
     const b = await bufferForWriting();
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
+    const slot = draftSlot(b.posts.find((p) => p.id === postId), b.channels);
     const r = await deleteDraft(b.token, postId, b.posts, await wroteIds(b.userId, postId));
     if (!r.ok) return { ok: false, message: r.reason };
     await patchSavedQueue(b.userId, (posts) => posts.filter((p) => p.id !== postId));
-    await recordAction(b.userId, "draft_deleted", { via: "app" }, { ids: [postId] });
+    await recordAction(b.userId, "draft_deleted", { via: "app" }, { ids: [postId], slots: [slot] });
     revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {

@@ -13,12 +13,17 @@ import { serializeApprover, type Approver } from "./rule-origin";
  * for scheduling, as stored: a tagged Approver in JSON, or an older bare string ("queue-pilot" or an app's name). Read it
  * with approverLine. Absent until approved.
  */
-export type Written = { postId: string; network: string; text: string; verdicts?: Verdict[] | null; playbookRevision?: string | null; approvedBy?: string; approvedAt?: string };
+export type Written = { postId: string; network: string; text: string; checkedText?: string | null; verdicts?: Verdict[] | null; playbookRevision?: string | null; approvedBy?: string; approvedAt?: string };
 
 
 export type WrittenStore = {
   /** Records drafts just saved; saving the same post again replaces its text. */
   record(userId: string, drafts: Written[]): Promise<void>;
+  /**
+   * Records a check of a draft's current text (Check again, or an edit that was checked) without replacing what Queue
+   * Pilot wrote. Only rows this person's Queue Pilot recorded change.
+   */
+  recordCheck(userId: string, checks: { postId: string; text: string; verdicts: Verdict[] | null; playbookRevision: string | null }[]): Promise<void>;
   /** The recorded drafts among these post ids. */
   get(userId: string, postIds: string[]): Promise<Written[]>;
   /** Records who approved these drafts; only drafts Queue Pilot recorded writing for this person change. */
@@ -32,13 +37,20 @@ export function postgresWrittenStore(): WrittenStore {
       if (!drafts.length) return;
       await db()
         .insert(written)
-        .values(drafts.map((d) => ({ userId, postId: d.postId, network: d.network, text: d.text.slice(0, 25_000), verdicts: d.verdicts ?? null, playbookRevision: d.playbookRevision ?? null })))
-        .onConflictDoUpdate({ target: [written.userId, written.postId], set: { text: sql`excluded.text`, network: sql`excluded.network`, verdicts: sql`excluded.verdicts`, playbookRevision: sql`excluded.playbook_revision`, savedAt: sql`now()` } });
+        .values(drafts.map((d) => ({ userId, postId: d.postId, network: d.network, text: d.text.slice(0, 25_000), checkedText: null, verdicts: d.verdicts ?? null, playbookRevision: d.playbookRevision ?? null })))
+        .onConflictDoUpdate({ target: [written.userId, written.postId], set: { text: sql`excluded.text`, checkedText: null, network: sql`excluded.network`, verdicts: sql`excluded.verdicts`, playbookRevision: sql`excluded.playbook_revision`, savedAt: sql`now()` } });
+    },
+    async recordCheck(userId, checks) {
+      for (const c of checks) {
+        await db().update(written)
+          .set({ checkedText: c.text.slice(0, 25_000), verdicts: c.verdicts, playbookRevision: c.playbookRevision })
+          .where(and(eq(written.userId, userId), eq(written.postId, c.postId)));
+      }
     },
     async get(userId, postIds) {
       if (!postIds.length) return [];
       const rows = await db().select().from(written).where(and(eq(written.userId, userId), inArray(written.postId, postIds)));
-      return rows.map((r) => ({ postId: r.postId, network: r.network, text: r.text, verdicts: (r.verdicts as Verdict[] | null) ?? null, ...(r.playbookRevision ? { playbookRevision: r.playbookRevision } : {}), ...(r.approvedBy ? { approvedBy: r.approvedBy, approvedAt: r.approvedAt?.toISOString() } : {}) }));
+      return rows.map((r) => ({ postId: r.postId, network: r.network, text: r.text, ...(r.checkedText !== null ? { checkedText: r.checkedText } : {}), verdicts: (r.verdicts as Verdict[] | null) ?? null, ...(r.playbookRevision ? { playbookRevision: r.playbookRevision } : {}), ...(r.approvedBy ? { approvedBy: r.approvedBy, approvedAt: r.approvedAt?.toISOString() } : {}) }));
     },
     async markApproved(userId, postIds, by) {
       if (!postIds.length) return;
@@ -46,6 +58,8 @@ export function postgresWrittenStore(): WrittenStore {
     },
   };
 }
+
+export { checkedTextOf } from "./checked-text";
 
 /** The subset of these post ids that Queue Pilot recorded writing for this person. */
 export async function wroteIds(userId: string, ...postIds: string[]): Promise<Set<string>> {

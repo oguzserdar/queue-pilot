@@ -15,6 +15,10 @@ const WORDS: Record<string, SignInProblem> = {
     title: "Sign-in cancelled",
     text: "You stopped the Buffer sign-in. Nothing was connected.",
   },
+  unable_to_get_user_info: {
+    title: "Buffer did not answer in time",
+    text: "Queue Pilot asked Buffer which account you signed in with and got no answer, often because Buffer was busy. Nothing was connected. Try again in a minute.",
+  },
   state_mismatch: {
     title: "Sign-in expired",
     text: "The sign-in took too long or was started in another tab. Try again.",
