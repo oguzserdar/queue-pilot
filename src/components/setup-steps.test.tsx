@@ -25,6 +25,12 @@ describe("SetupSteps", () => {
     expect(html()).toContain("Buffer: sam@example.com, 1 of 2 channels connected (LinkedIn); Threads disconnected.");
   });
 
+  it("says plainly when the Buffer account has no channels, without a success mark or empty brackets", () => {
+    const out = html({ account: { email: "sam@example.com", channels: [] } });
+    expect(out).toContain("Buffer: sam@example.com, no channels yet. Add one in Buffer, then come back.");
+    expect(out).not.toContain("()");
+  });
+
   it("calls an app connected only after it reached Queue Pilot, and offers the check before that", () => {
     expect(html({ approved: [app(null)] })).toContain("No AI app has reached Queue Pilot yet");
     const reached = html({ approved: [app(new Date().toISOString())] });
