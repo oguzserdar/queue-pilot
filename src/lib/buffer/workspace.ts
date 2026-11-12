@@ -78,7 +78,7 @@ export async function findTeamMembers(token: string, scope: { organizationId: st
 /**
  * A post as Buffer has it now and, for a note that mentions people, the first page of its channel's teammates, in one
  * request: Buffer's guide says one query may carry several top-level fields
- * (developers.buffer.com/guides/efficient-api-usage). Nothing more is read for a post that is gone or no longer a
+ * (developers.buffer.com/guides/efficient-api-usage.html). Nothing more is read for a post that is gone or no longer a
  * draft, since the note is refused. The channel comes from the saved copy; when the live post is on another channel,
  * the chosen people are looked up in that channel instead.
  *

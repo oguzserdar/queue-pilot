@@ -14,7 +14,7 @@ export type NoteTeammate = {
   avatar: string | null;
   /**
    * Buffer marks the member locked (viewer access on an organization with Roles). They can read notes and be
-   * mentioned but get no notification while locked (developers.buffer.com/guides/team-members), so the picker offers
+   * mentioned but get no notification while locked (developers.buffer.com/guides/team-members.html), so the picker offers
    * them and says so.
    */
   locked: boolean;

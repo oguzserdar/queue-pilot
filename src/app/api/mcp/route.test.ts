@@ -1947,7 +1947,7 @@ it("exposes exact evidence wording and repairs an existing owned draft without a
 });
 
 // Buffer counts every request against the app's shared limit, and its guide says to use an id you already stored
-// instead of fetching channels again to check it (developers.buffer.com/guides/efficient-api-usage). These are the
+// instead of fetching channels again to check it (developers.buffer.com/guides/efficient-api-usage.html). These are the
 // requests one tool call sends when the saved copy is older than a page's refresh window.
 describe("Buffer requests per tool call", () => {
   const mine: Post = { id: "mine", channelId: "ch", status: "draft", text: "Draft mine", dueAt: "2026-11-03T09:00:00Z", sentAt: null, externalLink: null, error: null, via: "api" }

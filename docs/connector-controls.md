@@ -32,7 +32,7 @@ Only drafts recorded as Queue Pilot's own are returned by `list_my_drafts`. Stor
 
 ## Verification
 
-- 218 test files, 1,751 tests passed (12 Nov 2026).
+- The full test suite runs before every push.
 - Type checking, copy checks and diff whitespace checks passed.
 - Connector integration exercises refusal, correction, Buffer draft save and verdict readback with simulated AI and Buffer responses.
 - Cross-account removal/read tests, signed-proposal tampering and expiry tests, real Postgres-compatible material cleanup checks, and AI settlement/refund checks pass.

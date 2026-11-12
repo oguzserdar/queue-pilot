@@ -1,7 +1,7 @@
 /**
  * Minimal Buffer GraphQL client (https://api.buffer.com, Bearer token).
  * Surfaces Buffer's own error messages and reads Buffer's RateLimit headers on every response
- * (https://developers.buffer.com/guides/api-limits: rolling 15-minute, 24-hour and 30-day windows).
+ * (https://developers.buffer.com/guides/api-limits.html: rolling 15-minute, 24-hour and 30-day windows).
  * On HTTP 429 a short Retry-After gets one retry; a long one (the daily window) fails at once with the reset time,
  * so a page never stalls waiting for a window that will not reopen in time.
  */
@@ -29,7 +29,7 @@ export class BufferRateLimitedError extends BufferApiError {
 /**
  * One window from Buffer's RateLimit header, e.g. "100-in-15min";r=98;t=897. Buffer names a policy after its quota, so
  * the name changes when the quota does (as an app gains authorized users); its guide says to match a policy by its
- * window length instead (developers.buffer.com/guides/api-limits). When RateLimit-Policy gives the quota and window,
+ * window length instead (developers.buffer.com/guides/api-limits.html). When RateLimit-Policy gives the quota and window,
  * `policy` is "<quota>/<window>s" and `windowSeconds` identifies the window; otherwise it is Buffer's name.
  */
 export type RateLimitWindow = { policy: string; remaining: number; resetSeconds: number; windowSeconds?: number };

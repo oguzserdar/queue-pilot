@@ -1,7 +1,7 @@
 /**
  * What one full first session costs in Buffer requests, measured by running the real code against a fake Buffer that
  * counts calls. Buffer gives each app 500 requests a day plus 25 for each Buffer account that has signed in to it
- * (developers.buffer.com/guides/api-limits, read 27 Oct 2026), so a session must cost less than the 25 it adds.
+ * (developers.buffer.com/guides/api-limits.html, read 27 Oct 2026), so a session must cost less than the 25 it adds.
  * The README quotes this number.
  */
 import { describe, expect, it } from "vitest";

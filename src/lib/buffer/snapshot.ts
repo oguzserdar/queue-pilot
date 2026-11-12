@@ -1,6 +1,6 @@
 /**
  * A per-user copy of the Buffer data the screens need, so a page view reads our database and makes no Buffer call.
- * Buffer allows 100 requests per 15 minutes and 250 to 500 per day (https://developers.buffer.com/guides/api-limits),
+ * Buffer allows 100 requests per 15 minutes and 250 to 500 per day (https://developers.buffer.com/guides/api-limits.html),
  * so the copy is refreshed only on purpose: at sign-in, from the Refresh button, by the slow background sync and after
  * our own writes. Each refresh records Buffer's RateLimit windows, so callers can slow down before a 429.
  *

@@ -82,7 +82,7 @@ export function RuleRouting({ rules, accounts, inheritance, onDelete, onAdd, exa
           <span className={styles.ruleText}>{r.text}</span>
           <span className={styles.meta}>
             <span className={styles.tag}>{source(r)}</span>
-            <span>{r.level === "block" ? <Term term="Blocks" note="A draft that breaks this rule is rewritten once, then not saved.">Stops a draft</Term> : <Term term="Flags" note="A draft that breaks this rule is saved and marked for you to check.">Warns you</Term>}</span>
+            <span>{r.level === "block" ? <Term term="Blocks" note="A draft that breaks this rule is rewritten once, then not saved.">Stops a draft</Term> : <Term term="Flags" note="A draft that breaks this rule is saved and marked for you to check.">Flags a draft</Term>}</span>
             {evidence && <span>From a review</span>}
             {isStartingRule(r) && <span>{STARTING_RULE_ORIGIN}</span>}
             {!all && !on && <span className={styles.warn}>{origin(r) === "shared" && !netShared ? `All-account rules are off for every ${net} account` : "Set not used here"}</span>}

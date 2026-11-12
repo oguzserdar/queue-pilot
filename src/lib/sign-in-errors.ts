@@ -33,7 +33,10 @@ const WORDS: Record<string, SignInProblem> = {
  */
 export function signInProblem(code: string | null): SignInProblem | null {
   if (!code) return null;
-  return WORDS[code] ?? { title: "Buffer sign-in did not finish", text: `Buffer said "${code}". Try again.` };
+  // An unknown code is shown only when it looks like a code: the address is anyone's to write, and free text here
+  // would speak in Queue Pilot's voice.
+  const known = /^[a-z_]{1,40}$/.test(code) ? `Buffer said "${code}". ` : "";
+  return WORDS[code] ?? { title: "Buffer sign-in did not finish", text: `${known}Try again.` };
 }
 
 /**

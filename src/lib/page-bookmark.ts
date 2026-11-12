@@ -16,6 +16,13 @@ export type PageFrom = { before?: string | null; after?: string | null };
 /** A timestamptz as Postgres writes it as text, for example 2026-11-10 03:10:12.123456+00. */
 const PG_TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/;
 
+/** True for a time that exists: month 13, day 40 or a 99-hour offset pass the pattern but make Postgres throw. */
+function realTime(at: string): boolean {
+  const [, y, mo, d, h, mi, s, oh] = at.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.\d+)?[+-](\d{2})/) ?? [];
+  const day = new Date(Date.UTC(+y, +mo - 1, +d));
+  return day.getUTCMonth() === +mo - 1 && day.getUTCDate() === +d && +h < 24 && +mi < 60 && +s < 60 && +oh <= 15;
+}
+
 /**
  * Reads a bookmark. The time stays as Postgres text because a JavaScript date drops microseconds.
  *
@@ -26,7 +33,7 @@ export function readBookmark(mark: string | null | undefined): { at: string; key
   if (!mark || mark.length > 300) return null;
   const cut = mark.indexOf("~");
   const at = mark.slice(0, cut), key = mark.slice(cut + 1);
-  if (cut < 1 || !key || !PG_TIME.test(at)) return null;
+  if (cut < 1 || !key || !PG_TIME.test(at) || !realTime(at)) return null;
   return { at, key };
 }
 

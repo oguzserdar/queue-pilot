@@ -115,7 +115,7 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
       )}
       <div className={styles.formFields}>
         <Select label="Applies to" value={network} onValueChange={setNetwork} options={[{ value: "all", label: "Every network" }, ...Object.entries(NETWORKS).map(([value, label]) => ({ value, label: `All ${label} accounts` })), ...accounts.map(a => ({ value: `account:${a.id}`, label: `${a.name} · ${NETWORKS[a.service] ?? a.service}` }))]} />
-        <Select label="If a draft breaks it" value={level} onValueChange={setLevel} options={[{ value: "warn", label: "Save it and flag it" }, { value: "block", label: "Do not save it" }]} />
+        <Select label="If a draft breaks it" value={level} onValueChange={setLevel} options={[{ value: "warn", label: "Flag it, and still save it" }, { value: "block", label: "Stop it, and do not save it" }]} />
       </div>
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
       <div><Button type="submit" variant="primary" disabled={busy || (!text.trim() && !added)}>{busy ? "Adding…" : added ? "✓ Added" : "Add rule"}</Button></div>

@@ -42,4 +42,8 @@ describe("withoutSignInError", () => {
   it("leaves a clean address alone", () => {
     expect(withoutSignInError(new URL("https://getqueuepilot.com/")).toString()).toBe("https://getqueuepilot.com/");
   });
+  it("shows an unknown code only when it looks like one, never free text from the address", () => {
+    expect(signInProblem("server_error_x")?.text).toBe('Buffer said "server_error_x". Try again.');
+    expect(signInProblem("Your account is suspended, call +1 555")?.text).toBe("Try again.");
+  });
 });

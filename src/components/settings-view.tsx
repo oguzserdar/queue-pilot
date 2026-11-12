@@ -19,7 +19,7 @@ import { TabsContent, TabsList, TabsTrigger } from "@/registry/components/tabs/t
 import styles from "./settings-view.module.css";
 import { remainingOf } from "@/lib/rate-limit-text";
 
-/** The example account's last RateLimit reading, in the format Buffer sends (developers.buffer.com/guides/api-limits). */
+/** The example account's last RateLimit reading, in the format Buffer sends (developers.buffer.com/guides/api-limits.html). */
 const EXAMPLE_RATE_LIMIT = [{ policy: "110-in-15min", remaining: 107 }, { policy: "525-in-24h", remaining: 487 }];
 
 import { showSecurityEvents, type ShownSecurityEvent } from "@/lib/security-event-words";

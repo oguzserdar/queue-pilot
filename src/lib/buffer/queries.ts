@@ -123,7 +123,7 @@ export async function readPostsNow(token: string, ids: string[], q: Query = buff
   return posts;
 }
 
-/** Buffer's largest page (developers.buffer.com/guides/efficient-api-usage): fewer, bigger pages spend fewer requests. */
+/** Buffer's largest page (developers.buffer.com/guides/efficient-api-usage.html): fewer, bigger pages spend fewer requests. */
 const PAGE_SIZE = 100;
 /** At most this many pages of posts per organization in one refresh, so one huge account cannot spend the shared limit. */
 const MAX_PAGES = 5;

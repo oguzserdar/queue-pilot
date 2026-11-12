@@ -2,7 +2,7 @@
 
 Notes from building Queue Pilot on Buffer's API. Putting them here so the next builder has somewhere to start. Source links and the code I use are included below.
 
-Last checked: 11 November 2026. Use the [API limits page](https://developers.buffer.com/guides/api-limits.html) for current quotas and the [schema changelog](https://developers.buffer.com/changelog) for field changes. The 27 October rollout date comes from Buffer's [Discord announcement](https://discord.com/channels/956701996063285369/1371849521423974512/1564678705551376536).
+Last checked: 11 November 2026. Use the [API limits page](https://developers.buffer.com/guides/api-limits.html) for current quotas and the [schema changelog](https://developers.buffer.com/changelog.html) for field changes. The 27 October rollout date comes from Buffer's [Discord announcement](https://discord.com/channels/956701996063285369/1371849521423974512/1564678705551376536).
 
 ![Notes from building Queue Pilot: shared OAuth request limits, detecting edits to older drafts, and tracking draft ownership.](media/buffer-api-notes.png)
 
@@ -34,7 +34,7 @@ Not used, on purpose:
 ## Sign-in and scopes
 
 - Apps sign people in with OAuth 2.0 and PKCE. The scopes are `posts:read posts:write ideas:read ideas:write account:read account:write snippets:read snippets:write notes:read notes:write offline_access`. The Notes scopes arrived on 3 Nov 2026, and existing tokens do not gain them: people must authorize the app again. Ask for `offline_access` to get a refresh token. Queue Pilot asks for `posts:read posts:write ideas:read ideas:write notes:read notes:write snippets:read snippets:write account:read offline_access` (`src/lib/buffer/oauth.ts`).
-- Post results (likes, clicks, reach) are not readable by OAuth apps. Buffer's [post metrics guide](https://developers.buffer.com/guides/post-metrics) limits them to personal API keys; the required `insightsRead` permission is unavailable to OAuth app clients. Queue Pilot currently learns from edits, not engagement metrics.
+- Post results (likes, clicks, reach) are not readable by OAuth apps. Buffer's [post metrics guide](https://developers.buffer.com/guides/post-metrics.html) limits them to personal API keys; the required `insightsRead` permission is unavailable to OAuth app clients. Queue Pilot currently learns from edits, not engagement metrics.
 - During Buffer Commit everyone can create two extra app clients, and an app client's name can be changed after you create it (Buffer staff in the Buffer Community Discord, 22 Oct 2026).
 - Include `prompt=consent` alongside `offline_access`, as in the [current authorization example](https://developers.buffer.com/guides/authentication.html). QP already sends both (`src/lib/auth.ts`). A [builder reported](https://discord.com/channels/956701996063285369/1371849521423974512/1565335572040523928) that adding the prompt resolved a missing refresh token.
 

@@ -78,7 +78,7 @@ const viewOf = (accessToken: string, snap: Snapshot) => ({ accessToken, rateLimi
  * - `force`: refreshed unless under 30 seconds old. For writes that decide on posts or channels in the copy.
  * - `stored`: the saved copy at any age, for tools that only check an id against it and then ask Buffer directly,
  *   which re-checks the person's access. Buffer's guide: "If you already stored the ID, use it"
- *   (developers.buffer.com/guides/efficient-api-usage). With no copy, or when `stored` is a check the copy fails (a
+ *   (developers.buffer.com/guides/efficient-api-usage.html). With no copy, or when `stored` is a check the copy fails (a
  *   post or organization newer than the copy), it refreshes once as `force` does.
  */
 async function bufferFor(auth: Auth, userId: string, opts: { force?: boolean; stored?: true | ((b: BufferView) => boolean) } = {}): Promise<BufferView> {

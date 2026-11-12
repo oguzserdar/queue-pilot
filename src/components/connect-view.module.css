@@ -66,3 +66,5 @@
 .anotherSummary { cursor: pointer; font-weight: 600; color: var(--text-secondary); list-style-position: inside; border-radius: 6px; }
 .anotherSummary:focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
 .another[open] { padding-bottom: var(--space-6); }
+/* On a phone the address card is narrow too: the address gets its own line there as well, never broken mid-word. */
+@media (max-width: 600px) { .address .code { flex: 1 1 100%; order: 3; white-space: nowrap; overflow-x: auto; } }

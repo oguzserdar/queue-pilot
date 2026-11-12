@@ -41,6 +41,9 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - A draft Buffer did save could be marked failed after a fill that stopped halfway. Recovery reads the queue again before deciding.
 - Settings stays up when a Telegram, Discord or channel read fails.
 - On a phone, the approve bar and toasts sit above the tab bar.
+- Links to Buffer's developer guides open again. Buffer moved them to addresses ending in .html.
+- On a phone, Connect your AI shows Queue Pilot's address on its own line. A rule's setting reads Stops a draft or Flags a draft everywhere.
+- A page link with a date that does not exist opens the newest page instead of an error. The sign-in notice no longer repeats free text from the address.
 - Signing in could loop between the app and the expired-session page when sign-in was switched off on a copy. The app sends people there only when sign-in is set up.
 - Opening the Playbook no longer reads Buffer, so it does not use the requests that saving and Approve need.
 - A repeated added ending whose rule sentence came back too long was asked about again on every Playbook visit. The answer is kept and the rule reads "End with" and the words.
