@@ -14,16 +14,24 @@ const roots = (s: string) => [...s.matchAll(/^#### (\w+)$/gm)].map((m) => m[1]);
 const QUERIES = roots(section("## Queries", "## Mutations"));
 const MUTATIONS = roots(section("## Mutations", "## Object Types"));
 
-/** Every non-test source file under src, joined. */
+/**
+ * Every non-test .ts source file under src, joined, with comments removed. Requests to Buffer are built only in .ts
+ * files; .tsx holds screens, whose prose ("on 4 channel{s}") would otherwise read as a call.
+ */
 function source(dir = "src"): string {
   return readdirSync(dir).map((f) => {
     const p = join(dir, f);
     if (statSync(p).isDirectory()) return source(p);
-    return /\.tsx?$/.test(f) && !/\.test\.|test-support/.test(f) ? readFileSync(p, "utf8") : "";
+    return /\.ts$/.test(f) && !/\.test\.|test-support/.test(f) ? readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1") : "";
   }).join("\n");
 }
 const SRC = source();
-const calls = (op: string) => new RegExp(`[\\s{]${op}\\s*[({]`).test(SRC);
+/**
+ * An operation is called when its name opens a selection or takes arguments, and is not a field picked from a
+ * mutation's result (`... on TagActionSuccess { tag { ... } }` reads a tag back, it does not call the `tag` query).
+ */
+const calls = (op: string) => [...SRC.matchAll(new RegExp(`[\\s{]${op}\\s*[({]`, "g"))]
+  .some((m) => !/\bon \w+ \{\s*$/.test(SRC.slice(Math.max(0, m.index - 60), m.index + 1)));
 
 const DOC = readFileSync("docs/buffer-api-notes.md", "utf8");
 const usedTable = DOC.slice(DOC.indexOf("## Every Buffer operation"), DOC.indexOf("Not used, on purpose"));
@@ -35,6 +43,11 @@ describe("the Buffer operations table", () => {
     expect(QUERIES).toContain("posts");
     expect(MUTATIONS).toContain("createPost");
     expect(calls("notARealOperationQP")).toBe(false);
+    // Two words that used to be counted by mistake: a comment about a channel, and a tag read back after createTag.
+    expect(calls("channel")).toBe(false);
+    expect(calls("tag")).toBe(false);
+    expect(calls("channels")).toBe(true);
+    expect(calls("tagsV2")).toBe(true);
   });
 
   it("lists as used exactly the operations the code calls", () => {

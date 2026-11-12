@@ -8,15 +8,15 @@ Last checked: 11 November 2026. Use the [API limits page](https://developers.buf
 
 ## Every Buffer operation Queue Pilot uses
 
-39 of the 49 operations in Buffer's [API reference](https://developers.buffer.com/reference.md): 18 of 24 queries and 21 of 25 mutations, checked 11 November 2026. A test (`src/lib/buffer/operations-used.test.ts`) compares this table with Buffer's reference and with the code, so it cannot drift.
+37 of the 49 operations in Buffer's [API reference](https://developers.buffer.com/reference.md): 16 of 24 queries and 21 of 25 mutations, checked 11 November 2026. A test (`src/lib/buffer/operations-used.test.ts`) compares this table with Buffer's reference and with the code, so it cannot drift.
 
 | Area | Reads | Writes | What Queue Pilot does with them |
 |---|---|---|---|
-| Account and channels | `account`, `channel`, `channels`, `configuration`, `dailyPostingLimits` | | Signs you in, reads your channels, posting times and daily limits, and keeps one saved copy |
+| Account and channels | `account`, `channels`, `configuration`, `dailyPostingLimits` | | Signs you in, reads your channels, posting times and daily limits, and keeps one saved copy |
 | Posts | `post`, `posts` | `createPost`, `editPost`, `deletePost` | Saves drafts, edits or deletes only drafts it wrote, schedules only on your Approve |
 | Notes | `collaborationNotes` | `createCollaborationNote`, `updateCollaborationNote`, `deleteCollaborationNote` | Reads your team's notes as rules, and adds notes to drafts |
 | Ideas | `ideaGroups`, `ideas` | `createIdea` | Saves material without an empty time to your Buffer Ideas |
-| Tags | `tag`, `tagsV2` | `createTag`, `updateTag`, `deleteTag` | Tags drafts, and manages tags when you ask |
+| Tags | `tagsV2` | `createTag`, `updateTag`, `deleteTag` | Tags drafts, and manages tags when you ask |
 | Content items | `contentItem`, `contentItems` | `createContentItem`, `createContentItemDraft`, `updateContentItem`, `updateContentItemDraft`, `deleteContentItem`, `addPostToContentItem`, `removePostFromContentItem`, `promoteContentItemDraftToPosts` | Groups the posts written from one piece of your work |
 | Saved snippets | `snippets` | `createSnippet`, `updateSnippet`, `deleteSnippet` | Reuses and saves hashtag sets and recurring lines |
 | Templates and team | `postTemplate`, `postTemplates`, `selectableTeamMembers` | | Fills a post from your templates, and names who left a note |
@@ -29,6 +29,7 @@ Not used, on purpose:
 | `instagramAudio`, `instagramAudioCatalog`, `searchInstagramAudio`, `searchInstagramAudioCatalog`, `trendingInstagramAudio` | Queue Pilot writes text posts, not reels |
 | `createPostTemplate`, `updatePostTemplate`, `deletePostTemplate` | Templates are yours. Queue Pilot reads them and never changes them |
 | `movePostInQueue` | Queue Pilot never reorders your queue |
+| `channel`, `tag` | Reading one channel or one tag at a time is never needed. The lists above already return all of them in one request |
 
 ## Sign-in and scopes
 
