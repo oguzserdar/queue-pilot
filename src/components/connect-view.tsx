@@ -100,7 +100,11 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
   // Which app's setup is open in the modal; the page itself only lists the apps.
   const [open, setOpen] = useState<string | null>(setup && OPENABLE.has(setup) ? setup : null);
   const [grokSurface, setGrokSurface] = useState("Grok web");
-  const connected = !example && !!approved?.length;
+  // Allow alone is not a connection: an app counts once it has called Queue Pilot, as Home and setup readiness count it.
+  const used = example ? [] : (approved ?? []).filter((a) => a.lastUsedAt);
+  const waiting = example ? [] : (approved ?? []).filter((a) => !a.lastUsedAt);
+  const connected = used.length > 0;
+  const names = (apps: ApprovedApp[]) => [...new Set(apps.map((a) => a.brand ?? a.name))].join(", ");
   const current = AIS.find((x) => x.name === (open === "Grok" ? grokSurface : open));
 
   return (
@@ -109,10 +113,10 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
         <h1 className={styles.title}>Connect your AI</h1>
         <p className={styles.sub}>Your AI does the writing. Queue Pilot gives it your empty Buffer times and your material, and checks what it writes before you approve.</p>
         {/* Connections are managed in one place, Settings; here a single line confirms what is connected. */}
-        {!example && !!approved?.length && (
+        {(used.length > 0 || waiting.length > 0) && (
           <p className={styles.connectedLine}>
-            <span className={styles.connectedMarks} aria-hidden="true">{[...new Set(approved.map((a) => a.brand).filter((b): b is string => !!b))].map((b) => <AiMark key={b} name={b} size={16} />)}</span>
-            <span>Connected: {[...new Set(approved.map((a) => a.brand ?? a.name))].join(", ")}</span>
+            <span className={styles.connectedMarks} aria-hidden="true">{[...new Set([...used, ...waiting].map((a) => a.brand).filter((b): b is string => !!b))].map((b) => <AiMark key={b} name={b} size={16} />)}</span>
+            <span>{[used.length ? `Connected: ${names(used)}` : "", waiting.length ? `Allowed, not used yet: ${names(waiting)}` : ""].filter(Boolean).join(". ")}</span>
             <a href="/settings?tab=ai">Manage</a>
           </p>
         )}

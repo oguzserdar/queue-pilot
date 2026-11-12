@@ -24,6 +24,14 @@ describe("ConnectView", () => {
     expect(out).not.toMatch(/<details[^>]*open/);
   });
 
+  it("keeps setup open after Allow until the AI has made a call", () => {
+    const out = html([{ ...app, lastUsedAt: null, calls: 0 }]);
+    expect(out).not.toContain("Connected: Claude");
+    expect(out).toContain("Allowed, not used yet: Claude");
+    expect(out).not.toContain("Add another AI");
+    expect(out).toContain("Or add it in a chat app");
+  });
+
   it("keeps setup open on the example account, which shows how connecting works", () => {
     expect(html([app], true)).not.toContain("Add another AI");
   });
