@@ -381,7 +381,11 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
           ) : (
             <>
               {note ? <p className={styles.footNote} role={note.ok ? "status" : "alert"}>{note.text}</p>
-                : current.ours === false ? <p id="approve-foreign" className={styles.footNote}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>
+                // A post that left the drafts (approved, or scheduled in Buffer) has no writing record on this page, so
+                // its state is said before the "did not write" line, which is only about drafts.
+                : current.status === "scheduled" && !approved.has(current.id) ? <p className={styles.footNote}>Scheduled in Buffer.</p>
+                : current.status === "sent" ? <p className={styles.footNote}>Published by Buffer.</p>
+                : current.ours === false && current.status === "draft" && !approved.has(current.id) ? <p id="approve-foreign" className={styles.footNote}>Queue Pilot did not write this draft. Change or schedule it in Buffer.</p>
                 : approved.has(current.id) ? <p className={styles.footNote}>{`Scheduled in Buffer. ${approverLine(APPROVED_IN_APP, new Date().toISOString())}${live ? "" : " (example)"}.`}</p>
                 : needsCheck(current.id) ? <p id="approve-playbook" className={styles.footNote}>{approveOffNote(readiness[current.id])}</p>
                 : worstTone(current) === "danger" ? <p id="approve-off" className={styles.footNote}>This post would fail in Buffer, so it cannot be approved yet. Fix the problem and Approve turns on.</p>
@@ -391,8 +395,8 @@ export function WeekView({ week, which = "next", nowIso, live = false, verdicts 
                 {current.ours !== false && !approved.has(current.id) && (
                   <DropdownMenu label="More" icon={<MoreHorizontal size={16} strokeWidth={1.75} />} items={[{ label: "Delete draft", destructive: true, icon: <Trash2 size={15} strokeWidth={1.75} />, onSelect: () => { setConfirmDelete(true); setEditing(null); setNote(null); } }]} />
                 )}
-                <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
-                  {approved.has(current.id) ? "Approved" : "Approve & schedule"}
+                <Button variant="primary" disabled={current.ours === false || worstTone(current) === "danger" || needsCheck(current.id) || approved.has(current.id) || pending} aria-describedby={current.status === "scheduled" || approved.has(current.id) ? undefined : current.ours === false ? "approve-foreign" : needsCheck(current.id) ? "approve-playbook" : worstTone(current) === "danger" && !approved.has(current.id) ? "approve-off" : undefined} onClick={() => approve([current.id])}>
+                  {approved.has(current.id) ? "Approved" : current.status === "scheduled" ? "Scheduled" : "Approve & schedule"}
                 </Button>
               </div>
             </>

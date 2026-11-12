@@ -43,3 +43,27 @@ describe("the week's title", () => {
     expect(html).toContain(`Next week: ${approveButton} drafts to approve, 1 held back`)
   })
 })
+
+describe("the draft window's footer", () => {
+  const scheduled = { ...demoWeek, posts: [{ ...demoWeek.posts[0], id: "sched", status: "scheduled" as const, checks: [] }] }
+  const foreign = { ...demoWeek, posts: [{ ...demoWeek.posts[0], id: "other", status: "draft" as const, checks: [] }] }
+
+  it("calls a scheduled post scheduled, not a draft Queue Pilot did not write", () => {
+    // After Approve the post is no longer a draft, so the page has no writing record for it.
+    const html = renderToStaticMarkup(<WeekView week={scheduled} live verdicts={{}} showDraft="sched" />)
+    expect(html).not.toContain("Queue Pilot did not write this draft")
+    expect(html).toContain("Scheduled in Buffer")
+  })
+
+  it("calls a published post published", () => {
+    const sent = { ...demoWeek, posts: [{ ...demoWeek.posts[0], id: "out", status: "sent" as const, checks: [] }] }
+    const html = renderToStaticMarkup(<WeekView week={sent} live verdicts={{}} showDraft="out" />)
+    expect(html).not.toContain("Queue Pilot did not write this draft")
+    expect(html).toContain("Published by Buffer")
+  })
+
+  it("still says so for another app's draft", () => {
+    const html = renderToStaticMarkup(<WeekView week={foreign} live verdicts={{}} showDraft="other" />)
+    expect(html).toContain("Queue Pilot did not write this draft")
+  })
+})
