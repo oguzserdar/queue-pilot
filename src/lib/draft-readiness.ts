@@ -10,6 +10,7 @@
  */
 import { playbookVersion } from "./playbook-version";
 import { appliesTo, type Rule } from "./rules";
+import { checkedTextOf } from "./checked-text";
 import type { Written } from "./written-store";
 
 /** `stale` marks evidence that needs a fresh check before approval. */
@@ -20,7 +21,7 @@ export function draftReadiness(written: Written | undefined, currentText: string
   if (!applicable.length) return { state: "ok" };
   const mandatory = applicable.filter(r => r.level === "block");
   const needsCheck = (reason: string): Readiness => ({ state: "check", stale: true, reason });
-  if (!written || written.text !== currentText || written.playbookRevision !== playbookVersion(rules) || !written.verdicts)
+  if (!written || checkedTextOf(written) !== currentText || written.playbookRevision !== playbookVersion(rules) || !written.verdicts)
     return mandatory.length
       ? needsCheck("The draft or its rules changed. Check it again before approving.")
       : { state: "flagged", reason: "Not checked against the current rules." };

@@ -10,6 +10,7 @@ import { approverLine } from "@/lib/rule-origin";
 import { postsBetween } from "@/lib/posts-between";
 import { nextWeekRange, thisWeekRange, weekFromBuffer } from "@/lib/week-from-buffer";
 import { postgresWrittenStore } from "@/lib/written-store";
+import { checkedTextOf } from "@/lib/checked-text";
 import { readOr } from "@/lib/read-or";
 import { signedInUserId } from "@/lib/current-user";
 import { writingAvailabilityFor } from "@/lib/writing-availability";
@@ -39,10 +40,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ w
   const rules = userId ? await readOr(postgresRulesStore().list(userId), null, "week-rules") : null;
   const revision = rules ? playbookVersion(rules) : null;
   const checkNotes = Object.fromEntries(written.map(w => [w.postId,
-    week.posts.find(p => p.id === w.postId)?.text !== w.text ? "This draft changed since its last check. Check it again before relying on that result." :
+    week.posts.find(p => p.id === w.postId)?.text !== checkedTextOf(w) ? "This draft changed since its last check. Check it again before relying on that result." :
     revision && w.playbookRevision !== revision ? "The rules or where they apply changed. This draft needs a fresh check." :
     "No current playbook check is available for this draft."]));
-  const verdicts = Object.fromEntries(written.map((w) => [w.postId, revision && w.playbookRevision === revision && week.posts.find(p => p.id === w.postId)?.text === w.text ? w.verdicts ?? null : null]));
+  const verdicts = Object.fromEntries(written.map((w) => [w.postId, revision && w.playbookRevision === revision && week.posts.find(p => p.id === w.postId)?.text === checkedTextOf(w) ? w.verdicts ?? null : null]));
   const readiness: Record<string, Readiness> = Object.fromEntries(written.map(w => {
     const post = user.posts.find(p => p.id === w.postId);
     const network = user.channels.find(c => c.id === post?.channelId)?.service ?? w.network;

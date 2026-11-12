@@ -223,7 +223,10 @@ export const written = pgTable(
     userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
     postId: text("post_id").notNull(),
     network: text("network").notNull(),
+    /** What Queue Pilot wrote. Never replaced by a later check, so the person's edits stay visible as edits. */
     text: text("text").notNull(),
+    /** The text the verdicts below were given for: the person's edited text after a check. Null means `text`. */
+    checkedText: text("checked_text"),
     /** The playbook verdicts the draft was saved with (src/lib/judge.ts); null when it was saved unchecked. */
     verdicts: jsonb("verdicts"),
     playbookRevision: text("playbook_revision"),

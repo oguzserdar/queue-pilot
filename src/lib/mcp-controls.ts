@@ -20,6 +20,7 @@ import { postgresMaterialStore } from "./material-store";
 import { postgresSourceStore } from "./sources-store";
 import { postgresVoiceStore } from "./voice-store";
 import { hasApprovedDraft, postgresWrittenStore } from "./written-store";
+import { checkedTextOf } from "./checked-text";
 import { postgresAiKeyStore } from "./ai-key-store";
 import { listModels, ModelListError } from "./ai-models";
 import { approvedApps } from "./ai-access";
@@ -273,8 +274,8 @@ export function registerControls(server: McpServer, userId: string, buffer: Buff
     const from = (ruleId: string) => { const r = rules.find(r => r.id === ruleId); return r ? ruleOrigin(r) : null; };
     return result({ asOf: b.fetchedAt.toISOString(), drafts: posts.flatMap(p => {
       const w = written.find(w => w.postId === p.id);
-      const verdicts = w && p.text === w.text && w.playbookRevision === revision ? w.verdicts ?? null : null;
-      return w ? [{ evidence: evidence.filter(e => e.postId === p.id).map(({ oldText: _old, newText: _new, draftText: _draft, ...citation }) => citation), postId: p.id, channelId: p.channelId, text: p.text, dueAt: p.dueAt, status: p.status, changedSinceCheck: p.text !== w.text, rulesChangedSinceCheck: w.playbookRevision !== revision, verdicts, rulesPassed: verdicts?.filter(v => v.verdict === "pass").map(v => ({ rule: v.rule, from: from(v.ruleId) })) ?? null }] : [];
+      const verdicts = w && p.text === checkedTextOf(w) && w.playbookRevision === revision ? w.verdicts ?? null : null;
+      return w ? [{ evidence: evidence.filter(e => e.postId === p.id).map(({ oldText: _old, newText: _new, draftText: _draft, ...citation }) => citation), postId: p.id, channelId: p.channelId, text: p.text, dueAt: p.dueAt, status: p.status, changedSinceCheck: p.text !== checkedTextOf(w), rulesChangedSinceCheck: w.playbookRevision !== revision, verdicts, rulesPassed: verdicts?.filter(v => v.verdict === "pass").map(v => ({ rule: v.rule, from: from(v.ruleId) })) ?? null }] : [];
     }), approved: week.filter(p => p.status !== "draft").flatMap(p => { const w = written.find(w => w.postId === p.id); return w?.approvedBy ? [{ postId: p.id, channelId: p.channelId, status: p.status, approvedBy: approverLine(w.approvedBy, w.approvedAt), approvedAt: w.approvedAt ?? null }] : []; }) });
   });
   server.registerTool("refresh_buffer", { title: "Refresh Buffer data", description: "Refresh the saved queue after a user changes channels or slots in Buffer. Shares the app's request limit and keeps data under 30 seconds old. Use sparingly, then read the relevant tools.", annotations: { ...write, idempotentHint: true, openWorldHint: true } }, async () => { const b = await buffer(true); return result({ refreshedAt: b.fetchedAt.toISOString(), channels: b.channels.length }); });

@@ -212,12 +212,12 @@ export function checkNote(check: PlaybookCheck): string | undefined {
  * The playbook check for one changed draft (update_draft), so a draft cannot be saved clean and then edited past a
  * "do not save" rule. Returns the refusal reason, or null when the text may be saved, with how it was checked.
  */
-export async function judgeEdit(userId: string, text: string, network: string, channelId?: string): Promise<{ refusal: string | null; check: PlaybookCheck }> {
+export async function judgeEdit(userId: string, text: string, network: string, channelId?: string): Promise<{ refusal: string | null; check: PlaybookCheck; verdicts: Verdict[] | null; playbookRevision: string | null }> {
   const rules = await postgresRulesStore().list(userId).catch(() => null);
   const { jm, cappedReason } = rules?.length ? await judgeFor(userId) : { jm: null, cappedReason: null };
   const slot = { id: "edit", service: network, channelId } as OpenSlot;
   const gate = await applyPlaybook([{ slotId: "edit", text }], [slot], rules, jm ? (d, r) => judgeDrafts(jm.judges, d, r) : null, cappedReason).finally(() => jm?.settle());
-  return { refusal: gate.refused[0]?.reason ?? null, check: gate.check };
+  return { refusal: gate.refused[0]?.reason ?? null, check: gate.check, verdicts: gate.check === "judged" ? (gate.verdicts.get("edit") ?? []) : rules?.length === 0 ? [] : null, playbookRevision: rules ? playbookVersion(rules) : null };
 }
 
 /**
@@ -233,6 +233,7 @@ export async function recheckDrafts(userId: string, drafts: { postId: string; te
   const slots = drafts.map((d) => ({ id: d.postId, service: d.network, channelId: d.channelId }) as OpenSlot);
   const gate = await applyPlaybook(drafts.map((d) => ({ slotId: d.postId, text: d.text })), slots, rules, jm ? (x, r) => judgeDrafts(jm.judges, x, r) : null, cappedReason).finally(() => jm?.settle());
   if (gate.check === "failed") return { ok: false, message: "The check could not run just now. Try again." };
-  await postgresWrittenStore().record(userId, drafts.map((d) => ({ postId: d.postId, network: d.network, text: d.text, playbookRevision: playbookVersion(rules), verdicts: gate.check === "judged" ? (gate.verdicts.get(d.postId) ?? []) : [] })));
+  // A check is recorded beside what Queue Pilot wrote, never over it: the person's edit must stay visible as an edit.
+  await postgresWrittenStore().recordCheck(userId, drafts.map((d) => ({ postId: d.postId, text: d.text, playbookRevision: playbookVersion(rules), verdicts: gate.check === "judged" ? (gate.verdicts.get(d.postId) ?? []) : [] })));
   return { ok: true, checked: drafts.length };
 }

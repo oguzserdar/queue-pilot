@@ -67,7 +67,7 @@ vi.mock("@/lib/sources-store", async (original) => ({ ...await original<typeof i
 vi.mock("@/lib/material-store", async (original) => ({ ...await original<typeof import("@/lib/material-store")>(), postgresMaterialStore: () => material }))
 vi.mock("@/lib/rules-store", async original => ({ ...await original<typeof import("@/lib/rules-store")>(), postgresRulesStore: () => ruleStore }))
 vi.mock("@/lib/written-store", () => ({
-  postgresWrittenStore: () => ({ get: async (id: string, ids: string[]) => (written.get(id) ?? []).filter(w => ids.includes(w.postId)), record: async (id: string, drafts: Written[]) => written.set(id, [...(written.get(id) ?? []), ...drafts]) }),
+  postgresWrittenStore: () => ({ get: async (id: string, ids: string[]) => (written.get(id) ?? []).filter(w => ids.includes(w.postId)), record: async (id: string, drafts: Written[]) => written.set(id, [...(written.get(id) ?? []), ...drafts]), recordCheck: async (id: string, checks: { postId: string; text: string; verdicts: Written["verdicts"]; playbookRevision: string | null }[]) => written.set(id, (written.get(id) ?? []).map((w) => { const c = checks.find((x) => x.postId === w.postId); return c ? { ...w, checkedText: c.text, verdicts: c.verdicts, playbookRevision: c.playbookRevision } : w; })) }),
   wroteIds: async (id: string, ...ids: string[]) => new Set((written.get(id) ?? []).filter((p) => ids.includes(p.postId)).map((p) => p.postId)),
   hasApprovedDraft: async (id: string) => (written.get(id) ?? []).some((w) => !!w.approvedAt),
 }))
@@ -1122,6 +1122,8 @@ describe("connector draft chain", () => {
     expect((await call("save_drafts", { title: "Repeat", drafts: [{ slotId, text: "again" }] })).isError).toBe(true)
     expect((await call("update_draft", { postId, text: "broth" })).isError).toBe(true)
     expect((await call("update_draft", { postId, text: "CSV export includes archived rows." })).isError).not.toBe(true)
+    // The AI revising its own draft is the writer: its text becomes what Queue Pilot wrote, so it is never "your fix".
+    expect((written.get("person-a") ?? []).filter((w) => w.postId === postId).at(-1)?.text).toBe("CSV export includes archived rows.")
     expect(answer(await call("show_next_week"))).toContain("includes archived rows")
     expect((await call("delete_draft", { postId })).isError).not.toBe(true)
     expect(lastAction("draft_deleted")).toMatchObject({ by: { via: "ai", app: "ChatGPT" }, facts: { ids: [postId] } })

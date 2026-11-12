@@ -42,7 +42,7 @@ import { limit, limitHeaders, type Action, type Limited } from "@/lib/rate-limit
 import { toolErrorMessage } from "@/lib/tool-error";
 import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
 import { repairDraftEvidence } from "@/lib/repair-draft-evidence";
-import { wroteIds } from "@/lib/written-store";
+import { postgresWrittenStore, wroteIds } from "@/lib/written-store";
 import { createPostNote, deletePostNote, listPostNotes, MAX_NOTE as MAX_BUFFER_NOTE, mentionAnnotations, mentionSpan, NotesNotAllowedError, placeMentions, updatePostNote, type MentionAnnotation, type NoteSubject, type WantedMention } from "@/lib/buffer/notes";
 import { BufferApiError, BufferRateLimitedError } from "@/lib/buffer/client";
 import { BufferAllowanceLowError, BufferAllowanceUnknownError, currentAllowance, withBudget } from "@/lib/buffer/budget";
@@ -319,12 +319,18 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         return repaired.ok ? text("Source quotes repaired on the existing draft. Its text, slot and draft status are unchanged. Quote matching is not a new AI check of meaning.") : { ...text(`Not changed: ${repaired.reason}`), isError: true };
       }
       let note: string | undefined;
+      let check: Awaited<ReturnType<typeof judgeEdit>> | undefined;
+      let editedNetwork = "";
       const r = await updateDraft(b.accessToken, postId, newText, b.posts, b.channels, await wroteIds(userId, postId), undefined, async (t, network, channelId) => {
-        const j = await judgeEdit(userId, t, network, channelId);
-        note = checkNote(j.check);
-        return j.refusal;
+        editedNetwork = network;
+        check = await judgeEdit(userId, t, network, channelId);
+        note = checkNote(check.check);
+        return check.refusal;
       }, expectedText);
       if (!r.ok) return { ...text(`Not changed: ${r.reason}`), isError: true };
+      // The connected AI revising its own draft is the writer, not the person fixing it: its text becomes what Queue
+      // Pilot wrote, with the check it just passed, so it never counts toward "You made the same fix twice".
+      await postgresWrittenStore().record(userId, [{ postId, network: editedNetwork, text: newText, verdicts: check?.verdicts ?? null, playbookRevision: check?.playbookRevision ?? null }]).catch((e: unknown) => console.error(JSON.stringify({ event: "qp-connector-edit-not-recorded", message: e instanceof Error ? e.message : String(e) })));
       await patchSnapshot(userId, (posts) => posts.map((p) => (p.id === postId ? { ...p, text: newText } : p)));
       return text(`Draft updated. It is still a draft until it is approved.${note ? `\n${note}` : ""}`);
     },

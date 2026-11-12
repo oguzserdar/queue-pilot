@@ -15,7 +15,7 @@ import { openSlots, parseSlotId } from "@/lib/open-slots";
 import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
 import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
 import { draftSlot, recordAction } from "@/lib/security-events";
-import { wroteIds } from "@/lib/written-store";
+import { postgresWrittenStore, wroteIds } from "@/lib/written-store";
 import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
 import { listRecentSent, readPostsNow, type Post } from "@/lib/buffer/queries";
 import { FeedError, findFeed } from "@/lib/feeds"
@@ -748,12 +748,15 @@ export async function editDraftText(postId: string, text: string, expectedText?:
     const b = await bufferForWriting();
     if (!b) return { ok: false, message: "Sign in with Buffer first." };
     let note: string | undefined;
+    let check: Awaited<ReturnType<typeof judgeEdit>> | undefined;
     const r = await updateDraft(b.token, postId, text.trim(), b.posts, b.channels, await wroteIds(b.userId, postId), undefined, async (t, network, channelId) => {
-      const j = await judgeEdit(b.userId, t, network, channelId);
-      note = checkNote(j.check);
-      return j.refusal;
+      check = await judgeEdit(b.userId, t, network, channelId);
+      note = checkNote(check.check);
+      return check.refusal;
     }, expectedText);
     if (!r.ok) return { ok: false, message: r.reason };
+    // The edit was just checked: keep that check beside what Queue Pilot wrote, so Approve needs no second check.
+    if (check?.verdicts) await postgresWrittenStore().recordCheck(b.userId, [{ postId, text: text.trim(), verdicts: check.verdicts, playbookRevision: check.playbookRevision }]).catch((e: unknown) => console.error(JSON.stringify({ event: "qp-edit-check-not-recorded", message: e instanceof Error ? e.message : String(e) })));
     await patchSavedQueue(b.userId, (posts) => posts.map((p) => (p.id === postId ? { ...p, text: text.trim() } : p)));
     revalidatePath("/", "layout");
     return { ok: true, title: note };

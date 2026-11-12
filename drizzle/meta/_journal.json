@@ -281,6 +281,13 @@
       "when": 1794382247833,
       "tag": "20261111073047_offer_dismissed",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794465172110,
+      "tag": "20261112063252_written_checked_text",
+      "breakpoints": true
     }
   ]
 }
