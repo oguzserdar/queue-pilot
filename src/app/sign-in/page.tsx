@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { SignInNotice } from "@/components/sign-in-button";
+import { withoutSignInError } from "@/lib/sign-in-errors";
 import styles from "./sign-in.module.css";
 
 /** Sign in with Buffer. Used directly and as the login step when an AI asks to connect to Queue Pilot. */
@@ -15,7 +17,9 @@ export default function SignInPage() {
   async function signIn() {
     setBusy(true);
     setError(null);
-    const res = await authClient.signIn.social({ provider: "buffer", callbackURL: connecting ? undefined : "/" });
+    // A failed sign-in comes back here with ?error=, which the notice explains; an AI's connect request keeps its query.
+    const here = withoutSignInError(new URL(window.location.href));
+    const res = await authClient.signIn.social({ provider: "buffer", callbackURL: connecting ? undefined : "/", errorCallbackURL: here.pathname + here.search });
     if (res.error) {
       setError("Buffer sign-in could not start. Please try again in a moment.");
       setBusy(false);
@@ -31,6 +35,7 @@ export default function SignInPage() {
           ? "Your AI is asking to work with your Buffer queue. Sign in with Buffer first; you will choose what it may do on the next screen."
           : "Queue Pilot reads your Buffer queue and puts your own AI to work on its empty times."}
       </p>
+      <SignInNotice />
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       <button type="button" className={styles.cta} onClick={signIn} disabled={busy}>
         {busy ? "Opening Buffer…" : "Sign in with Buffer"}

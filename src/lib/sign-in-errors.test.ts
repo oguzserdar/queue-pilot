@@ -20,6 +20,12 @@ describe("signInProblem", () => {
     expect(signInProblem("state_mismatch")?.text).toContain("Try again");
   });
 
+  it("explains that Buffer did not say who the person is, without blaming them", () => {
+    const p = signInProblem("unable_to_get_user_info");
+    expect(p?.title).toBe("Buffer did not answer in time");
+    expect(p?.text).toContain("Nothing was connected");
+  });
+
   it("says something for any other code, and nothing when there is none", () => {
     expect(signInProblem("server_error")?.title).toBe("Buffer sign-in did not finish");
     expect(signInProblem(null)).toBeNull();

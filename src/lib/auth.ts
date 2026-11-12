@@ -104,10 +104,17 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
             // Buffer has no userinfo endpoint; the GraphQL account query is the identity.
             getUserInfo: async (tokens) => {
               if (!tokens.accessToken) return null;
-              const { account } = await bufferQuery<{ account: { id: string; email: string; name: string | null; avatar: string } }>(
+              // A busy or failing Buffer must not end sign-in on a blank error page: returning nothing sends the person
+              // back with ?error=unable_to_get_user_info, which the page explains.
+              const read = await bufferQuery<{ account: { id: string; email: string; name: string | null; avatar: string } }>(
                 tokens.accessToken,
                 "{ account { id email name avatar } }",
-              );
+              ).catch((e: unknown) => {
+                console.error(JSON.stringify({ event: "qp-sign-in-account-read-failed", message: e instanceof Error ? e.message : String(e) }));
+                return null;
+              });
+              if (!read) return null;
+              const { account } = read;
               // Buffer's account name is optional; without one, the part of the email before the @ reads better than the address.
               const name = account.name?.trim() || account.email.split("@")[0];
               // The picture is checked once here, at sign-in, so pages never wait on Gravatar: none means initials.
