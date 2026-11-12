@@ -144,6 +144,16 @@ curl localhost:3000/api/health/ready
 
 This runs the app and Postgres, applies migrations on start, and runs the daily job. `BUFFER_REDIRECT_URI` is this copy's address followed by `/api/auth/callback/buffer` (`http://localhost:3000/...` on your own machine), and it must match the redirect URI in your Buffer app exactly. Behind a reverse proxy that appends to `x-forwarded-for`, set `TRUSTED_PROXY_HOP_COUNT` to the number of proxies, or list their addresses in `TRUSTED_PROXIES`, so each visitor gets their own rate limit. Signed-out visitors see the example app at `/` until you set `LANDING_PAGE=on`, which shows the homepage.
 
+When the health check answers, open `/admin` and become the admin as in step 4 above. Step 5's command cannot reach this database from outside Docker. To add or restore an admin later, run it inside: `docker compose exec db psql -U queuepilot queuepilot -c "update \"user\" set role = 'admin' where lower(email) = lower('you@example.com')"`. It answers `UPDATE 1` when it worked, and `UPDATE 0` when that person has not signed in yet.
+
+You can also skip the build. Each release publishes the app as an image at `ghcr.io/oguzserdar/queue-pilot`, for amd64 and arm64, tagged with the version, such as `0.9.0`. Run it on any container host with the variables from `.env.example`, `DATABASE_URL` included, and with a restart policy, because the app stops when the database is not up yet. It applies migrations when it starts and listens on port 3000. Have the host make the two calls the `cron` service in `docker-compose.yml` makes, each with `Authorization: Bearer <CRON_SECRET>`. They are `/api/cron/due` every 30 seconds and `/api/cron/echo` once a day.
+
+### Updating and backups
+
+- **On Vercel.** Pull the new release into the repository Vercel deploys from and push. Migrations run on that production deploy.
+- **With Docker.** Back up first. Run `git pull`, or check out a release tag, and add any new lines from `.env.example` to your `.env`. Then run `docker compose up -d --build`. Migrations apply when the app starts. If a required value is missing the app stops, and `docker compose logs app` names it.
+- **Backups.** Your data is in Postgres. On Vercel, use your database provider's backups. With Docker, this writes it to a file while the copy is running: `docker compose exec -T db pg_dump -U queuepilot queuepilot > backup.sql`.
+
 ### Settings
 
 The settings in the table below can be changed in `/admin`: Buffer app keys, the hosted AI key and its budget, the daily allowance per person, source keys, and the five Telegram and Discord bot fields. For each one, a value saved in `/admin` wins over the server's environment variable, which wins over the default, and `/admin` shows which one is in use. Removing a saved value goes back to the environment's. Secrets are encrypted and shown masked. Every change is logged with the admin who made it, never with a secret's value.

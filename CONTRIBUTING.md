@@ -5,7 +5,7 @@ Thanks for helping. Queue Pilot is a Next.js app on the Buffer API, MIT licensed
 ## Run it
 
 1. Copy `.env.example` to `.env` and fill it in.
-2. `pnpm install`, then `pnpm dev`. Or run everything with `docker compose up`.
+2. With Node 24 and pnpm 10, run `pnpm install`. Set `DATABASE_URL` in `.env` to a Postgres you can reach from your machine, then run `pnpm db:migrate` to create the tables, and `pnpm dev`. Or run everything, database included, with `docker compose up`, which applies migrations when the app starts.
 
 ## Before a pull request
 

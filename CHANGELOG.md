@@ -30,6 +30,7 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - Voice examples say three to five work best and stop at twelve, and each one says who added it. Every limit a person can reach says what it is.
 - Once an AI app has connected, Home leads with it. The first visit is one page until you choose how to fill the week.
 - Suggest changes starts with the commented draft only, and a dialog's buttons stay in view in a short window.
+- The README says how to update a copy you run, back up its data, add an admin on Docker and run the published Docker image. It lists every startup value.
 
 ### Fixed
 - A fill lost every draft when the AI answered an empty video timestamp for one post.
