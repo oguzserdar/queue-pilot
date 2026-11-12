@@ -1,6 +1,6 @@
 /**
- * @fileoverview The Playbook's same-fix offer actions: sign-in and limits first, Buffer read again before the model is
- * asked, each confirmed repeat shown with its edit, place and rule, and Keep or Not now saved through the signed
+ * @fileoverview The Playbook's same-fix offer actions: sign-in first, the saved copy of the account and never a Buffer
+ * read when the Playbook opens, each confirmed repeat shown with its edit, place and rule, and Keep or Not now saved through the signed
  * suggestion, refreshing the Playbook and Home.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -12,6 +12,8 @@ vi.mock("@/lib/current-user", () => ({ signedInUserId: vi.fn(), bufferForWriting
 vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn() }))
 vi.mock("@/lib/judge-model", () => ({ AiCapError: class AiCapError extends Error {} }))
 vi.mock("@/lib/rule-suggestions", () => ({ ruleSuggestions: vi.fn(), applySuggestion: vi.fn() }))
+const snapshotGet = vi.fn()
+vi.mock("@/lib/buffer/snapshot-store", () => ({ postgresSnapshotStore: () => ({ get: snapshotGet }) }))
 
 const { signedInUserId, bufferForWriting } = await import("@/lib/current-user")
 const { limit } = await import("@/lib/rate-limit")
@@ -39,6 +41,7 @@ beforeEach(() => {
   vi.mocked(signedInUserId).mockResolvedValue("person-a")
   vi.mocked(limit).mockResolvedValue({ ok: true } as never)
   vi.mocked(bufferForWriting).mockResolvedValue(buffer as never)
+  snapshotGet.mockResolvedValue({ data: { channels: buffer.channels, posts: [] } })
   vi.mocked(ruleSuggestions).mockResolvedValue({ suggestions: [suggestion], note: "" } as never)
   vi.mocked(applySuggestion).mockResolvedValue({ ok: true, id: "r9", message: "Suggestion kept as a playbook rule." })
 })
@@ -51,24 +54,17 @@ describe("checkRepeatedFixes", () => {
     expect(ruleSuggestions).not.toHaveBeenCalled()
   })
 
-  it("stops at the request limit before reading Buffer or asking the model", async () => {
-    vi.mocked(limit).mockResolvedValue({ ok: false, resetSeconds: 20 } as never)
-    expect(await checkRepeatedFixes()).toEqual({ ok: false, message: "Too many requests just now. Try again in 20 seconds." })
-    expect(bufferForWriting).not.toHaveBeenCalled()
-    expect(ruleSuggestions).not.toHaveBeenCalled()
-  })
-
-  it("reads Buffer again before asking the model, so edits made there just now count", async () => {
+  it("never reads Buffer when the Playbook opens, so the shared allowance stays for saving and Approve", async () => {
     await checkRepeatedFixes()
-    expect(vi.mocked(bufferForWriting).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(ruleSuggestions).mock.invocationCallOrder[0])
     expect(ruleSuggestions).toHaveBeenCalledWith("person-a", "fixes", expect.any(Function))
+    expect(bufferForWriting).not.toHaveBeenCalled()
+    expect(limit).not.toHaveBeenCalled()
   })
 
-  it("says Buffer did not answer when the read fails, and asks no model", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    vi.mocked(bufferForWriting).mockRejectedValue(new Error("network"))
-    expect(await checkRepeatedFixes()).toEqual({ ok: false, message: "Buffer did not answer. Try again in a minute." })
-    expect(ruleSuggestions).not.toHaveBeenCalled()
+  it("still answers when the saved copy cannot be read, naming the network without the account", async () => {
+    snapshotGet.mockRejectedValue(new Error("db down"))
+    const r = await checkRepeatedFixes()
+    expect(r.ok && r.offers[0].where).toBe(`On LinkedIn you added "${ending}" at the end of 2 drafts.`)
   })
 
   it("shows each confirmed repeat with the edit, the account and network, the rule and the model's reason", async () => {

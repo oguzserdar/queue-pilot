@@ -86,18 +86,21 @@ const keysOf = (drafts: WrittenDraft[]) => [...new Set(drafts.flatMap((d) => (d.
  */
 async function fitDrafts(drafts: WrittenDraft[], slots: OpenSlot[], deps: WriteWeekDeps): Promise<{ fit: WrittenDraft[]; dropped: string[] }> {
   const byId = new Map(slots.map((s) => [s.id, s]));
-  const fit: WrittenDraft[] = [];
-  const dropped: string[] = [];
-  for (const d of drafts) {
+  // Record-keeping for the live view must never stop the save of the other drafts, so a failed write is only logged.
+  const note = async (what: string, run: () => Promise<void> | undefined) => {
+    try { await run(); } catch (e) { console.error(JSON.stringify({ event: "qp-fill-record-failed", what, message: e instanceof Error ? e.message : String(e) })); }
+  };
+  // Over-limit drafts are shortened at the same time, each once, so several of them cost one model wait, not many.
+  const results = await Promise.all(drafts.map(async (d): Promise<{ keep: WrittenDraft } | { drop: string }> => {
     const slot = byId.get(d.slotId);
     const limit = slot ? limitFor(slot.service) : null;
-    if (!slot || limit === null || !tooLong(slot.service, d.text)) { fit.push(d); continue; }
-    // One extra model call on the same allowance, bounded to once per draft per pass.
+    if (!slot || limit === null || !tooLong(slot.service, d.text)) return { keep: d };
     const shorter = await deps.shorten(d, slot, limit).catch(() => null);
-    if (shorter?.text && !tooLong(slot.service, shorter.text)) { await deps.fitted?.(shorter); fit.push(shorter); }
-    else { await deps.dropped?.(d.slotId); dropped.push(d.slotId); }
-  }
-  return { fit, dropped };
+    if (shorter?.text && !tooLong(slot.service, shorter.text)) { await note("fitted", () => deps.fitted?.(shorter)); return { keep: shorter }; }
+    await note("dropped", () => deps.dropped?.(d.slotId));
+    return { drop: d.slotId };
+  }));
+  return { fit: results.flatMap((r) => ("keep" in r ? [r.keep] : [])), dropped: results.flatMap((r) => ("drop" in r ? [r.drop] : [])) };
 }
 
 export async function writeWeek(open: OpenSlot[], now: Date, deps: WriteWeekDeps): Promise<WriteWeekResult> {

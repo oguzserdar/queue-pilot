@@ -334,9 +334,14 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
         return check.refusal;
       }, expectedText);
       if (!r.ok) return { ...text(`Not changed: ${r.reason}`), isError: true };
-      // The connected AI revising its own draft is the writer, not the person fixing it: its text becomes what Queue
-      // Pilot wrote, with the check it just passed, so it never counts toward "You made the same fix twice".
-      await postgresWrittenStore().record(userId, [{ postId, network: editedNetwork, text: newText, verdicts: check?.verdicts ?? null, playbookRevision: check?.playbookRevision ?? null }]).catch((e: unknown) => console.error(JSON.stringify({ event: "qp-connector-edit-not-recorded", message: e instanceof Error ? e.message : String(e) })));
+      // The connected AI revising its own draft is the writer, not the person fixing it: when the person had not changed
+      // the draft, its text becomes what Queue Pilot wrote, so the AI's change never counts toward "You made the same
+      // fix twice". When the person had already fixed it, what Queue Pilot wrote is kept, so their fix stays an edit,
+      // and the AI's text is stored only as the checked text.
+      const before = b.posts.find((p) => p.id === postId)?.text ?? "";
+      const recorded = (await postgresWrittenStore().get(userId, [postId]).catch(() => []))[0];
+      const entry = { postId, network: editedNetwork, text: newText, verdicts: check?.verdicts ?? null, playbookRevision: check?.playbookRevision ?? null };
+      await (recorded && recorded.text !== before ? postgresWrittenStore().recordCheck(userId, [entry]) : postgresWrittenStore().record(userId, [entry])).catch((e: unknown) => console.error(JSON.stringify({ event: "qp-connector-edit-not-recorded", message: e instanceof Error ? e.message : String(e) })));
       await patchSnapshot(userId, (posts) => posts.map((p) => (p.id === postId ? { ...p, text: newText } : p)));
       return text(`Draft updated. It is still a draft until it is approved.${note ? `\n${note}` : ""}`);
     },

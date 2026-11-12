@@ -1125,6 +1125,12 @@ describe("connector draft chain", () => {
     // The AI revising its own draft is the writer: its text becomes what Queue Pilot wrote, so it is never "your fix".
     expect((written.get("person-a") ?? []).filter((w) => w.postId === postId).at(-1)?.text).toBe("CSV export includes archived rows.")
     expect(answer(await call("show_next_week"))).toContain("includes archived rows")
+    // The person then fixes the draft in Buffer, and asks the AI for another change: their fix must stay an edit.
+    posts[0].text = "CSV export now includes archived rows."
+    expect((await call("update_draft", { postId, text: "CSV export now includes archived rows too.", expectedText: "CSV export now includes archived rows." })).isError).not.toBe(true)
+    const row = (written.get("person-a") ?? []).filter((w) => w.postId === postId).at(-1)
+    expect(row?.text).toBe("CSV export includes archived rows.")
+    expect(row?.checkedText).toBe("CSV export now includes archived rows too.")
     expect((await call("delete_draft", { postId })).isError).not.toBe(true)
     expect(lastAction("draft_deleted")).toMatchObject({ by: { via: "ai", app: "ChatGPT" }, facts: { ids: [postId] } })
     expect(answer(await call("show_next_week"))).not.toContain(`post id ${postId}`)

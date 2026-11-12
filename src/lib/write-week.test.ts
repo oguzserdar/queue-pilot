@@ -138,6 +138,21 @@ describe("writeWeek, drafts over the slot's limit", () => {
     expect(r).toMatchObject({ kind: "done", saved: [{ slotId: "x" }], refused: [] });
   });
 
+  it("shortens over-limit drafts at the same time, and a failed record write never stops the save", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let running = 0, most = 0;
+    const d = deps({
+      write: vi.fn(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }, { slotId: "y", text: long, sourceKey: "s1:41" }, { slotId: "z", text: "Fits.", sourceKey: "s1:41" }]),
+      shorten: vi.fn(async (draft) => { running++; most = Math.max(most, running); await new Promise((r) => setTimeout(r, 5)); running--; return { ...draft, text: draft.slotId === "x" ? "short" : "a".repeat(281) }; }),
+      fitted: vi.fn(async () => { throw new Error("db down"); }),
+      dropped: vi.fn(async () => { throw new Error("db down"); }),
+    });
+    const r = await writeWeek([xSlot("x", "2026-10-27T09:00:00Z"), xSlot("y", "2026-10-28T09:00:00Z"), xSlot("z", "2026-10-29T09:00:00Z")], now, d);
+    expect(most).toBe(2);
+    expect(d.save).toHaveBeenCalledWith([expect.objectContaining({ slotId: "x", text: "short" }), expect.objectContaining({ slotId: "z" })], ["s1:41"]);
+    expect(r).toMatchObject({ kind: "done", dropped: ["y"] });
+  });
+
   it("leaves out a draft that is still too long after shortening, without a Too long notice", async () => {
     const d = deps({
       write: vi.fn(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }, { slotId: "y", text: "Fits.", sourceKey: "s1:41" }]),

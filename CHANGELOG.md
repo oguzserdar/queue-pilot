@@ -41,6 +41,12 @@ All notable changes to Queue Pilot are recorded here. The format follows
 - A draft Buffer did save could be marked failed after a fill that stopped halfway. Recovery reads the queue again before deciding.
 - Settings stays up when a Telegram, Discord or channel read fails.
 - On a phone, the approve bar and toasts sit above the tab bar.
+- Signing in could loop between the app and the expired-session page when sign-in was switched off on a copy. The sign-in cookie is now cleared there too.
+- Opening the Playbook no longer reads Buffer, so it does not use the requests that saving and Approve need.
+- A repeated added ending whose rule sentence came back too long was asked about again on every Playbook visit. The answer is kept and the rule reads "End with" and the words.
+- Drafts over a network's limit are shortened together, each with a short time limit, so a slow AI leaves the fill time to save.
+- New accounts start with one privacy rule. Checking drafts against it alone no longer uses one of the day's AI actions.
+- When the connected AI changes a draft you had already fixed, your fix still counts toward the same-fix offer.
 - On a phone, the Write a post window kept the send button inside the window and the preview above the footer. The setup window shows Queue Pilot's address on its own line instead of breaking it mid-word. In the example account, a sign-in message no longer covers the example card, and the failing-post row says it opens Next week.
 - Deleting a draft that had just been approved in Buffer could delete the scheduled post. Queue Pilot reads the post again first and deletes it only while it is still a draft.
 - A Telegram or Discord post sent with Send now stayed scheduled forever if the platform asked it to wait. It goes out once the wait is over.

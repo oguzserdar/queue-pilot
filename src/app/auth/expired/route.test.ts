@@ -7,14 +7,15 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getSession = vi.fn();
-vi.mock("@/lib/auth", () => ({ getAuth: async () => ({ api: { getSession } }) }));
+const authOn = { value: true };
+vi.mock("@/lib/auth", () => ({ getAuth: async () => (authOn.value ? { api: { getSession } } : null) }));
 
 const { GET } = await import("./route");
 const req = () => new NextRequest("https://getqueuepilot.com/auth/expired", {
   headers: { cookie: "__Secure-better-auth.session_token=dead; better-auth.session_data.0=x; theme=dark" },
 });
 
-beforeEach(() => { getSession.mockReset(); });
+beforeEach(() => { getSession.mockReset(); authOn.value = true; });
 
 describe("GET /auth/expired", () => {
   it("clears every sign-in cookie of a session that no longer exists and sends the visitor home", async () => {
@@ -27,6 +28,13 @@ describe("GET /auth/expired", () => {
     expect(cleared[0]).toMatch(/^__Secure-better-auth\.session_token=;.*Max-Age=0.*Secure/i);
     expect(cleared[1]).toMatch(/^better-auth\.session_data\.0=;.*Max-Age=0/i);
     expect(cleared.join()).not.toMatch(/theme=/);
+  });
+
+  it("clears the cookie when sign-in is switched off, so the app and this page never send the visitor in a loop", async () => {
+    authOn.value = false;
+    const res = await GET(req());
+    expect(res.headers.get("location")).toBe("/");
+    expect(res.headers.getSetCookie()).toHaveLength(2);
   });
 
   it("clears nothing when the session lookup fails, so a database hiccup never signs anyone out", async () => {

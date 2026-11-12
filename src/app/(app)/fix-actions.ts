@@ -6,15 +6,13 @@
  * and that answer is saved per set of repeats, so opening the page again does not spend another AI action.
  */
 import { revalidatePath } from "next/cache";
+import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { bufferForWriting, signedInUserId } from "@/lib/current-user";
-import { waitMessage, waitRefusal } from "@/lib/buffer/not-sent";
 import { AiCapError } from "@/lib/judge-model";
-import { limit } from "@/lib/rate-limit";
 import { applySuggestion, ruleSuggestions } from "@/lib/rule-suggestions";
 import { fixExcerpt } from "@/lib/fix-excerpt";
 import type { Fix } from "@/lib/fixes";
 import { NETWORKS } from "@/lib/rules";
-import type { WriteBuffer } from "@/lib/write-slots-for-user";
 
 /** One repeated fix the model called a lasting preference, ready for the offer card. */
 export type RepeatedFix = {
@@ -51,29 +49,22 @@ function did(fix: Fix | undefined, count: number): string {
 }
 
 /**
- * The open repeated fixes, judged by the model. Reads Buffer again first so edits made there a moment ago are seen,
- * within the same shared request allowance the Refresh button uses. Asking the model is limited and metered inside
- * ruleSuggestions; a saved answer for the same repeats is reused without an AI action.
+ * The open repeated fixes, judged by the model. The Playbook asks this when it opens, so it reads the saved copy of
+ * the account and never Buffer: opening a screen must not spend the shared Buffer allowance that saving and Approve
+ * need. Asking the model is limited and metered inside ruleSuggestions; a saved answer is reused without an AI action.
  */
 export async function checkRepeatedFixes(): Promise<RepeatedFixesResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  const l = await limit("bufferWrite", userId);
-  if (!l.ok) return { ok: false, message: `Too many requests just now. Try again in ${l.resetSeconds} seconds.` };
-  let b: WriteBuffer | null;
+  const channels = (await postgresSnapshotStore().get(userId).catch(() => null))?.data.channels ?? [];
   try {
-    b = await bufferForWriting();
-  } catch (e) {
-    const wait = waitRefusal(e);
-    if (wait) return { ok: false, message: waitMessage(wait) };
-    console.error(JSON.stringify({ event: "qp-repeated-fixes-refresh-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Buffer did not answer. Try again in a minute." };
-  }
-  if (!b) return { ok: false, message: "Sign in with Buffer first." };
-  const buffer = b;
-  try {
-    const found = await ruleSuggestions(userId, "fixes", async () => buffer);
-    const account = (id?: string) => (id ? buffer.channels.find((c) => c.id === id)?.name : undefined);
+    // The fixes check reads only the saved copy; Buffer is loaded only by the modes that need it, never here.
+    const found = await ruleSuggestions(userId, "fixes", async () => {
+      const b = await bufferForWriting();
+      if (!b) throw new Error("Sign in with Buffer first.");
+      return b;
+    });
+    const account = (id?: string) => (id ? channels.find((c) => c.id === id)?.name : undefined);
     const offers = found.suggestions.map((s): RepeatedFix => {
       const ev = (s.evidence ?? {}) as Evidence;
       const network = NETWORKS[ev.network ?? ""] ?? ev.network ?? "";

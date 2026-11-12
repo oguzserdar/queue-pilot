@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getAuth } from "@/lib/auth";
+import { clearSignInCookies } from "@/lib/sign-in-cookies";
 
 /**
  * Clears a sign-in cookie whose session no longer exists, then goes to the homepage. The router only checks that a
@@ -11,7 +12,9 @@ import { getAuth } from "@/lib/auth";
 export async function GET(req: NextRequest) {
   const res = new NextResponse(null, { status: 303, headers: { location: "/" } });
   const auth = await getAuth();
-  if (!auth) return res;
+  // With sign-in switched off no session can be live, so the cookie is cleared. Leaving it would send the visitor
+  // back to the app, which sends them here again: a redirect loop.
+  if (!auth) { clearSignInCookies(req.cookies.getAll(), res.cookies); return res; }
   // A lookup that fails says nothing about the session, so nothing is cleared: a database hiccup must not sign a
   // live person out. Only a lookup that succeeds and finds no session clears the cookies.
   let live: unknown;
@@ -22,10 +25,6 @@ export async function GET(req: NextRequest) {
     return res;
   }
   if (live) return res;
-  for (const { name } of req.cookies.getAll()) {
-    if (/^(__Secure-)?better-auth\./.test(name)) {
-      res.cookies.set(name, "", { path: "/", maxAge: 0, httpOnly: true, sameSite: "lax", secure: name.startsWith("__Secure-") });
-    }
-  }
+  clearSignInCookies(req.cookies.getAll(), res.cookies);
   return res;
 }

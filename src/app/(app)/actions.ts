@@ -28,6 +28,7 @@ import { addPastedExample, exampleFromQueue, InvalidVoiceExampleError, MAX_NOTE,
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram";
 import { postgresEchoStore, postgresTelegramCodes } from "@/lib/echo-store";
+import { clearSignInCookies } from "@/lib/sign-in-cookies";
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
 import { installState, installUrl } from "@/lib/discord";
 import { operatorSetting, operatorSettings } from "@/lib/env";
@@ -369,9 +370,7 @@ export async function deleteMyAccount(confirm: string): Promise<SourceActionResu
   // The account and its sessions are gone, but this browser still holds the sign-in cookie. The router only checks
   // that the cookie exists, so clear it here or the person stays "signed in" to an empty app instead of the homepage.
   const jar = await cookies();
-  for (const { name } of jar.getAll()) {
-    if (/^(__Secure-)?better-auth\./.test(name)) jar.set(name, "", { path: "/", maxAge: 0, httpOnly: true, sameSite: "lax", secure: name.startsWith("__Secure-") });
-  }
+  clearSignInCookies(jar.getAll(), jar);
   return { ok: true };
 }
 
@@ -380,7 +379,12 @@ export async function setOfferAside(key: unknown): Promise<SourceActionResult> {
   const userId = await signedInUserId();
   if (!userId) return { ok: false, message: "Sign in with Buffer first." };
   if (!isOfferKey(key)) return { ok: false, message: "That offer is not one Queue Pilot shows." };
-  await dismissOffer(userId, key);
+  try {
+    await dismissOffer(userId, key);
+  } catch (e) {
+    console.error(JSON.stringify({ event: "qp-offer-aside-failed", message: e instanceof Error ? e.message : String(e) }));
+    return { ok: false, message: "Queue Pilot could not save that just now. Try again in a minute." };
+  }
   revalidatePath("/");
   return { ok: true };
 }

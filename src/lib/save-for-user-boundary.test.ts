@@ -37,3 +37,17 @@ describe("mandatory checks at the Buffer write boundary", () => {
     expect(mocks.edit).not.toHaveBeenCalled();
   });
 });
+
+describe("Queue Pilot's own starting rule", () => {
+  const starting = { id: "s", kind: "guidance", channels: "all", level: "warn", text: "Keep private matters private.", addedBy: "starting" };
+  it("is still checked, but takes none of the person's daily actions when it is the only rule", async () => {
+    mocks.rules.mockResolvedValue([starting]);
+    await judgeEdit("person", "An edit.", "twitter");
+    expect(mocks.model).toHaveBeenCalledWith("person", { noAction: true });
+  });
+  it("takes an action as usual once the person has a rule of their own", async () => {
+    mocks.rules.mockResolvedValue([starting, { id: "b", kind: "guidance", channels: "all", level: "block", text: "No hype.", addedBy: "you" }]);
+    await judgeEdit("person", "An edit.", "twitter");
+    expect(mocks.model).toHaveBeenCalledWith("person", { noAction: false });
+  });
+});

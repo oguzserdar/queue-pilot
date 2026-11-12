@@ -75,8 +75,8 @@ export function preferencesFrom<T extends FixOffer>(offers: T[], verdicts: Verdi
     if (!vs.length || !vs.every((v) => v.verdict === "preference") || !why) return [];
     if (o.fix.kind !== "ends_with") return [{ ...o, why, sentence: "" }];
     // An added ending reads as the model's sentence, which says which posts it is for. The exact words stay on the rule.
-    const sentence = ruleSentence(vs);
-    return sentence ? [{ ...o, why, sentence }] : [];
+    // With no sentence that can be kept (none, or too long), the rule keeps its plain "End with ..." wording instead.
+    return [{ ...o, why, sentence: ruleSentence(vs) }];
   });
 }
 
@@ -87,15 +87,14 @@ function ruleSentence(vs: Verdict[]): string {
 }
 
 /**
- * True when the model answered every candidate exactly one way and gave a reason, and an added ending it calls a
- * preference came with a rule sentence that can be kept. Only a complete answer is saved, so a skipped or muddled
- * answer is asked again next time instead of hiding a suggestion for a day.
+ * True when the model answered every candidate exactly one way and gave a reason. Only a complete answer is saved, so
+ * a skipped or muddled answer is asked again next time. A missing or over-long rule sentence does not make an answer
+ * incomplete: asking again would spend an AI action on every Playbook visit for a sentence that keeps coming back long.
  */
 export function complete(offers: FixOffer[], verdicts: Verdict[]): boolean {
   return offers.every((o, i) => {
     const vs = verdicts.filter((v) => v.candidate === i + 1);
-    const clear = vs.length > 0 && vs.every((v) => v.verdict === vs[0].verdict && v.why.trim());
-    return clear && (vs[0].verdict !== "preference" || o.fix.kind !== "ends_with" || !!ruleSentence(vs));
+    return vs.length > 0 && vs.every((v) => v.verdict === vs[0].verdict && v.why.trim());
   });
 }
 
