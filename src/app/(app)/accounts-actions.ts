@@ -52,17 +52,10 @@ export async function readComposerAccounts(): Promise<Result<{ accounts: Compose
  * @returns How many drafts were saved, or why not (with each refused account's reason)
  */
 export async function saveForAccounts(input: { requestId: string; text: string; title?: string; versions: { channelId: string; text: string }[]; previousText?: string }): Promise<Result<{ saved: number; message: string }>> {
-  const { requestId, text, title, versions, previousText } = input ?? ({} as never);
-  if (previousText !== undefined && (typeof previousText !== "string" || previousText.length > MAX_TEXT)) return { ok: false, message: "Open the composer again and retry." };
-  if (typeof requestId !== "string" || !/^[0-9a-f-]{36}$/i.test(requestId)) return { ok: false, message: "Open the composer again and retry." };
-  if (typeof text !== "string" || !text.trim()) return { ok: false, message: "Write the post first." };
-  if (text.length > MAX_TEXT) return { ok: false, message: `Keep the post to ${MAX_TEXT.toLocaleString("en-US")} characters.` };
-  if (title !== undefined && (typeof title !== "string" || title.length > 200)) return { ok: false, message: "Shorten the title." };
-  if (!Array.isArray(versions) || !versions.length) return { ok: false, message: "Choose at least one account." };
-  if (versions.length > 10) return { ok: false, message: "Choose up to 10 accounts at a time." };
-  if (versions.some((v) => typeof v?.channelId !== "string" || typeof v?.text !== "string" || !v.text.trim() || v.text.length > MAX_TEXT)) return { ok: false, message: "Every chosen account needs text." };
-  const unfilled = [...new Set(versions.flatMap((v) => placeholdersIn(v.text)))];
-  if (unfilled.length) return { ok: false, message: `Fill in ${unfilled.map((n) => `{{${n}}}`).join(", ")} before saving.` };
+  // The input comes from the browser, so every part is checked before anything reaches Buffer.
+  const problem = postProblem(input) ?? versionsProblem(input?.versions);
+  if (problem) return { ok: false, message: problem };
+  const { requestId, text, title, versions, previousText } = input;
   try {
     const r = await bufferForReading();
     if (!r) return { ok: false, message: "Sign in with Buffer first." };
@@ -73,18 +66,9 @@ export async function saveForAccounts(input: { requestId: string; text: string; 
     const orgs = [...new Set(versions.map((v) => b.channels.find((c) => c.id === v.channelId)?.organizationId))];
     if (orgs.length !== 1 || !orgs[0]) return { ok: false, message: "Choose accounts from one Buffer organization." };
     const flow = contentItemFlow(r.userId);
-    // Keep the main text in Buffer first. The same requestId finds the same item again after an unclear answer.
-    const saved = await flow.save(b, { text: text.trim(), title: title?.trim() || undefined, requestId, organizationId: orgs[0] });
-    if (saved.isError || !saved.item) return { ok: false, message: plain(saved.text) };
-    let item = saved.item;
-    // A retry with edited text found the first item. Update it only while Buffer still holds what this composer sent
-    // last time; anything else is an edit made in Buffer, which is kept.
-    if (item.body.kind === "draft" && item.body.text.trim() !== text.trim()) {
-      if (previousText === undefined || item.body.text.trim() !== previousText.trim()) return { ok: false, message: "This post was changed in Buffer after your last save here, so Queue Pilot leaves it alone. Open it in Buffer, or close this and start a new post." };
-      const updated = await flow.save(b, { contentItemId: item.id, text: text.trim(), expectedText: previousText.trim() });
-      if (updated.isError || !updated.item) return { ok: false, message: plain(updated.text) };
-      item = updated.item;
-    }
+    const kept = await keepMainText(flow, b, { requestId, text, title, previousText, organizationId: orgs[0] });
+    if (!kept.ok) return kept;
+    const item = kept.item;
     const promoted = await flow.promote(b, { contentItemId: item.id, expectedDraftText: text.trim(), versions: versions.map((v) => ({ channelId: v.channelId, text: v.text.trim() })), byHand: true });
     revalidatePath("/", "layout");
     if (promoted.refused?.length) return { ok: false, message: "No account drafts were created. Fix these versions:", refused: promoted.refused };
@@ -96,6 +80,54 @@ export async function saveForAccounts(input: { requestId: string; text: string; 
     console.error(JSON.stringify({ event: "qp-save-for-accounts-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Buffer did not answer clearly. Press Save again: the same post is found, never saved twice." };
   }
+}
+
+type Flow = ReturnType<typeof contentItemFlow>;
+type Saved = NonNullable<Awaited<ReturnType<Flow["save"]>>["item"]>;
+
+/**
+ * Keeps the main text in Buffer first, as one content item. The same requestId finds the same item again after an
+ * unclear answer.
+ */
+async function keepMainText(flow: Flow, b: ItemBuffer, p: { requestId: string; text: string; title?: string; previousText?: string; organizationId: string }): Promise<{ ok: true; item: Saved } | { ok: false; message: string }> {
+  const { text, previousText } = p;
+  const saved = await flow.save(b, { text: text.trim(), title: p.title?.trim() || undefined, requestId: p.requestId, organizationId: p.organizationId });
+  if (saved.isError || !saved.item) return { ok: false, message: plain(saved.text) };
+  const item = saved.item;
+  // A retry with edited text found the first item. Update it only while Buffer still holds what this composer sent
+  // last time; anything else is an edit made in Buffer, which is kept.
+  if (item.body.kind !== "draft" || item.body.text.trim() === text.trim()) return { ok: true, item };
+  if (previousText === undefined || item.body.text.trim() !== previousText.trim()) return { ok: false, message: "This post was changed in Buffer after your last save here, so Queue Pilot leaves it alone. Open it in Buffer, or close this and start a new post." };
+  const updated = await flow.save(b, { contentItemId: item.id, text: text.trim(), expectedText: previousText.trim() });
+  if (updated.isError || !updated.item) return { ok: false, message: plain(updated.text) };
+  return { ok: true, item: updated.item };
+}
+
+/** What is wrong with the post itself (request id, main text, title, earlier text), or null. */
+function postProblem(input: { requestId: unknown; text: unknown; title?: unknown; previousText?: unknown } | undefined): string | null {
+  if (!input || typeof input !== "object") return "Open the composer again and retry.";
+  const { requestId, text, title, previousText } = input;
+  if (previousText !== undefined && (typeof previousText !== "string" || previousText.length > MAX_TEXT)) return "Open the composer again and retry.";
+  if (typeof requestId !== "string" || !/^[0-9a-f-]{36}$/i.test(requestId)) return "Open the composer again and retry.";
+  if (typeof text !== "string" || !text.trim()) return "Write the post first.";
+  if (text.length > MAX_TEXT) return `Keep the post to ${MAX_TEXT.toLocaleString("en-US")} characters.`;
+  if (title !== undefined && (typeof title !== "string" || title.length > 200)) return "Shorten the title.";
+  return null;
+}
+
+/** What is wrong with the chosen accounts' versions (none, too many, empty, unfilled placeholders), or null. */
+function versionsProblem(versions: unknown): string | null {
+  if (!Array.isArray(versions) || !versions.length) return "Choose at least one account.";
+  if (versions.length > 10) return "Choose up to 10 accounts at a time.";
+  if (!versions.every(isVersion)) return "Every chosen account needs text.";
+  const unfilled = [...new Set(versions.flatMap((v) => placeholdersIn(v.text)))];
+  return unfilled.length ? `Fill in ${unfilled.map((n) => `{{${n}}}`).join(", ")} before saving.` : null;
+}
+
+/** One account's version as the browser sent it: a channel id and non-empty text within the limit. */
+function isVersion(v: unknown): v is { channelId: string; text: string } {
+  if (typeof v !== "object" || v === null || !("channelId" in v) || !("text" in v)) return false;
+  return typeof v.channelId === "string" && typeof v.text === "string" && v.text.trim() !== "" && v.text.length <= MAX_TEXT;
 }
 
 /** The flow's assistant-facing text, without the ids and markup a person does not need. */

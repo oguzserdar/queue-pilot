@@ -152,7 +152,7 @@ async function proposeFirstRulesForScope(writer: LanguageModel, judges: Judges, 
   // Prove every habit by meaning against every post of its network, and against CONTRAST on that network; one judge
   // call per post judges all the rules that apply to it. The check is strict: a post that lacks the habit has not
   // followed it, even where the habit would not fit that post.
-  const candidates: Rule[] = habits.map((h, i) => ({ ...h.rule, id: `first-${i}` }) as Rule);
+  const candidates: Rule[] = habits.map((h, i): Rule => ({ ...h.rule, id: `first-${i}` }));
   const habitNetworks = [...new Set(habits.map((h) => h.network))];
   const contrast = habitNetworks.flatMap((network) => CONTRAST.map((t, j) => ({ slotId: `contrast-${network}-${j}`, text: t, network })));
   const verdicts = candidates.length

@@ -77,3 +77,26 @@ describe("triageFromBuffer repeated fixes", () => {
     expect(TRIAGE_GROUPS[0]).toEqual({ kind: "repeat", label: "Fixes you repeated" })
   })
 });
+
+describe("triageFromBuffer posts taken off the schedule", () => {
+  const draft = post("a", "draft", "2026-11-10T09:00:00Z", "Pulled back");
+  const input = (pulledBack?: string[]) => triageFromBuffer({ channels: [channel] as never, posts: [draft] as never, now, timeZone: "UTC", checks: { a: { state: "ok" } } as never, comments: [], pulledBack });
+
+  it("lists a post the person took off the schedule in its own group, never as ready to approve", () => {
+    const items = input(["a"]);
+    expect(items.filter((i) => i.kind === "approve")).toEqual([]);
+    const taken = items.filter((i) => i.kind === "taken");
+    expect(taken).toHaveLength(1);
+    expect(taken[0].run).toBeUndefined();
+    expect(taken[0].href).toBe("/week");
+  });
+
+  it("control: the same draft without the mark is ready to approve", () => {
+    expect(input().filter((i) => i.kind === "approve")).toHaveLength(1);
+  });
+
+  it("names the group and puts it right after Ready to approve", () => {
+    const kinds = TRIAGE_GROUPS.map((g) => g.kind);
+    expect(kinds.indexOf("taken" as never)).toBe(kinds.indexOf("approve") + 1);
+  });
+});

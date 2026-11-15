@@ -13,7 +13,7 @@ import type { OpenSlot } from "./open-slots";
 import type { Post } from "./buffer/queries";
 const pg = await migratedPglite(); const testDb = drizzle(pg);
 vi.mock("../db", () => ({ db: () => testDb }));
-const fake = vi.hoisted(() => ({ query: vi.fn(), owned: vi.fn(), model: null as unknown, giveBack: vi.fn(), settle: vi.fn() }));
+const fake = vi.hoisted(() => ({ query: vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(), owned: vi.fn<(userId: string, drafts: import("./written-store").Written[]) => Promise<void>>(), model: null as unknown, giveBack: vi.fn<import("./judge-model").Ai["giveBack"]>(), settle: vi.fn<import("./judge-model").Ai["settle"]>() }));
 vi.mock("./buffer/client", async original => ({ ...await original<typeof import("./buffer/client")>(), bufferQuery: fake.query }));
 vi.mock("./rules-store", () => ({ postgresRulesStore: () => ({ list: async () => [] }) }));
 vi.mock("./sources-store", () => ({ postgresSourceStore: () => ({ list: async () => [], markUsed: async () => {} }) }));
@@ -50,7 +50,7 @@ it("saves a 1:59:50 closing quote as a draft, retains both captions, and detects
  const saved = await saveDraftsForUser("owner", "fixture-token", { title: "Closing finding", drafts: drafts.map(d => ({ ...d, snapshotId: snapshot.id })), open: [slot] });
  expect(saved.saved).toHaveLength(1); expect(saved.flags).toEqual([]);
  const write = fake.query.mock.calls.find(c => c[1].includes("createContentItem"))!;
- expect(write[2].input.posts[0]).toMatchObject({ text, saveToDraft: true });
+ expect((write[2] as { input: { posts: unknown[] } }).input.posts[0]).toMatchObject({ text, saveToDraft: true });
  const [evidence] = await store.evidenceForPosts("owner", ["podcast-post"]);
  expect(evidence).toMatchObject({ quote, locator: "t=7190" });
  expect(sourceTimestamp(evidence.locator!)).toBe("1:59:50");

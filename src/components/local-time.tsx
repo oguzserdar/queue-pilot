@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useReaderClock } from "./reader-clock";
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [["minute", 60], ["hour", 3600], ["day", 86400]];
 
@@ -20,13 +20,10 @@ function relative(iso: string, now: number): string | null {
  * on hover, falling back to the date after a week.
  */
 export function LocalTime({ iso, options, fallback = "", relative: rel = false }: { iso: string | null; options: Intl.DateTimeFormatOptions; fallback?: string; relative?: boolean }) {
-  const [text, setText] = useState("");
-  const [exact, setExact] = useState<string | undefined>();
-  useEffect(() => {
-    if (!iso) { setText(fallback); return; }
-    const full = new Date(iso).toLocaleString(undefined, options);
-    setText(rel ? relative(iso, Date.now()) ?? full : full);
-    setExact(rel ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : undefined);
-  }, [iso, options, fallback, rel]);
-  return <time dateTime={iso ?? undefined} title={exact}>{text}</time>;
+  const now = useReaderClock();
+  if (now === null) return <time dateTime={iso ?? undefined} />;
+  if (!iso) return <time>{fallback}</time>;
+  const full = new Date(iso).toLocaleString(undefined, options);
+  const exact = rel ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : undefined;
+  return <time dateTime={iso} title={exact}>{rel ? relative(iso, now) ?? full : full}</time>;
 }

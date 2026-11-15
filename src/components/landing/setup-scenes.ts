@@ -55,19 +55,24 @@ function field(g: G) {
  * one-pixel ear flap down each side, and gold wings on the belly. A row of face always separates the cap and flaps
  * from the eyes, whichever way they look.
  */
+/** How far each row of the pilot's round shape is pulled in from the sides: outline, body fill, and cap. */
+const OUTLINE_INSET: Partial<Record<number, number>> = { 0: 3, 1: 1, 14: 1, 15: 3 };
+const BODY_INSET: Partial<Record<number, number>> = { 1: 3, 2: 2, 13: 2, 14: 3 };
+const CAP_INSET: Partial<Record<number, number>> = { 1: 3, 2: 2 };
+
 function pilot(g: G, x: number, y: number, closed: boolean, look = 0, lift = 0) {
   oval(g, x + 8, y + 17, 7 - Math.abs(lift), 1, C.shadow);
   y += lift;
   for (let r = 0; r < 16; r++) {
-    const inset = r === 0 || r === 15 ? 3 : r === 1 || r === 14 ? 1 : 0;
+    const inset = OUTLINE_INSET[r] ?? 0;
     px(g, x + inset, y + r, 16 - inset * 2, 1, C.ink);
   }
   for (let r = 1; r < 15; r++) {
-    const inset = r === 1 || r === 14 ? 3 : r === 2 || r === 13 ? 2 : 1;
+    const inset = BODY_INSET[r] ?? 1;
     px(g, x + inset, y + r, 16 - inset * 2, 1, r >= 11 ? C.deep : C.crimson);
   }
   for (let r = 1; r <= 3; r++) {
-    const inset = r === 1 ? 3 : r === 2 ? 2 : 1;
+    const inset = CAP_INSET[r] ?? 1;
     px(g, x + inset, y + r, 16 - inset * 2, 1, C.cap);
   }
   px(g, x + 1, y + 4, 1, 4, C.cap); px(g, x + 14, y + 4, 1, 4, C.cap);

@@ -20,11 +20,11 @@ const fieldType = (type: string, field: string) => typeSection(REFERENCE, type).
 /** Required fields: non-null with no documented default. */
 const required = (type: string) => [...typeSection(REFERENCE, type).matchAll(/^- `(\w+)`: `[^`]*!`(?! \(default)/gm)].map((m) => m[1]);
 
-type Call = { query: string; variables: Record<string, any> };
+type Call = { query: string; variables: { input: { filter: Record<string, unknown>; draft: Record<string, unknown>; posts: Record<string, unknown>[] } & Record<string, unknown> } };
 function fake(answers: unknown[]) {
   const calls: Call[] = [];
-  const run = vi.fn(async (_t: string, query: string, variables?: Record<string, unknown>) => {
-    calls.push({ query, variables: variables ?? {} });
+  const run = vi.fn<(t: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async (_t: string, query: string, variables?: Record<string, unknown>) => {
+    calls.push({ query, variables: (variables ?? {}) as Call["variables"] });
     return answers.shift();
   }) as unknown as typeof import("./client").bufferQuery;
   return { run, calls };
@@ -93,7 +93,7 @@ describe("request documents match Buffer's published types", () => {
     const unknown: string[] = [];
     for (const c of calls) {
       const [, inputType] = c.query.match(/\$input: (\w+)!/) ?? [];
-      expect(() => fieldsOf(inputType), inputType).not.toThrow();
+      expect(() => fieldsOf(inputType)).not.toThrow();
       for (const k of Object.keys(c.variables.input)) if (!fieldsOf(inputType).has(k)) unknown.push(`${inputType}.${k}`);
     }
     const nested: [Record<string, unknown>, string][] = [
@@ -113,7 +113,7 @@ describe("promotion only ever creates drafts", () => {
     const need = required("CreatePostInput");
     expect(need).toEqual(expect.arrayContaining(["channelId", "mode", "schedulingType"]));
     for (const p of inputs) {
-      for (const f of need) expect(p, f).toHaveProperty(f);
+      for (const f of need) expect(p).toHaveProperty(f);
       expect(p).toMatchObject({ saveToDraft: true, needsApproval: false, assets: [], aiAssisted: true });
     }
     expect(inputs[0]).toMatchObject({ mode: "addToQueue" });

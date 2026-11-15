@@ -38,7 +38,7 @@ describe("itemsFromXml", () => {
   });
 
   it("throws on text that is not a feed", () => {
-    expect(() => itemsFromXml("<html><body>hello</body></html>")).toThrow();
+    expect(() => itemsFromXml("<html><body>hello</body></html>")).toThrow("The XML document could not be parsed as a feed");
   });
 });
 

@@ -83,5 +83,5 @@ export async function runEchoes(plan: EchoSend[], deps: EchoDeps): Promise<EchoR
 
 /** The first image on a post, for the copy; videos and documents are linked through the post's own link instead. */
 export function imageOf(post: Post): string | null {
-  return post.assets?.find((a) => a.type === "image" && /^https:\/\//.test(a.source))?.source ?? null;
+  return post.assets?.find((a) => a.type === "image" && a.source.startsWith("https://"))?.source ?? null;
 }

@@ -4,8 +4,10 @@
  * Buffer tokens in its account table, encrypted (encryptOAuthTokens). The Buffer client id and secret can be
  * changed in /admin at runtime, so the auth instance is built lazily and rebuilt when those keys change.
  */
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { APIError } from "better-auth/api";
 import { admin, genericOAuth, jwt } from "better-auth/plugins";
+import { existingAccountMail, mailConfig, resetMail, smtpMailer, verifyMail, type Mailer } from "./mail";
 import { mcp } from "@better-auth/mcp";
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
@@ -31,7 +33,7 @@ export const mcpResource = (baseURL: string) => `${baseURL}/api/mcp`;
  */
 export const ACCOUNT_OPTIONS = { encryptOAuthTokens: true, accountLinking: { disableImplicitLinking: true } } as const;
 
-export function buildAuth(opts: { clientId: string; clientSecret?: string; secret: string; baseURL: string }) {
+export function buildAuth(opts: { clientId: string; clientSecret?: string; secret: string; baseURL: string; mail?: Mailer | null }) {
   return betterAuth({
     secret: opts.secret,
     baseURL: opts.baseURL,
@@ -78,8 +80,10 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
       }),
     },
     account: ACCOUNT_OPTIONS,
-    // Buffer is the only way in: no passwords, no email sign-up.
-    emailAndPassword: { enabled: false },
+    // Email accounts work only when the server has a mail sender: sign-up needs a verified email and a reset needs a
+    // mailed link, and neither is ever skipped. Without one, Buffer is the only way in, as in 1.0.
+    emailAndPassword: opts.mail ? emailPasswordOptions(opts.mail, opts.baseURL) : { enabled: false },
+    emailVerification: opts.mail ? emailVerificationOptions(opts.mail) : undefined,
     // Buffer refresh tokens are single-use, so every refresh goes through bufferAccessToken's lock. These routes
     // would let a signed-in browser refresh outside it. Server calls through auth.api are not affected.
     // update-user is also closed: name and picture come only from Buffer at sign-in, so a person cannot point their
@@ -146,6 +150,40 @@ export function buildAuth(opts: { clientId: string; clientSecret?: string; secre
   });
 }
 
+/** Email sign-up and password reset, used only when the server has a mail sender. */
+function emailPasswordOptions(mail: Mailer, baseURL: string): NonNullable<BetterAuthOptions["emailAndPassword"]> {
+  return {
+    enabled: true,
+    // No session until the emailed link is opened.
+    autoSignIn: false,
+    requireEmailVerification: true,
+    minPasswordLength: 10,
+    maxPasswordLength: 128,
+    resetPasswordTokenExpiresIn: 60 * 60,
+    // A reset signs the person out everywhere else, so a stolen session ends with it.
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url }) => mail.send(resetMail(user.email, url)),
+    // Signing up with a used address answers like a new sign-up; the owner of the address gets a notice instead.
+    onExistingUserSignUp: async ({ user }) => mail.send(existingAccountMail(user.email, `${baseURL}/sign-in`)),
+  };
+}
+
+/** The emailed verification link, used only when the server has a mail sender. */
+function emailVerificationOptions(mail: Mailer): NonNullable<BetterAuthOptions["emailVerification"]> {
+  return {
+    // One inbox, one account: a +alias or Gmail dot variant of a verified account cannot become a second one.
+    beforeEmailVerification: async (u) => {
+      const { inboxTaken } = await import("./canonical-email");
+      if (await inboxTaken(u.email, u.id)) throw new APIError("FORBIDDEN", { message: "This inbox already has a Queue Pilot account. Sign in to that one, or reset its password." });
+    },
+    sendOnSignUp: true,
+    sendOnSignIn: true,
+    autoSignInAfterVerification: true,
+    expiresIn: 60 * 60,
+    sendVerificationEmail: async ({ user, url }) => mail.send(verifyMail(user.email, url)),
+  };
+}
+
 type Auth = ReturnType<typeof buildAuth>;
 let cached: { key: string; auth: Auth } | null = null;
 
@@ -155,9 +193,11 @@ export async function getAuth(): Promise<Auth | null> {
   const r = await readConfig();
   if (!r.ok) return null;
   const baseURL = new URL(r.env.BUFFER_REDIRECT_URI).origin;
-  const key = `${r.env.BUFFER_CLIENT_ID}|${r.env.BUFFER_CLIENT_SECRET ?? ""}|${baseURL}`;
+  const smtp = mailConfig();
+  const mail = smtp ? smtpMailer(smtp) : null;
+  const key = `${r.env.BUFFER_CLIENT_ID}|${r.env.BUFFER_CLIENT_SECRET ?? ""}|${baseURL}|${mail?.key ?? "no-mail"}`;
   if (cached?.key !== key) {
-    cached = { key, auth: buildAuth({ clientId: r.env.BUFFER_CLIENT_ID, clientSecret: r.env.BUFFER_CLIENT_SECRET, secret: r.env.SESSION_SECRET, baseURL }) };
+    cached = { key, auth: buildAuth({ clientId: r.env.BUFFER_CLIENT_ID, clientSecret: r.env.BUFFER_CLIENT_SECRET, secret: r.env.SESSION_SECRET, baseURL, mail }) };
   }
   return cached.auth;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { CommandPalette, type CommandItem } from "@/registry/components/command-palette/command-palette";
 import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
@@ -30,6 +30,70 @@ export function readSingleKeys(): boolean {
   }
 }
 
+/** Follows the single-key switch: changed on this page (SINGLE_KEYS_EVENT) or in another tab (storage). */
+function subscribeSingleKeys(onChange: () => void): () => void {
+  window.addEventListener(SINGLE_KEYS_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => { window.removeEventListener(SINGLE_KEYS_EVENT, onChange); window.removeEventListener("storage", onChange); };
+}
+
+/** The server has no browser storage: shortcuts start on, as they do for anyone who never switched them off. */
+const singleKeysOnServer = () => true;
+
+type Platform = ReturnType<typeof usePlatform>;
+
+/** The dialog a Cmd/Ctrl combination opens (the navigator or the shortcut help), or null when the press is not one. */
+function comboDialog(e: KeyboardEvent, platform: Platform): "palette" | "help" | null {
+  for (const s of SHORTCUTS) {
+    if (s.sequence || !("action" in s.run) || !s.keys[0].startsWith("mod+")) continue;
+    const { action } = s.run;
+    if ((action === "palette" || action === "help") && matchesShortcut(e, s.keys[0], platform)) return action;
+  }
+  return null;
+}
+
+/** A shortcut's keys as caps: a sequence with "then" between its keys, else its one key or combination. */
+function keyCaps(s: Shortcut, platform: Platform) {
+  if (s.sequence) return s.keys.map((k, i) => <Fragment key={k + i}>{i > 0 && <span className={styles.then}>then</span>}<Kbd size="sm">{k.toUpperCase()}</Kbd></Fragment>);
+  if (s.keys[0] === "?") return <Kbd size="sm">?</Kbd>;
+  return <Kbd size="sm">{formatShortcut(s.keys[0], platform).text}</Kbd>;
+}
+
+const HELP_GROUPS = ["General", "Write", "Go to"] as const;
+
+/** The shortcut help: every shortcut by group, with the single-key switch. Single keys show Off while it is off. */
+function ShortcutHelp({ singleKeys, platform, onSingleKeys }: { singleKeys: boolean; platform: Platform; onSingleKeys: (on: boolean) => void }) {
+  return (
+    <DialogContent className={styles.helpDialog} title="Keyboard shortcuts" description="Shortcuts work anywhere except while you type.">
+      <div className={styles.groups}>
+        {HELP_GROUPS.map((g) => (
+          <section key={g} className={styles.group} aria-label={g}>
+            <h3 className={styles.groupTitle}>{g}</h3>
+            <ul className={styles.rows}>
+              {SHORTCUTS.filter((s) => s.group === g && s.id !== "help-key").map((s) => {
+                const off = !singleKeys && (s.sequence || s.keys[0] === "?");
+                return (
+                  <li key={s.id} className={styles.row} data-off={off || undefined}>
+                    <span>{s.label}</span>
+                    <span className={styles.keys}>
+                      {s.id === "help" ? <><Kbd size="sm">?</Kbd><span className={styles.then}>or</span>{keyCaps(s, platform)}</> : keyCaps(s, platform)}
+                      {off && <span className={styles.offNote}>Off</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+      <div className={styles.switchRow}>
+        <Switch label="Single-key shortcuts" checked={singleKeys} onCheckedChange={onSingleKeys} />
+        <p className={styles.switchNote}>Turn off if you use voice control. Shortcuts with {platform === "mac" ? "⌘" : "Ctrl"} keep working.</p>
+      </div>
+    </DialogContent>
+  );
+}
+
 /**
  * The app's keyboard: one listener for the whole app, the shortcut help (? or Cmd/Ctrl+/) and the quick navigator
  * (Cmd/Ctrl+K). Single-key shortcuts (G then a letter, N then P, ?) never fire while typing or inside a dialog, and can be
@@ -40,10 +104,11 @@ export function KeyboardShortcuts() {
   const path = usePathname();
   const platform = usePlatform();
   const [open, setOpen] = useState<"palette" | "help" | null>(null);
-  const [singleKeys, setSingleKeys] = useState(true);
+  const stored = useSyncExternalStore(subscribeSingleKeys, readSingleKeys, singleKeysOnServer);
+  // Set by the switch here, so it holds for this visit even when the browser refuses to store it.
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const singleKeys = chosen ?? stored;
   const matcher = useRef(sequenceMatcher());
-
-  useEffect(() => setSingleKeys(readSingleKeys()), []);
 
   const run = (s: Shortcut) => {
     if ("to" in s.run) return router.push(s.run.to);
@@ -59,11 +124,10 @@ export function KeyboardShortcuts() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.isComposing) return;
-      const combo = SHORTCUTS.find((s) => !s.sequence && "action" in s.run && s.keys[0].startsWith("mod+") && matchesShortcut(e, s.keys[0], platform));
-      if (combo) {
+      const which = comboDialog(e, platform);
+      if (which) {
         e.preventDefault();
         matcher.current.reset();
-        const which = (combo.run as { action: "palette" | "help" }).action;
         setOpen((o) => (o === which ? null : which));
         return;
       }
@@ -87,7 +151,7 @@ export function KeyboardShortcuts() {
   });
 
   const toggleSingleKeys = (on: boolean) => {
-    setSingleKeys(on);
+    setChosen(on);
     try {
       localStorage.setItem(SINGLE_KEYS, on ? "on" : "off");
     } catch {}
@@ -114,14 +178,6 @@ export function KeyboardShortcuts() {
     [platform],
   );
 
-  const groups = ["General", "Write", "Go to"] as const;
-  const keyCaps = (s: Shortcut) =>
-    s.sequence
-      ? s.keys.map((k, i) => <Fragment key={k + i}>{i > 0 && <span className={styles.then}>then</span>}<Kbd size="sm">{k.toUpperCase()}</Kbd></Fragment>)
-      : s.keys[0] === "?"
-        ? <Kbd size="sm">?</Kbd>
-        : <Kbd size="sm">{formatShortcut(s.keys[0], platform).text}</Kbd>;
-
   return (
     <>
       <Dialog open={open === "palette"} onOpenChange={(o) => setOpen(o ? "palette" : null)}>
@@ -145,33 +201,7 @@ export function KeyboardShortcuts() {
       </Dialog>
       <Dialog open={open === "help"} onOpenChange={(o) => setOpen(o ? "help" : null)}>
         {open === "help" && (
-          <DialogContent className={styles.helpDialog} title="Keyboard shortcuts" description="Shortcuts work anywhere except while you type.">
-            <div className={styles.groups}>
-              {groups.map((g) => (
-                <section key={g} className={styles.group} aria-label={g}>
-                  <h3 className={styles.groupTitle}>{g}</h3>
-                  <ul className={styles.rows}>
-                    {SHORTCUTS.filter((s) => s.group === g && s.id !== "help-key").map((s) => {
-                      const off = !singleKeys && (s.sequence || s.keys[0] === "?");
-                      return (
-                        <li key={s.id} className={styles.row} data-off={off || undefined}>
-                          <span>{s.label}</span>
-                          <span className={styles.keys}>
-                            {s.id === "help" ? <><Kbd size="sm">?</Kbd><span className={styles.then}>or</span>{keyCaps(s)}</> : keyCaps(s)}
-                            {off && <span className={styles.offNote}>Off</span>}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              ))}
-            </div>
-            <div className={styles.switchRow}>
-              <Switch label="Single-key shortcuts" checked={singleKeys} onCheckedChange={toggleSingleKeys} />
-              <p className={styles.switchNote}>Turn off if you use voice control. Shortcuts with {platform === "mac" ? "⌘" : "Ctrl"} keep working.</p>
-            </div>
-          </DialogContent>
+          <ShortcutHelp singleKeys={singleKeys} platform={platform} onSingleKeys={toggleSingleKeys} />
         )}
       </Dialog>
     </>

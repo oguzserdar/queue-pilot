@@ -39,7 +39,7 @@ type Hunk = { removed: string[]; added: string[]; atEnd: boolean };
 function hunks(a: string[], b: string[]): Hunk[] {
   const A = a.map(norm);
   const B = b.map(norm);
-  const L = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  const L = Array.from({ length: a.length + 1 }, () => Array.from({ length: b.length + 1 }, () => 0));
   for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
   const out: Hunk[] = [];
   let i = 0;

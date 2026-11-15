@@ -53,7 +53,7 @@ describe("sendDirectPost", () => {
     await sendDirectPost("u1", "key-0001", [dc], d);
     const again = await sendDirectPost("u1", "key-0001", [dc], d);
     expect(sent).toHaveLength(1);
-    expect(again.results).toEqual([{ kind: "discord", label: dc.label, status: "sent", link: "https://discord.com/channels/g/c1/m1", error: null }]);
+    expect(again.results).toEqual([{ kind: "discord", target: "c1", label: dc.label, status: "sent", link: "https://discord.com/channels/g/c1/m1", error: null }]);
   });
 
   it("sends a new post with the same text when it is a new form", async () => {
@@ -91,7 +91,7 @@ describe("resendFailed", () => {
     const { d, sent } = deps({ post: async (item) => { if (fail) throw new Refused("Missing Permissions"); sent.push(item); return { link: null }; } });
     await sendDirectPost("u1", "key-0001", [dc], d);
     fail = false;
-    const [a, b] = await Promise.all([resendFailed("u1", await postIdFor("u1", "key-0001"), "discord", d), resendFailed("u1", await postIdFor("u1", "key-0001"), "discord", d)]);
+    const [a, b] = await Promise.all([resendFailed("u1", await postIdFor("u1", "key-0001"), { kind: "discord", target: "" }, d), resendFailed("u1", await postIdFor("u1", "key-0001"), { kind: "discord", target: "" }, d)]);
     expect([a?.status, b]).toEqual(["sent", null]);
     expect(sent.map((s) => s.text)).toEqual([dc.text]);
   });
@@ -99,8 +99,8 @@ describe("resendFailed", () => {
   it("never resends a destination that may already have landed, or someone else's", async () => {
     const { d } = deps({ post: async () => { throw new DOMException("timeout", "TimeoutError"); } });
     await sendDirectPost("u1", "key-0001", [dc], d);
-    expect(await resendFailed("u1", await postIdFor("u1", "key-0001"), "discord", d)).toBeNull();
-    expect(await resendFailed("u2", await postIdFor("u1", "key-0001"), "discord", d)).toBeNull();
+    expect(await resendFailed("u1", await postIdFor("u1", "key-0001"), { kind: "discord", target: "" }, d)).toBeNull();
+    expect(await resendFailed("u2", await postIdFor("u1", "key-0001"), { kind: "discord", target: "" }, d)).toBeNull();
   });
 });
 

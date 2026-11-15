@@ -9,24 +9,24 @@ const page = (ids: string[], next: string | null) => ({
 
 describe("listPostsDue", () => {
   it("follows cursors until the last page", async () => {
-    const q = vi.fn()
+    const q = vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>()
       .mockResolvedValueOnce(page(["p1", "p2"], "cur1"))
       .mockResolvedValueOnce(page(["p3"], null));
-    const r = await listPostsDue("t", "org", { start: "2026-11-02T00:00:00Z", end: "2026-11-08T23:59:59Z" }, q);
+    const r = await listPostsDue("t", "org", { start: "2026-11-02T00:00:00Z", end: "2026-11-08T23:59:59Z" }, q as never);
     expect(r.posts.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
     expect(r.truncated).toBe(false);
-    expect(q.mock.calls[1][2].after).toBe("cur1");
+    expect(q.mock.calls[1][2]?.after).toBe("cur1");
   });
 
   it("sends the date range as a dueAt filter, sorted by dueAt", async () => {
-    const q = vi.fn().mockResolvedValueOnce(page([], null));
-    await listPostsDue("t", "org", { start: "S", end: "E" }, q);
-    expect(q.mock.calls[0][2].input).toEqual({ organizationId: "org", filter: { dueAt: { start: "S", end: "E" } }, sort: [{ field: "dueAt", direction: "asc" }] });
+    const q = vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>().mockResolvedValueOnce(page([], null));
+    await listPostsDue("t", "org", { start: "S", end: "E" }, q as never);
+    expect(q.mock.calls[0][2]?.input).toEqual({ organizationId: "org", filter: { dueAt: { start: "S", end: "E" } }, sort: [{ field: "dueAt", direction: "asc" }] });
   });
 
   it("stops after the page limit and says so", async () => {
     let n = 0;
-    const q = vi.fn(async () => page([`p${n++}`], `cur${n}`));
+    const q = vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async () => page([`p${n++}`], `cur${n}`));
     const r = await listPostsDue("t", "org", { start: "S", end: "E" }, q as never);
     // Five pages of Buffer's largest page (100): the same 500-post ceiling as ten pages of 50, in half the requests.
     expect(q).toHaveBeenCalledTimes(5);
@@ -36,8 +36,8 @@ describe("listPostsDue", () => {
 
 describe("listChannels", () => {
   it("asks for the posting schedule and channel health", async () => {
-    const q = vi.fn().mockResolvedValueOnce({ channels: [] });
-    await listChannels("t", "org", q);
+    const q = vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>().mockResolvedValueOnce({ channels: [] });
+    await listChannels("t", "org", q as never);
     const query = q.mock.calls[0][1] as string;
     for (const f of ["postingSchedule { day paused times }", "timezone", "isDisconnected", "isLocked", "isQueuePaused"]) expect(query).toContain(f);
   });
@@ -47,25 +47,25 @@ describe("listChannels", () => {
 describe("fresh approval reads", () => {
   it("reads every requested post beyond the alias batch limit", async () => {
     const ids = Array.from({ length: MAX_ALIASES * 2 + 5 }, (_, i) => `draft-${i}`);
-    const q = vi.fn(async (_token, _query, variables) => Object.fromEntries(Object.entries(variables).map(([key, input]) => [`p${key.slice(1)}`, post((input as { id: string }).id)])));
+    const q = vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async (_token, _query, variables) => Object.fromEntries(Object.entries(variables!).map(([key, input]) => [`p${key.slice(1)}`, post((input as { id: string }).id)])));
     expect((await readPostsNow("token", ids, q as never)).map(p => p.id)).toEqual(ids);
     expect(q).toHaveBeenCalledTimes(3);
-    expect(q.mock.calls.every(call => Object.keys(call[2]).length <= MAX_ALIASES)).toBe(true);
+    expect(q.mock.calls.every(call => Object.keys(call[2]!).length <= MAX_ALIASES)).toBe(true);
   });
 
   it("leaves out a post deleted in Buffer and still returns the others", async () => {
     // Buffer types post as non-null: one missing id fails the whole batch with a not-found error.
-    const q = vi.fn(async (_token, _query, variables) => {
-      const ids = Object.values(variables).map((v) => (v as { id: string }).id);
+    const q = vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async (_token, _query, variables) => {
+      const ids = Object.values(variables!).map((v) => (v as { id: string }).id);
       if (ids.includes("gone")) throw new BufferApiError("Post not found", 200, "NOT_FOUND");
-      return Object.fromEntries(Object.entries(variables).map(([key, input]) => [`p${key.slice(1)}`, post((input as { id: string }).id)]));
+      return Object.fromEntries(Object.entries(variables!).map(([key, input]) => [`p${key.slice(1)}`, post((input as { id: string }).id)]));
     });
     expect((await readPostsNow("token", ["a", "gone", "b"], q as never)).map(p => p.id)).toEqual(["a", "b"]);
     expect(q).toHaveBeenCalledTimes(4);
   });
 
   it("still throws when a single read fails for another reason", async () => {
-    const q = vi.fn(async () => { throw new BufferApiError("Something else broke", 200, "INTERNAL_SERVER_ERROR"); });
+    const q = vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async () => { throw new BufferApiError("Something else broke", 200, "INTERNAL_SERVER_ERROR"); });
     await expect(readPostsNow("token", ["a", "b"], q as never)).rejects.toThrow("Something else broke");
   });
 });

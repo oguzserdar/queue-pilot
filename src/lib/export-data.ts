@@ -92,7 +92,7 @@ export async function exportUserData(userId: string, now: Date = new Date()) {
     playbook: { inheritance: inheritance[0]?.settings ?? {}, rules: strip(rules), dismissedOffers: strip(dismissed) },
     voice: { examples: strip(voiceExamples), notes: strip(voiceNotes) },
     homeOffersSetAside: strip(offers),
-    sources: { feeds: strip(sources), used: strip(sourcesUsed), material: strip(materials), snapshots: strip(snapshots).map(({ metadata, ...s }) => { const { segments: _s, ...rest } = (metadata ?? {}) as Record<string, unknown>; return { ...s, metadata: rest }; }) },
+    sources: { feeds: strip(sources), used: strip(sourcesUsed), material: strip(materials), snapshots: strip(snapshots).map(({ metadata, ...s }) => { const { segments: _s, ...rest } = metadata ?? {}; return { ...s, metadata: rest }; }) },
     copies: { destinations: strip(copies), sent: strip(copiedPosts), posts: strip(posts) },
     draftsQueuePilotWrote: strip(drafts),
     draftEvidence: strip(evidence),

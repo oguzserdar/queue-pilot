@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import type { OpenSlot } from "./open-slots";
-const m = vi.hoisted(() => ({ latest: vi.fn(), capture: vi.fn(), byId: vi.fn(), record: vi.fn(), owned: vi.fn(), get: vi.fn(), save: vi.fn() }));
+import type { SavedDraft } from "./save-drafts";
+const m = vi.hoisted(() => ({ latest: vi.fn<typeof import("./source-store").latestSource>(), capture: vi.fn<typeof import("./source-store").captureSource>(), byId: vi.fn<typeof import("./source-store").sourceById>(), record: vi.fn<typeof import("./source-store").recordEvidence>(), owned: vi.fn<ReturnType<typeof import("./written-store").postgresWrittenStore>["record"]>(), get: vi.fn<ReturnType<typeof import("./material-store").postgresMaterialStore>["get"]>(), save: vi.fn<typeof import("./save-drafts").saveDrafts>() }));
 vi.mock("./source-store", () => ({ latestSource: m.latest, captureSource: m.capture, sourceById: m.byId, recordEvidence: m.record }));
 vi.mock("./material-store", () => ({ postgresMaterialStore: () => ({ get: m.get }) }));
 vi.mock("./rules-store", () => ({ postgresRulesStore: () => ({ list: async () => [] }) }));
@@ -9,14 +10,15 @@ vi.mock("./written-store", () => ({ postgresWrittenStore: () => ({ record: m.own
 vi.mock("./buffer/snapshot-store", () => ({ postgresSnapshotStore: () => ({ get: async () => null }) }));
 vi.mock("./save-drafts", () => ({ saveDrafts: m.save }));
 const { saveDraftsForUser } = await import("./save-for-user");
+type Snapshot = Awaited<ReturnType<typeof import("./source-store").sourceById>>;
 const open = ["a", "b"].map(id => ({ id, service: "twitter" }) as OpenSlot);
 const draft = (slotId = "a") => ({ slotId, text: "The limit is 500." });
 beforeEach(() => {
- vi.resetAllMocks(); m.record.mockResolvedValue(undefined); m.owned.mockResolvedValue(undefined); m.latest.mockResolvedValue(null);
+ vi.resetAllMocks(); m.record.mockResolvedValue(undefined); m.owned.mockResolvedValue(undefined); m.latest.mockResolvedValue(null as unknown as Snapshot);
  m.get.mockImplementation(async (_u, key) => ({ key, text: "The limit is 500.", title: "Release", link: "https://example.com" }));
- m.capture.mockImplementation(async (_u, i) => ({ id: i.sourceKey, text: i.text, metadata: {} }));
- m.byId.mockResolvedValue({ id: "snap", text: "The limit is 500.", metadata: {} });
- m.save.mockImplementation(async (_t, i) => ({ saved: i.drafts.map((d: { slotId: string; text: string }) => ({ ...d, postId: d.slotId, network: "twitter" })), refused: [], requests: 1 }));
+ m.capture.mockImplementation(async (_u, i) => { const input = i as { sourceKey: string; text: string }; return { id: input.sourceKey, text: input.text, metadata: {} } as Snapshot; });
+ m.byId.mockResolvedValue({ id: "snap", text: "The limit is 500.", metadata: {} } as Snapshot);
+ m.save.mockImplementation(async (_t, i) => ({ saved: i.drafts.map((d: { slotId: string; text: string }) => ({ ...d, postId: d.slotId, network: "twitter" }) as SavedDraft), refused: [], requests: 1 }));
 });
 it("captures an owned material key when an older caller has not read it first", async () => {
  const r = await saveDraftsForUser("u", "t", { title: "Old client", drafts: [draft()], open, sourceKeys: ["material:" + "a".repeat(64)] });
@@ -37,7 +39,7 @@ it("saves unresolved legacy material with a warning but never grants approval ow
  expect(r.saved).toHaveLength(1); expect(r.flags[0].verdict).toBe("unsure"); expect(m.owned).toHaveBeenCalledWith("u", []);
 });
 it("still rejects a supplied snapshot from another account before writing", async () => {
- m.byId.mockResolvedValue(null);
+ m.byId.mockResolvedValue(null as unknown as Snapshot);
  await expect(saveDraftsForUser("u", "t", { title: "Foreign", drafts: [{ ...draft(), snapshotId: "foreign" }], open })).rejects.toThrow("not in this account"); expect(m.save).not.toHaveBeenCalled();
 });
 // 11 Nov 2026: an AI drafted posts from a person's inbox. A draft like that names no source, and it used to be saved

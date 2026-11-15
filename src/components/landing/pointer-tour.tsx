@@ -96,7 +96,7 @@ const POINTER_ROWS = [
   "o", "oo", "oxo", "oxxo", "oxxxo", "oxxxxo", "oxxxxxo", "oxxxxxxo", "oxxxxxxxo", "oxxxxxxxxo",
   "oxxxxxoooo", "oxxoxxo", "oxo.oxxo", "oo..oxxo", "o....oxxo", ".....oxxo", "......oo",
 ];
-const cells = (want: string, className: string) => POINTER_ROWS.flatMap((row, y) => [...row].map((c, x) =>
+const cells = (want: string, className: string) => POINTER_ROWS.flatMap((row, y) => row.split("").map((c, x) =>
   c === want ? <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} className={className} /> : null));
 const OUTLINE = cells("o", styles.edge);
 
@@ -165,7 +165,7 @@ export function PointerTour({ stops: STOPS, children, className }: { stops: Tour
         current = i;
         const target = STOPS[i].find(el);
         if (target) {
-          const box = el.getBoundingClientRect(), r = target.getBoundingClientRect();
+          const box = el.getBoundingClientRect();
           // Aim inside the part, and keep the whole pointer (30 by 46) inside the frame so its edge never cuts it off.
           const to = tipAfter(target, box);
           setSay(null);

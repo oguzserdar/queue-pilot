@@ -1,6 +1,6 @@
 /**
  * @fileoverview Request limits for Queue Pilot's own surfaces: the connector, Buffer writes, AI bursts, connect round
- * trips, account actions and the admin unlock.
+ * trips, account actions, the admin unlock and agent sign-up.
  *
  * Fixed windows are counted in Postgres with one atomic upsert per check, so every server instance shares one count
  * without a separate cache service. Better Auth limits `/api/auth/*` itself (see `src/lib/auth.ts`).
@@ -34,6 +34,20 @@ export const RULES = {
   reviewLink: { max: 60, windowSeconds: 600 },
   /** Account deletion and signing out other devices, per person. */
   account: { max: 5, windowSeconds: 3600 },
+  /** Admin operations, from /admin or a connected AI app, per admin. */
+  admin: { max: 60, windowSeconds: 60 },
+  /** Recording refused admin calls, per person and caller (page or one app), apart from the admin's own actions. */
+  adminRefusal: { max: 10, windowSeconds: 60 },
+  /**
+   * Agent sign-ups per hashed caller address (src/lib/agent-signup): 3 a day, as the sign-up contract sets, and at most
+   * 10 tries a minute. Counted only for well-formed requests, so a malformed one never uses up the day.
+   */
+  agentRegister: { max: 3, windowSeconds: 86_400 },
+  agentRegisterBurst: { max: 10, windowSeconds: 60 },
+  /** Assertion trades at the agent token endpoint, per hashed caller address. */
+  agentToken: { max: 60, windowSeconds: 60 },
+  /** Calls by one signed-up agent to its own tools. */
+  agentCall: { max: 60, windowSeconds: 60 },
 } as const satisfies Record<string, Rule>;
 
 export type Action = keyof typeof RULES;

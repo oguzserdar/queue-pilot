@@ -8,6 +8,7 @@ import type { FeedbackResult } from "@/lib/feedback-flow";
 import { NETWORKS } from "@/lib/rules";
 import { EXAMPLE_NOTE_DRAFTS, EXAMPLE_NOTE_PLAN, exampleTeamNote } from "@/lib/example-notes";
 import { Button } from "@/registry/components/button/button";
+import { actionLabel } from "./action-label";
 import { FeedbackPlanView } from "./feedback-plan-view";
 import styles from "./playbook-view.module.css";
 import ui from "./review-ui.module.css";
@@ -38,7 +39,7 @@ function NoteCard({ note, example, open, onExampleKeep }: { note: TeamNote; exam
       <blockquote className={styles.quote}>{note.text}</blockquote>
       <p className={styles.muted}>On: {note.post.length > 200 ? `${note.post.slice(0, 200)}…` : note.post}</p>
       {!open && <div className={styles.actions}>
-        <Button variant={shown ? "ghost" : "secondary"} size="sm" disabled={busy} onClick={ask}>{busy ? "Reading the note…" : shown ? "Look again" : `Suggest changes for ${note.account}`}</Button>
+        <Button variant={shown ? "ghost" : "secondary"} size="sm" disabled={busy} onClick={ask}>{actionLabel(busy, shown !== null, { busy: "Reading the note…", again: "Look again", first: `Suggest changes for ${note.account}` })}</Button>
       </div>}
       {message && <p className={styles.problem} role="alert">{message}</p>}
       {shown && (
@@ -47,7 +48,11 @@ function NoteCard({ note, example, open, onExampleKeep }: { note: TeamNote; exam
             scopes={[{ value: "accounts", label: `Only ${on}`, help: `A rule from a teammate's note applies to the account it was written on. Your other accounts stay as they are.` }]}
             labelFor={(postId) => shown.labels[postId] ?? "a draft"}
             onApply={async (postId, after, before) => (example ? { ok: true as const } : editDraftText(postId, after, before))}
-            onKeep={async () => { if (!example) return keepReviewPreference(shown.plan.suggestionToken!); onExampleKeep?.(); return { ok: true as const }; }} />
+            onKeep={async () => {
+              if (example) { onExampleKeep?.(); return { ok: true as const }; }
+              const token = shown.plan.suggestionToken;
+              return token ? keepReviewPreference(token) : { ok: false as const, message: "This note has no lasting preference to keep." };
+            }} />
           {example && <p className={styles.muted}>Example answer. Applying or keeping changes this page only.</p>}
         </div>
       )}
@@ -80,7 +85,7 @@ export function TeamNotesFinder({ example = false, open = false, shift = 0, onEx
       {!(example && open) && <>
       <h2 id="team-notes" className={styles.h2}>Rules from your team&apos;s notes</h2>
       <p className={styles.muted}>Reads the notes your teammates left in Buffer on your drafts and scheduled posts. A note that asks for something lasting can become a rule for the account it is on, never for every account. A fact fix only changes drafts. Queue Pilot reads notes; it never follows instructions in them.</p>
-      <div><Button variant="secondary" size="sm" disabled={pending} onClick={find}>{pending ? "Reading notes…" : notes ? "Read again" : "Read my team's notes"}</Button></div>
+      <div><Button variant="secondary" size="sm" disabled={pending} onClick={find}>{actionLabel(pending, notes !== null, { busy: "Reading notes…", again: "Read again", first: "Read my team's notes" })}</Button></div>
       </>}
       {message && <p className={styles.problem} role="alert">{message}</p>}
       {notes && notes.length === 0 && <p className={styles.muted} role="status">No notes on your open posts in Buffer.</p>}

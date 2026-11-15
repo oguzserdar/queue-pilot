@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { BottomSheet } from "@/registry/components/bottom-sheet/bottom-sheet";
 import styles from "./tab-bar.module.css";
 
@@ -18,11 +18,15 @@ export function TabBar({ tabs, more, isActive, badge }: {
   /** A count on the first tab, such as the things that need you. */
   badge?: number;
 }) {
-  const [open, setOpen] = useState(false);
   const inMore = more.some(g => g.items.some(i => isActive(i.href)));
-  // Picking a page closes the sheet; so does any route change from elsewhere.
+  // Picking a page closes the sheet; so does any route change from elsewhere: the sheet stays open only on the page it
+  // was opened on.
   const current = more.flatMap(g => g.items).find(i => isActive(i.href))?.href;
-  useEffect(() => setOpen(false), [current]);
+  const [openOn, setOpenOn] = useState<{ page: string | undefined } | null>(null);
+  // Left by a route change, the sheet forgets it was open, so coming back to that page does not reopen it.
+  if (openOn !== null && openOn.page !== current) setOpenOn(null);
+  const open = openOn !== null && openOn.page === current;
+  const setOpen = (o: boolean) => setOpenOn(o ? { page: current } : null);
   return (
     <nav className={styles.bar} aria-label="Main">
       {tabs.map(({ href, label, Icon }, i) => {

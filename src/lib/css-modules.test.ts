@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const files = (dir: string): string[] =>
-  readdirSync(dir).flatMap((n) => { const p = join(dir, n); return statSync(p).isDirectory() ? files(p) : p.endsWith(".module.css") ? [p] : []; });
+  readdirSync(dir).flatMap((n) => { const p = join(dir, n); if (statSync(p).isDirectory()) return files(p); return p.endsWith(".module.css") ? [p] : []; });
 
 /** Splits a selector list on commas outside parentheses, so ":is(h2, h3)" stays one part. */
 function topLevel(sel: string): string[] {

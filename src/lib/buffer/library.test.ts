@@ -17,7 +17,7 @@ const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
 type Call = { query: string; variables: Record<string, unknown> };
 function fake(answers: unknown[]) {
   const calls: Call[] = [];
-  const run = vi.fn(async (_t: string, query: string, variables?: Record<string, unknown>) => {
+  const run = vi.fn<(t: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async (_t: string, query: string, variables?: Record<string, unknown>) => {
     calls.push({ query, variables: variables ?? {} });
     return answers.shift();
   }) as unknown as typeof import("./client").bufferQuery;
@@ -43,7 +43,7 @@ const template = (id: string, body = "Shipped {{feature}}.") => ({ id, title: `T
 
 describe("documented types and fields", () => {
   it("control: a made-up type or field is caught", () => {
-    expect(() => fieldsOf("MadeUpInput")).toThrow();
+    expect(() => fieldsOf("MadeUpInput")).toThrow("type MadeUpInput not in the reference");
     expect(fieldsOf("PostTemplate").has("notARealFieldQP")).toBe(false);
   });
 
@@ -60,7 +60,8 @@ describe("documented types and fields", () => {
     await listSnippets("t", "org", null, run);
     await listTeamMembers("t", { organizationId: "org" }, { search: "ana" }, run);
     await channelSettings("t", "org", run);
-    for (const c of calls) for (const [, type] of c.query.matchAll(/\$\w+: (\w+)!/g)) if (!["String", "Int"].includes(type)) expect(() => fieldsOf(type), type).not.toThrow();
+    const types = calls.flatMap((c) => [...c.query.matchAll(/\$\w+: (\w+)!/g)].map(([, type]) => type)).filter((type) => !["String", "Int"].includes(type));
+    for (const type of types) expect(() => fieldsOf(type)).not.toThrow();
     const checks: [string, string, string][] = [
       [calls[0].query, "node", "PostTemplate"],
       [calls[1].query, "postTemplate(input: $input)", "PostTemplate"],

@@ -3,6 +3,7 @@ import { Check, Link2 } from "lucide-react";
 import { AiMark } from "@/components/ai-mark";
 import { consentIdentity } from "@/lib/consent-identity";
 import styles from "./consent.module.css";
+import Image from "next/image";
 
 /** Plain-language meaning of each scope an AI client may ask for. Unknown scopes are listed as-is. */
 const SCOPE_TEXT: Record<string, string> = {
@@ -23,8 +24,7 @@ export function ConsentCard({ client, clientId = "", redirectUri = "", user, sco
         <div className={styles.pair} aria-hidden="true">
           <span className={styles.clientTile}>{brand ? <AiMark name={brand} size={32} /> : client.replace(/^www\./, "").charAt(0).toUpperCase()}</span>
           <span className={styles.link}><Link2 size={16} strokeWidth={2} /></span>
-          {/* eslint-disable-next-line @next/next/no-img-element -- a fixed local icon, no optimisation needed */}
-          <img className={styles.appTile} src="/icon-192.png" alt="" width={56} height={56} />
+          <Image className={styles.appTile} src="/icon-192.png" alt="" width={56} height={56} />
         </div>
         {/* Only a name proven by the app's registered address is shown as a name; any other is the app's own claim. */}
         <h1 id="consent-title" className={styles.title}>{brand ? <strong>{brand}</strong> : <>Unverified app: <bdi>{client}</bdi></>} wants to connect to Queue Pilot</h1>
@@ -33,7 +33,7 @@ export function ConsentCard({ client, clientId = "", redirectUri = "", user, sco
         {brand === "Cursor" ? <p className={styles.clientNote}>Connecting from Grok Bot? It registers this connection as Cursor.</p> : null}
         <div className={styles.account}>
           {image
-            ? /* eslint-disable-next-line @next/next/no-img-element -- the person's own Buffer picture */ <img className={styles.avatar} src={image} alt="" width={32} height={32} />
+            ? <img className={styles.avatar} src={image} alt="" width={32} height={32} />
             : <span className={styles.avatar} aria-hidden="true">{(name || email).charAt(0).toUpperCase()}</span>}
           <span className={styles.who}><span className={styles.name}>{name || email}</span>{name ? <span className={styles.email}>{email}</span> : null}</span>
         </div>

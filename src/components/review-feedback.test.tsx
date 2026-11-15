@@ -6,8 +6,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/(app)/review-actions", () => ({ proposeCommentChanges: vi.fn(), keepReviewPreference: vi.fn() }));
-vi.mock("@/app/(app)/actions", () => ({ editDraftText: vi.fn() }));
+vi.mock("@/app/(app)/review-actions", () => ({ proposeCommentChanges: vi.fn<typeof import("@/app/(app)/review-actions").proposeCommentChanges>(), keepReviewPreference: vi.fn<typeof import("@/app/(app)/review-actions").keepReviewPreference>() }));
+vi.mock("@/app/(app)/actions", () => ({ editDraftText: vi.fn<typeof import("@/app/(app)/actions").editDraftText>() }));
 
 const { ReviewFeedback, firstPicks } = await import("./review-feedback");
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;|&apos;/g, "'").replace(/\s+/g, " ");

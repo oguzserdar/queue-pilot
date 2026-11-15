@@ -15,6 +15,9 @@ const text = postText;
 const CARBON = text("d1");
 const DUET = text("d5");
 
+/** When Sam left the note: the evening the newsletter went out, moved with the example's clock. */
+const noteAt = (shift: number): string => shiftIso("2026-11-01T21:05:00Z", storyShift(shift));
+
 /** Sam's note, as Buffer returns it on the open LinkedIn draft, left the evening the newsletter went out. */
 export const exampleTeamNote = (shift: number): TeamNote => ({
   key: "note:example-sam-d1",
@@ -24,7 +27,7 @@ export const exampleTeamNote = (shift: number): TeamNote => ({
   network: "linkedin",
   post: CARBON,
   author: "Sam",
-  at: shiftIso("2026-11-01T21:05:00Z", storyShift(shift)),
+  at: noteAt(shift),
   text: "On LinkedIn, can we always say whose model it is the first time? Google's Gemini 4 Carbon, not just Gemini 4 Carbon.",
 });
 
@@ -55,6 +58,6 @@ export const exampleNoteRule = (shift: number): ExampleRule => {
   return {
     id: "r-note-sam", kind: "guidance", channels: "all", accountIds: ["linkedin"], level: "warn", text: PREFERENCE,
     learnedFrom: { kind: "note", note: note.text, author: "Sam", at: note.at, postId: "d1", channelId: "linkedin", account: "Alex Rivera", network: "linkedin" },
-    origin: `A note from Sam on ${dayMonth(note.at!)}`,
+    origin: `A note from Sam on ${dayMonth(noteAt(shift))}`,
   };
 };

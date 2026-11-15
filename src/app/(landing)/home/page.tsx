@@ -48,6 +48,119 @@ const faq = [
   { title: "Where do I get help?", content: <>Open an issue on <a href={`${REPO}/issues`} target="_blank" rel="noopener noreferrer">GitHub</a>. Report a security problem privately, as the <a href={`${REPO}/blob/main/SECURITY.md`} target="_blank" rel="noopener noreferrer">security policy</a> describes, and see what is planned in the <a href={`${REPO}/blob/main/ROADMAP.md`} target="_blank" rel="noopener noreferrer">roadmap</a>.</> },
 ];
 
+/** The top bar: brand, the page sections, the demo and sign-in. */
+function SiteHeader() {
+  return (
+    <header className={s.header}>
+      <div className={[s.wrap, s.headerRow].join(" ")}>
+        <a className={s.brand} href="/"><Image src="/icon.svg" alt="" width={26} height={26} />Queue Pilot</a>
+        <nav className={s.nav} aria-label="Main">
+          <a href="#how">How it works</a>
+          <a href="#questions">Questions</a>
+          <a href="#run-your-own">Run your own</a>
+          <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
+        </nav>
+        <div className={s.headerActions}>
+          <a className={s.quiet} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
+          <SignInButton returnTo="/" variant="primary" size="md" say="Sign in and I will show you your empty times.">Sign in with Buffer</SignInButton>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/** How lightly Queue Pilot uses Buffer's API, with the measured request counts. */
+function ApiSection() {
+  return (
+    <section className={s.section} id="buffer-api" aria-labelledby="api-title">
+      <div className={[s.wrap, s.split].join(" ")}>
+        <div className={s.copy}>
+          <h2 id="api-title">Light on Buffer&apos;s API.</h2>
+          <p>Every Queue Pilot user shares one Buffer allowance, so every request counts.</p>
+          <ul className={s.facts}>
+            <li><b>Drafts first.</b> It never schedules on its own. Only your Approve schedules, or your AI when you ask it.</li>
+            <li><b>One saved copy of your queue.</b> Browsing every screen costs no requests. A refresh is one.</li>
+            <li><b>Counted before it is sent.</b> Across every server, and AI requests pause while few are left.</li>
+            <li><b>Who did what.</b> Settings lists every schedule, delete and AI app by name. An app that only names itself shows as unverified.</li>
+          </ul>
+        </div>
+        <figure className={[s.shot, s.apiShot].join(" ")}>
+          <table className={s.apiTable}>
+            <caption>Buffer requests in a first session, 3 channels</caption>
+            <tbody>
+              <tr><th scope="row">Sign in</th><td>1</td></tr>
+              <tr><th scope="row">First page</th><td>2</td></tr>
+              <tr><th scope="row">Browsing every screen</th><td>0</td></tr>
+              <tr><th scope="row">Write a week, 15 drafts</th><td>7</td></tr>
+              <tr><th scope="row">Edit one draft</th><td>2</td></tr>
+              <tr><th scope="row">Refresh</th><td>1</td></tr>
+            </tbody>
+            <tfoot><tr><th scope="row">First session</th><td>13</td></tr></tfoot>
+          </table>
+          <figcaption>Measured by a test that counts every Buffer call. <a href={`${REPO}#how-it-uses-buffers-api`} target="_blank" rel="noopener noreferrer">See each call</a></figcaption>
+        </figure>
+      </div>
+    </section>
+  );
+}
+
+/** Open source: the four steps to run your own copy. */
+function RunYourOwn() {
+  return (
+    <section className={[s.section, s.tinted].join(" ")} id="run-your-own" aria-labelledby="oss-title">
+      <div className={[s.wrap, s.stack].join(" ")}>
+        <div className={s.copy}>
+          <h2 id="oss-title">Open source. Run your own copy.</h2>
+          <p>Queue Pilot is MIT licensed. This site is one deployed copy. Yours keeps its data in your own database and signs in with your own Buffer app.</p>
+          <p><a href={REPO} target="_blank" rel="noopener noreferrer">Code, changelog and issues on GitHub</a></p>
+        </div>
+        <ol className={s.loop}>
+          <li className={s.step}><SetupScene step={0} className={s.stepArt} /><span className={s.meta}>Buffer</span><p>Add an app client in Buffer's API settings, with your address as its redirect.</p></li>
+          <li className={s.step}><SetupScene step={1} className={s.stepArt} /><span className={s.meta}>Database</span><p>Create a Postgres database, then fill in <code>.env.example</code>. Each line says how.</p></li>
+          <li className={s.step}><SetupScene step={2} className={s.stepArt} /><span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every deploy or start.</p></li>
+          <li className={s.step}><SetupScene step={3} className={s.stepArt} /><span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim it with your setup code.</p></li>
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+/** The closing band: sign in or try the demo, with the Pilot. */
+function StartBand() {
+  return (
+    <section className={s.band} aria-labelledby="start-title" data-pilot-scope="">
+      <PixelField placement="band" />
+      <div className={[s.wrap, s.bandInner].join(" ")}>
+        <h2 id="start-title">Fill next week from what you already shipped</h2>
+        <p>Sign in with Buffer, connect your AI, and ask it to fill next week from what you published.</p>
+        <div className={s.ctas}>
+          <SignInButton returnTo="/" variant="secondary" size="lg" say="Sign in and I will show you your empty times.">Sign in with Buffer</SignInButton>
+          <a className={s.bandLink} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
+        </div>
+        <PilotWeek week={false} tone="light" className={s.bandPilot} />
+      </div>
+    </section>
+  );
+}
+
+/** The footer: brand, the Buffer note, and links. */
+function SiteFooter() {
+  return (
+    <footer className={s.footer}>
+      <div className={[s.wrap, s.footerRow].join(" ")}>
+        <span className={s.brand}><Image src="/icon.svg" alt="" width={22} height={22} />Queue Pilot</span>
+        <span className={s.fine}>Not made by Buffer. An entry in Buffer Commit. MIT licensed.</span>
+        <nav className={s.nav} aria-label="Footer">
+          <a href={`${REPO}/blob/main/docs/buffer-api-notes.md`} target="_blank" rel="noopener noreferrer">How it uses the Buffer API</a>
+          <a href={`${REPO}/blob/main/CHANGELOG.md`} target="_blank" rel="noopener noreferrer">Changelog</a>
+          <a href="/privacy">Privacy</a>
+          <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
+        </nav>
+      </div>
+    </footer>
+  );
+}
+
 /** The public landing page: sections on one wrapper, Arc controls as Arc ships them. */
 
 /** The homepage, drawn with the app's real components (the hero plays a scripted walkthrough). */
@@ -60,21 +173,7 @@ export default function HomePage() {
   const demo = exampleWeekProps(shift);
   return (
     <div className={s.page}>
-      <header className={s.header}>
-        <div className={[s.wrap, s.headerRow].join(" ")}>
-          <a className={s.brand} href="/"><Image src="/icon.svg" alt="" width={26} height={26} />Queue Pilot</a>
-          <nav className={s.nav} aria-label="Main">
-            <a href="#how">How it works</a>
-            <a href="#questions">Questions</a>
-            <a href="#run-your-own">Run your own</a>
-            <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
-          </nav>
-          <div className={s.headerActions}>
-            <a className={s.quiet} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
-            <SignInButton returnTo="/" variant="primary" size="md" say="Sign in and I will show you your empty times.">Sign in with Buffer</SignInButton>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main>
         {/* A cancelled or failed Buffer sign-in returns here with ?error=; say what happened. */}
@@ -136,35 +235,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className={s.section} id="buffer-api" aria-labelledby="api-title">
-          <div className={[s.wrap, s.split].join(" ")}>
-            <div className={s.copy}>
-              <h2 id="api-title">Light on Buffer&apos;s API.</h2>
-              <p>Every Queue Pilot user shares one Buffer allowance, so every request counts.</p>
-              <ul className={s.facts}>
-                <li><b>Drafts first.</b> It never schedules on its own. Only your Approve schedules, or your AI when you ask it.</li>
-                <li><b>One saved copy of your queue.</b> Browsing every screen costs no requests. A refresh is one.</li>
-                <li><b>Counted before it is sent.</b> Across every server, and AI requests pause while few are left.</li>
-                <li><b>Who did what.</b> Settings lists every schedule, delete and AI app by name. An app that only names itself shows as unverified.</li>
-              </ul>
-            </div>
-            <figure className={[s.shot, s.apiShot].join(" ")}>
-              <table className={s.apiTable}>
-                <caption>Buffer requests in a first session, 3 channels</caption>
-                <tbody>
-                  <tr><th scope="row">Sign in</th><td>1</td></tr>
-                  <tr><th scope="row">First page</th><td>2</td></tr>
-                  <tr><th scope="row">Browsing every screen</th><td>0</td></tr>
-                  <tr><th scope="row">Write a week, 15 drafts</th><td>7</td></tr>
-                  <tr><th scope="row">Edit one draft</th><td>2</td></tr>
-                  <tr><th scope="row">Refresh</th><td>1</td></tr>
-                </tbody>
-                <tfoot><tr><th scope="row">First session</th><td>13</td></tr></tfoot>
-              </table>
-              <figcaption>Measured by a test that counts every Buffer call. <a href={`${REPO}#how-it-uses-buffers-api`} target="_blank" rel="noopener noreferrer">See each call</a></figcaption>
-            </figure>
-          </div>
-        </section>
+        <ApiSection />
 
         <section className={[s.section, s.faq].join(" ")} id="questions" aria-labelledby="faq-title">
           <div className={[s.wrap, s.split].join(" ")}>
@@ -176,48 +247,12 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className={[s.section, s.tinted].join(" ")} id="run-your-own" aria-labelledby="oss-title">
-          <div className={[s.wrap, s.stack].join(" ")}>
-            <div className={s.copy}>
-              <h2 id="oss-title">Open source. Run your own copy.</h2>
-              <p>Queue Pilot is MIT licensed. This site is one deployed copy. Yours keeps its data in your own database and signs in with your own Buffer app.</p>
-              <p><a href={REPO} target="_blank" rel="noopener noreferrer">Code, changelog and issues on GitHub</a></p>
-            </div>
-            <ol className={s.loop}>
-              <li className={s.step}><SetupScene step={0} className={s.stepArt} /><span className={s.meta}>Buffer</span><p>Add an app client in Buffer's API settings, with your address as its redirect.</p></li>
-              <li className={s.step}><SetupScene step={1} className={s.stepArt} /><span className={s.meta}>Database</span><p>Create a Postgres database, then fill in <code>.env.example</code>. Each line says how.</p></li>
-              <li className={s.step}><SetupScene step={2} className={s.stepArt} /><span className={s.meta}>Deploy</span><p>Deploy to Vercel, or run <code>docker compose up -d</code>. Migrations run on every deploy or start.</p></li>
-              <li className={s.step}><SetupScene step={3} className={s.stepArt} /><span className={s.meta}>Admin</span><p>Open <code>/admin</code>, sign in with Buffer and claim it with your setup code.</p></li>
-            </ol>
-          </div>
-        </section>
+        <RunYourOwn />
 
-        <section className={s.band} aria-labelledby="start-title" data-pilot-scope="">
-          <PixelField placement="band" />
-          <div className={[s.wrap, s.bandInner].join(" ")}>
-            <h2 id="start-title">Fill next week from what you already shipped</h2>
-            <p>Sign in with Buffer, connect your AI, and ask it to fill next week from what you published.</p>
-            <div className={s.ctas}>
-              <SignInButton returnTo="/" variant="secondary" size="lg" say="Sign in and I will show you your empty times.">Sign in with Buffer</SignInButton>
-              <a className={s.bandLink} href={DEMO} data-pilot-say="No sign-in. Alex's sample account, the same app with sample data.">Try the demo</a>
-            </div>
-            <PilotWeek week={false} tone="light" className={s.bandPilot} />
-          </div>
-        </section>
+        <StartBand />
       </main>
 
-      <footer className={s.footer}>
-        <div className={[s.wrap, s.footerRow].join(" ")}>
-          <span className={s.brand}><Image src="/icon.svg" alt="" width={22} height={22} />Queue Pilot</span>
-          <span className={s.fine}>Not made by Buffer. An entry in Buffer Commit. MIT licensed.</span>
-          <nav className={s.nav} aria-label="Footer">
-            <a href={`${REPO}/blob/main/docs/buffer-api-notes.md`} target="_blank" rel="noopener noreferrer">How it uses the Buffer API</a>
-            <a href={`${REPO}/blob/main/CHANGELOG.md`} target="_blank" rel="noopener noreferrer">Changelog</a>
-            <a href="/privacy">Privacy</a>
-            <a href={REPO} target="_blank" rel="noopener noreferrer">GitHub</a>
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

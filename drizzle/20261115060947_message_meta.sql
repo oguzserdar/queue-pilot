@@ -1,0 +1,1 @@
+ALTER TABLE "qp_message" ADD COLUMN "meta" jsonb;

@@ -79,3 +79,22 @@ export async function deleteDraft(token: string, id: string, posts: Post[], wrot
   // DeletePostPayload is DeletePostSuccess | VoidMutationError (which implements MutationError); only success counts.
   return res.deletePost.__typename === "DeletePostSuccess" ? { ok: true } : { ok: false, reason: res.deletePost.message ?? "Buffer refused to delete it." };
 }
+
+/**
+ * Takes a scheduled post off the schedule and keeps it as a draft in Buffer: editPost with saveToDraft true, which
+ * "saves the post as a draft instead of keeping it scheduled" (developers.buffer.com/reference.md, EditPostInput, read
+ * 15 Nov 2026). Only `id` and `saveToDraft` are sent, so text, time and media stay as they are. The post is read from
+ * Buffer right before, and moved only while Buffer still calls it scheduled: a post already sending or sent is left.
+ *
+ * @param mine - When given (an AI app asking), only these post ids may be moved: the drafts Queue Pilot wrote
+ */
+export async function moveToDraft(token: string, id: string, q: Query = bufferQuery, mine?: ReadonlySet<string>): Promise<EditResult> {
+  if (mine && !mine.has(id)) return { ok: false, reason: "Only posts Queue Pilot wrote can be moved back to draft here. The person can move any post in Buffer." };
+  const fresh = await q<{ post: Post }>(token, "query ($input: PostInput!) { post(input: $input) { id channelId text status } }", { input: { id } });
+  const latest = fresh.post;
+  if (!latest || latest.id !== id) return { ok: false, reason: "This post is no longer in Buffer." };
+  if (latest.status === "draft") return { ok: false, reason: "This post is already a draft." };
+  if (latest.status !== "scheduled") return { ok: false, reason: latest.status === "sent" ? "This post was already sent." : "This post is being sent or has an error, so it was left as it is." };
+  const res = await q<{ editPost: { __typename: string; message?: string } }>(token, EDIT_POST, { input: { id, saveToDraft: true } });
+  return res.editPost.__typename === "PostActionSuccess" ? { ok: true } : { ok: false, reason: res.editPost.message ?? "Buffer refused the change." };
+}

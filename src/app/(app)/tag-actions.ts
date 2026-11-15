@@ -6,7 +6,7 @@
  * would pull a scheduled post back to drafts. Tags are always the organization's own, checked on the server.
  */
 import { bufferQuery } from "@/lib/buffer/client";
-import { createTag, listTags, MAX_TAG_NAME, setDraftTags } from "@/lib/buffer/tags";
+import { createTag, listTags, MAX_TAG_NAME, setDraftTags, type TagWriteResult } from "@/lib/buffer/tags";
 import { bufferForReading } from "@/lib/current-user";
 import { limit } from "@/lib/rate-limit";
 import { wroteIds } from "@/lib/written-store";
@@ -28,6 +28,12 @@ async function forPost(postId: unknown): Promise<{ ok: true; token: string; user
   if (!org) return { ok: false, message: "Refresh Queue Pilot once so it knows this channel's organization." };
   const canEdit = post.status === "draft" && (await wroteIds(b.userId, postId)).has(postId);
   return { ok: true, token: b.token, userId: b.userId, org, canEdit };
+}
+
+/** Buffer's refusal of a new tag, in the person's words: a taken name and a full plan get their own sentence. */
+function tagRefusal(r: Extract<TagWriteResult<unknown>, { ok: false }>, name: string): string {
+  if (r.kind === "duplicate") return `A tag named "${name}" already exists.`;
+  return r.kind === "limit" ? "Your Buffer plan's tag limit is reached." : r.message;
 }
 
 function failure(e: unknown, event: string): { ok: false; message: string } {
@@ -83,7 +89,7 @@ export async function createTagForDraft(postId: string, name: string): Promise<R
     if (!l.ok) return { ok: false, message: `Too many requests just now. Try again in ${l.resetSeconds} seconds.` };
     const r = await createTag(p.token, p.org, clean);
     if (r.ok) return { ok: true, tag: toTag(r.value) };
-    return { ok: false, message: r.kind === "duplicate" ? `A tag named "${clean}" already exists.` : r.kind === "limit" ? "Your Buffer plan's tag limit is reached." : r.message };
+    return { ok: false, message: tagRefusal(r, clean) };
   } catch (e) {
     return failure(e, "qp-create-tag-failed");
   }

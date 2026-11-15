@@ -19,6 +19,9 @@ import { PLACE_NAME, followUpIdFor, resendFailed, scheduleDirectPost, sendDirect
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { directPostDeps, startTimerOrNote } from "@/lib/direct-post-run";
+import { listSocialAccounts, readSocialAccount } from "@/lib/social-accounts";
+import { countFor, limitFor } from "@/lib/char-limits";
+import type { SocialNetwork } from "@/lib/social-networks";
 
 /** Where the person can post, as the composer shows it. */
 export type PostTargets = {
@@ -26,22 +29,32 @@ export type PostTargets = {
   discord: { label: string; limit: number; channels: { id: string; name: string; canPost: boolean }[]; defaultId: string | null } | null;
   /** Why Discord channels could not be listed, when the bot is connected but the read failed. */
   problem?: string;
+  /** Mastodon and Bluesky accounts Queue Pilot posts to directly. One whose sign-in was refused is left out. */
+  accounts?: { id: string; network: SocialNetwork; label: string; limit: number }[];
 };
 
 /**
  * One place of a recent direct post, as Sources shows it. sendAt is set for a scheduled one; late when it went out
  * more than five minutes after it. followsBuffer marks a follow-up, which is changed on its Buffer draft, not here.
  */
-export type DirectPostView = { postId: string; kind: PostKind; label: string; text: string; status: DirectPostStatus; link: string | null; error: string | null; at: string; sendAt: string | null; late: boolean; followsBuffer: boolean };
+export type DirectPostView = { postId: string; kind: PostKind; target: string; label: string; text: string; status: DirectPostStatus; link: string | null; error: string | null; at: string; sendAt: string | null; late: boolean; followsBuffer: boolean };
 
 /** What a change to a post answers: done (with a note to show), or the reason it was not. */
 export type ActionResult = { ok: true; note?: string } | { ok: false; message: string };
 
+/** The most characters a message to that place may have: each network's own limit, 300 when it has none. */
+function textLimit(kind: PostKind): number {
+  if (kind === "telegram") return telegram.TEXT_LIMIT;
+  return kind === "discord" ? discord.CONTENT_LIMIT : limitFor(kind) ?? 300;
+}
+
 /** Why a message cannot go to that place as written, or null. */
 function textProblem(kind: PostKind, text: string): string | null {
-  const max = kind === "telegram" ? telegram.TEXT_LIMIT : discord.CONTENT_LIMIT;
+  // Mastodon and Bluesky are counted the way the networks count (char-limits.ts), not by string length.
+  const max = textLimit(kind);
+  const count = kind === "telegram" || kind === "discord" ? text.length : countFor(kind, text);
   if (!text) return `Write the ${PLACE_NAME[kind]} message, or leave ${PLACE_NAME[kind]} out.`;
-  if (text.length > max) return `The ${PLACE_NAME[kind]} message is ${text.length} characters; ${PLACE_NAME[kind]} takes up to ${max}.`;
+  if (count > max) return `The ${PLACE_NAME[kind]} message is ${count} characters; ${PLACE_NAME[kind]} takes up to ${max}.`;
   return null;
 }
 
@@ -62,12 +75,13 @@ function guildChannels(token: string, guildId: string) {
 export async function postTargets(): Promise<PostTargets> {
   const userId = await signedInUserId();
   if (!userId) return { telegram: null, discord: null };
-  const [dests, tokens] = await Promise.all([postgresEchoStore().destinations(userId), botTokens()]);
+  const [dests, tokens, social] = await Promise.all([postgresEchoStore().destinations(userId), botTokens(), listSocialAccounts(userId)]);
   const tg = dests.find((d) => d.kind === "telegram");
   const dc = dests.find((d) => d.kind === "discord");
   const out: PostTargets = {
     telegram: tg && tokens.telegram ? { label: tg.label, limit: telegram.TEXT_LIMIT } : null,
     discord: null,
+    accounts: social.filter((a) => !a.broken).map((a) => ({ id: a.id, network: a.network, label: a.handle, limit: limitFor(a.network) ?? 300 })),
   };
   if (dc && dc.guildId && tokens.discord) {
     try {
@@ -81,9 +95,9 @@ export async function postTargets(): Promise<PostTargets> {
 }
 
 /** One post from the form. With sendAt (ISO), it is scheduled for that time instead of sent now. */
-export type SendPostInput = { key: string; sendAt?: string; telegram?: { text: string }; discord?: { channelId: string; text: string } };
+export type SendPostInput = { key: string; sendAt?: string; telegram?: { text: string }; discord?: { channelId: string; text: string }; accounts?: { id: string; text: string }[] };
 export type SendPostResult =
-  | { ok: true; results: { kind: PostKind; label: string; status: DirectPostStatus; link: string | null; error: string | null }[]; note?: string }
+  | { ok: true; results: { kind: PostKind; target: string; label: string; status: DirectPostStatus; link: string | null; error: string | null }[]; note?: string }
   | { ok: false; message: string };
 
 /** True when the post is a follow-up of a Buffer post, which is changed on its draft, not in Sources. */
@@ -91,41 +105,79 @@ async function followsBuffer(userId: string, postId: string): Promise<boolean> {
   return (await postgresDirectPostStore().rows(userId, postId)).some((r) => r.bufferPostId);
 }
 
+type Destination = Awaited<ReturnType<ReturnType<typeof postgresEchoStore>["destinations"]>>[number];
+type Tokens = Awaited<ReturnType<typeof botTokens>>;
+type Built<T> = { ok: true; item: T } | { ok: false; message: string };
+
+/** The person's connected Telegram channel, with the text checked against Telegram's limit. */
+function telegramItem(input: { text: string }, tg: Destination | undefined, tokens: Tokens): Built<PostItem> {
+  const text = String(input.text ?? "").trim();
+  if (!tg || !tokens.telegram) return { ok: false, message: "Connect a Telegram channel first." };
+  const problem = textProblem("telegram", text);
+  if (problem) return { ok: false, message: problem };
+  return { ok: true, item: { kind: "telegram", target: tg.target, label: tg.label, text } };
+}
+
+/** A Discord channel in the person's server that the bot can post in, checked against Discord every time. */
+async function discordItem(input: { channelId: string; text: string }, dc: Destination | undefined, tokens: Tokens): Promise<Built<PostItem>> {
+  const text = String(input.text ?? "").trim();
+  if (!dc || !dc.guildId || !tokens.discord) return { ok: false, message: "Add Queue Pilot to a Discord server first." };
+  const problem = textProblem("discord", text);
+  if (problem) return { ok: false, message: problem };
+  let channels;
+  try { channels = await guildChannels(tokens.discord, dc.guildId); } catch (e) { return { ok: false, message: `Discord did not answer just now: ${e instanceof Error ? e.message : String(e)}` }; }
+  const channel = channels.find((c) => c.id === String(input.channelId));
+  if (!channel) return { ok: false, message: "That channel is not in your Discord server." };
+  if (!channel.canPost) return { ok: false, message: `Queue Pilot cannot post in #${channel.name}. Give its role View Channel and Send Messages there, or pick another channel.` };
+  return { ok: true, item: { kind: "discord", target: channel.id, label: `${dc.label.split(" #")[0]} #${channel.name}`, text, guildId: dc.guildId } };
+}
+
+/** Mastodon and Bluesky: the account id comes from the browser, so it must be one of this person's own accounts. */
+async function accountItems(userId: string, accounts: { id: string; text: string }[]): Promise<Built<PostItem[]>> {
+  const items: PostItem[] = [];
+  const seen = new Set<string>();
+  for (const a of accounts) {
+    const id = String(a?.id ?? "");
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const account = await readSocialAccount(userId, id);
+    if (!account || (account.network !== "mastodon" && account.network !== "bluesky")) return { ok: false, message: "That account is not connected to Queue Pilot. Connect it in Settings, Channels." };
+    if (account.broken) return { ok: false, message: `${PLACE_NAME[account.network]} refused ${account.handle}'s sign-in earlier. Connect it again in Settings, Channels.` };
+    const text = String(a.text ?? "").trim();
+    const problem = textProblem(account.network, text);
+    if (problem) return { ok: false, message: problem };
+    items.push({ kind: account.network, target: account.id, label: account.handle, text });
+  }
+  return { ok: true, item: items };
+}
+
 /**
- * Checks the places a person chose and turns them into what gets sent: their connected Telegram channel, and a
- * Discord channel in their server that the bot can post in (checked against Discord every time).
+ * Checks the places a person chose and turns them into what gets sent: their connected Telegram channel, a Discord
+ * channel in their server that the bot can post in (checked against Discord every time), and their own Mastodon and
+ * Bluesky accounts. The first place that cannot take the post stops it, with the reason.
  */
-async function placeItems(userId: string, input: { telegram?: { text: string } | null; discord?: { channelId: string; text: string } | null }, tokens: { telegram?: string; discord?: string }): Promise<{ ok: true; items: PostItem[] } | { ok: false; message: string }> {
+async function placeItems(userId: string, input: { telegram?: { text: string } | null; discord?: { channelId: string; text: string } | null; accounts?: { id: string; text: string }[] | null }, tokens: Tokens): Promise<{ ok: true; items: PostItem[] } | { ok: false; message: string }> {
   const dests = await postgresEchoStore().destinations(userId);
   const items: PostItem[] = [];
-  const tg = dests.find((d) => d.kind === "telegram");
-  const dc = dests.find((d) => d.kind === "discord");
   if (input.telegram) {
-    const text = String(input.telegram.text ?? "").trim();
-    if (!tg || !tokens.telegram) return { ok: false, message: "Connect a Telegram channel first." };
-    const problem = textProblem("telegram", text);
-    if (problem) return { ok: false, message: problem };
-    items.push({ kind: "telegram", target: tg.target, label: tg.label, text });
+    const built = telegramItem(input.telegram, dests.find((d) => d.kind === "telegram"), tokens);
+    if (!built.ok) return built;
+    items.push(built.item);
   }
   if (input.discord) {
-    const text = String(input.discord.text ?? "").trim();
-    if (!dc || !dc.guildId || !tokens.discord) return { ok: false, message: "Add Queue Pilot to a Discord server first." };
-    const problem = textProblem("discord", text);
-    if (problem) return { ok: false, message: problem };
-    let channels;
-    try { channels = await guildChannels(tokens.discord, dc.guildId); } catch (e) { return { ok: false, message: `Discord did not answer just now: ${e instanceof Error ? e.message : String(e)}` }; }
-    const channel = channels.find((c) => c.id === String(input.discord!.channelId));
-    if (!channel) return { ok: false, message: "That channel is not in your Discord server." };
-    if (!channel.canPost) return { ok: false, message: `Queue Pilot cannot post in #${channel.name}. Give its role View Channel and Send Messages there, or pick another channel.` };
-    items.push({ kind: "discord", target: channel.id, label: `${dc.label.split(" #")[0]} #${channel.name}`, text, guildId: dc.guildId });
+    const built = await discordItem(input.discord, dests.find((d) => d.kind === "discord"), tokens);
+    if (!built.ok) return built;
+    items.push(built.item);
   }
-  return { ok: true, items };
+  const accounts = await accountItems(userId, input.accounts ?? []);
+  if (!accounts.ok) return accounts;
+  return { ok: true, items: [...items, ...accounts.item] };
 }
 
 /** Sends one post now, or schedules it, each place getting the exact text the person confirmed. */
 export async function sendPostAction(input: SendPostInput): Promise<SendPostResult> {
   const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (!userId) return { ok: false, message: "Sign in first." };
   if (!input || typeof input !== "object" || typeof input.key !== "string" || !/^[A-Za-z0-9-]{8,64}$/.test(input.key)) return { ok: false, message: "Open the post again and send it from there." };
   const sendAt = input.sendAt === undefined ? null : new Date(String(input.sendAt));
   if (sendAt) {
@@ -150,7 +202,7 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
   }
   const { results } = await sendDirectPost(userId, input.key, items, deps);
   if (results.some((r) => r.status === "sent" || r.status === "uncertain")) {
-    await recordAction(userId, "direct_post_sent", { via: "app" }, { name: results.filter((r) => r.status !== "failed").map((r) => (r.kind === "telegram" ? "Telegram" : "Discord")).join(" and ") });
+    await recordAction(userId, "direct_post_sent", { via: "app" }, { name: results.filter((r) => r.status !== "failed").map((r) => PLACE_NAME[r.kind]).join(" and ") });
   }
   revalidatePath("/sources");
   revalidatePath("/settings");
@@ -158,14 +210,15 @@ export async function sendPostAction(input: SendPostInput): Promise<SendPostResu
 }
 
 /** Sends a place again after Telegram or Discord refused it, with the same text. */
-export async function resendPostAction(postId: string, kind: PostKind): Promise<SendPostResult> {
+export async function resendPostAction(postId: string, kind: PostKind, target = ""): Promise<SendPostResult> {
   const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof postId !== "string" || postId.length > 100 || (kind !== "telegram" && kind !== "discord")) return { ok: false, message: "Unknown post." };
+  if (!userId) return { ok: false, message: "Sign in first." };
+  if (typeof postId !== "string" || postId.length > 100 || !(kind in PLACE_NAME) || typeof target !== "string" || target.length > 200) return { ok: false, message: "Unknown post." };
   if (!(await limit("outbound", userId)).ok) return { ok: false, message: "Too many sends this hour. Try again later." };
   const tokens = await botTokens();
-  if (!tokens[kind]) return { ok: false, message: "That bot is not set up on this deployment." };
-  const r = await resendFailed(userId, postId, kind, directPostDeps(() => Promise.resolve(tokens)));
+  if ((kind === "telegram" || kind === "discord") && !tokens[kind]) return { ok: false, message: "That bot is not set up on this deployment." };
+  // Mastodon and Bluesky name the account; the row is found by it, and only this person's row can match.
+  const r = await resendFailed(userId, postId, { kind, target }, directPostDeps(() => Promise.resolve(tokens)));
   if (!r) return { ok: false, message: "Only a message Telegram or Discord refused can be sent again. A follow-up is changed on its Buffer draft." };
   revalidatePath("/sources");
   revalidatePath("/settings");
@@ -181,7 +234,7 @@ export type ChangeScheduledInput = { sendAt?: string; telegram?: string; discord
  */
 export async function changeScheduledPostAction(postId: string, change: ChangeScheduledInput): Promise<ActionResult> {
   const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (!userId) return { ok: false, message: "Sign in first." };
   if (typeof postId !== "string" || postId.length > 100 || !change || typeof change !== "object") return { ok: false, message: "Unknown post." };
   const sendAt = change.sendAt === undefined ? undefined : new Date(String(change.sendAt));
   if (sendAt) {
@@ -202,13 +255,16 @@ export async function changeScheduledPostAction(postId: string, change: ChangeSc
   if (!rows.length) return { ok: false, message: "It already went out or was cancelled, so it cannot be changed." };
   revalidatePath("/sources");
   revalidatePath("/settings");
-  return { ok: true, note: await startTimerOrNote(postId, Math.max(...rows.map((r) => r.revision)), rows[0].sendAt!) };
+  // A rescheduled row always has its send time; one without is a broken store, not a case to guess around.
+  const at = rows[0].sendAt;
+  if (!at) throw new Error("A rescheduled post came back without a send time.");
+  return { ok: true, note: await startTimerOrNote(postId, Math.max(...rows.map((r) => r.revision)), at) };
 }
 
 /** Cancels a scheduled post before it goes out. */
 export async function cancelScheduledPostAction(postId: string): Promise<ActionResult> {
   const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (!userId) return { ok: false, message: "Sign in first." };
   if (typeof postId !== "string" || postId.length > 100) return { ok: false, message: "Unknown post." };
   if (await followsBuffer(userId, postId)) return { ok: false, message: "This one follows a Buffer post. Turn it off on that draft in Next week." };
   const n = await postgresDirectPostStore().cancel(userId, postId, new Date());
@@ -224,7 +280,7 @@ export async function recentDirectPosts(from: PageFrom = {}): Promise<Page<Direc
   const now = new Date();
   const page = await directPostPage(userId, from);
   return { ...page, rows: page.rows.map((r) => ({
-    postId: r.postId, kind: r.kind, label: r.label, text: r.text, status: shownStatus(r, now), link: r.link, error: r.error, at: r.createdAt.toISOString(),
+    postId: r.postId, kind: r.kind, target: r.target, label: r.label, text: r.text, status: shownStatus(r, now), link: r.link, error: r.error, at: r.createdAt.toISOString(),
     sendAt: r.sendAt?.toISOString() ?? null, late: sentLate(r), followsBuffer: !!r.bufferPostId,
   })) };
 }
@@ -256,13 +312,29 @@ function placesOf(rows: { kind: PostKind; label: string; text: string; target: s
 export type FollowUpInput = { telegram?: { text: string } | null; discord?: { channelId: string; text: string } | null };
 
 /**
+ * Follows or stops following each place the input names; a place left out is not touched. Returns the places that
+ * could not change because they already went out or are going out now.
+ */
+async function applyFollowUps(store: ReturnType<typeof postgresDirectPostStore>, at: { userId: string; id: string; bufferPostId: string; at: Date; now: Date }, input: FollowUpInput, items: PostItem[]): Promise<PostKind[]> {
+  const unchanged: PostKind[] = [];
+  for (const kind of ["telegram", "discord"] as const) {
+    if (input[kind] === undefined) continue;
+    const item = items.find((i) => i.kind === kind);
+    if (item) { if (!(await store.follow(at.userId, at.id, item, at.at, at.now, at.bufferPostId))) unchanged.push(kind); }
+    // Telegram and Discord have one row per post, found by kind; the target is not part of their key.
+    else await store.unfollow(at.userId, at.id, { kind, target: "" }, at.now);
+  }
+  return unchanged;
+}
+
+/**
  * Sets which places follow one of the person's Buffer posts, with their text. Each goes out once Buffer has
  * published the post; a place turned off stops waiting. A place already going out, sent or failed is not changed,
  * and the answer says so.
  */
 export async function saveFollowUpAction(bufferPostId: string, input: FollowUpInput): Promise<{ ok: false; message: string } | { ok: true; note?: string; places: FollowUpPlace[] }> {
   const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
+  if (!userId) return { ok: false, message: "Sign in first." };
   if (typeof bufferPostId !== "string" || bufferPostId.length > 100 || !input || typeof input !== "object") return { ok: false, message: "Unknown post." };
   const [snap, allowed, tokens] = await Promise.all([postgresSnapshotStore().get(userId), limit("outbound", userId), botTokens()]);
   // The post must be one of this person's, from their own saved Buffer week, with a time.
@@ -275,13 +347,7 @@ export async function saveFollowUpAction(bufferPostId: string, input: FollowUpIn
   const id = await followUpIdFor(userId, bufferPostId);
   const at = new Date(Date.parse(post.dueAt) + 60_000);
   const now = new Date();
-  const unchanged: PostKind[] = [];
-  for (const kind of ["telegram", "discord"] as const) {
-    if (input[kind] === undefined) continue;
-    const item = built.items.find((i) => i.kind === kind);
-    if (item) { if (!(await store.follow(userId, id, item, at, now, bufferPostId))) unchanged.push(kind); }
-    else await store.unfollow(userId, id, kind, now);
-  }
+  const unchanged = await applyFollowUps(store, { userId, id, bufferPostId, at, now }, input, built.items);
   const rows = await store.rows(userId, id);
   // Turning off a place that is going out right now cannot stop it.
   for (const kind of ["telegram", "discord"] as const) {

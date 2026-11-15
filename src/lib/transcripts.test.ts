@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { youtubeTranscript } from "./transcripts";
 
-const answer = (status: number, body: unknown) => vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
+const answer = (status: number, body: unknown) => vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
 
 describe("youtubeTranscript", () => {
   it("asks Supadata for the plain-text transcript of a YouTube video, with the key in the header", async () => {
     const f = answer(200, { content: "Today we make croutons from stale bread.", lang: "en" });
     expect(await youtubeTranscript("https://www.youtube.com/watch?v=abc123", "key-1", f)).toBe("Today we make croutons from stale bread.");
     const [url, init] = f.mock.calls[0];
-    expect(String(url)).toBe("https://api.supadata.ai/v1/transcript?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123&text=false&mode=native&lang=en");
-    expect((init.headers as Record<string, string>)["x-api-key"]).toBe("key-1");
+    expect(url).toBe("https://api.supadata.ai/v1/transcript?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123&text=false&mode=native&lang=en");
+    expect(init?.headers).toMatchObject({ "x-api-key": "key-1" });
   });
 
   it("never sends a link that is not a YouTube video", async () => {
-    const f = vi.fn();
+    const f = vi.fn<typeof fetch>();
     expect(await youtubeTranscript("https://example.com/watch?v=abc", "k", f)).toBeNull();
     expect(await youtubeTranscript("https://www.youtube.com/channel/UC1", "k", f)).toBeNull();
     expect(f).not.toHaveBeenCalled();

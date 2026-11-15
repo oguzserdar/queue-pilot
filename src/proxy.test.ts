@@ -20,11 +20,11 @@ afterEach(() => { vi.unstubAllEnvs(); });
 describe("before the homepage is launched", () => {
   beforeEach(() => { vi.stubEnv("LANDING_PAGE", ""); });
   it("shows a signed-out visitor the example app on every screen, with no redirect", () => {
-    for (const path of ["/", "/week", "/playbook", "/connect"]) expect(passes(proxy(at(path))), path).toBe(true);
+    expect(["/", "/week", "/playbook", "/connect"].filter((path) => !passes(proxy(at(path))))).toEqual([]);
   });
   it("never serves the homepage, and sends its address and the demo addresses to /", () => {
     expect(rewrittenTo(proxy(at("/")))).toBeNull();
-    for (const path of ["/home", "/demo", "/demo/leave"]) expect(redirectedTo(proxy(at(path))), path).toBe("/");
+    expect(["/home", "/demo", "/demo/leave"].map((path) => [path, redirectedTo(proxy(at(path)))])).toEqual([["/home", "/"], ["/demo", "/"], ["/demo/leave", "/"]]);
   });
   it("leaves a signed-in person on their app", () => {
     expect(passes(proxy(at("/week", SESSION)))).toBe(true);
@@ -49,7 +49,8 @@ describe("the homepage", () => {
 
 describe("the app's screens", () => {
   it("are only for someone signed in with Buffer", () => {
-    for (const path of ["/week", "/playbook", "/settings", "/sources/new", "/connect"]) expect(redirectedTo(proxy(at(path))), path).toBe("/");
+    const paths = ["/week", "/playbook", "/settings", "/sources/new", "/connect"];
+    expect(paths.map((path) => [path, redirectedTo(proxy(at(path)))])).toEqual(paths.map((path) => [path, "/"]));
   });
   it("open for a session, including the secure cookie name used over HTTPS", () => {
     expect(passes(proxy(at("/week", SESSION)))).toBe(true);
@@ -89,5 +90,5 @@ describe("the demo", () => {
 });
 
 it("runs on every app screen and its subpages", () => {
-  for (const p of APP_SCREENS) expect(config.matcher, p).toContain(`${p}/:path*`);
+  expect(APP_SCREENS.filter((p) => !config.matcher.includes(`${p}/:path*`))).toEqual([]);
 });

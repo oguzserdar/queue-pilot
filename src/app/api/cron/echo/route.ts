@@ -9,7 +9,7 @@ import { getAuth } from "@/lib/auth";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { refreshSnapshot } from "@/lib/buffer/snapshot";
 import { withBudget } from "@/lib/buffer/budget";
-import { bufferAccessToken } from "@/lib/buffer-token";
+import { NoBufferAccount, bufferAccessToken } from "@/lib/buffer-token";
 import { botTokens, echoForUser } from "@/lib/echo-run";
 import { pruneRequestCounts } from "@/lib/rate-limit";
 import { postgresEchoStore } from "@/lib/echo-store";
@@ -57,6 +57,8 @@ export async function GET(req: Request) {
       sent += out.filter((r) => r.status === "sent").length;
       failed += out.filter((r) => r.status === "failed").length;
     } catch (e) {
+      // Someone without Buffer has no Buffer posts to copy: nothing to do, not a failure.
+      if (e instanceof NoBufferAccount) continue;
       console.warn(JSON.stringify({ event: "qp-cron-echo-user-failed", userId, message: forLog(e) }));
     }
   }

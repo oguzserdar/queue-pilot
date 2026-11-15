@@ -3,21 +3,34 @@
  * due run claims rows with FOR UPDATE SKIP LOCKED, so any number of workers can run at the same time and each row is
  * taken by one of them. Every statement a person's action runs is scoped to their user id.
  */
-import { and, desc, eq, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { directPostSend } from "../db/schema";
-import { CLAIM_MS, type DirectPostRow, type DirectPostStore } from "./direct-posts";
+import { CLAIM_MS, ONE_PER_POST, WAIT_CEILING, textFor, type DirectPostRow, type DirectPostStore, type Place } from "./direct-posts";
 import { readPage, timeText, type Page, type PageFrom } from "./page-bookmark";
+import { SOCIAL_NETWORKS } from "./social-networks";
 
+/** Direct posts go to Telegram, Discord, Mastodon or Bluesky; Instagram posts go through Buffer, so any other kind here is a bug. */
+function postKind(kind: (typeof directPostSend.$inferSelect)["kind"]): DirectPostRow["kind"] {
+  if (kind === "instagram") throw new Error("Unexpected direct post kind instagram");
+  return kind;
+}
 const toRow = (r: typeof directPostSend.$inferSelect): DirectPostRow => ({
-  postId: r.postId, kind: r.kind, target: r.target, guildId: r.guildId, label: r.label, text: r.text, status: r.status,
-  attempts: r.attempts, link: r.link, error: r.error, sendAt: r.sendAt, revision: r.revision, callStartedAt: r.callStartedAt,
+  postId: r.postId, kind: postKind(r.kind), target: r.target, guildId: r.guildId, label: r.label, text: r.text, status: r.status,
+  attempts: r.attempts, waits: r.waits, link: r.link, error: r.error, sendAt: r.sendAt, revision: r.revision, callStartedAt: r.callStartedAt,
   claimedUntil: r.claimedUntil, bufferPostId: r.bufferPostId, createdAt: r.createdAt, updatedAt: r.updatedAt,
 });
 
 const mine = (userId: string, postId: string) => and(eq(directPostSend.userId, userId), eq(directPostSend.postId, postId));
 
-export function postgresDirectPostStore(): DirectPostStore {
+/** The row of one place: by kind for Telegram and Discord (one per post), by kind and account for the others. */
+const at = (p: Place) => (ONE_PER_POST.has(p.kind) ? eq(directPostSend.kind, p.kind) : and(eq(directPostSend.kind, p.kind), eq(directPostSend.target, p.target)));
+
+type Planning = Pick<DirectPostStore, "claim" | "schedule" | "reschedule" | "follow" | "unfollow" | "defer" | "retryLater" | "waitingFollowUps" | "followedPlaces">;
+type Cancelling = Pick<DirectPostStore, "cancelKind" | "cancel">;
+
+/** Writing, scheduling, following and cancelling rows. */
+function planning(): Planning {
   return {
     async claim(userId, postId, item, now) {
       const rows = await db()
@@ -36,13 +49,15 @@ export function postgresDirectPostStore(): DirectPostStore {
       return rows.length === 1;
     },
     async reschedule(userId, postId, change, now) {
+      // Each waiting row of the post, every kind: the new time for all, and each row's own text (by account, else by kind).
+      const waiting = await db().select({ kind: directPostSend.kind, target: directPostSend.target }).from(directPostSend).where(and(mine(userId, postId), eq(directPostSend.status, "scheduled")));
       const out: DirectPostRow[] = [];
-      for (const kind of ["telegram", "discord"] as const) {
-        const text = change.texts?.[kind];
+      for (const w of waiting) {
+        const text = textFor(change, { kind: postKind(w.kind), target: w.target });
         const rows = await db()
           .update(directPostSend)
           .set({ ...(change.sendAt ? { sendAt: change.sendAt, claimedUntil: null } : {}), ...(text !== undefined ? { text } : {}), revision: sql`${directPostSend.revision} + 1`, updatedAt: now })
-          .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "scheduled")))
+          .where(and(mine(userId, postId), eq(directPostSend.kind, w.kind), eq(directPostSend.target, w.target), eq(directPostSend.status, "scheduled")))
           .returning();
         out.push(...rows.map(toRow));
       }
@@ -55,32 +70,44 @@ export function postgresDirectPostStore(): DirectPostStore {
         .insert(directPostSend)
         .values({ postId, userId, kind: item.kind, target: item.target, label: item.label, text: item.text, guildId: item.guildId ?? null, status: "scheduled", sendAt, bufferPostId, createdAt: now, updatedAt: now })
         .onConflictDoUpdate({
-          target: [directPostSend.postId, directPostSend.kind],
+          // Telegram and Discord: one row per post, so a new channel moves the row (the partial unique index).
+          // Mastodon and Bluesky: one row per account, the primary key.
+          ...(ONE_PER_POST.has(item.kind)
+            ? { target: [directPostSend.postId, directPostSend.kind], targetWhere: sql`${directPostSend.kind} in ('telegram', 'discord')` }
+            : { target: [directPostSend.postId, directPostSend.kind, directPostSend.target] }),
           set: { target: item.target, label: item.label, text: item.text, guildId: item.guildId ?? null, status: "scheduled", sendAt, revision: sql`${directPostSend.revision} + 1`, claimedUntil: null, callStartedAt: null, updatedAt: now },
           setWhere: sql`${directPostSend.userId} = ${userId} and ${directPostSend.status} in ('scheduled', 'cancelled')`,
         })
         .returning({ id: directPostSend.postId });
       return rows.length === 1;
     },
-    async unfollow(userId, postId, kind, now) {
+    async unfollow(userId, postId, place, now) {
       await db()
         .update(directPostSend)
         .set({ status: "cancelled", revision: sql`${directPostSend.revision} + 1`, updatedAt: now })
-        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "scheduled")));
+        .where(and(mine(userId, postId), at(place), eq(directPostSend.status, "scheduled")));
     },
-    async defer(userId, postId, kind, when, now) {
+    async defer(userId, postId, place, when, now) {
       // A held row keeps its time (the one-day limit counts from it) and is not due again before holdUntil.
       await db()
         .update(directPostSend)
         .set({ status: "scheduled", ...(when.sendAt ? { sendAt: when.sendAt } : {}), claimedUntil: when.holdUntil ?? null, updatedAt: now })
-        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending"), sql`${directPostSend.callStartedAt} is null`));
+        .where(and(mine(userId, postId), at(place), eq(directPostSend.status, "pending"), sql`${directPostSend.callStartedAt} is null`));
     },
-    async retryLater(userId, postId, kind, until, now) {
-      // Only after Telegram or Discord refused with "wait": nothing was posted, so the call mark is cleared.
+    async retryLater(userId, postId, place, until, now) {
+      // Only after the network refused with "wait": nothing was posted, so the call mark is cleared. At the ceiling the
+      // row is left pending for the caller to fail; a row no longer pending is not this run's, so that counts as done.
+      const [row] = await db()
+        .select({ status: directPostSend.status, waits: directPostSend.waits })
+        .from(directPostSend)
+        .where(and(mine(userId, postId), at(place)));
+      if (!row || row.status !== "pending") return true;
+      if (row.waits >= WAIT_CEILING) return false;
       await db()
         .update(directPostSend)
-        .set({ status: "scheduled", sendAt: sql`coalesce(${directPostSend.sendAt}, ${until})`, claimedUntil: until, callStartedAt: null, updatedAt: now })
-        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending")));
+        .set({ status: "scheduled", sendAt: sql`coalesce(${directPostSend.sendAt}, ${until})`, claimedUntil: until, callStartedAt: null, waits: sql`${directPostSend.waits} + 1`, updatedAt: now })
+        .where(and(mine(userId, postId), at(place), eq(directPostSend.status, "pending")));
+      return true;
     },
     async waitingFollowUps(userId, bufferPostIds) {
       if (!bufferPostIds.length) return [];
@@ -97,6 +124,12 @@ export function postgresDirectPostStore(): DirectPostStore {
         ));
       return new Set(rows.map((r) => `${r.id}|${r.kind}`));
     },
+  };
+}
+
+/** Cancelling scheduled rows, one post or every post to a kind of place. */
+function cancelling(): Cancelling {
+  return {
     async cancelKind(userId, kind, now) {
       const rows = await db()
         .update(directPostSend)
@@ -114,12 +147,18 @@ export function postgresDirectPostStore(): DirectPostStore {
         .returning({ id: directPostSend.postId });
       return rows.length;
     },
+  };
+}
+
+/** Claiming due rows, sending them, and reading them back. */
+function sending(): Omit<DirectPostStore, keyof Planning | keyof Cancelling> {
+  return {
     async claimDue(now, limit, only) {
       const t = directPostSend;
       // Rows that are due and not held, or claimed by a worker that died before calling. SKIP LOCKED lets any number
       // of workers run at once; each row goes to one of them.
       const due = db()
-        .select({ postId: t.postId, kind: t.kind })
+        .select({ postId: t.postId, kind: t.kind, target: t.target })
         .from(t)
         .where(and(
           or(
@@ -134,40 +173,63 @@ export function postgresDirectPostStore(): DirectPostStore {
       const rows = await db()
         .update(t)
         .set({ status: "pending", claimedUntil: new Date(now.getTime() + CLAIM_MS), updatedAt: now })
-        .where(sql`(${t.postId}, ${t.kind}) in ${due}`)
+        .where(sql`(${t.postId}, ${t.kind}, ${t.target}) in ${due}`)
         .returning();
       return rows.map((r) => ({ ...toRow(r), userId: r.userId }));
     },
-    async startCall(userId, postId, kind, now) {
+    async hold(userId, postId, place, until, now) {
+      await db()
+        .update(directPostSend)
+        .set({ status: "scheduled", sendAt: sql`coalesce(${directPostSend.sendAt}, ${until})`, claimedUntil: until, updatedAt: now })
+        .where(and(mine(userId, postId), at(place), eq(directPostSend.status, "pending"), isNull(directPostSend.callStartedAt)));
+    },
+    async release(userId, postId, place, now) {
+      await db()
+        .update(directPostSend)
+        .set({ claimedUntil: new Date(now.getTime() - 1), updatedAt: now })
+        .where(and(mine(userId, postId), at(place), eq(directPostSend.status, "pending"), isNull(directPostSend.callStartedAt)));
+    },
+    async startCall(userId, postId, place, now) {
       const rows = await db()
         .update(directPostSend)
         .set({ callStartedAt: now, updatedAt: now })
-        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending"), sql`${directPostSend.callStartedAt} is null`))
+        .where(and(mine(userId, postId), at(place), eq(directPostSend.status, "pending"), sql`${directPostSend.callStartedAt} is null`))
         .returning({ id: directPostSend.postId });
       return rows.length === 1;
     },
     async rows(userId, postId) {
       return (await db().select().from(directPostSend).where(mine(userId, postId))).map(toRow);
     },
-    async reclaimFailed(userId, postId, kind, now) {
+    async reclaimFailed(userId, postId, place, now) {
       // One statement: only a failed row of this user's flips back to pending, so two resends cannot both win.
       const [row] = await db()
         .update(directPostSend)
-        .set({ status: "pending", attempts: sql`${directPostSend.attempts} + 1`, error: null, callStartedAt: null, claimedUntil: new Date(now.getTime() + CLAIM_MS), updatedAt: now })
-        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "failed"), isNull(directPostSend.bufferPostId)))
+        .set({ status: "pending", attempts: sql`${directPostSend.attempts} + 1`, waits: 0, error: null, callStartedAt: null, claimedUntil: new Date(now.getTime() + CLAIM_MS), updatedAt: now })
+        .where(and(mine(userId, postId), at(place), eq(directPostSend.status, "failed"), isNull(directPostSend.bufferPostId)))
         .returning();
       return row ? toRow(row) : null;
     },
-    async finish(userId, postId, kind, result, now) {
+    async finish(userId, postId, place, result, now) {
       await db()
         .update(directPostSend)
         .set({ status: result.status, link: result.link, error: result.error, updatedAt: now })
-        .where(and(mine(userId, postId), eq(directPostSend.kind, kind), eq(directPostSend.status, "pending")));
+        .where(and(mine(userId, postId), at(place), eq(directPostSend.status, "pending")));
     },
     async recent(userId, limit) {
       return (await db().select().from(directPostSend).where(eq(directPostSend.userId, userId)).orderBy(desc(directPostSend.createdAt)).limit(limit)).map(toRow);
     },
+    async between(userId, start, end) {
+      const at = sql`coalesce(${directPostSend.sendAt}, ${directPostSend.createdAt})`;
+      return (await db().select().from(directPostSend).where(and(
+        eq(directPostSend.userId, userId), inArray(directPostSend.kind, [...SOCIAL_NETWORKS]), ne(directPostSend.status, "cancelled"),
+        sql`${at} >= ${start}`, sql`${at} < ${end}`,
+      )).orderBy(asc(at))).map(toRow);
+    },
   };
+}
+
+export function postgresDirectPostStore(): DirectPostStore {
+  return { ...planning(), ...cancelling(), ...sending() };
 }
 
 /** Telegram and Discord posts per page in Settings, Channels. */

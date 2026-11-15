@@ -7,6 +7,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { mcpToolSource, registeredToolNames } from "@/test/mcp-tool-sources";
 
 const root = join(__dirname, "../..");
 const readme = readFileSync(join(root, "README.md"), "utf8");
@@ -15,9 +16,8 @@ const localLinks = [...readme.matchAll(/\]\((?!https?:|#|mailto:)([^)\s]+)\)/g)]
 
 /** Every tool the connector registers, read from its source files. */
 function registeredTools(): Set<string> {
-  const sources = readdirSync(join(root, "src/lib")).filter((f) => f.startsWith("mcp-") && f.endsWith(".ts") && !f.endsWith(".test.ts")).map((f) => join(root, "src/lib", f));
-  const code = [join(root, "src/app/api/mcp/route.ts"), ...sources].map((f) => readFileSync(f, "utf8")).join("\n");
-  return new Set([...code.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((m) => m[1]));
+  const sources = readdirSync(join(root, "src/lib")).filter((f) => f.startsWith("mcp-") && f.endsWith(".ts") && !f.endsWith(".test.ts"));
+  return new Set(registeredToolNames(mcpToolSource(...sources)));
 }
 
 /** PNG chunk types other than the ones needed to draw the image (text, time, EXIF, XMP and the like). */

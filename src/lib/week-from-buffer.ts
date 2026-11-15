@@ -3,7 +3,7 @@
  * each channel's posting slots placed on their local day and time, and the account's posts placed into those slots.
  */
 import type { Channel, DayOfWeek, Post as BufferPost } from "./buffer/queries";
-import { slotsInRange, zonedToUtc } from "./slots";
+import { intlDayOfWeek, slotsInRange, zonedToUtc } from "./slots";
 import { slotId } from "./open-slots";
 import { slotKey, type WeekModel, type WeekPost } from "./week-model";
 
@@ -15,7 +15,7 @@ function parts(instant: Date, timeZone: string) {
       .formatToParts(instant)
       .map((x) => [x.type, x.value]),
   );
-  return { weekday: p.weekday as string, day: Number(p.day), month: p.month as string, year: Number(p.year), time: `${Number(p.hour)}:${p.minute}` };
+  return { weekday: p.weekday, day: Number(p.day), month: p.month, year: Number(p.year), time: `${Number(p.hour)}:${p.minute}` };
 }
 
 /**
@@ -25,8 +25,13 @@ function parts(instant: Date, timeZone: string) {
  */
 export function weekRange(now: Date, timeZone: string, weeksAhead: 0 | 1): { start: Date; end: Date } {
   const today = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).formatToParts(now);
-  const get = (t: string) => today.find((x) => x.type === t)!.value;
-  const dow = INDEX[get("weekday").toLowerCase().slice(0, 3) as DayOfWeek];
+  const get = (t: string) => {
+    const part = today.find((x) => x.type === t);
+    // Intl always writes the parts asked for in its options.
+    if (!part) throw new Error(`Intl gave no ${t}`);
+    return part.value;
+  };
+  const dow = INDEX[intlDayOfWeek(get("weekday"))];
   const base = Date.UTC(Number(get("year")), Number(get("month")) - 1, Number(get("day")));
   const monday = new Date(base + (weeksAhead * 7 - dow) * 86_400_000);
   const start = zonedToUtc(monday.getUTCFullYear(), monday.getUTCMonth() + 1, monday.getUTCDate(), 0, 0, timeZone);
@@ -80,7 +85,7 @@ export function weekFromBuffer(channels: Channel[], posts: BufferPost[], range: 
     const at = new Date(p.dueAt);
     if (at < range.start || at >= range.end) continue;
     const local = parts(at, ch.timezone);
-    const day = INDEX[local.weekday.toLowerCase().slice(0, 3) as DayOfWeek];
+    const day = INDEX[intlDayOfWeek(local.weekday)];
     weekPosts.push({
       id: p.id,
       channel: ch.id,

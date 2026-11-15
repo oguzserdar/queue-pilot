@@ -15,12 +15,45 @@ import { judgeModelFor } from "./judge-model";
 import { countFor, limitFor } from "./char-limits";
 import { playbookVersion } from "./playbook-version";
 import type { Verdict } from "./judge";
+import type { Rule } from "./rules";
 
 /** The outcome of one check. "refused" means a blocking rule or the length failed; nothing is saved either way. */
 export type TextCheck =
   | { kind: "needs_channel"; message: string }
   | { kind: "unavailable"; message: string }
   | { kind: "checked"; status: "refused" | "flagged" | "uncertain" | "passed" | "not_checked"; reason?: string; channelId: string | null; scope: "account" | "network-only"; verdicts: Verdict[]; judgedWith?: string; playbookRevision: string; limit: { max: number | null; from: "buffer" | "built-in" } };
+
+type SaveLimit = { max: number | null; from: "buffer" | "built-in" };
+
+/** The text limit a check holds the draft to: the account's own limit, or the built-in one when stricter for a save. */
+function saveLimit(builtIn: number | null, channelLimit: number | null | undefined, forOrdinarySave: boolean): SaveLimit {
+  if (!channelLimit) return { max: builtIn, from: "built-in" };
+  if (forOrdinarySave && builtIn !== null && builtIn < channelLimit) return { max: builtIn, from: "built-in" };
+  return { max: channelLimit, from: "buffer" };
+}
+
+/** Why a draft over its limit is refused, naming whose limit it is. */
+function overLimitReason(max: number, from: SaveLimit["from"], network: string, channelLimit: number | null | undefined): string {
+  if (from === "buffer") return `Over this account's ${max} character limit.`;
+  if (channelLimit && channelLimit > max) return `Over Queue Pilot's current save limit of ${max} characters for ${network}. Buffer allows this account ${channelLimit}, but drafts saved into open slots are still checked at ${max}.`;
+  return `Over ${network}'s ${max} character limit.`;
+}
+
+/** True when the text cannot be checked without one exact account: a named one that matches no single account, more
+ * than one match, or no match while some rule is written for exact accounts. */
+function needsExactChannel(matches: number, channelId: string | undefined, rules: Rule[]): boolean {
+  if (channelId && matches !== 1) return true;
+  if (matches > 1) return true;
+  return !matches && rules.some(r => r.accountIds?.length || r.inheritance || r.overrides?.accounts);
+}
+
+/** The check's status: refused by a blocking rule, uncertain when a verdict is missing or unsure, flagged, or passed. */
+function statusOf(verdicts: Verdict[], ruleCount: number): "refused" | "uncertain" | "flagged" | "passed" {
+  if (verdicts.some(v => v.level === "block" && v.verdict === "fail")) return "refused";
+  if (verdicts.length !== ruleCount || verdicts.some(v => v.verdict === "unsure" || v.unavailable)) return "uncertain";
+  if (verdicts.some(v => v.verdict === "fail")) return "flagged";
+  return "passed";
+}
 
 /**
  * Checks text against the person's playbook for one network, and one exact account when given.
@@ -38,12 +71,10 @@ export async function checkText(userId: string, text: string, network: string, c
   const [snap, allRules] = await Promise.all([postgresSnapshotStore().get(userId), postgresRulesStore().list(userId)]);
   const revision = playbookVersion(allRules);
   const builtIn = limitFor(network);
-  const limit: { max: number | null; from: "buffer" | "built-in" } = !channelLimit ? { max: builtIn, from: "built-in" }
-    : forOrdinarySave && builtIn !== null && builtIn < channelLimit ? { max: builtIn, from: "built-in" }
-    : { max: channelLimit, from: "buffer" };
-  if (limit.max && countFor(network, text) > limit.max) return { kind: "checked", status: "refused", reason: limit.from === "buffer" ? `Over this account's ${limit.max} character limit.` : channelLimit && channelLimit > limit.max ? `Over Queue Pilot's current save limit of ${limit.max} characters for ${network}. Buffer allows this account ${channelLimit}, but drafts saved into open slots are still checked at ${limit.max}.` : `Over ${network}'s ${limit.max} character limit.`, channelId: channelId ?? null, scope: channelId ? "account" : "network-only", verdicts: [], playbookRevision: revision, limit };
+  const limit = saveLimit(builtIn, channelLimit, forOrdinarySave);
+  if (limit.max && countFor(network, text) > limit.max) return { kind: "checked", status: "refused", reason: overLimitReason(limit.max, limit.from, network, channelLimit), channelId: channelId ?? null, scope: channelId ? "account" : "network-only", verdicts: [], playbookRevision: revision, limit };
   const eligible = snap?.data.channels.filter(c => c.service === network && (!channelId || c.id === channelId)) ?? [];
-  if ((channelId && eligible.length !== 1) || eligible.length > 1 || (!eligible.length && allRules.some(r => r.accountIds?.length || r.inheritance || r.overrides?.accounts)))
+  if (needsExactChannel(eligible.length, channelId, allRules))
     return { kind: "needs_channel", message: "Choose one exact channelId from list_channels so the correct account rules are checked." };
   const channel = eligible[0]?.id;
   const scope = channel ? "account" : "network-only";
@@ -53,9 +84,7 @@ export async function checkText(userId: string, text: string, network: string, c
   if (!jm) return { kind: "unavailable", message: "AI checking is unavailable. Check built-in AI or your own key in Settings." };
   try {
     const verdicts = (await judgeDrafts(jm.judges, [{ slotId: "try", text, network, channelId: channel }], rules)).get("try") ?? [];
-    const blocked = verdicts.some(v => v.level === "block" && v.verdict === "fail");
-    const incomplete = verdicts.length !== rules.length;
-    const status = blocked ? "refused" : incomplete || verdicts.some(v => v.verdict === "unsure" || v.unavailable) ? "uncertain" : verdicts.some(v => v.verdict === "fail") ? "flagged" : "passed";
+    const status = statusOf(verdicts, rules.length);
     return { kind: "checked", status, channelId: channel ?? null, scope, verdicts, judgedWith: jm.source, playbookRevision: revision, limit };
   } catch (e) { await jm.giveBack(); throw e; }
   finally { await jm.settle(); }

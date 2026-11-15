@@ -31,8 +31,10 @@ export function needsFromBuffer(channels: Channel[], posts: Post[], now: Date, t
     const ch = byId.get(p.channelId);
     return UPCOMING.includes(p.status) && ch && channelCheck(ch).result === "fail";
   });
-  if (blocked.length) {
-    const ch = byId.get(blocked[0].channelId)!;
+  // The filter kept only posts whose channel is known, so the first one's channel is found.
+  const blockedChannel = blocked.length ? byId.get(blocked[0].channelId) : undefined;
+  if (blocked.length && blockedChannel) {
+    const ch = blockedChannel;
     items.push({ id: "willfail", tone: "danger", title: `${plural(blocked.length, "post")} would fail`, detail: channelCheck(ch).detail, action: "Open week", href: "/week" });
   }
 

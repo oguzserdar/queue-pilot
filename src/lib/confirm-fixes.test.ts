@@ -86,13 +86,13 @@ describe("buildConfirmPrompt", () => {
 describe("askVerdicts", () => {
   it("passes the deadline to the model call, so a slow check stops before its claim lapses", async () => {
     const signal = AbortSignal.abort();
-    const model = { specificationVersion: "v3", provider: "test", modelId: "t", supportedUrls: {}, doGenerate: vi.fn(async (o: { abortSignal?: AbortSignal }) => { if (o.abortSignal?.aborted) throw new Error("aborted"); throw new Error("not aborted"); }), doStream: vi.fn() } as never;
-    await expect(askVerdicts(model, [offer("a")], signal)).rejects.toThrow();
+    const model = { specificationVersion: "v3", provider: "test", modelId: "t", supportedUrls: {}, doGenerate: vi.fn<(o: { abortSignal?: AbortSignal }) => Promise<never>>(async (o: { abortSignal?: AbortSignal }) => { if (o.abortSignal?.aborted) throw new Error("aborted"); throw new Error("not aborted"); }), doStream: vi.fn<() => Promise<never>>() } as never;
+    await expect(askVerdicts(model, [offer("a")], signal)).rejects.toThrow(/^aborted$/);
     expect(vi.mocked((model as { doGenerate: (o: { abortSignal?: AbortSignal }) => unknown }).doGenerate).mock.calls[0]?.[0]?.abortSignal?.aborted ?? true).toBe(true);
   });
 
   it("makes no model call when code found no repeated fix", async () => {
-    const model = { doGenerate: vi.fn() } as never;
+    const model = { doGenerate: vi.fn<() => Promise<never>>() } as never;
     expect(await askVerdicts(model, [])).toEqual([]);
   });
 });

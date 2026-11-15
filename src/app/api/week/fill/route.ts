@@ -19,8 +19,8 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin");
   const sameHost = (() => { try { return !!origin && new URL(origin).host === new URL(request.url).host; } catch { return false; } })();
   if (!sameHost) return new Response(null, { status: 403 });
-  const body = await request.json().catch(() => null) as { week?: unknown } | null;
-  const week = body?.week === "this" ? "this" : "next";
+  const body: unknown = await request.json().catch(() => null);
+  const week = typeof body === "object" && body !== null && "week" in body && body.week === "this" ? "this" : "next";
 
   const encoder = new TextEncoder();
   let send: (event: object) => void = () => {};

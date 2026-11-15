@@ -1,7 +1,6 @@
 /**
  * @fileoverview Buffer daily posting limits: one request per organization, documented fields and inputs only.
  */
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bufferReference, documentedFields } from "./reference.test-support";
 import { postingLimits } from "./posting-limits";
@@ -16,7 +15,7 @@ describe("Buffer daily posting limits", () => {
 
   it("asks once per organization, only for documented fields, at the given time", async () => {
     const calls: Record<string, unknown>[] = [];
-    const run = vi.fn(async (_t: string, _q: string, v?: Record<string, unknown>) => {
+    const run = vi.fn<(t: string, q: string, v?: Record<string, unknown>) => Promise<unknown>>(async (_t: string, _q: string, v?: Record<string, unknown>) => {
       calls.push(v ?? {});
       const ids = (v as { input: { channelIds: string[] } }).input.channelIds;
       return { dailyPostingLimits: ids.map((channelId) => ({ channelId, isAtLimit: channelId === "x1", limit: channelId === "x1" ? 3 : null, scheduled: 2, sent: 1 })) };

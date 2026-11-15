@@ -1,11 +1,13 @@
 import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
+import { NoObjectGeneratedError } from "ai";
+import { ZodError } from "zod";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { answering } from "./ai-test-model";
 import type { Post } from "./buffer/queries";
 const pg = await migratedPglite(); const testDb = drizzle(pg);
 vi.mock("../db", () => ({ db: () => testDb }));
-const ai = vi.hoisted(() => ({ model: null as unknown, calls: 0, settle: vi.fn(), giveBack: vi.fn(), available: true }));
+const ai = vi.hoisted(() => ({ model: null as unknown, calls: 0, settle: vi.fn<import("./judge-model").Ai["settle"]>(), giveBack: vi.fn<import("./judge-model").Ai["giveBack"]>(), available: true }));
 vi.mock("./judge-model", () => ({ aiFor: async () => { ai.calls++; return ai.available ? { language: ai.model, settle: ai.settle, giveBack: ai.giveBack } : null; } }));
 vi.mock("./rate-limit", () => ({ limit: async () => ({ ok: true }) }));
 const store = await import("./source-store");
@@ -57,7 +59,7 @@ describe("source checks through the production operation", () => {
   });
   it("provider failure leaves a pending source change and releases its lease", async () => {
     ai.model = answering("not valid json");
-    await expect(report("The price is $20.")).rejects.toThrow();
+    await expect(report("The price is $20.")).rejects.toThrow(NoObjectGeneratedError);
     expect(ai.giveBack).toHaveBeenCalledOnce();
     expect(await store.claimSourceJob("owner", `source:${key}`)).not.toBeNull();
     expect((await store.sourceHoldsForPosts("owner", posts)).has(key)).toBe(true);
@@ -67,7 +69,7 @@ describe("source checks through the production operation", () => {
     expect(await report("The price is $20.")).toMatchObject({ pending: 1, proposals: 0 });
   });
   it("an outage cannot become a new source or consume AI", async () => {
-    await expect(report("")).rejects.toThrow();
+    await expect(report("")).rejects.toThrow(ZodError);
     expect((await store.latestSource("owner", key))?.text).toBe("The price is $10.");
     expect(ai.calls).toBe(0);
   });

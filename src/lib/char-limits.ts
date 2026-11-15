@@ -40,7 +40,7 @@ export function countFor(service: string, text: string): number {
   switch (service) {
     case "twitter":
       // Weighted count: a URL is 23, a character outside the BMP (emoji) is 2.
-      return withUrls(text, () => 23, (s) => [...s].reduce((n, ch) => n + ((ch.codePointAt(0) ?? 0) > 0xffff ? 2 : 1), 0));
+      return withUrls(text, () => 23, (s) => Array.from(s).reduce((n, ch) => n + ((ch.codePointAt(0) ?? 0) > 0xffff ? 2 : 1), 0));
     case "linkedin":
       return withUrls(text, () => 24, utf16);
     case "instagram":

@@ -10,7 +10,7 @@ function files(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
     const p = join(dir, n);
     if (statSync(p).isDirectory()) return files(p);
-    return /\.tsx$/.test(n) && !/\.test\.tsx$/.test(n) ? [p] : [];
+    return n.endsWith(".tsx") && !n.endsWith(".test.tsx") ? [p] : [];
   });
 }
 

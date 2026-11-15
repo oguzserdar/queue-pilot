@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { tryDraft } from "@/app/(app)/actions";
+import { tryDraft } from "@/app/(app)/rule-actions";
 import { Button } from "@/registry/components/button/button";
 import { Select } from "@/registry/components/select/select";
 import { Textarea } from "@/registry/components/textarea/textarea";
@@ -11,6 +11,12 @@ import type { Verdict } from "@/lib/judge";
 import styles from "./playbook-view.module.css";
 
 const LABEL = { pass: "Follows", fail: "Breaks", unsure: "Not sure" } as const;
+
+/** The one-line answer: no rules apply here, or whether the draft would be saved. */
+function verdictLine(count: number, blocked: boolean, where: string | undefined): string {
+  if (count === 0) return `No rules apply on ${where}.`;
+  return blocked ? "Would not be saved. It breaks a rule marked do not save." : "Would be saved.";
+}
 
 /**
  * Try a draft: a model judges typed text against the playbook, the same check every save gets, so a rule can be seen
@@ -52,7 +58,7 @@ export function RuleTester({ live, example, accounts = [] }: { accounts?: RuleAc
         {!answer && !problem && <p className={styles.muted}>{live ? "Type a draft and press Check." : "Sign in to check your own text."}</p>}
         {answer && (
           <>
-            <p className={styles.verdict} data-blocked={blocked}>{answer.verdicts.length === 0 ? `No rules apply on ${selected?.name ?? NETWORKS[network]}.` : blocked ? "Would not be saved. It breaks a rule marked do not save." : "Would be saved."}</p>
+            <p className={styles.verdict} data-blocked={blocked}>{verdictLine(answer.verdicts.length, !!blocked, selected?.name ?? NETWORKS[network])}</p>
             <ul className={styles.results}>
               {answer.verdicts.map((v) => (
                 <li key={v.ruleId} className={styles.result} data-status={v.verdict === "unsure" ? "guidance" : v.verdict}>

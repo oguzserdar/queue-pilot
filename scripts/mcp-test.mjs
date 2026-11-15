@@ -45,7 +45,8 @@ createServer(async (req, res) => {
   if (!req.url?.startsWith("/mcp")) { res.writeHead(404).end(); return; }
   const server = buildServer();
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  res.on("close", () => { transport.close(); server.close(); });
+  // Closing on hang-up is fire and forget; a failure to close is only logged.
+  res.on("close", () => { void Promise.all([transport.close(), server.close()]).catch((e) => console.error(e)); });
   await server.connect(transport);
   await transport.handleRequest(req, res);
 }).listen(4418, () => console.log("test connector on http://localhost:4418/mcp"));

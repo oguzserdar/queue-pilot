@@ -55,10 +55,16 @@ export async function echoForUser(userId: string, posts: Post[], deps: { store: 
   return runEchoes(plan, {
     claim: (postId, destinationId) => deps.store.claim(userId, postId, destinationId, now, new Date(now.getTime() + CLAIM_MS)),
     send: async ({ post, destination }: EchoSend) => {
-      const d = byId.get(destination.id)!;
+      // The plan holds only usable destinations, each with its bot's token; a gap here is a bug, said plainly.
+      const d = byId.get(destination.id);
+      if (!d) throw new Error(`Copy destination ${destination.id} is not among the usable ones`);
       const body = { text: post.text, link: post.externalLink, imageUrl: imageOf(post) };
-      if (d.kind === "telegram") return { messageId: String((await senders.telegram(deps.tokens.telegram!, Number(d.target), body)).messageId) };
-      return senders.discord(deps.tokens.discord!, d.target, body);
+      if (d.kind === "telegram") {
+        if (!deps.tokens.telegram) throw new telegram.TelegramError("Queue Pilot's Telegram bot is not set up on this deployment.");
+        return { messageId: String((await senders.telegram(deps.tokens.telegram, Number(d.target), body)).messageId) };
+      }
+      if (!deps.tokens.discord) throw new discord.DiscordError("Queue Pilot's Discord bot is not set up on this deployment.");
+      return senders.discord(deps.tokens.discord, d.target, body);
     },
     record: (r) => deps.store.record(userId, r),
     previous: (postId, destinationId) => previous.get(`${postId}|${destinationId}`),

@@ -7,8 +7,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { EvidenceCard } from "@/lib/source-presentation";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock("@/app/(app)/source-actions", () => ({ checkMySources: vi.fn(), recheckSourceEvidence: vi.fn(), applySourceFix: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["refresh"]>() }) }));
+vi.mock("@/app/(app)/source-actions", () => ({ checkMySources: vi.fn<typeof import("@/app/(app)/source-actions").checkMySources>(), recheckSourceEvidence: vi.fn<typeof import("@/app/(app)/source-actions").recheckSourceEvidence>(), applySourceFix: vi.fn<typeof import("@/app/(app)/source-actions").applySourceFix>() }));
 
 const { DraftSources } = await import("./source-evidence");
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;|&apos;/g, "'").replace(/\s+/g, " ");

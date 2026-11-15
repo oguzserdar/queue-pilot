@@ -31,9 +31,10 @@ export async function shareDrafts(userId: string, postIds: unknown, days = 7): P
     if (!snap) return { ok: false, message: "Queue Pilot has not read your Buffer yet. Open Next week first." };
     const channels = new Map(snap.data.channels.map((c) => [c.id, c]));
     // Only the person's own drafts, as they were last read from Buffer; ids are lookup keys, not proof.
-    const drafts: SharedDraft[] = snap.data.posts
-      .filter((p) => postIds.includes(p.id) && p.status === "draft" && channels.has(p.channelId))
-      .map((p) => ({ postId: p.id, channelId: p.channelId, network: channels.get(p.channelId)!.service, channel: channels.get(p.channelId)!.name, dueAt: p.dueAt, text: p.text }));
+    const drafts: SharedDraft[] = snap.data.posts.flatMap((p) => {
+      const c = channels.get(p.channelId);
+      return postIds.includes(p.id) && p.status === "draft" && c ? [{ postId: p.id, channelId: p.channelId, network: c.service, channel: c.name, dueAt: p.dueAt, text: p.text }] : [];
+    });
     if (drafts.length !== new Set(postIds).size) return { ok: false, message: "Some of those drafts are no longer in Buffer. Refresh and try again." };
     const link = await postgresReviewStore().create(userId, drafts, days);
     return { ok: true, id: link.id };
@@ -93,20 +94,27 @@ export async function fixesForRule(userId: string, ruleId: unknown): Promise<{ o
   if (!rule) return { ok: false, message: "That rule is no longer in your playbook." };
   if (!snap) return { ok: false, message: "Queue Pilot has not read your Buffer yet. Open Next week first." };
   const channels = new Map(snap.data.channels.map((c) => [c.id, c]));
+  // Every candidate's account is in channels: the filter below keeps only those.
+  const channelOf = (channelId: string) => {
+    const c = channels.get(channelId);
+    if (!c) throw new Error(`No channel ${channelId} for a draft`);
+    return c;
+  };
   const candidates = snap.data.posts.filter((p) => p.status === "draft" && channels.has(p.channelId));
   // Only drafts Queue Pilot wrote: the person's own drafts are theirs to change.
   const ours = await wroteIds(userId, ...candidates.map((p) => p.id));
-  const drafts = candidates.filter((p) => ours.has(p.id) && appliesTo(rule, channels.get(p.channelId)!.service, p.channelId)).slice(0, MAX_FIX_DRAFTS);
+  const drafts = candidates.filter((p) => ours.has(p.id) && appliesTo(rule, channelOf(p.channelId).service, p.channelId)).slice(0, MAX_FIX_DRAFTS);
   // No drafts, no AI action spent.
   if (!drafts.length) return { ok: true, fixes: [], checked: 0 };
   const jm = await judgeModelFor(userId).catch((e) => (e instanceof AiCapError ? e : null));
   if (jm instanceof AiCapError) return { ok: false, message: jm.message };
   if (!jm) return { ok: false, message: "Add your AI key in Settings: a model checks the drafts." };
   try {
-    const fixes = await proposeRuleFixes(jm.judges, jm.language, drafts.map((p) => ({ slotId: p.id, text: p.text, network: channels.get(p.channelId)!.service, channelId: p.channelId })), rule);
+    const fixes = await proposeRuleFixes(jm.judges, jm.language, drafts.map((p) => ({ slotId: p.id, text: p.text, network: channelOf(p.channelId).service, channelId: p.channelId })), rule);
     const label = (postId: string) => {
-      const p = drafts.find((d) => d.id === postId)!;
-      const c = channels.get(p.channelId)!;
+      const p = drafts.find((d) => d.id === postId);
+      if (!p) throw new Error(`A fix names ${postId}, which is not one of the drafts`);
+      const c = channelOf(p.channelId);
       return `${c.name}${p.dueAt ? `, ${new Date(p.dueAt).toLocaleString("en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit", timeZone: c.timezone || "UTC" })}` : ""}`;
     };
     return { ok: true, checked: drafts.length, fixes: fixes.map((f) => ({ ...f, label: label(f.postId) })) };

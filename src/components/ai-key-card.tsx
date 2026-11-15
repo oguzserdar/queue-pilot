@@ -6,16 +6,24 @@ import { Badge } from "@/registry/components/badge/badge";
 import { AiUsage } from "./ai-usage";
 
 import { useState, useTransition } from "react";
-import { removeAiKey, saveAiKey, setAiModel } from "@/app/(app)/actions";
+import { removeAiKey, saveAiKey, setAiModel } from "@/app/(app)/settings-actions";
 import { Select } from "@/registry/components/select/select";
 import { ConfirmButton } from "./confirm-button";
 import { Button } from "@/registry/components/button/button";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { PasswordField } from "@/registry/components/password-field/password-field";
+import { actionLabel } from "./action-label";
 import styles from "./settings-view.module.css";
 
 /** models is the provider's current list for this key; null when it could not be read just now. */
 export type ShownAiKey = { provider: string; masked: string; model: string | null; models: { id: string; name: string }[] | null } | null;
+
+/** How the default model is chosen from this provider's list. */
+function defaultModelRule(provider: string): string {
+  if (provider.startsWith("Anthropic")) return "the newest active Sonnet model";
+  if (provider.startsWith("OpenRouter")) return "Claude Sonnet when your key can use it, from the models that return structured output";
+  return "the newest small model by name, since OpenAI's list does not say what each model is for";
+}
 
 /**
  * The person's own AI key, for "Write drafts with my AI" on Next week. Shows only the masked key; the full key is
@@ -60,7 +68,7 @@ export function AiKeyCard({ shown, allowance, notice }: { shown: ShownAiKey | un
             )}
           </div>
         </div>
-        <p className={styles.muted}>The list comes from your provider for this key. The default is chosen from it: {shown.provider.startsWith("Anthropic") ? "the newest active Sonnet model" : shown.provider.startsWith("OpenRouter") ? "Claude Sonnet when your key can use it, from the models that return structured output" : "the newest small model by name, since OpenAI's list does not say what each model is for"}.</p>
+        <p className={styles.muted}>The list comes from your provider for this key. The default is chosen from it: {defaultModelRule(shown.provider)}.</p>
         </>
       ) : (
         <>
@@ -97,7 +105,7 @@ export function AiKeyCard({ shown, allowance, notice }: { shown: ShownAiKey | un
         >
           <PasswordField id="ai-key-input" label="Anthropic (sk-ant-…), OpenAI (sk-…) or OpenRouter (sk-or-…) key" autoComplete="off" spellCheck={false} value={value} onChange={(e) => { setValue(e.target.value); setKeyError(null); }} placeholder="sk-…" error={keyError ?? undefined} description={saved ? "Saved. Press Fill next week on Next week." : undefined} />
           <div className={styles.deleteActions}>
-            <Button type="submit" variant="primary" size="sm" disabled={pending || (!value.trim() && !saved)}>{pending ? "Saving…" : saved ? "✓ Saved" : "Save key"}</Button>
+            <Button type="submit" variant="primary" size="sm" disabled={pending || (!value.trim() && !saved)}>{actionLabel(pending, saved, { busy: "Saving…", again: "✓ Saved", first: "Save key" })}</Button>
             <a className={styles.muted} href="/api/openrouter/start">Or connect your OpenRouter account</a>
           </div>
         </form>

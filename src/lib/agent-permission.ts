@@ -13,7 +13,7 @@ import type { Post } from "./buffer/queries";
 export const APPROVE_MODES = ["ask", "direct", "off"] as const;
 export type ApproveMode = (typeof APPROVE_MODES)[number];
 
-const isMode = (v: unknown): v is ApproveMode => APPROVE_MODES.includes(v as ApproveMode);
+const isMode = (v: unknown): v is ApproveMode => APPROVE_MODES.some((m) => m === v);
 
 /** The person's choice, and a revision that changes every time they save it, so older tokens stop working. */
 export async function approvePermission(userId: string): Promise<{ mode: ApproveMode; revision: string }> {

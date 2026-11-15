@@ -5,7 +5,7 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
-const signOut = vi.fn();
+const signOut = vi.fn<NonNullable<Awaited<ReturnType<typeof import("@/lib/auth").getAuth>>>["api"]["signOut"]>();
 vi.mock("@/lib/auth", () => ({ getAuth: async () => ({ api: { signOut } }) }));
 
 const { POST } = await import("./route");
@@ -15,7 +15,7 @@ describe("POST /auth/signout", () => {
     const out = new Headers();
     out.append("set-cookie", "qp.session_token=; Max-Age=0; Path=/");
     out.append("set-cookie", "qp.session_data=; Max-Age=0; Path=/");
-    signOut.mockResolvedValue(new Response(null, { headers: out }));
+    signOut.mockResolvedValue(new Response(null, { headers: out }) as never);
     const req = new NextRequest("http://localhost:43781/auth/signout", {
       method: "POST",
       headers: { origin: "https://qp.example.org", "x-forwarded-host": "qp.example.org" },

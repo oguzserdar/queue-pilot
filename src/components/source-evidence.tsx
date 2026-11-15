@@ -9,12 +9,24 @@ import { sourceTimestamp, sourceCheckedTime, sourceDraftTime } from "@/lib/sourc
 import { Button } from "@/registry/components/button/button";
 import styles from "./source-evidence.module.css";
 
+/** The caption warning on a video quote: auto captions and unknown captions both ask the person to check names. */
+function captionNote(captions: EvidenceCard["captions"]): string {
+  if (captions === "auto") return " · Auto captions: check names";
+  return captions === "unknown" ? " · Caption type unknown: check names" : "";
+}
+
+/** A network's name as the person knows it; an unknown id is shown as is. */
+function networkName(network: string): string {
+  if (network === "twitter") return "X";
+  return network === "linkedin" ? "LinkedIn" : network;
+}
+
 export function EvidenceDetail({ card }: { card: EvidenceCard }) {
   const url = card.uri.startsWith("http") ? new URL(card.uri) : null;
   if (url && card.locator) url.searchParams.set("t", card.locator.slice(2));
   return <div className={styles.evidence}>
     {url ? <a href={url.toString()} target="_blank" rel="noreferrer">{card.title}{card.locator ? ` · ${sourceTimestamp(card.locator)}` : ""}</a> : <strong>{card.title}</strong>}
-    <p className={styles.caption}>{card.quote ? "Quote matches the saved source" : "Quote not found in the source"}{card.kind === "video-description" ? " · Video description only" : ""}{card.captions === "auto" ? " · Auto captions: check names" : card.captions === "unknown" ? " · Caption type unknown: check names" : ""}{card.paidPreview ? " · Paid preview" : ""}{card.truncated ? " · Source excerpt only" : ""}</p>
+    <p className={styles.caption}>{card.quote ? "Quote matches the saved source" : "Quote not found in the source"}{card.kind === "video-description" ? " · Video description only" : ""}{captionNote(card.captions)}{card.paidPreview ? " · Paid preview" : ""}{card.truncated ? " · Source excerpt only" : ""}</p>
     {card.quote && <blockquote>{card.quote}</blockquote>}
     <p className={styles.caption}>Claim when drafted: {card.claim}</p>
   </div>;
@@ -90,13 +102,13 @@ export function SourceEvidencePanel({ cards, timeZone = "UTC" }: { cards: Eviden
     {checked.length > 0 && <details className={styles.checked}>
       <summary>View saved quotes and drafts ({new Set(checked.map(c => c.postId)).size})</summary>
       {checked.map((card, i) => <article className={styles.card} key={`${card.postId}-${card.snapshotId}-${i}`}>
-        <h3>{card.channel ?? "Draft"}{card.network ? ` · ${card.network === "twitter" ? "X" : card.network === "linkedin" ? "LinkedIn" : card.network}` : ""} · {sourceDraftTime(card.dueAt, card.timeZone ?? timeZone)}</h3>
+        <h3>{card.channel ?? "Draft"}{card.network ? ` · ${networkName(card.network)}` : ""} · {sourceDraftTime(card.dueAt, card.timeZone ?? timeZone)}</h3>
         <p className={styles.message}>{card.draftText}</p>
         <EvidenceDetail card={card} />
       </article>)}
     </details>}
     {needs.map((card, i) => <article className={styles.card} key={`${card.postId}-${card.snapshotId}-${i}`}>
-      <h3>{card.channel ?? "Draft"}{card.network ? ` · ${card.network === "twitter" ? "X" : card.network === "linkedin" ? "LinkedIn" : card.network}` : ""} · {sourceDraftTime(card.dueAt, card.timeZone ?? timeZone)}</h3>
+      <h3>{card.channel ?? "Draft"}{card.network ? ` · ${networkName(card.network)}` : ""} · {sourceDraftTime(card.dueAt, card.timeZone ?? timeZone)}</h3>
       <p className={styles.caption}>{(affected.get(card.sourceKey ?? card.uri)?.size ?? 0)} {(affected.get(card.sourceKey ?? card.uri)?.size ?? 0) === 1 ? "draft needs" : "drafts need"} review from this source</p>
       <EvidenceDetail card={card} />
       <p>{card.why}</p>

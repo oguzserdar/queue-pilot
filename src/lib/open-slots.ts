@@ -45,6 +45,14 @@ function localLabel(at: Date, timeZone: string): string {
     .replace(",", "");
 }
 
+/** Why Buffer cannot post to this channel right now, or null when it can. */
+function cannotPostReason(ch: Channel): string | null {
+  if (ch.isDisconnected) return "disconnected in Buffer";
+  if (ch.isLocked) return "locked in Buffer";
+  if (ch.isQueuePaused) return "queue paused in Buffer";
+  return null;
+}
+
 /**
  * Every empty slot between start and end, oldest first. Channels Buffer cannot post to right now (disconnected,
  * locked, queue paused) are listed as skipped with the reason, so the AI can tell the user instead of drafting for them.
@@ -53,14 +61,12 @@ export function openSlots(channels: Channel[], posts: Post[], range: { start: Da
   const slots: OpenSlot[] = [];
   const skipped: SkippedChannel[] = [];
   for (const ch of channels) {
-    const reason = ch.isDisconnected ? "disconnected in Buffer" : ch.isLocked ? "locked in Buffer" : ch.isQueuePaused ? "queue paused in Buffer" : null;
+    const reason = cannotPostReason(ch);
     if (reason) {
       skipped.push({ channel: ch.name, reason });
       continue;
     }
-    const taken = posts
-      .filter((p) => p.channelId === ch.id && p.dueAt && HOLDS_SLOT.has(p.status))
-      .map((p) => Date.parse(p.dueAt as string));
+    const taken = posts.flatMap((p) => (p.channelId === ch.id && p.dueAt && HOLDS_SLOT.has(p.status) ? [Date.parse(p.dueAt)] : []));
     for (const s of slotsInRange(ch, range.start, range.end)) {
       const at = new Date(s.at);
       if (taken.some((t) => Math.abs(t - at.getTime()) < SAME_SLOT_MS)) continue;

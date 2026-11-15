@@ -29,12 +29,12 @@ describe("postgres post store", () => {
   it("resends a failed destination once, and never a sent one", async () => {
     const s = postgresDirectPostStore();
     await s.claim("u1", "a2", item, now);
-    await s.finish("u1", "a2", "discord", { status: "failed", link: null, error: "Missing Permissions" }, now);
-    const [a, b] = await Promise.all([s.reclaimFailed("u1", "a2", "discord", now), s.reclaimFailed("u1", "a2", "discord", now)]);
+    await s.finish("u1", "a2", { kind: "discord", target: "" }, { status: "failed", link: null, error: "Missing Permissions" }, now);
+    const [a, b] = await Promise.all([s.reclaimFailed("u1", "a2", { kind: "discord", target: "" }, now), s.reclaimFailed("u1", "a2", { kind: "discord", target: "" }, now)]);
     expect([a, b].filter(Boolean)).toHaveLength(1);
     expect(a?.attempts ?? b?.attempts).toBe(2);
-    await s.finish("u1", "a2", "discord", { status: "sent", link: "https://discord.com/channels/g/c1/m", error: null }, now);
-    expect(await s.reclaimFailed("u1", "a2", "discord", now)).toBeNull();
+    await s.finish("u1", "a2", { kind: "discord", target: "" }, { status: "sent", link: "https://discord.com/channels/g/c1/m", error: null }, now);
+    expect(await s.reclaimFailed("u1", "a2", { kind: "discord", target: "" }, now)).toBeNull();
   });
 
   it("returns only this person's rows for an post", async () => {
@@ -46,8 +46,8 @@ describe("postgres post store", () => {
   it("keeps each person's posts to themselves", async () => {
     const s = postgresDirectPostStore();
     expect(await s.recent("u2", 10)).toEqual([]);
-    await s.finish("u2", "a1", "discord", { status: "failed", link: null, error: "x" }, now);
-    expect(await s.reclaimFailed("u2", "a1", "discord", now)).toBeNull();
+    await s.finish("u2", "a1", { kind: "discord", target: "" }, { status: "failed", link: null, error: "x" }, now);
+    expect(await s.reclaimFailed("u2", "a1", { kind: "discord", target: "" }, now)).toBeNull();
     expect((await s.recent("u1", 10)).map((r) => r.postId).sort()).toEqual(["a1", "a2"]);
   });
 });
@@ -58,7 +58,7 @@ describe("postgres send-now retry", () => {
     const tgNow = { kind: "telegram" as const, target: "-200", label: "Now news", text: "Out now." };
     await s.claim("u1", "now1", tgNow, now);
     const until = new Date(now.getTime() + 30_000);
-    await s.retryLater("u1", "now1", "telegram", until, now);
+    await s.retryLater("u1", "now1", { kind: "telegram", target: "" }, until, now);
     const due = await s.claimDue(new Date(until.getTime() + 1_000), 25);
     expect(due.map((d) => d.postId)).toContain("now1");
   });
@@ -84,10 +84,10 @@ describe("postgres disconnect", () => {
     const dc = { kind: "discord" as const, target: "c8", label: "#news", text: "Now." };
     await s.claim("d1", "k3", dc, now);
     await s.claim("d1", "k4", dc, now);
-    expect(await s.startCall("d1", "k4", "discord", now)).toBe(true);
+    expect(await s.startCall("d1", "k4", { kind: "discord", target: "" }, now)).toBe(true);
     expect(await s.cancelKind("d1", "discord", now)).toBe(1);
     // The worker holding k3 can no longer start its call.
-    expect(await s.startCall("d1", "k3", "discord", now)).toBe(false);
+    expect(await s.startCall("d1", "k3", { kind: "discord", target: "" }, now)).toBe(false);
     expect((await s.rows("d1", "k4")).map((r) => r.status)).toEqual(["pending"]);
   });
 });
@@ -123,10 +123,29 @@ describe("postgres due claims", () => {
     await s.schedule("u1", "f1", tg, at, now);
     await s.schedule("u1", "f2", tg, at, now);
     await s.claimDue(after, 10); // both claimed; the worker dies
-    expect(await s.startCall("u1", "f2", "telegram", after)).toBe(true); // f2 reached the call
+    expect(await s.startCall("u1", "f2", { kind: "telegram", target: "" }, after)).toBe(true); // f2 reached the call
     const later = new Date(after.getTime() + 3 * 60_000);
     const again = await s.claimDue(later, 10);
     expect(again.map((r) => r.postId).filter((id) => id.startsWith("f"))).toEqual(["f1"]);
+  });
+
+  it("sends once when a slow worker's claim runs out and a second worker takes the row", async () => {
+    const { runDue } = await import("./direct-posts");
+    const s = postgresDirectPostStore();
+    await s.schedule("u1", "r1", tg, at, now);
+    const [slow] = await s.claimDue(after, 10, { postId: "r1", revision: 0 }); // worker A claims, then stalls
+    expect(slow?.postId).toBe("r1");
+    const later = new Date(after.getTime() + 3 * 60_000); // A's claim has run out
+    // While worker B's call is in flight (started, not finished), worker A wakes up: it must not get a call of its own.
+    const post = vi.fn<import("./direct-posts").DirectPostDeps["post"]>(async () => {
+      expect(await s.startCall("u1", "r1", { kind: "telegram", target: "" }, later)).toBe(false);
+      return { link: "https://t.me/x/1" };
+    });
+    const deps = { store: s, post, refused: () => false, now: () => later };
+    const sent = await runDue(deps, { only: { postId: "r1", revision: 0 } }); // worker B takes it and sends
+    expect(sent.map((r) => r.status)).toEqual(["sent"]);
+    expect(await s.startCall("u1", "r1", { kind: "telegram", target: "" }, later)).toBe(false); // A wakes up: no second call
+    expect(post).toHaveBeenCalledTimes(1);
   });
 
   it("never claims a pending row written by the previous version", async () => {
@@ -145,15 +164,15 @@ describe("postgres follow-ups", () => {
   it("adds a place, updates it while waiting or cancelled, and leaves one that went out", async () => {
     const s = postgresDirectPostStore();
     expect(await s.follow("u1", "fu1", tg, at, now, "bp1")).toBe(true);
-    await s.unfollow("u1", "fu1", "telegram", now);
+    await s.unfollow("u1", "fu1", { kind: "telegram", target: "" }, now);
     expect((await s.followedPlaces("u1", ["bp1"])).size).toBe(0);
     expect(await s.follow("u1", "fu1", { ...tg, text: "Back on." }, at, now, "bp1")).toBe(true);
     const [row] = await s.rows("u1", "fu1");
     expect([row.status, row.text, row.revision, row.bufferPostId]).toEqual(["scheduled", "Back on.", 2, "bp1"]);
     expect(await s.followedPlaces("u1", ["bp1", "bp9"])).toEqual(new Set(["bp1|telegram"]));
     await s.claimDue(new Date("2026-11-09T18:02:00Z"), 50, { postId: "fu1", revision: 2 });
-    await s.startCall("u1", "fu1", "telegram", now);
-    await s.finish("u1", "fu1", "telegram", { status: "sent", link: null, error: null }, now);
+    await s.startCall("u1", "fu1", { kind: "telegram", target: "" }, now);
+    await s.finish("u1", "fu1", { kind: "telegram", target: "" }, { status: "sent", link: null, error: null }, now);
     expect(await s.follow("u1", "fu1", { ...tg, text: "Again" }, at, now, "bp1")).toBe(false);
   });
 
@@ -169,7 +188,7 @@ describe("postgres follow-ups", () => {
     await s.follow("u1", "fu3", tg, at, now, "bp3");
     await s.claimDue(new Date("2026-11-09T18:02:00Z"), 50, { postId: "fu3", revision: 0 });
     const later = new Date("2026-11-09T18:07:00Z");
-    await s.defer("u1", "fu3", "telegram", { sendAt: later }, now);
+    await s.defer("u1", "fu3", { kind: "telegram", target: "" }, { sendAt: later }, now);
     const [row] = await s.rows("u1", "fu3");
     expect([row.status, row.sendAt?.toISOString(), row.callStartedAt]).toEqual(["scheduled", later.toISOString(), null]);
   });
@@ -185,7 +204,7 @@ describe("postgres claims after review", () => {
     const s = postgresDirectPostStore();
     await s.follow("u1", "rv1", tg, at, now, "bp1");
     await s.claimDue(t("2026-11-09T18:02:00Z"), 50, { postId: "rv1", revision: 0 });
-    await s.defer("u1", "rv1", "telegram", { holdUntil: t("2026-11-09T18:07:00Z") }, now);
+    await s.defer("u1", "rv1", { kind: "telegram", target: "" }, { holdUntil: t("2026-11-09T18:07:00Z") }, now);
     expect(await s.claimDue(t("2026-11-09T18:05:00Z"), 50, { postId: "rv1", revision: 9 })).toEqual([]);
     const [row] = await s.claimDue(t("2026-11-09T18:08:00Z"), 50, { postId: "rv1", revision: 9 });
     expect([row.postId, row.sendAt?.toISOString()]).toEqual(["rv1", at.toISOString()]);
@@ -203,9 +222,9 @@ describe("postgres claims after review", () => {
   it("never lets a late finish overwrite a finished place", async () => {
     const s = postgresDirectPostStore();
     await s.claim("u1", "rv3", tg, now);
-    await s.startCall("u1", "rv3", "telegram", now);
-    await s.finish("u1", "rv3", "telegram", { status: "sent", link: "https://t.me/x/1", error: null }, now);
-    await s.finish("u1", "rv3", "telegram", { status: "failed", link: null, error: "late" }, now);
+    await s.startCall("u1", "rv3", { kind: "telegram", target: "" }, now);
+    await s.finish("u1", "rv3", { kind: "telegram", target: "" }, { status: "sent", link: "https://t.me/x/1", error: null }, now);
+    await s.finish("u1", "rv3", { kind: "telegram", target: "" }, { status: "failed", link: null, error: "late" }, now);
     expect((await s.rows("u1", "rv3"))[0].status).toBe("sent");
   });
 
@@ -213,8 +232,8 @@ describe("postgres claims after review", () => {
     const s = postgresDirectPostStore();
     await s.follow("u1", "rv4", tg, at, now, "bp4");
     await s.claimDue(t("2026-11-09T18:02:00Z"), 50, { postId: "rv4", revision: 0 });
-    await s.finish("u1", "rv4", "telegram", { status: "failed", link: null, error: "Deleted in Buffer." }, now);
-    expect(await s.reclaimFailed("u1", "rv4", "telegram", now)).toBeNull();
+    await s.finish("u1", "rv4", { kind: "telegram", target: "" }, { status: "failed", link: null, error: "Deleted in Buffer." }, now);
+    expect(await s.reclaimFailed("u1", "rv4", { kind: "telegram", target: "" }, now)).toBeNull();
     expect(await s.followedPlaces("u1", ["bp4"])).toEqual(new Set());
   });
 
@@ -222,8 +241,8 @@ describe("postgres claims after review", () => {
     const s = postgresDirectPostStore();
     await s.schedule("u1", "rv5", tg, at, now);
     await s.claimDue(t("2026-11-09T18:02:00Z"), 50, { postId: "rv5", revision: 0 });
-    await s.startCall("u1", "rv5", "telegram", t("2026-11-09T18:02:00Z"));
-    await s.retryLater("u1", "rv5", "telegram", t("2026-11-09T18:03:00Z"), now);
+    await s.startCall("u1", "rv5", { kind: "telegram", target: "" }, t("2026-11-09T18:02:00Z"));
+    await s.retryLater("u1", "rv5", { kind: "telegram", target: "" }, t("2026-11-09T18:03:00Z"), now);
     const [row] = await s.rows("u1", "rv5");
     expect([row.status, row.callStartedAt]).toEqual(["scheduled", null]);
     expect(await s.claimDue(t("2026-11-09T18:02:30Z"), 50, { postId: "rv5", revision: 0 })).toEqual([]);

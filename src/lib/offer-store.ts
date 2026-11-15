@@ -16,7 +16,7 @@ const OFFERS = ["welcome", "connect-ai", "add-ai"] as const;
 export type OfferKey = (typeof OFFERS)[number];
 
 /** Whether a value names one of Home's offers; anything else is never stored. */
-export const isOfferKey = (v: unknown): v is OfferKey => typeof v === "string" && (OFFERS as readonly string[]).includes(v);
+export const isOfferKey = (v: unknown): v is OfferKey => typeof v === "string" && OFFERS.some((o) => o === v);
 
 /**
  * The offers this person set aside.

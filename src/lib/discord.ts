@@ -8,6 +8,7 @@ import "server-only";
  * EMBED_LINKS 1<<14, ATTACH_FILES 1<<15. Message content is limited to 2,000 characters.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
+import * as z from "zod";
 import { fit } from "./text-fit";
 
 export const PERMISSIONS = String((1 << 10) | (1 << 11) | (1 << 14) | (1 << 15));
@@ -17,7 +18,8 @@ const API = "https://discord.com/api/v10";
 type Fetch = typeof fetch;
 
 export class DiscordError extends Error {
-  constructor(message: string, readonly retryAfterSeconds?: number) {
+  /** @param global - Discord's 429 body says the wait covers the whole bot, not one route (docs: rate-limits, "global") */
+  constructor(message: string, readonly retryAfterSeconds?: number, readonly global = false) {
     super(message);
   }
 }
@@ -28,13 +30,37 @@ export function installUrl(o: { clientId: string; redirectUri: string; state: st
   return `https://discord.com/oauth2/authorize?${q}`;
 }
 
-async function json<T>(res: Response): Promise<T> {
-  const body = (await res.json().catch(() => null)) as (T & { message?: string; retry_after?: number }) | null;
+// What each answer must hold, checked instead of trusted (docs.discord.com/developers/resources).
+const RefusalShape = z.object({
+  message: z.string().optional().catch(undefined),
+  retry_after: z.number().optional().catch(undefined),
+  global: z.unknown().optional(),
+}).catch({});
+const OverwriteShape = z.object({ id: z.string(), type: z.number(), allow: z.string(), deny: z.string() });
+const ChannelShape = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.number(),
+  position: z.number().optional().catch(undefined),
+  permission_overwrites: z.array(OverwriteShape).optional(),
+});
+const InstallAnswer = z.object({ guild: z.object({ id: z.string(), name: z.string() }).optional().catch(undefined) });
+const MessageAnswer = z.object({ id: z.string() });
+const RolesAnswer = z.array(z.object({ id: z.string(), permissions: z.string() }));
+const MemberAnswer = z.object({ roles: z.array(z.string()) });
+
+async function json<T>(res: Response, shape: z.ZodType<T>): Promise<T> {
+  const body: unknown = await res.json().catch(() => null);
   // Only Discord's own refusal (a 4xx) means nothing was posted. A 5xx or an answer we cannot read may still have
   // posted, so it is a plain error, which callers treat as "may have been sent".
   if (res.status >= 500 || !body) throw new Error(`Discord answered ${res.status} without a readable result`);
-  if (!res.ok) throw new DiscordError(body.message ?? `Discord answered ${res.status}`, body.retry_after);
-  return body;
+  if (!res.ok) {
+    const refusal = RefusalShape.parse(body);
+    throw new DiscordError(refusal.message ?? `Discord answered ${res.status}`, refusal.retry_after, refusal.global === true);
+  }
+  const parsed = shape.safeParse(body);
+  if (!parsed.success) throw new Error(`Discord answered ${res.status} without a readable result`);
+  return parsed.data;
 }
 
 /** Exchanges the install code; the token response names the server the bot was added to. */
@@ -49,7 +75,7 @@ export async function exchangeInstall(
     body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: o.redirectUri, client_id: o.clientId, client_secret: o.clientSecret }),
     signal: AbortSignal.timeout(10_000),
   });
-  const body = await json<{ guild?: { id: string; name: string } }>(res);
+  const body = await json(res, InstallAnswer);
   if (!body.guild) throw new DiscordError("Discord did not say which server the bot was added to. Try adding it again.");
   return { guildId: body.guild.id, guildName: body.guild.name };
 }
@@ -57,7 +83,7 @@ export async function exchangeInstall(
 /** Channels the bot can post in: text (type 0) and announcement (type 5) channels. */
 export async function postableChannels(botToken: string, guildId: string, doFetch: Fetch = fetch): Promise<{ id: string; name: string }[]> {
   const res = await doFetch(`${API}/guilds/${encodeURIComponent(guildId)}/channels`, { headers: { authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(10_000) });
-  const channels = await json<{ id: string; name: string; type: number; position?: number }[]>(res);
+  const channels = await json(res, z.array(ChannelShape));
   return channels
     .filter((c) => c.type === 0 || c.type === 5)
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
@@ -85,7 +111,7 @@ export async function sendCopy(
     }),
     signal: AbortSignal.timeout(10_000),
   });
-  const body = await json<{ id: string }>(res);
+  const body = await json(res, MessageAnswer);
   return { messageId: body.id };
 }
 
@@ -114,7 +140,7 @@ const SEND_MESSAGES = BigInt(1 << 11);
 const NONE = BigInt(0);
 
 /** A permission overwrite on a channel: type 0 is a role, type 1 a member. */
-export type Overwrite = { id: string; type: number; allow: string; deny: string };
+export type Overwrite = z.infer<typeof OverwriteShape>;
 
 /**
  * Whether a member can see and post in a channel, computed the way Discord documents it
@@ -150,13 +176,13 @@ export function canPost(o: { guildId: string; roles: { id: string; permissions: 
  * person picks only a channel that will work.
  */
 export async function channelsWithAccess(botToken: string, guildId: string, doFetch: Fetch = fetch): Promise<{ id: string; name: string; canPost: boolean }[]> {
-  const get = async <T>(path: string) => json<T>(await doFetch(`${API}${path}`, { headers: { authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(10_000) }));
+  const get = async <T>(path: string, shape: z.ZodType<T>) => json(await doFetch(`${API}${path}`, { headers: { authorization: `Bot ${botToken}` }, signal: AbortSignal.timeout(10_000) }), shape);
   const g = encodeURIComponent(guildId);
-  const me = await get<{ id: string }>("/users/@me");
+  const me = await get("/users/@me", MessageAnswer);
   const [channels, roles, member] = await Promise.all([
-    get<{ id: string; name: string; type: number; position?: number; permission_overwrites?: Overwrite[] }[]>(`/guilds/${g}/channels`),
-    get<{ id: string; permissions: string }[]>(`/guilds/${g}/roles`),
-    get<{ roles: string[] }>(`/guilds/${g}/members/${encodeURIComponent(me.id)}`),
+    get(`/guilds/${g}/channels`, z.array(ChannelShape)),
+    get(`/guilds/${g}/roles`, RolesAnswer),
+    get(`/guilds/${g}/members/${encodeURIComponent(me.id)}`, MemberAnswer),
   ]);
   return channels
     .filter((c) => c.type === 0 || c.type === 5)
@@ -176,7 +202,7 @@ export async function postText(botToken: string, channelId: string, content: str
     body: JSON.stringify({ content, allowed_mentions: { parse: [] } }),
     signal: AbortSignal.timeout(10_000),
   });
-  const id = (await json<{ id?: string }>(res)).id;
+  const id = (await json(res, z.object({ id: z.string().optional().catch(undefined) }))).id;
   if (!id) throw new Error("Discord accepted the message but did not return its id");
   return { messageId: id };
 }

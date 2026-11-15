@@ -1,0 +1,3 @@
+ALTER TABLE "qp_announcement_send" DROP CONSTRAINT "qp_announcement_send_announcement_id_kind_pk";--> statement-breakpoint
+ALTER TABLE "qp_announcement_send" ADD CONSTRAINT "qp_announcement_send_announcement_id_kind_target_pk" PRIMARY KEY("announcement_id","kind","target");--> statement-breakpoint
+CREATE UNIQUE INDEX "qp_announcement_send_one_bot_place" ON "qp_announcement_send" USING btree ("announcement_id","kind") WHERE "qp_announcement_send"."kind" in ('telegram', 'discord');

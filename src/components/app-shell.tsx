@@ -63,15 +63,18 @@ export type ShellAccount = {
   isAdmin?: boolean;
   /** Development states page only. */
   syncPreview?: SyncStatus;
+  /** Signed in without Buffer: the channels are the person's own Mastodon and Bluesky accounts. */
+  noBuffer?: boolean;
 } | null;
 
 /** The same compact channel identity for real and example accounts. */
-function ChannelStatus({ channels }: { channels: NonNullable<ShellAccount>["channels"] }) {
+function ChannelStatus({ channels, noBuffer }: { channels: NonNullable<ShellAccount>["channels"]; noBuffer?: boolean }) {
+  if (!channels.length && noBuffer) return <span className={styles.statusLine}>No accounts yet <Link className={styles.statusLink} href="/settings?tab=channels">Connect an account</Link></span>;
   if (!channels.length) return <span className={styles.statusLine}>No channels in Buffer <a className={styles.statusLink} href={BUFFER_CHANNELS_URL} target="_blank" rel="noreferrer">Add</a></span>;
   const names = channels.map(c => `${c.name} (${c.service})`).join(", ");
-  return <Link href="/settings?tab=channels" className={styles.channelStatus} title={names} aria-label={`Buffer channels: ${names}`}>
-    {channels.length <= 2 ? channels.map(c => <span key={c.id} className={styles.channelName}><ChannelIcon service={c.service} /><span>{c.name}</span></span>) :
-      <span className={styles.channelSummary}><span className={styles.channelLogos} aria-hidden="true">{channels.slice(0, 4).map(c => <span key={c.id}><ChannelIcon service={c.service} size={14} /></span>)}</span><span>{channels.length} channels</span></span>}
+  return <Link href="/settings?tab=channels" className={styles.channelStatus} title={names} aria-label={`${noBuffer ? "Your accounts" : "Buffer channels"}: ${names}`}>
+    {channels.length <= (noBuffer ? 1 : 2) ? channels.map(c => <span key={c.id} className={styles.channelName}><ChannelIcon service={c.service} /><span>{c.name}</span></span>) :
+      <span className={styles.channelSummary}><span className={styles.channelLogos} aria-hidden="true">{channels.slice(0, 4).map(c => <span key={c.id}><ChannelIcon service={c.service} size={14} /></span>)}</span><span>{channels.length} {noBuffer ? "accounts" : "channels"}</span></span>}
   </Link>;
 }
 
@@ -109,8 +112,8 @@ export function AppShell({ account, signInOpen, landing = true, children }: { ac
             {account ? (
               <>
                 <div className={`${styles.syncRow} ${styles.statusCard}`}>
-                  <ChannelStatus channels={account.channels} />
-                  <SyncIndicator />
+                  <ChannelStatus channels={account.channels} noBuffer={account.noBuffer} />
+                  {!account.noBuffer && <SyncIndicator />}
                 </div>
                 <div className={styles.menuRow}><AccountMenu name={account.name} email={account.email} image={account.image} isAdmin={account.isAdmin} /></div>
               </>

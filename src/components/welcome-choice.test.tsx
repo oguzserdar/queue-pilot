@@ -6,8 +6,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/(app)/actions", () => ({ setOfferAside: vi.fn(), addSource: vi.fn(), writeWeek: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+vi.mock("@/app/(app)/actions", () => ({ setOfferAside: vi.fn<typeof import("@/app/(app)/actions").setOfferAside>(), addSource: vi.fn<typeof import("@/app/(app)/actions").addSource>() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["refresh"]>(), push: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["push"]>() }) }));
 
 const { WelcomeChoice } = await import("./welcome-choice");
 const { AiOffer } = await import("./ai-offer");

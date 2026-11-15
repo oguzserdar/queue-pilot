@@ -74,10 +74,8 @@ describe("quoteNeedsAttention", () => {
   });
 
   it("keeps a quote open for every caption, description and paid-preview warning, from one shared list", () => {
-    for (const over of [{ captions: "auto" as const }, { captions: "unknown" as const }, { kind: "video-description" as const }, { paidPreview: true }]) {
-      expect(quoteWarnings(card(over)), JSON.stringify(over)).toHaveLength(1);
-      expect(quoteNeedsAttention(card(over)), JSON.stringify(over)).toBe(true);
-    }
+    const overs = [{ captions: "auto" as const }, { captions: "unknown" as const }, { kind: "video-description" as const }, { paidPreview: true }];
+    expect(overs.map((over) => [over, quoteWarnings(card(over)).length, quoteNeedsAttention(card(over))])).toEqual(overs.map((over) => [over, 1, true]));
     expect(quoteWarnings(card({ captions: "manual" }))).toEqual([]);
   });
 

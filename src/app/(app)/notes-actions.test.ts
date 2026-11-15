@@ -5,11 +5,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { BufferApiError } from "@/lib/buffer/client"
 
-vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn(), signedInUserId: vi.fn() }))
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
+vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn<typeof import("@/lib/current-user").bufferForReading>(), signedInUserId: vi.fn<typeof import("@/lib/current-user").signedInUserId>() }))
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn<typeof import("next/cache").revalidatePath>() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
-vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn(async () => ({ ok: true })) }))
-vi.mock("@/lib/security-events", () => ({ recordAction: vi.fn(async () => {}) }))
+vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn<typeof import("@/lib/rate-limit").limit>(async () => ({ ok: true }) as import("@/lib/rate-limit").Limited) }))
+vi.mock("@/lib/security-events", () => ({ recordAction: vi.fn<typeof import("@/lib/security-events").recordAction>(async () => {}) }))
 const buffer = { answer: (() => ({})) as (query: string, variables: Record<string, unknown>) => unknown }
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: async (_t: string, q: string, v: Record<string, unknown>) => { const a = buffer.answer(q, v); if (a instanceof Error) throw a; return a } }))
 
@@ -30,7 +30,7 @@ describe("readDraftNotes", () => {
   })
 
   it("never asks Buffer about a post outside the person's queue", async () => {
-    const asked = vi.fn()
+    const asked = vi.fn<(query: string) => void>()
     buffer.answer = (q) => { asked(q); return {} }
     expect(await readDraftNotes("someone-elses")).toEqual({ ok: false, message: "This post is not in your queue." })
     expect(asked).not.toHaveBeenCalled()

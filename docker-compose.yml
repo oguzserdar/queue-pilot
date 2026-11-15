@@ -1,5 +1,6 @@
-# Run Queue Pilot on your own machine or server: copy .env.example to .env, fill it in (each line says how to
-# generate its value), then `docker compose up -d`. Check it with /api/health/ready.
+# Run Queue Pilot on your own machine or server: ./install.sh writes .env with new secrets and starts everything
+# (or copy .env.example to .env yourself and run `docker compose up -d`). Check it with /api/health/ready.
+# Profiles: `https` adds automatic HTTPS for QP_DOMAIN; `backup` adds a nightly database dump to ./backups.
 # Postgres keeps its data in the `db` volume. The `cron` service calls the daily job the way Vercel Cron does.
 services:
   app:
@@ -10,8 +11,10 @@ services:
       DATABASE_URL: postgres://queuepilot:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/queuepilot
     # With no proxy in front, leave TRUSTED_PROXY_HOP_COUNT unset (0). Behind a reverse proxy, set the number of
     # proxies that append to X-Forwarded-For, or list them in TRUSTED_PROXIES.
+    # Only this machine reaches port 3000 unless QP_BIND says otherwise: with a domain, visitors come in through HTTPS,
+    # so nobody can skip the proxy and choose their own X-Forwarded-For (TRUSTED_PROXY_HOP_COUNT=1 trusts one proxy).
     ports:
-      - "3000:3000"
+      - "${QP_BIND:-127.0.0.1}:3000:3000"
     depends_on:
       db:
         condition: service_healthy
@@ -43,7 +46,39 @@ services:
     # so a failure, or a host that starts at 17:01, still gets that day's run. /tmp/echo-started holds when the
     # current daily run began; a run older than 10 minutes (finished, failed, or cut off by a restart) no longer blocks a new
     # one, so a failing run is retried every 10 minutes, not every 30 seconds.
-    entrypoint: ["sh", "-c", "while true; do curl -fsS -m 50 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/due || true; today=$$(date -u +%F); now=$$(date -u +%s); started=$$(cat /tmp/echo-started 2>/dev/null || echo 0); if [ $$(date -u +%H%M) -ge 1700 ] && [ \"$$(cat /tmp/echo-day 2>/dev/null)\" != \"$$today\" ] && [ $$((now - started)) -gt 600 ]; then echo $$now > /tmp/echo-started; (curl -fsS -m 300 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/echo && echo $$today > /tmp/echo-day) & fi; sleep 30; done"]
+    # Replies: in the background at most once a minute (/tmp/replies-started holds when the last call began), so they
+    # never delay the 30-second check; the app reads each account no more often than its network allows.
+    entrypoint: ["sh", "-c", "while true; do curl -fsS -m 50 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/due || true; today=$$(date -u +%F); now=$$(date -u +%s); if [ $$((now - $$(cat /tmp/replies-started 2>/dev/null || echo 0))) -ge 60 ]; then echo $$now > /tmp/replies-started; (curl -fsS -m 55 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/replies || true) & fi; started=$$(cat /tmp/echo-started 2>/dev/null || echo 0); if [ $$(date -u +%H%M) -ge 1700 ] && [ \"$$(cat /tmp/echo-day 2>/dev/null)\" != \"$$today\" ] && [ $$((now - started)) -gt 600 ]; then echo $$now > /tmp/echo-started; (curl -fsS -m 300 -o /dev/null -H \"Authorization: Bearer $$CRON_SECRET\" http://app:3000/api/cron/echo && echo $$today > /tmp/echo-day) & fi; sleep 30; done"]
+
+  # Automatic HTTPS for QP_DOMAIN (certificates from Let's Encrypt, renewed on their own). Needs ports 80 and 443.
+  https:
+    image: caddy:2.10-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    command: ["caddy", "reverse-proxy", "--from", "${QP_DOMAIN:-localhost}", "--to", "app:3000"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy:/data
+    depends_on:
+      - app
+
+  # One database dump a night into ./backups, the last 14 kept, readable only by their owner. Restore one with:
+  # gunzip -c backups/<file>.sql.gz | docker compose exec -T db psql -U queuepilot queuepilot
+  backup:
+    image: postgres:17-alpine
+    profiles: ["backup"]
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["sh", "-c", "set -o pipefail; umask 077; chmod 700 /backups; while true; do f=/backups/queuepilot-$$(date -u +%F).sql.gz; pg_dump -h db -U queuepilot queuepilot | gzip > $$f.tmp && mv $$f.tmp $$f || rm -f $$f.tmp; ls -1t /backups/queuepilot-*.sql.gz | tail -n +15 | xargs -r rm -f; sleep 86400; done"]
 
 volumes:
   db:
+  caddy:

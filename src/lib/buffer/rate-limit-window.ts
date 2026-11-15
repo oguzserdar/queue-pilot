@@ -21,5 +21,12 @@ export function lengthOfName(name: string): number | null {
   const m = name.match(/-in-(\d+)(m|min|minutes?|h|hours?|d|days?)$/);
   if (!m) return null;
   const n = Number(m[1]);
-  return m[2].startsWith("m") ? n * 60 : m[2].startsWith("h") ? n * 3_600 : n * 86_400;
+  return n * secondsPerUnit(m[2]);
+}
+
+/** Seconds in one unit as Buffer's policy names write it: minutes, hours, else days. */
+function secondsPerUnit(unit: string): number {
+  if (unit.startsWith("m")) return 60;
+  if (unit.startsWith("h")) return 3_600;
+  return 86_400;
 }

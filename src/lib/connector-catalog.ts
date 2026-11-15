@@ -28,6 +28,7 @@ export const CONNECTOR_CATALOG: CatalogGroup[] = [
   {
     key: "writes", title: "Changes, when you ask", note: "Drafts stay drafts. Saves are checked against your playbook.",
     items: [
+      { label: "Takes a post it wrote off the schedule, keeping it as a draft (only you can schedule it again)", tools: ["move_back_to_draft"] },
       { label: "Reads source text, video captions and web pages; can spend transcript and search credits", tools: ["read_material", "get_transcript", "search_context", "add_web_page"] },
       { label: "Writes and saves drafts in empty times", tools: ["save_drafts", "write_my_week"] },
       { label: "Saves ideas to your Buffer ideas board", tools: ["save_idea"] },

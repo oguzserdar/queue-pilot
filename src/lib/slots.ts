@@ -6,6 +6,17 @@ import type { Channel, DayOfWeek, Post } from "./buffer/queries";
 
 const DAYS: DayOfWeek[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
+/**
+ * The day of a weekday name Intl wrote in English ("Mon"), read from its first three letters. Intl only writes real
+ * days, so another value means a broken runtime and throws.
+ */
+export function intlDayOfWeek(weekday: string): DayOfWeek {
+  const short = weekday.toLowerCase().slice(0, 3);
+  const day = DAYS.find((d) => d === short);
+  if (!day) throw new Error(`Intl gave an unknown weekday: ${weekday}`);
+  return day;
+}
+
 /** The local calendar date and weekday of a UTC instant in a timezone. */
 function localDate(instant: Date, timeZone: string): { y: number; m: number; d: number; day: DayOfWeek } {
   const parts = Object.fromEntries(
@@ -13,7 +24,7 @@ function localDate(instant: Date, timeZone: string): { y: number; m: number; d: 
       .formatToParts(instant)
       .map((p) => [p.type, p.value]),
   );
-  return { y: Number(parts.year), m: Number(parts.month), d: Number(parts.day), day: parts.weekday.toLowerCase().slice(0, 3) as DayOfWeek };
+  return { y: Number(parts.year), m: Number(parts.month), d: Number(parts.day), day: intlDayOfWeek(parts.weekday) };
 }
 
 /** Offset of a timezone from UTC, in minutes, at a given instant. */
@@ -59,7 +70,7 @@ export function slotsInRange(channel: Pick<Channel, "id" | "timezone" | "isQueue
 
 /** Slots with no post already due on that channel at that minute. Sent, failed and draft posts with a time all count as taken. */
 export function openSlots(slots: Slot[], posts: Pick<Post, "channelId" | "dueAt">[]): Slot[] {
-  const taken = new Set(posts.filter((p) => p.dueAt).map((p) => `${p.channelId}@${new Date(p.dueAt!).toISOString().slice(0, 16)}`));
+  const taken = new Set(posts.flatMap((p) => (p.dueAt ? [`${p.channelId}@${new Date(p.dueAt).toISOString().slice(0, 16)}`] : [])));
   return slots.filter((s) => !taken.has(`${s.channelId}@${s.at.slice(0, 16)}`));
 }
 

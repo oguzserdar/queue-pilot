@@ -16,16 +16,15 @@ import { MAX_RULE_TEXT } from "./rules";
 /** Bump when the prompt or schema changes, so answers saved for the old check are never reused. */
 export const CONFIRM_VERSION = 3;
 
-const Verdicts = z.object({
-  verdicts: z.array(
-    z.object({
-      candidate: z.number().int().describe("The candidate number"),
-      verdict: z.enum(["preference", "fact", "unclear"]).describe("preference: a lasting choice of wording, tone or format for future posts. fact: a correction that only applied to these posts. unclear: chance, or the two edits do not share one intent"),
-      why: z.string().describe("One plain sentence naming what both edits show"),
-      rule: z.string().describe("For a preference: the rule as the author would write it in their playbook, one sentence in the drafts' language, keeping the edit's exact words and saying which posts it is for, for example: End posts about the cookbook with \"https://example.com/book\". Empty for any other verdict"),
-    }),
-  ),
+/** One candidate's answer; also how saved answers are read back (fix-verdicts.ts). */
+export const VerdictItem = z.object({
+  candidate: z.number().int().describe("The candidate number"),
+  verdict: z.enum(["preference", "fact", "unclear"]).describe("preference: a lasting choice of wording, tone or format for future posts. fact: a correction that only applied to these posts. unclear: chance, or the two edits do not share one intent"),
+  why: z.string().describe("One plain sentence naming what both edits show"),
+  rule: z.string().describe("For a preference: the rule as the author would write it in their playbook, one sentence in the drafts' language, keeping the edit's exact words and saying which posts it is for, for example: End posts about the cookbook with \"https://example.com/book\". Empty for any other verdict"),
 });
+
+const Verdicts = z.object({ verdicts: z.array(VerdictItem) });
 
 /** A repeat the model judged a lasting preference, with its reason and the rule as the author would write it. */
 export type ConfirmedOffer<T extends FixOffer> = T & { why: string; sentence: string };
@@ -34,7 +33,9 @@ export type Verdict = z.infer<typeof Verdicts>["verdicts"][number];
 /** Plain words for a fix, as the model reads it. */
 function describe(o: FixOffer): string {
   const f = o.fix;
-  return f.kind === "replace" ? `replaced "${f.from}" with "${f.to}"` : f.kind === "banned" ? `cut "${f.phrase}"` : `added "${f.phrase}" at the end`;
+  if (f.kind === "replace") return `replaced "${f.from}" with "${f.to}"`;
+  if (f.kind === "banned") return `cut "${f.phrase}"`;
+  return `added "${f.phrase}" at the end`;
 }
 
 /**

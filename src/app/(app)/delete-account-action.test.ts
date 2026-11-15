@@ -5,17 +5,17 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/current-user", () => ({ signedInUserId: vi.fn() }))
-vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn(async () => ({ ok: true })) }))
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
+vi.mock("@/lib/current-user", () => ({ signedInUserId: vi.fn<typeof import("@/lib/current-user").signedInUserId>() }))
+vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn<typeof import("@/lib/rate-limit").limit>(async () => ({ ok: true }) as import("@/lib/rate-limit").Limited) }))
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn<typeof import("next/cache").revalidatePath>() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
-vi.mock("@/lib/delete-account", () => ({ deleteAccount: vi.fn(), LastAdminError: class LastAdminError extends Error { constructor() { super("You are this deployment's only admin.") } } }))
-const jar = vi.hoisted(() => ({ getAll: vi.fn(), set: vi.fn() }))
+vi.mock("@/lib/delete-account", () => ({ deleteAccount: vi.fn<typeof import("@/lib/delete-account").deleteAccount>(), LastAdminError: class LastAdminError extends Error { constructor() { super("You are this deployment's only admin.") } } }))
+const jar = vi.hoisted(() => ({ getAll: vi.fn<Awaited<ReturnType<typeof import("next/headers").cookies>>["getAll"]>(), set: vi.fn<Awaited<ReturnType<typeof import("next/headers").cookies>>["set"]>() }))
 vi.mock("next/headers", () => ({ cookies: async () => jar, headers: async () => new Headers() }))
 
 const { signedInUserId } = await import("@/lib/current-user")
 const { deleteAccount, LastAdminError } = await import("@/lib/delete-account")
-const { deleteMyAccount } = await import("./actions")
+const { deleteMyAccount } = await import("./settings-actions")
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -31,7 +31,7 @@ describe("deleteMyAccount", () => {
   it("clears this browser's sign-in cookies once the account is deleted, and leaves other cookies alone", async () => {
     vi.mocked(deleteAccount).mockResolvedValue(undefined as never)
     expect(await deleteMyAccount("delete")).toEqual({ ok: true })
-    const cleared = jar.set.mock.calls.map(([name, value, opts]) => ({ name, value, maxAge: opts.maxAge, secure: opts.secure }))
+    const cleared = jar.set.mock.calls.map(([name, value, opts]) => ({ name, value, maxAge: opts?.maxAge, secure: opts?.secure }))
     expect(cleared).toEqual([
       { name: "__Secure-better-auth.session_token", value: "", maxAge: 0, secure: true },
       { name: "better-auth.session_data", value: "", maxAge: 0, secure: false },

@@ -19,6 +19,11 @@ const WORDS: Record<string, SignInProblem> = {
     title: "Buffer did not answer in time",
     text: "Queue Pilot asked Buffer which account you signed in with and got no answer, often because Buffer was busy. Nothing was connected. Try again in a minute.",
   },
+  // Better Auth refuses to join a Buffer sign-in to an email account with the same address (implicit linking is off).
+  account_not_linked: {
+    title: "This email already has a Queue Pilot account",
+    text: "You made it with an email and password, so sign in that way. Queue Pilot never joins a Buffer sign-in to an account just because the email matches, so nobody gets into your account through a Buffer account they made with your address.",
+  },
   state_mismatch: {
     title: "Sign-in expired",
     text: "The sign-in took too long or was started in another tab. Try again.",

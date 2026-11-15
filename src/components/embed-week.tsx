@@ -17,7 +17,8 @@ export function EmbedWeek({ shift }: { shift: number }) {
   const drafts = demoPosts(shift).filter((p) => p.status === "draft").sort((a, b) => a.day - b.day || mins(a.time) - mins(b.time));
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const ready = drafts.filter((p) => worstTone(p) !== "danger" && !approved.has(p.id));
-  const chan = (id: Post["channel"]) => channels.find((c) => c.id === id)!.name;
+  // Every demo post names one of the demo channels; an unknown id shows as itself.
+  const chan = (id: Post["channel"]) => channels.find((c) => c.id === id)?.name ?? id;
 
   return (
     <section className={styles.widget} aria-labelledby="qp-embed-title">

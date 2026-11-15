@@ -4,7 +4,7 @@
  * line, and rows recorded in the same millisecond are never skipped. One extra row is read to know whether another
  * page exists.
  */
-import { and, asc, desc, eq, gt, lt, or, sql, type SQL } from "drizzle-orm";
+import { SQL, and, asc, desc, eq, gt, is, lt, or, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 /** A page of rows, newest first, with bookmarks for the next older and newer pages (null when there is none). */
@@ -62,11 +62,13 @@ export async function readPage<R>(opts: {
   const after = before ? null : readBookmark(opts.from.after);
   const mark = before ?? after;
   const cmp = before ? lt : gt;
+  // The key is a column or an expression; the two branches below run the same comparison, split only so each side
+  // type-checks against its own lt/gt overload.
   const where = mark
-    ? or(cmp(opts.time, sql`${mark.at}::timestamptz`), and(eq(opts.time, sql`${mark.at}::timestamptz`), cmp(opts.key as PgColumn, mark.key)))
+    ? or(cmp(opts.time, sql`${mark.at}::timestamptz`), and(eq(opts.time, sql`${mark.at}::timestamptz`), is(opts.key, SQL) ? cmp(opts.key, mark.key) : cmp(opts.key, mark.key)))
     : undefined;
   // Walking newer reads upward from the bookmark, then turns the rows back to newest first.
-  const order = after ? [asc(opts.time), asc(opts.key as PgColumn)] : [desc(opts.time), desc(opts.key as PgColumn)];
+  const order = after ? [asc(opts.time), asc(opts.key)] : [desc(opts.time), desc(opts.key)];
   const got = await opts.read(where, order, opts.limit + 1);
   const more = got.length > opts.limit;
   const page = after ? got.slice(0, opts.limit).reverse() : got.slice(0, opts.limit);

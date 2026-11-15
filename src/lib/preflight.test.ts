@@ -19,25 +19,25 @@ const res = (status: number, type: string) => new Response(status === 200 || sta
 
 describe("imageLinkCheck", () => {
   it("passes a reachable image and asks for one byte only", async () => {
-    const fetchImpl = vi.fn(async () => res(206, "image/png"));
+    const fetchImpl = vi.fn<typeof fetch>(async () => res(206, "image/png"));
     expect((await imageLinkCheck("https://cdn.example/a.png", { fetchImpl })).result).toBe("pass");
     const [, init] = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
     expect((init.headers as Record<string, string>).Range).toBe("bytes=0-0");
   });
   it("fails a share page that returns HTML instead of the image", async () => {
-    const r = await imageLinkCheck("https://drive.example/view?id=1", { fetchImpl: vi.fn(async () => res(200, "text/html; charset=utf-8")) });
+    const r = await imageLinkCheck("https://drive.example/view?id=1", { fetchImpl: vi.fn<typeof fetch>(async () => res(200, "text/html; charset=utf-8")) });
     expect(r.result).toBe("fail");
     expect(r.detail).toContain("text/html");
   });
   it("fails a missing image", async () => {
-    expect((await imageLinkCheck("https://cdn.example/gone.png", { fetchImpl: vi.fn(async () => res(404, "text/plain")) })).result).toBe("fail");
+    expect((await imageLinkCheck("https://cdn.example/gone.png", { fetchImpl: vi.fn<typeof fetch>(async () => res(404, "text/plain")) })).result).toBe("fail");
   });
   it("fails a link that does not answer", async () => {
-    const r = await imageLinkCheck("https://slow.example/a.png", { fetchImpl: vi.fn(async () => { throw new Error("timeout"); }) });
+    const r = await imageLinkCheck("https://slow.example/a.png", { fetchImpl: vi.fn<typeof fetch>(async () => { throw new Error("timeout"); }) });
     expect(r.detail).toContain("did not answer");
   });
   it("fails malformed and non-web links without fetching", async () => {
-    const fetchImpl = vi.fn();
+    const fetchImpl = vi.fn<typeof fetch>();
     expect((await imageLinkCheck("not a url", { fetchImpl })).result).toBe("fail");
     expect((await imageLinkCheck("file:///etc/passwd", { fetchImpl })).result).toBe("fail");
     expect(fetchImpl).not.toHaveBeenCalled();

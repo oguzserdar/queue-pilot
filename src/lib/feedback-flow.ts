@@ -43,12 +43,19 @@ export async function checkedFeedback(userId: string, feedback: { text: string; 
   const jm = await judgeModelFor(userId).catch((e) => (e instanceof AiCapError ? e : Promise.reject(e)));
   if (jm instanceof AiCapError) return { ok: false, message: jm.message };
   if (!jm) return { ok: false, message: "AI is unavailable. Check the allowance or your own key in Settings." };
+  // Every draft's account is in channels (the callers prove it); a missing one fails the plan like any other error.
+  const serviceOf = (channelId: string) => {
+    const channel = channels.get(channelId);
+    if (!channel) throw new Error(`No channel ${channelId} for a draft`);
+    return channel.service;
+  };
   try {
-    const plan = await planFeedback(jm.language, feedback, drafts.map(p => ({ slotId: p.id, text: p.text, network: channels.get(p.channelId)!.service, channelId: p.channelId })));
-    const slots = drafts.map(p => ({ id: p.id, service: channels.get(p.channelId)!.service, channelId: p.channelId })) as OpenSlot[];
+    const plan = await planFeedback(jm.language, feedback, drafts.map(p => ({ slotId: p.id, text: p.text, network: serviceOf(p.channelId), channelId: p.channelId })));
+    const slots = drafts.map((p) => asSlot(p, serviceOf(p.channelId)));
     const lengthRefusals = plan.edits.flatMap(e => {
-      const draft = drafts.find(p => p.id === e.postId)!;
-      const reason = tooLong(channels.get(draft.channelId)!.service, e.after);
+      const draft = drafts.find(p => p.id === e.postId);
+      if (!draft) throw new Error(`An edit names ${e.postId}, which is not one of the drafts`);
+      const reason = tooLong(serviceOf(draft.channelId), e.after);
       return reason ? [{ postId: e.postId, reason }] : [];
     });
     const fitting = plan.edits.filter(e => !lengthRefusals.some(r => r.postId === e.postId));
@@ -63,6 +70,11 @@ export async function checkedFeedback(userId: string, feedback: { text: string; 
   } finally { await jm.settle(); }
 }
 
+/** A draft as the playbook check reads a slot: only its id, network and account are read (save-for-user.ts). */
+function asSlot(p: Post, service: string): OpenSlot {
+  return { id: p.id, service, channelId: p.channelId, channel: "", organizationId: null, at: "", local: "", timezone: "" };
+}
+
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
 /** A review comment's proposals for the drafts the person chose. */
@@ -72,8 +84,8 @@ export async function feedbackForComment(userId: string, linkId: unknown, commen
   const link = links.find(l => l.id === linkId);
   const comment = link?.comments.find(c => c.id === commentId);
   const original = link?.drafts.find(d => d.postId === comment?.postId);
-  if (!comment || !original || !snap) return { ok: false, message: "That comment is not in your reviews." };
-  const ids = new Set(postIds as string[]);
+  if (!link || !comment || !original || !snap) return { ok: false, message: "That comment is not in your reviews." };
+  const ids = new Set(postIds.filter((p): p is string => typeof p === "string"));
   const channels = new Map(snap.data.channels.map(c => [c.id, c]));
   const drafts = snap.data.posts.filter(p => ids.has(p.id) && p.status === "draft" && channels.has(p.channelId));
   const ours = await wroteIds(userId, ...ids);
@@ -83,6 +95,6 @@ export async function feedbackForComment(userId: string, linkId: unknown, commen
   return checkedFeedback(userId, { text: comment.text, quote: comment.quote, original: original.text }, drafts, channels, (preference, reason) => ({
     key: `review:${hash([linkId, commentId, preference, accountIds])}`,
     rule: { kind: "guidance", text: preference, channels: "all", accountIds, level: "warn" },
-    evidence: { kind: "review", comment: comment.text, quote: comment.quote, reason, sharedAt: link!.createdAt, networks: [...new Set(drafts.map(p => channels.get(p.channelId)!.service))].sort() },
+    evidence: { kind: "review", comment: comment.text, quote: comment.quote, reason, sharedAt: link.createdAt, networks: [...new Set(drafts.flatMap(p => channels.get(p.channelId)?.service ?? []))].sort() },
   }));
 }

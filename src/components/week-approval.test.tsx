@@ -4,9 +4,9 @@ import { demoWeekFor } from "@/lib/demo-data"
 
 const demoWeek = demoWeekFor(0);
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["refresh"]>() }) }))
 vi.mock("@/app/(app)/actions", () => ({}))
-vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn() }) }))
+vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn<ReturnType<typeof import("@/registry/components/toast-stack/toast-stack").useToastStack>["toast"]>() }) }))
 const { WeekView } = await import("./week-view")
 
 const week = { ...demoWeek, posts: [
@@ -89,5 +89,21 @@ describe("a week with no posting times", () => {
     expect(html).not.toContain("every time has a post")
     expect(html).toContain("no posting times set in Buffer")
     expect(html).toContain("Add posting times to your channels in Buffer")
+  })
+})
+
+describe("posts taken off the schedule in Buffer", () => {
+  it("leaves them out of the Approve button and the title's count, and names them apart", () => {
+    const html = renderToStaticMarkup(<WeekView week={week} live verdicts={{ ours: null, "foreign-api": null }} pulledBack={["foreign-api"]} />)
+    expect(html).toContain("Approve 1 draft")
+    expect(html).toContain("1 draft to approve")
+    expect(html).toContain("1 taken off the schedule")
+    expect(html).not.toContain("2 drafts to approve")
+  })
+
+  it("control: without pulled-back posts both drafts count", () => {
+    const html = renderToStaticMarkup(<WeekView week={week} live verdicts={{ ours: null, "foreign-api": null }} />)
+    expect(html).toContain("Approve 2 drafts")
+    expect(html).not.toContain("taken off the schedule")
   })
 })

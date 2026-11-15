@@ -7,8 +7,8 @@ import { randomUUID } from "node:crypto";
 import { and, asc, count, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { fixDismissed, rule as ruleTable, ruleInheritance } from "../db/schema";
-import type { Inheritance } from "./rule-scopes";
-import type { NewRule, Rule } from "./rules";
+import { inheritanceFrom } from "./rule-scopes";
+import { storedRuleSpec, type NewRule, type Rule } from "./rules";
 
 export const MAX_RULES = 50;
 
@@ -38,15 +38,17 @@ export function postgresRulesStore(): RulesStore {
     async list(userId) {
       const rows = await db().select().from(ruleTable).where(eq(ruleTable.userId, userId)).orderBy(asc(ruleTable.createdAt));
       const [policy] = await db().select().from(ruleInheritance).where(eq(ruleInheritance.userId, userId));
-      const inheritance = (policy?.settings ?? {}) as Inheritance;
-      return rows.map((r) => ({ ...(r.spec as NewRule), id: r.id, fixes: r.fixes, ...(Object.keys(inheritance).length ? { inheritance } : {}) }) as StoredRule);
+      const inheritance = inheritanceFrom(policy?.settings);
+      return rows.map((r): StoredRule => ({ ...storedRuleSpec(r.spec), id: r.id, fixes: r.fixes, ...(Object.keys(inheritance).length ? { inheritance } : {}) }));
     },
     async add(userId, spec, fixes = 0) {
       if (spec.accountIds && !(await ownedAccounts(userId, spec.accountIds))) throw new Error("Choose an account connected to your Queue Pilot.");
       const overrides = Object.keys(spec.overrides?.accounts ?? {});
       if (overrides.length && !(await ownedAccounts(userId, overrides))) throw new Error("Choose an account connected to your Queue Pilot.");
-      const { inheritance: _runtime, ...persisted } = spec;
-      spec = persisted as NewRule;
+      // Inheritance is read from the owner's settings at runtime and never stored on the rule.
+      const persisted: NewRule = { ...spec };
+      delete persisted.inheritance;
+      spec = persisted;
       const [{ c }] = await db().select({ c: count() }).from(ruleTable).where(eq(ruleTable.userId, userId));
       if (c >= MAX_RULES) throw new TooManyRulesError();
       const id = randomUUID();
@@ -67,7 +69,7 @@ export function postgresRulesStore(): RulesStore {
         ), '[]'::jsonb))
         where id = ${id} and user_id = ${userId} and spec->>'channels' = 'all'
         returning id`);
-      return (r as unknown as { rows: unknown[] }).rows.length > 0;
+      return r.rows.length > 0;
     },
     async dismiss(userId, key) {
       await db().insert(fixDismissed).values({ userId, key: key.slice(0, 500) }).onConflictDoNothing();

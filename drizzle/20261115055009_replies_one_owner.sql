@@ -1,0 +1,2 @@
+ALTER TABLE "qp_social_account" ADD COLUMN "replies_since" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "qp_social_account_replies_once" ON "qp_social_account" USING btree ("network","account_id") WHERE replies_on;

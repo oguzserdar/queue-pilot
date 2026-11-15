@@ -57,7 +57,7 @@ describe("Buffer fields we query", () => {
 });
 
 /** Runs a real write path against a fake Buffer and returns every GraphQL input object it sent. */
-async function sentInputs(run: (q: any) => Promise<unknown>): Promise<{ query: string; input: Record<string, unknown> }[]> {
+async function sentInputs(run: (q: typeof import("./client").bufferQuery) => Promise<unknown>): Promise<{ query: string; input: Record<string, unknown> }[]> {
   const sent: { query: string; input: Record<string, unknown> }[] = [];
   const q = async (_t: string, query: string, variables?: Record<string, unknown>) => {
     if (variables?.input) sent.push({ query, input: variables.input as Record<string, unknown> });
@@ -68,7 +68,7 @@ async function sentInputs(run: (q: any) => Promise<unknown>): Promise<{ query: s
     if (query.includes("editPost")) return { editPost: { __typename: "PostActionSuccess" } };
     return { createPost: { __typename: "PostActionSuccess" } };
   };
-  await run(q);
+  await run(q as unknown as typeof import("./client").bufferQuery);
   return sent;
 }
 

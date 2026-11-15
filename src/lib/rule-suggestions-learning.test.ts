@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WriteBuffer } from "./write-slots-for-user";
 const deps = vi.hoisted(() => ({
-  rewrites: vi.fn(), offers: vi.fn(), propose: vi.fn(), first: vi.fn(), sent: vi.fn(),
-  settle: vi.fn(async () => {}), giveBack: vi.fn(async () => {}), ai: vi.fn(),
+  rewrites: vi.fn<typeof import("./read-back").currentRewrites>(), offers: vi.fn<typeof import("./read-back").currentOffers>(), propose: vi.fn<typeof import("./rewrite-rules").proposeRules>(), first: vi.fn<typeof import("./day-one-rules").proposeFirstRules>(), sent: vi.fn<typeof import("./buffer/queries").listRecentSent>(),
+  settle: vi.fn<() => Promise<void>>(async () => {}), giveBack: vi.fn<() => Promise<void>>(async () => {}), ai: vi.fn<typeof import("./judge-model").judgeModelFor>(),
 }));
 vi.mock("./read-back", () => ({ currentRewrites: deps.rewrites, currentOffers: deps.offers }));
 vi.mock("./rewrite-rules", () => ({ proposeRules: deps.propose }));
@@ -16,7 +16,7 @@ const rule = { kind: "guidance" as const, text: "Keep it short", channels: ["twi
 const buffer = { userId: "a", token: "token", channels: [{ id: "ch", service: "twitter", organizationId: "org" }] } as WriteBuffer;
 beforeEach(() => {
   vi.clearAllMocks(); vi.stubEnv("SESSION_SECRET", "test-key");
-  deps.ai.mockResolvedValue({ judges: { explainer: {}, decider: {} }, settle: deps.settle, giveBack: deps.giveBack });
+  deps.ai.mockResolvedValue({ judges: { explainer: {}, decider: {} }, settle: deps.settle, giveBack: deps.giveBack } as unknown as Awaited<ReturnType<typeof import("./judge-model").judgeModelFor>>);
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("learning controls", () => {
@@ -37,8 +37,8 @@ describe("learning controls", () => {
     expect(deps.settle).toHaveBeenCalledTimes(1);
   });
   it("excludes Queue Pilot posts from first-rule learning and gives back failed AI actions", async () => {
-    deps.sent.mockResolvedValue([{ id: "ours", channelId: "ch", text: "Generated", notes: [] }, { id: "mine", channelId: "ch", text: "My writing", notes: [] }]);
-    deps.first.mockResolvedValue({ offers: [{ rule, proof: { kind: "posts", examples: ["My writing"] } }], skipped: [] });
+    deps.sent.mockResolvedValue([{ id: "ours", channelId: "ch", text: "Generated", notes: [] }, { id: "mine", channelId: "ch", text: "My writing", notes: [] }] as unknown as import("./buffer/queries").SentPost[]);
+    deps.first.mockResolvedValue({ offers: [{ rule, proof: { kind: "posts", examples: ["My writing"] } }], skipped: [] } as unknown as Awaited<ReturnType<typeof import("./day-one-rules").proposeFirstRules>>);
     const r = await ruleSuggestions("a", "past_posts", async () => buffer);
     expect(deps.first.mock.calls[0][2]).toEqual([{ id: "mine", channelId: "ch", channelName: undefined, network: "twitter", text: "My writing", notes: [] }]);
     expect(r.suggestions).toHaveLength(1);

@@ -1,14 +1,14 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ cards: [] as unknown[], pending: 0, buffer: { userId: "owner", token: "token", posts: [{ id: "post", text: "Original", status: "draft" }] }, edit: vi.fn(async () => ({ ok: true })), report: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const state = vi.hoisted(() => ({ cards: [] as unknown[], pending: 0, buffer: { userId: "owner", token: "token", posts: [{ id: "post", text: "Original", status: "draft" }] }, edit: vi.fn<typeof import("./actions").editDraftText>(async () => ({ ok: true })), report: vi.fn<(...args: Parameters<typeof import("@/lib/source-check").reportSourceVersion>) => void>() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn<typeof import("next/cache").revalidatePath>() }));
 vi.mock("@/lib/current-user", () => ({ signedInUserId: async () => "owner", freshBufferForCurrentUser: async () => state.buffer }));
 vi.mock("@/lib/buffer/queries", () => ({ readPostsNow: async () => state.buffer.posts }));
-vi.mock("@/lib/check-sources", () => ({ checkSources: vi.fn() }));
-vi.mock("@/lib/source-check", () => ({ listSourcesToCheck: async () => [{ sourceKey: "source", evidence: [{ postId: "post" }] }], reportSourceVersion: async (...args: unknown[]) => { state.report(...args); return { pending: state.pending }; } }));
+vi.mock("@/lib/check-sources", () => ({ checkSources: vi.fn<typeof import("@/lib/check-sources").checkSources>() }));
+vi.mock("@/lib/source-check", () => ({ listSourcesToCheck: async () => [{ sourceKey: "source", evidence: [{ postId: "post" }] }], reportSourceVersion: async (...args: Parameters<typeof import("@/lib/source-check").reportSourceVersion>) => { state.report(...args); return { pending: state.pending }; } }));
 vi.mock("@/lib/source-store", () => ({ latestSource: async () => ({ uri: "https://example.com/source", text: "Actual source", metadata: {} }) }));
 vi.mock("@/lib/source-presentation", () => ({ sourceCards: async () => state.cards }));
 vi.mock("@/lib/rate-limit", () => ({ limit: async () => ({ ok: true }) }));
-vi.mock("./actions", () => ({ editDraftText: (...args: unknown[]) => state.edit(...args as []) }));
+vi.mock("./actions", () => ({ editDraftText: (...args: Parameters<typeof import("./actions").editDraftText>) => state.edit(...args) }));
 const { recheckSourceEvidence, applySourceFix } = await import("./source-actions");
 beforeEach(() => { state.cards = []; state.pending = 0; state.edit.mockClear(); state.report.mockClear(); });
 it("does not report an unfinished evidence check as successful", async () => {

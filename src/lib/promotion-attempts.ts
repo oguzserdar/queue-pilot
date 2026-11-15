@@ -36,6 +36,13 @@ export type PromotionAttemptStore = {
 /** What one promoted version is: its account, text, slot time and the proof it carries. */
 export type FingerprintVersion = { channelId: string; text: string; dueAt?: string; snapshotId?: string; evidence?: unknown[] };
 
+/** Orders strings by UTF-16 code units, as the default sort does, so the digest never depends on the locale. */
+function byCodeUnits(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 /**
  * A stable fingerprint of the versions, order-independent and whitespace-insensitive in the text. It covers the slot
  * time, the source and the evidence too, so a retry cannot swap in different proof under the same attempt.
@@ -46,7 +53,7 @@ export type FingerprintVersion = { channelId: string; text: string; dueAt?: stri
 export function promotionFingerprint(versions: FingerprintVersion[]): string {
   const norm = versions
     .map((v) => [v.channelId, v.text.replace(/\s+/g, " ").trim(), v.dueAt ?? null, v.snapshotId ?? null, v.evidence ?? null] as const)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    .sort(([a], [b]) => byCodeUnits(a, b));
   return createHash("sha256").update(JSON.stringify(norm)).digest("hex");
 }
 

@@ -27,7 +27,7 @@ async function fetchReference(): Promise<string> {
     return text;
   } catch (e) {
     try { return readFileSync(CACHE, "utf8"); } catch {
-      throw new Error(`Could not download Buffer's API reference (${URL}): ${(e as Error).message}. These tests need it once; connect and run them again.`);
+      throw new Error(`Could not download Buffer's API reference (${URL}): ${e instanceof Error ? e.message : String(e)}. These tests need it once; connect and run them again.`);
     }
   }
 }
