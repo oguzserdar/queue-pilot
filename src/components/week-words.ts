@@ -154,3 +154,15 @@ export function weekFacts(f: FactsInput) {
   };
   return { posts, drafts, passed, overdue, open, needsCheck, pulled, ready, blocked, counts };
 }
+
+/**
+ * A channel or account name cut into the pieces it may wrap between: before an "@" that is not the first character
+ * and after a dot, so a handle such as "@ada@mastodon.social" wraps as "@ada" / "@mastodon." / "social", never
+ * mid-word. Joined back, the pieces are the name unchanged.
+ *
+ * @param name - The name as shown
+ * @returns The name in order, split at those points
+ */
+export function namePieces(name: string): string[] {
+  return name.split(/(?<=\.)|(?<=.)(?=@)/u).filter((piece) => piece !== "");
+}

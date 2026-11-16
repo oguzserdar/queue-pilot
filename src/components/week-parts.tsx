@@ -15,6 +15,7 @@ import { directAccountId } from "@/lib/direct-channel";
 import { parseSlotId } from "@/lib/open-slots";
 import { zoneLabel, type WeekModel, type WeekPost } from "@/lib/week-model";
 import { ChannelIcon } from "./channel-icon";
+import { namePieces } from "./week-words";
 import { SlotComposer, type ComposerSlot } from "./slot-composer";
 import { PostComposer } from "./post-composer";
 import styles from "./week-view.module.css";
@@ -98,7 +99,7 @@ export function WeekGrid({ week, name, dayHasContent, cell }: { week: WeekModel;
   return (
     <div className={styles.layout}>
       <div className={styles.gridWrap}>
-        <div className={styles.grid} role="table" aria-label={`Posting slots for ${name.toLowerCase()}`} style={{ gridTemplateColumns: `max-content ${DAYS.map((_, d) => (dayHasContent(d) ? "minmax(132px, 1fr)" : "56px")).join(" ")}` }}>
+        <div className={styles.grid} role="table" aria-label={`Posting slots for ${name.toLowerCase()}`} style={{ gridTemplateColumns: `fit-content(180px) ${DAYS.map((_, d) => (dayHasContent(d) ? "minmax(132px, 1fr)" : "56px")).join(" ")}` }}>
           <div className={styles.corner}>{week.timeZone && week.startsAt && <span className={styles.zone}>Times in {zoneLabel(week.timeZone, new Date(week.startsAt))}</span>}</div>
           {DAYS.map((d, i) => {
             const has = dayHasContent(i);
@@ -107,7 +108,7 @@ export function WeekGrid({ week, name, dayHasContent, cell }: { week: WeekModel;
           {channels.map((ch) => (
             <div key={ch.id} className={styles.row} role="row">
               <div className={styles.channel} role="rowheader">
-                <span className={styles.chip}><ChannelIcon service={ch.service} />{ch.name}</span>
+                <span className={styles.chip}><ChannelIcon service={ch.service} /><ChannelName name={ch.name} /></span>
                 {ch.timezone && week.timeZone && week.startsAt && ch.timezone !== week.timeZone && (
                   <span className={styles.zone}>{zoneLabel(ch.timezone, new Date(week.startsAt))} times</span>
                 )}
@@ -132,7 +133,7 @@ export function WeekGrid({ week, name, dayHasContent, cell }: { week: WeekModel;
               const items = cell(ch.id, day);
               return items.length > 0 && (
                 <div key={ch.id} className={styles.listChannel}>
-                  <span className={styles.chip}><ChannelIcon service={ch.service} />{ch.name}</span>
+                  <span className={styles.chip}><ChannelIcon service={ch.service} /><ChannelName name={ch.name} /></span>
                   {ch.isDisconnected && <>{" "}<Badge tone="danger" size="sm">Disconnected</Badge></>}
                   {items}
                 </div>
@@ -155,4 +156,9 @@ export function ComposerFor({ composing, live, onDirectClose, onClose }: { compo
   const accountId = slot ? directAccountId(slot.channelId) : null;
   if (id && slot && accountId && live) return <PostComposer key={id} recent={[]} preset={{ accountId, at: slot.at }} onClose={onDirectClose} />;
   return <SlotComposer slot={accountId ? null : composing} live={live} onClose={onClose} />;
+}
+
+/** A channel name that wraps only between its natural pieces (see namePieces), so a long handle stays readable. */
+function ChannelName({ name }: { name: string }) {
+  return <span className={styles.chipName}>{namePieces(name).map((piece, i) => <span key={i}>{i > 0 && <wbr />}{piece}</span>)}</span>;
 }
