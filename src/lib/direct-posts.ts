@@ -5,9 +5,9 @@
  * the call to Telegram or Discord: a claim that never reached that point (the worker died first) is taken back and
  * sent later, while a call that got no answer is "uncertain", because it may have landed, and is never resent.
  */
-import type { SocialNetwork } from "./social-networks";
+import type { PostingNetwork } from "./social-networks";
 
-export type PostKind = "telegram" | "discord" | SocialNetwork;
+export type PostKind = "telegram" | "discord" | PostingNetwork;
 
 /**
  * One destination of a post: the kind and the connected account or channel. Telegram and Discord are one per post

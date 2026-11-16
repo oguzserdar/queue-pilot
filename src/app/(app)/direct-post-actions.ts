@@ -21,7 +21,7 @@ import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { directPostDeps, startTimerOrNote } from "@/lib/direct-post-run";
 import { listSocialAccounts, readSocialAccount } from "@/lib/social-accounts";
 import { countFor, limitFor } from "@/lib/char-limits";
-import type { SocialNetwork } from "@/lib/social-networks";
+import { isPostingNetwork, type PostingNetwork } from "@/lib/social-networks";
 
 /** Where the person can post, as the composer shows it. */
 export type PostTargets = {
@@ -30,7 +30,7 @@ export type PostTargets = {
   /** Why Discord channels could not be listed, when the bot is connected but the read failed. */
   problem?: string;
   /** Mastodon and Bluesky accounts Queue Pilot posts to directly. One whose sign-in was refused is left out. */
-  accounts?: { id: string; network: SocialNetwork; label: string; limit: number }[];
+  accounts?: { id: string; network: PostingNetwork; label: string; limit: number }[];
 };
 
 /**
@@ -81,7 +81,8 @@ export async function postTargets(): Promise<PostTargets> {
   const out: PostTargets = {
     telegram: tg && tokens.telegram ? { label: tg.label, limit: telegram.TEXT_LIMIT } : null,
     discord: null,
-    accounts: social.filter((a) => !a.broken).map((a) => ({ id: a.id, network: a.network, label: a.handle, limit: limitFor(a.network) ?? 300 })),
+    // Only accounts on networks Queue Pilot posts to: an Instagram account answers comments and messages only.
+    accounts: social.flatMap((a) => (!a.broken && isPostingNetwork(a.network) ? [{ id: a.id, network: a.network, label: a.handle, limit: limitFor(a.network) ?? 300 }] : [])),
   };
   if (dc && dc.guildId && tokens.discord) {
     try {
@@ -141,7 +142,7 @@ async function accountItems(userId: string, accounts: { id: string; text: string
     if (seen.has(id)) continue;
     seen.add(id);
     const account = await readSocialAccount(userId, id);
-    if (!account || (account.network !== "mastodon" && account.network !== "bluesky")) return { ok: false, message: "That account is not connected to Queue Pilot. Connect it in Settings, Channels." };
+    if (!account || !isPostingNetwork(account.network)) return { ok: false, message: "That account is not connected to Queue Pilot. Connect it in Settings, Channels." };
     if (account.broken) return { ok: false, message: `${PLACE_NAME[account.network]} refused ${account.handle}'s sign-in earlier. Connect it again in Settings, Channels.` };
     const text = String(a.text ?? "").trim();
     const problem = textProblem(account.network, text);

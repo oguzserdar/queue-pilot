@@ -1,5 +1,5 @@
 import "server-only";
-import { isSocialNetwork } from "./social-networks";
+import { isPostingNetwork } from "./social-networks";
 /**
  * @fileoverview Posting times for accounts Queue Pilot posts to directly (Mastodon, Bluesky), so a person without
  * Buffer plans a week the same way: times per weekday in their own time zone. The accounts come back shaped like
@@ -63,7 +63,7 @@ export async function setPostingTimes(userId: string, accountId: string, times: 
 export async function directChannels(userId: string): Promise<Channel[]> {
   const rows = await db().select({ id: socialAccount.id, network: socialAccount.network, handle: socialAccount.handle, brokenAt: socialAccount.brokenAt, postingSchedule: socialAccount.postingSchedule, timeZone: socialAccount.timeZone })
     .from(socialAccount).where(eq(socialAccount.userId, userId)).orderBy(socialAccount.connectedAt, socialAccount.id);
-  return rows.flatMap((r) => (isSocialNetwork(r.network) ? [{
+  return rows.flatMap((r) => (isPostingNetwork(r.network) ? [{
     id: `${DIRECT_PREFIX}${r.id}`, name: r.handle, service: r.network, timezone: r.timeZone ?? "UTC",
     isDisconnected: r.brokenAt !== null, isLocked: false, isQueuePaused: false, postingSchedule: r.postingSchedule,
   }] : []));

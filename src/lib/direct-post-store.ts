@@ -8,7 +8,7 @@ import { db } from "../db";
 import { directPostSend } from "../db/schema";
 import { CLAIM_MS, ONE_PER_POST, WAIT_CEILING, textFor, type DirectPostRow, type DirectPostStore, type Place } from "./direct-posts";
 import { readPage, timeText, type Page, type PageFrom } from "./page-bookmark";
-import { SOCIAL_NETWORKS } from "./social-networks";
+import { POSTING_NETWORKS } from "./social-networks";
 
 /** Direct posts go to Telegram, Discord, Mastodon or Bluesky; Instagram posts go through Buffer, so any other kind here is a bug. */
 function postKind(kind: (typeof directPostSend.$inferSelect)["kind"]): DirectPostRow["kind"] {
@@ -221,7 +221,7 @@ function sending(): Omit<DirectPostStore, keyof Planning | keyof Cancelling> {
     async between(userId, start, end) {
       const at = sql`coalesce(${directPostSend.sendAt}, ${directPostSend.createdAt})`;
       return (await db().select().from(directPostSend).where(and(
-        eq(directPostSend.userId, userId), inArray(directPostSend.kind, [...SOCIAL_NETWORKS]), ne(directPostSend.status, "cancelled"),
+        eq(directPostSend.userId, userId), inArray(directPostSend.kind, [...POSTING_NETWORKS]), ne(directPostSend.status, "cancelled"),
         sql`${at} >= ${start}`, sql`${at} < ${end}`,
       )).orderBy(asc(at))).map(toRow);
     },

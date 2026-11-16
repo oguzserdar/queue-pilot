@@ -3,7 +3,7 @@
  * channel ("direct:<account id>"), so the week grid shows them beside Buffer's and their times count as taken.
  */
 import type { Post } from "./buffer/queries";
-import { isSocialNetwork } from "./social-networks";
+import { isPostingNetwork } from "./social-networks";
 import type { DirectPostRow } from "./direct-posts";
 import { DIRECT_PREFIX } from "./direct-channel";
 
@@ -26,7 +26,7 @@ function rowError(r: DirectPostRow): { message: string; supportUrl: null } | nul
  */
 export function directWeekPosts(rows: DirectPostRow[]): Post[] {
   return rows.flatMap((r) => {
-    if (r.status === "cancelled" || !isSocialNetwork(r.kind)) return [];
+    if (r.status === "cancelled" || !isPostingNetwork(r.kind)) return [];
     const at = (r.sendAt ?? r.createdAt).toISOString();
     const error = rowError(r);
     return [{

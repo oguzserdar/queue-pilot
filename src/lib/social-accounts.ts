@@ -43,7 +43,7 @@ const Credentials = z.record(z.string(), z.string());
 
 /** A stored row as a usable account, or null for a network Queue Pilot does not post to directly. */
 function decrypted(row: Row): SocialAccount | null {
-  if (row.network !== "mastodon" && row.network !== "bluesky") return null;
+  if (!isSocialNetwork(row.network)) return null;
   const master = process.env.SETTINGS_KEY;
   if (!master) throw new Error("SETTINGS_KEY is not set, so connected accounts cannot be read");
   return {

@@ -16,8 +16,9 @@ import { PostingTimesEditor } from "./posting-times-editor";
 import { ConfirmButton } from "./confirm-button";
 import styles from "./settings-view.module.css";
 import channelStyles from "./sources-view.module.css";
+import { isPostingNetwork, type SocialNetwork } from "@/lib/social-networks";
 
-const NETWORK = { mastodon: "Mastodon", bluesky: "Bluesky" } as const;
+const NETWORK = { mastodon: "Mastodon", bluesky: "Bluesky", instagram: "Instagram" } as const satisfies Record<SocialNetwork, string>;
 
 /** The words for a Mastodon connect result arriving in the address (?mastodon=...). */
 export const MASTODON_RESULT: Record<string, { ok: boolean; text: string }> = {
@@ -62,7 +63,7 @@ export function SocialAccounts({ accounts, mastodonResult, example = false }: { 
                 <span className={styles.muted}>{NETWORK[a.network]}{a.broken ? " · stopped accepting Queue Pilot's sign-in. Connect it again below." : ""}</span>
               </div>
               <div className={styles.confirm}>
-                <PostingTimesEditor accountId={a.id} handle={a.handle} schedule={a.postingSchedule} timeZone={a.timeZone} disabled={pending || a.broken} onSaved={(r) => setNote({ ok: r.ok, text: r.message })} />
+                {isPostingNetwork(a.network) && <PostingTimesEditor accountId={a.id} handle={a.handle} schedule={a.postingSchedule} timeZone={a.timeZone} disabled={pending || a.broken} onSaved={(r) => setNote({ ok: r.ok, text: r.message })} />}
                 <Switch label="Replies" checked={a.repliesOn} disabled={pending || a.broken} onCheckedChange={(on) => act(() => setRepliesAction(a.id, on))} />
                 <ConfirmButton variant="secondary" label="Disconnect" question={`Disconnect ${a.handle}? Posts and replies to it stop.`} confirmLabel={`Disconnect ${NETWORK[a.network]}`} pending={pending} onConfirm={() => act(() => disconnectSocialAction(a.id))} />
               </div>

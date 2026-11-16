@@ -16,8 +16,7 @@
  * stored once and answered once.
  */
 import "server-only";
-import * as z from "zod";
-import { type SocialNetwork } from "./social-networks";
+import { type ReplyNetwork } from "./social-networks";
 import * as mastodon from "./mastodon";
 import * as bluesky from "./bluesky";
 import { MAX_WAIT_SECONDS, type Cooldowns } from "./direct-posts";
@@ -34,6 +33,9 @@ import { activeAutomations } from "./reply-automation-store";
 import { linksAllowed, matchAutomation, pickVersion, type ReplyAutomation } from "./reply-automations";
 import { markAccountBroken, ownAccounts, repliesOwnerKey, replyAccounts, type ReplyAccount } from "./social-accounts";
 import { postgresCooldowns } from "./cooldowns";
+import { ReplyRefused, RenewFailed } from "./reply-errors";
+import { SENDERS, type ReplyRoute, type SendContext, type Sender } from "./reply-senders";
+import { InstagramError } from "./instagram";
 
 /** One of the owner's connected accounts, as the run compares mention authors against it. */
 export type OwnAccount = { networkAccountId: string; handle: string; server: string };
@@ -44,7 +46,7 @@ export type ReplyRunDeps = {
   /** The accounts with replies on and not broken. */
   accounts: () => Promise<ReplyAccount[]>;
   /** All of this owner's accounts on a network, whatever their state. */
-  own: (userId: string, network: SocialNetwork) => Promise<OwnAccount[]>;
+  own: (userId: string, network: ReplyNetwork) => Promise<OwnAccount[]>;
   draft: ReplyDeps["draft"];
   rules: ReplyDeps["rules"];
   ruleAccount?: ReplyDeps["ruleAccount"];
@@ -82,23 +84,12 @@ export const MAX_ANSWERS = 20;
  */
 export const RUN_ANSWER_MS = 40_000;
 
-/** The run refused a reply itself, before it reached the network; nothing was sent. */
-export class ReplyRefused extends Error {}
-
-/** Bluesky's session could not be renewed before the reply call, so nothing was posted; the reply is tried later. */
 /** The account is cooling down after a "wait" (from a post or a reply): no call, the reply waits until it ends. */
 class CoolingDown extends Error {
   constructor(readonly seconds: number) { super(`The network asked to wait, so this waits ${seconds} seconds before trying.`); }
 }
 
-class RenewFailed extends Error {
-  constructor(cause: unknown) {
-    super(`Bluesky's session could not be renewed, so nothing was posted: ${cause instanceof Error ? cause.message : String(cause)}`);
-  }
-}
-
-const refused = (e: unknown) => e instanceof mastodon.MastodonError || e instanceof bluesky.BlueskyError || e instanceof ReplyRefused || e instanceof RenewFailed || e instanceof CoolingDown;
-const signInRefused = (e: unknown) => (e instanceof mastodon.MastodonError || e instanceof bluesky.BlueskyError) && (e.status === 401 || e.status === 403);
+const refused = (e: unknown) => e instanceof mastodon.MastodonError || e instanceof bluesky.BlueskyError || e instanceof InstagramError || e instanceof ReplyRefused || e instanceof RenewFailed || e instanceof CoolingDown;
 /**
  * On a read only a 401 means the sign-in is gone. A 403 is a token without read:notifications (Mastodon answers 403
  * outside the granted scopes), which can still post, so it is logged and the account is left working.
@@ -156,8 +147,10 @@ async function runAccount(deps: ReplyRunDeps, account: ReplyAccount, sum: ReplyR
       return;
     }
   }
-  const taken = await deps.cursors.take(account.userId, account.id, startedAt, READ_GAP_MS[account.network]);
-  if (!taken) {
+  const reader = READERS[account.network];
+  // A network whose events arrive by webhook has nothing to read: only its put-back replies are swept.
+  const taken = reader ? await deps.cursors.take(account.userId, account.id, startedAt, reader.gapMs) : null;
+  if (reader && !taken) {
     sum.skipped += 1;
     return;
   }
@@ -170,8 +163,7 @@ async function runAccount(deps: ReplyRunDeps, account: ReplyAccount, sum: ReplyR
   const automations = await (deps.automations ?? activeAutomations)(account.userId, account.id);
   const read: Read = { deps, account, sum, now, startedAt, more, automations };
   await sweep(read);
-  if (account.network === "mastodon") await readMastodon(read, taken);
-  else await readBluesky(read, taken);
+  if (reader && taken) await reader.read(read, taken);
 }
 
 /** Stores one mention and answers it on its public route; counts the result. */
@@ -213,7 +205,7 @@ async function answerOne(r: Read, inboundId: string, route: "public" | "private"
     rules: deps.rules,
     ruleAccount: deps.ruleAccount,
     judge: deps.judge(account.userId),
-    send: sendFor(r, inboundId, externalId, meta),
+    send: sendFor(r, inboundId, route, externalId, meta),
     refused,
     // A network that says wait has posted nothing: the reply is put back and the sweeper sends it after the wait.
     liveAccount: true,
@@ -228,20 +220,23 @@ async function answerOne(r: Read, inboundId: string, route: "public" | "private"
 function waitSeconds(e: unknown): number | undefined {
   if (e instanceof CoolingDown) return e.seconds;
   if (e instanceof RenewFailed) return 60;
-  if ((e instanceof mastodon.MastodonError || e instanceof bluesky.BlueskyError) && e.status === 429) return e.retryAfterSeconds ?? 60;
-  return undefined;
+  return networkWaitSeconds(e);
 }
 
-/** A thread root kept with a Bluesky mention: its address and content hash. */
-const KeptRoot = z.looseObject({ uri: z.string(), cid: z.string() });
+/** How long a network itself said to wait (a 429, or Instagram's throttle codes); undefined when it did not. */
+function networkWaitSeconds(e: unknown): number | undefined {
+  if ((e instanceof mastodon.MastodonError || e instanceof bluesky.BlueskyError) && e.status === 429) return e.retryAfterSeconds ?? 60;
+  if (e instanceof InstagramError && e.kind === "wait") return e.retryAfterSeconds ?? 60;
+  return undefined;
+}
 
 /** The routes a reply can go out on. */
 const REPLY_ROUTES = ["public", "private", "dm"] as const;
 const isReplyRoute = (v: string): v is (typeof REPLY_ROUTES)[number] => REPLY_ROUTES.some((x) => x === v);
 
 /** The network call that sends one reply to one stored mention, built from what was kept with it. */
-function sendFor(r: Read, inboundId: string, externalId: string, meta: Record<string, unknown> | null): (req: SendRequest) => Promise<{ externalId: string | null }> {
-  const send = networkSend(r, inboundId, externalId, meta);
+function sendFor(r: Read, inboundId: string, route: ReplyRoute, externalId: string, meta: Record<string, unknown> | null): (req: SendRequest) => Promise<{ externalId: string | null }> {
+  const send = networkSend(r, inboundId, route, externalId, meta);
   const { deps, account, now } = r;
   const cooldowns = deps.cooldowns;
   if (!cooldowns) return send;
@@ -253,7 +248,7 @@ function sendFor(r: Read, inboundId: string, externalId: string, meta: Record<st
     try {
       return await send(req);
     } catch (e) {
-      const wait = (e instanceof mastodon.MastodonError || e instanceof bluesky.BlueskyError) && e.status === 429 ? e.retryAfterSeconds ?? 60 : undefined;
+      const wait = networkWaitSeconds(e);
       // Capped like posts: the network names the time, and any server can send any time.
       if (wait !== undefined) await cooldowns.note(key, new Date(now().getTime() + Math.min(wait, MAX_WAIT_SECONDS) * 1000)).catch(() => {});
       throw e;
@@ -262,52 +257,10 @@ function sendFor(r: Read, inboundId: string, externalId: string, meta: Record<st
 }
 
 /** The network call itself. */
-function networkSend(r: Read, inboundId: string, externalId: string, meta: Record<string, unknown> | null): (req: SendRequest) => Promise<{ externalId: string | null }> {
+function networkSend(r: Read, inboundId: string, route: ReplyRoute, externalId: string, meta: Record<string, unknown> | null): Sender {
   const { deps, account, now } = r;
-  const broken = async (e: unknown) => { if (signInRefused(e)) await deps.markBroken(account.userId, account.id).catch(() => {}); };
-  if (account.network === "mastodon") {
-    const acct = typeof meta?.acct === "string" ? meta.acct : null;
-    // A visibility not kept is answered as direct: never more public than what it answers.
-    const visibility = (["public", "unlisted", "private", "direct"] as const).find((v) => v === meta?.visibility) ?? "direct";
-    return async (req) => {
-      if (!acct) throw new ReplyRefused("The mention's author was not kept, so nothing was sent.");
-      if (withMention(req.text, acct) !== req.text) throw new ReplyRefused(`A Mastodon reply must start with @${acct}.`);
-      try {
-        const { id } = await mastodon.replyTo(account.server, account.credentials.token ?? "", externalId, req.text, req.key, visibility, deps.post, now);
-        return { externalId: id };
-      } catch (e) { await broken(e); throw e; }
-    };
-  }
-  const cid = typeof meta?.cid === "string" ? meta.cid : null;
-  const keptRoot = KeptRoot.safeParse(meta?.root);
-  const root = keptRoot.success ? keptRoot.data : null;
-  return async (req) => {
-    if (!cid) throw new ReplyRefused("The mention's content id was not kept, so nothing was sent.");
-    const self = { uri: externalId, cid };
-    // The record key comes from the reply row's id and its fixed creation time, so it never changes for this reply.
-    const row = (await deps.store.replies(account.userId, inboundId)).find((x) => x.id === req.key);
-    if (!row) throw new ReplyRefused("The reply's row was not found, so nothing was sent.");
-    // The last error the reply call itself gave. Any other error came from renewing the session, before a call.
-    let fromCall: unknown;
-    try {
-      const { uri } = await withBlueskySession(account.userId, account, async (session) => {
-        try {
-          return await bluesky.replyTo(account.server, session, self, root ?? self, req.text, bluesky.tidFor(req.key, row.at), deps.post, now);
-        } catch (e) {
-          fromCall = e;
-          throw e;
-        }
-      }, { post: deps.post });
-      return { externalId: uri };
-    } catch (e) {
-      await broken(e);
-      // Renewing failed before any call, so nothing was posted: the reply waits and is tried again. A refused sign-in
-      // (the account is broken) and a rate limit (with its own wait) keep their own handling.
-      const rateLimited = e instanceof bluesky.BlueskyError && e.status === 429;
-      if (e !== fromCall && !signInRefused(e) && !rateLimited) throw new RenewFailed(e);
-      throw e;
-    }
-  };
+  const ctx: SendContext = { account, now, post: deps.post, markBroken: deps.markBroken, replies: (userId, id) => deps.store.replies(userId, id) };
+  return SENDERS[account.network](ctx, inboundId, route, externalId, meta);
 }
 
 /** How old a mention may be for the sweeper to still answer it: after an outage, day-old mentions are left alone. */
@@ -497,3 +450,14 @@ export async function runDueReplies(deps: ReplyRunDeps = replyRunDeps()): Promis
   console.log(JSON.stringify({ event: "qp-reply-run", ...sum }));
   return sum;
 }
+
+/**
+ * How each network's mentions are read, and how long a read waits after the last one. A network whose comments and
+ * messages arrive by webhook (Instagram) has no reader: the run only sends its replies.
+ */
+const READERS: Record<ReplyNetwork, { read: (r: Read, taken: ReplyCursor) => Promise<void>; gapMs: number } | null> = {
+  mastodon: { read: readMastodon, gapMs: READ_GAP_MS.mastodon },
+  bluesky: { read: readBluesky, gapMs: READ_GAP_MS.bluesky },
+  instagram: null,
+};
+

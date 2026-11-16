@@ -2,7 +2,7 @@
  * @fileoverview The in-memory direct post store, for tests and the signed-out example. It keeps the same rules as the
  * Postgres store (direct-post-store.ts): one row per place, claims that run out, and every change scoped to its owner.
  */
-import { isSocialNetwork } from "./social-networks";
+import { isPostingNetwork } from "./social-networks";
 import { CLAIM_MS, ONE_PER_POST, WAIT_CEILING, textFor, type DirectPostRow, type DirectPostStore, type Place, type PostItem } from "./direct-posts";
 
 type Mem = DirectPostRow & { userId: string; claimedUntil: Date | null };
@@ -131,7 +131,7 @@ function sending(rows: Rows): Omit<DirectPostStore, keyof Planning> {
     async between(userId, start, end) {
       const at = (r: DirectPostRow) => (r.sendAt ?? r.createdAt).getTime();
       return [...rows.values()]
-        .filter((r) => r.userId === userId && isSocialNetwork(r.kind) && r.status !== "cancelled" && at(r) >= start.getTime() && at(r) < end.getTime())
+        .filter((r) => r.userId === userId && isPostingNetwork(r.kind) && r.status !== "cancelled" && at(r) >= start.getTime() && at(r) < end.getTime())
         .sort((a, b) => at(a) - at(b)).map(out);
     },
   };
