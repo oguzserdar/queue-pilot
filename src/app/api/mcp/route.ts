@@ -128,7 +128,9 @@ async function handle(req: Request): Promise<Response> {
       // Read once per request: a person whose admin role was removed, or an app whose admin access was taken away,
       // loses the admin tools on the next call. An app without admin access never sees them at all.
       const isAdmin = await userIsAdmin(userId).then((admin) => admin && appHasGrant(userId, clientId)).catch(() => false);
-      const res = await createMcpHandler(() => buildServer(auth, userId, websiteUrl, clientId, isAdmin), { legacy: "stateless" }).fetch(request);
+      // Listens are refused at once: Queue Pilot sends no change notices, so an open listen would only sit until the
+      // host's time limit and then be opened again, using server time all day.
+      const res = await createMcpHandler(() => buildServer(auth, userId, websiteUrl, clientId, isAdmin), { legacy: "stateless", maxSubscriptions: 0 }).fetch(request);
       const headers = new Headers(res.headers);
       for (const [k, v] of Object.entries(limitHeaders("mcp", l))) headers.set(k, v);
       return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
