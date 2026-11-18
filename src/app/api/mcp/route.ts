@@ -37,7 +37,12 @@ function buildServer(auth: Auth, userId: string, websiteUrl: string, clientId = 
     name: "queue-pilot", version: pkg.version, title: "Queue Pilot",
     websiteUrl,
     icons: [{ src: `${websiteUrl}/icon-512.png`, mimeType: "image/png", sizes: ["512x512"] }],
-  }, { instructions: SERVER_INSTRUCTIONS });
+  }, {
+    instructions: SERVER_INSTRUCTIONS,
+    // The tool and prompt lists never change while the server runs. Saying so tells a 2026 client not to open a listen
+    // for changes; left out, registering a tool or prompt declares listChanged true.
+    capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } },
+  });
   // Every tool, here and in src/lib, is registered through registerGuardedTool, which refuses a server without its guard.
   guardServer(server, { userId, websiteUrl });
   // The connected app's name, looked up once: Security activity names it for deletes and approvals, and the approval
