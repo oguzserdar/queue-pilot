@@ -127,14 +127,23 @@ export async function listMentions(server: string, token: string, sinceId?: stri
   return { mentions: page.flatMap((n) => toMention(n) ?? []), nextSinceId };
 }
 
-/** Mastodon's HTML status content as plain text: paragraphs, line breaks and list items kept, tags dropped, entities decoded. */
+/** The line breaks a closing or empty tag stands for in plain text; any other tag stands for nothing. */
+function breakFor(tag: string): string {
+  if (/^<br\b/i.test(tag)) return "\n";
+  if (/^<\/p\s*>$/i.test(tag)) return "\n\n";
+  if (/^<\/(li|blockquote|pre|ul|ol)\s*>$/i.test(tag)) return "\n";
+  return "";
+}
+
+/**
+ * Mastodon's HTML status content as plain text: paragraphs, line breaks and list items kept, tags dropped, entities
+ * decoded. The HTML is read once, as tags and the text between them, and only text is decoded, so a decoded "&lt;"
+ * is a character in the text and never read as a tag. The result is plain text, never HTML: show it as text.
+ */
 export function htmlToText(html: string): string {
-  const text = html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<\/(li|blockquote|pre|ul|ol)>/gi, "\n")
-    .replace(/<[^>]*>/g, "");
-  return decodeEntities(text).replace(/\n{3,}/g, "\n\n").trim();
+  let text = "";
+  for (const part of html.split(/(<[^>]*>)/)) text += part.startsWith("<") && part.endsWith(">") ? breakFor(part) : decodeEntities(part);
+  return text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };

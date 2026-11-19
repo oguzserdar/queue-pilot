@@ -160,6 +160,12 @@ describe("htmlToText", () => {
     expect(htmlToText("<p>one &amp; two<br>three</p><p>&lt;b&gt; &quot;x&quot; &#39;y&#39; &#x1F600; &amp;lt;</p>")).toBe("one & two\nthree\n\n<b> \"x\" 'y' \u{1F600} &lt;");
   });
 
+  it("reads tags once, so escaped or broken markup stays as text and is never read again as a tag", () => {
+    expect(htmlToText("<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>")).toBe("<script>alert(1)</script>");
+    expect(htmlToText("<p>a <scr<i>ipt> b</p>")).toBe("a ipt> b");
+    expect(htmlToText("<p>1 &lt; 2 and 3 &gt; 2</p>")).toBe("1 < 2 and 3 > 2");
+  });
+
   it("puts each list item and quote on its own line", () => {
     expect(htmlToText("<p>Steps:</p><ul><li>one</li><li>two</li></ul><blockquote><p>quoted</p></blockquote>")).toBe("Steps:\n\none\ntwo\n\nquoted");
   });
