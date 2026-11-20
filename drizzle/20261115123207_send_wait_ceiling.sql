@@ -1,1 +1,0 @@
-ALTER TABLE "qp_announcement_send" ADD COLUMN "waits" integer DEFAULT 0 NOT NULL;

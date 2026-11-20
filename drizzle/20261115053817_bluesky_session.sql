@@ -1,1 +1,0 @@
-ALTER TABLE "qp_social_account" ADD COLUMN "session" text;
