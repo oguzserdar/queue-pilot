@@ -5,7 +5,7 @@ import { writeFileSync } from 'node:fs';
 const url = process.env.DATABASE_URL;
 if (!url || new URL(url).hostname !== '127.0.0.1' || new URL(url).pathname !== '/qpday4') throw new Error('Local test database only');
 const pool = new pg.Pool({ connectionString: url });
-const uid='day4-local-review'; const now=new Date();
+const uid='day4-local-review';
 await pool.query('insert into "user"(id,name,email,email_verified) values($1,$2,$3,true) on conflict(id) do nothing',[uid,'Local test account','local-review@example.test']);
 await pool.query('insert into session(id,user_id,token,expires_at,updated_at) values($1,$2,$3,$4,now()) on conflict(id) do update set expires_at=excluded.expires_at',['day4-local-session',uid,'day4-local-token',new Date(Date.now()+86400000)]);
 const channels=[{id:'local-company',name:'Company · Local test',service:'linkedin'},{id:'local-personal',name:'Personal · Local test',service:'linkedin'},{id:'local-x',name:'Founder · Local test',service:'twitter'}].map(c=>({...c,timezone:'UTC',organizationId:'local-org',isDisconnected:false,isLocked:false,isQueuePaused:false,postingSchedule:[{day:'mon',paused:false,times:['09:00','12:00']}]}));

@@ -15,6 +15,16 @@ const PIXEL = 4;
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 const threshold = (x: number, y: number) => BAYER[(y & 3) * 4 + (x & 3)];
 
+/**
+ * How dense the dots are at a cell, from its place across (fx) and down (fy) the field, each 0 to 1. A band thickens
+ * downward; stacked on a phone they thicken below the middle; side by side they gather on the picture's (right) side.
+ */
+function density(band: boolean, narrow: boolean, fx: number, fy: number): number {
+  if (band) return Math.min(1, fy) * 0.7;
+  if (narrow) return Math.min(1, Math.max(0, (fy - 0.4) / 0.6)) * 0.5;
+  return Math.min(1, Math.max(0, (fx - 0.5) / 0.5)) * (0.4 + 0.6 * Math.sin(fy * Math.PI)) * 0.8;
+}
+
 export function PixelField({ placement = "hero" }: { placement?: "hero" | "band" }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -57,9 +67,7 @@ export function PixelField({ placement = "hero" }: { placement?: "hero" | "band"
         if (frames.some((o) => inside(o, x, y) && !corner(o, x, y))) continue;
         // Side by side, the dots gather on the picture's side so the text side stays plain. Stacked on a phone the
         // picture spans the width, so the dots spread evenly across it instead of leaning right.
-        const d = placement === "band" ? Math.min(1, y / h) * 0.7
-          : narrow ? Math.min(1, Math.max(0, (y / h - 0.4) / 0.6)) * 0.5
-          : Math.min(1, Math.max(0, (x / w - 0.5) / 0.5)) * (0.4 + 0.6 * Math.sin((y / h) * Math.PI)) * 0.8;
+        const d = density(placement === "band", narrow, x / w, y / h);
         // Denser toward the picture, but never solid, so no band forms: at most about half the cells.
         const p = placement === "hero" ? pull(x, y) * 0.55 : 0;
         if (Math.max(d, p) <= threshold(x, y)) continue;

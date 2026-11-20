@@ -9,7 +9,7 @@ function canonical(value: unknown): unknown {
 export function playbookVersion(rules: Rule[]): string {
   return createHash("sha256").update(JSON.stringify(canonical(rules.map(r => {
     const { learnedFrom: _e, ...rest } = r;
-    const clean = { ...rest } as Record<string, unknown>;
+    const clean: Record<string, unknown> = { ...rest };
     delete clean.fixes;
     return clean;
   }).sort((a, b) => String(a.id).localeCompare(String(b.id)))))).digest("hex");

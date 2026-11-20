@@ -2,19 +2,17 @@
  * @fileoverview The agent skill stays true to the connector: every tool it offers is described, the digest in the
  * index matches the file, and the deployment's own address is the one it tells the AI to connect to.
  */
-import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PLUGIN_SKILLS } from "./plugin-skills";
+import { mcpToolSource, registeredToolNames } from "@/test/mcp-tool-sources";
 import { SKILL_DESCRIPTION, SKILL_TOOL_NAMES, servedSkills, skillIndex, skillMarkdown, skillArchive } from "./agent-skill";
 
 const origin = "https://qp.example.com";
 
 describe("agent skill", () => {
   it("describes every tool the connector registers, and no tool it does not", () => {
-    const route = readFileSync(join(__dirname, "../app/api/mcp/route.ts"), "utf8") + readFileSync(join(__dirname, "mcp-controls.ts"), "utf8") + readFileSync(join(__dirname, "mcp-content-items.ts"), "utf8");
-    const registered = [...route.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((m) => m[1]).sort();
+    const registered = registeredToolNames(mcpToolSource("mcp-controls.ts", "mcp-content-items.ts")).sort();
     expect(registered.length).toBeGreaterThan(5);
     expect([...SKILL_TOOL_NAMES].sort()).toEqual(registered);
   });

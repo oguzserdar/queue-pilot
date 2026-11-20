@@ -47,13 +47,13 @@ describe("source evidence on Postgres", () => {
     const next = (await store.claimSourceJob("owner", key))!;
     await store.releaseSourceJob("owner", key, old);
     expect(await store.claimSourceJob("owner", key)).toBeNull();
-    await expect(store.appendSource("owner", input("race"), "user", old)).rejects.toThrow();
+    await expect(store.appendSource("owner", input("race"), "user", old)).rejects.toThrow(store.SourceBusyError);
     await store.appendSource("owner", input("race"), "user", next);
     await store.releaseSourceJob("owner", key, next);
   });
   it("keeps evidence private and holds changed drafts and changed source versions", async () => {
     const first = await store.captureSource("owner", input("linked"));
-    await expect(store.recordEvidence("other", "p", first.text, first.id, [{ claim: first.text, quote: first.text }])).rejects.toThrow();
+    await expect(store.recordEvidence("other", "p", first.text, first.id, [{ claim: first.text, quote: first.text }])).rejects.toThrow("The source is not in this account.");
     await store.recordEvidence("owner", "p", first.text, first.id, [{ claim: first.text, quote: first.text }]);
     expect(await store.evidenceForPosts("other", ["p"])).toEqual([]);
     expect((await store.sourceHoldsForPosts("owner", [{ id: "p", text: first.text }])).size).toBe(0);
@@ -82,9 +82,9 @@ it("lease renewal cannot revive an expired claim or extend its successor", async
  const key = "source:renew";
  const old = (await store.claimSourceJob("owner", key))!;
  await pg.query("update qp_source_job set expires_at = now() - interval '1 second' where key = $1", [key]);
- await expect(store.renewSourceJob("owner", key, old)).rejects.toThrow();
+ await expect(store.renewSourceJob("owner", key, old)).rejects.toThrow(store.SourceBusyError);
  const current = (await store.claimSourceJob("owner", key))!;
- await expect(store.renewSourceJob("owner", key, old)).rejects.toThrow();
+ await expect(store.renewSourceJob("owner", key, old)).rejects.toThrow(store.SourceBusyError);
  await expect(store.renewSourceJob("owner", key, current)).resolves.toBeUndefined();
 });
 

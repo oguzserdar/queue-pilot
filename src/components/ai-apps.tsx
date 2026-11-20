@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { removeUnusedAiApps, renameAiApp, revokeAiApp } from "@/app/(app)/actions";
+import { removeUnusedAiApps, renameAiApp, revokeAiApp } from "@/app/(app)/settings-actions";
+import { grantAppAdminAccess, removeAppAdminAccess } from "@/app/admin/actions";
 import type { ApprovedApp } from "@/lib/ai-access";
 import { MAX_LABEL, UNUSED_DAYS } from "@/lib/ai-app-limits";
 import { sinceText } from "@/lib/connect-links";
@@ -10,6 +11,7 @@ import { DropdownMenu } from "@/registry/components/dropdown-menu/dropdown-menu"
 import { InlineEdit } from "@/registry/components/inline-edit/inline-edit";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { AiMark } from "./ai-mark";
+import { useReaderClock } from "./reader-clock";
 import styles from "./ai-apps.module.css";
 
 const day = (iso: string) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(iso));
@@ -34,12 +36,23 @@ function details(a: ApprovedApp) {
   return [a.label ?? a.name, `Registered as ${a.name}`, `Returns to ${a.returnsTo.join(", ") || "an unknown place"}`, `Approved ${day(a.approvedAt)}`, a.lastUsedAt ? `Last used ${new Date(a.lastUsedAt).toISOString()}` : "Not used yet", `${a.calls} calls`].join("\n");
 }
 
+/** When a connection was last used: stopped, used some time ago (once the reader's clock is known), or not yet. */
+function LastUse({ app: a, now }: { app: ApprovedApp; now: number | null }) {
+  if (a.unused) return <span className={styles.stopped}>Stopped, unused</span>;
+  if (!a.lastUsedAt) return <span>Not used yet</span>;
+  return <span><span className={styles.dot} aria-hidden="true" />Used{now === null ? "" : ` ${sinceText(a.lastUsedAt, now)}`}</span>;
+}
+
 /**
  * Every AI app connection that can use this account through the connector, grouped by app. Each connection says where
  * it sends you back to, when you approved it and when it was last used, and can be named, so two connections of the
- * same app can be told apart. Disconnecting asks once, inline, and takes effect on the app's next call.
+ * same app can be told apart. Disconnecting asks once, inline, and takes effect on the app's next call. For the admin
+ * (`adminApps` given), each connection can also be given admin access, which its admin tools need.
  */
-export function AiApps({ apps, now = Date.now() }: { apps: ApprovedApp[] | null; now?: number }) {
+export function AiApps({ apps, adminApps, now: fixedNow }: { apps: ApprovedApp[] | null; adminApps?: string[]; now?: number }) {
+  // The reader's clock, after the page loads; a fixed time when one is given (tests and fixed screens).
+  const clock = useReaderClock(60_000);
+  const now = fixedNow ?? clock;
   const [confirming, setConfirming] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -58,6 +71,10 @@ export function AiApps({ apps, now = Date.now() }: { apps: ApprovedApp[] | null;
     const r = await removeUnusedAiApps();
     if (r.ok) { toast({ type: "success", title: r.title ?? "Removed." }); setMessage(null); } else setMessage(r.message);
   });
+  const setAdmin = (a: ApprovedApp, on: boolean) => start(async () => {
+    const r = on ? await grantAppAdminAccess(a.consentId) : await removeAppAdminAccess(a.consentId);
+    if (r.ok) { toast({ type: "success", title: r.message }); setMessage(null); } else setMessage(r.message);
+  });
   const rename = async (a: ApprovedApp, next: string) => {
     const r = await renameAiApp(a.consentId, next);
     if (!r.ok) throw new Error(r.message);
@@ -69,8 +86,9 @@ export function AiApps({ apps, now = Date.now() }: { apps: ApprovedApp[] | null;
       <div className={styles.who}>
         <InlineEdit variant="body" className={styles.name} value={a.label ?? ""} placeholder={a.name} label={`Name for this ${a.name} connection`} onSave={(next) => rename(a, next)} validate={(v) => (v.trim().length > MAX_LABEL ? `Keep it under ${MAX_LABEL} characters.` : null)} />
         <span className={styles.meta}>
-          <span className={a.unused ? styles.stopped : undefined}>{a.unused ? "Stopped, unused" : a.lastUsedAt ? <><span className={styles.dot} aria-hidden="true" />Used {sinceText(a.lastUsedAt, now)}</> : "Not used yet"}</span>
+          <LastUse app={a} now={now} />
           {a.returnsTo.length ? <span> · {a.returnsTo.join(" · ")}</span> : null}
+          {adminApps?.includes(a.consentId) ? <span> · Admin access</span> : null}
         </span>
         {a.label && a.label.trim() !== a.name ? <span className={styles.note}>Registered as {a.name}.</span> : null}
       </div>
@@ -83,6 +101,9 @@ export function AiApps({ apps, now = Date.now() }: { apps: ApprovedApp[] | null;
         ) : (
           <DropdownMenu label="Manage" items={[
             { label: "Copy details", onSelect: () => { void navigator.clipboard.writeText(details(a)).then(() => toast({ type: "success", title: "Details copied." })); } },
+            ...(adminApps ? [adminApps.includes(a.consentId)
+              ? { label: "Remove admin access", onSelect: () => setAdmin(a, false) }
+              : { label: "Give admin access", onSelect: () => setAdmin(a, true) }] : []),
             { label: "Disconnect", destructive: true, separatorBefore: true, onSelect: () => setConfirming(a.consentId) },
           ]} />
         )}

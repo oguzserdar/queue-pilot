@@ -6,6 +6,7 @@
  * and that answer is saved per set of repeats, so opening the page again does not spend another AI action.
  */
 import { revalidatePath } from "next/cache";
+import * as z from "zod";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { bufferForWriting, signedInUserId } from "@/lib/current-user";
 import { AiCapError } from "@/lib/judge-model";
@@ -36,7 +37,23 @@ export type RepeatedFix = {
 /** The model's answer for the open repeats: the offers it confirmed, and a plain line when it confirmed none. */
 export type RepeatedFixesResult = { ok: true; offers: RepeatedFix[]; note: string } | { ok: false; message: string };
 
-type Evidence = { fix?: Fix; channelId?: string; network?: string; count?: number; examples?: { before: string; after: string }[]; why?: string };
+/**
+ * The evidence a signed suggestion carries (built in src/lib/rule-suggestions.ts), read back through this schema. Each
+ * field is read on its own: one missing or unexpected field is left out, never the whole evidence.
+ */
+const evidenceSchema = z.object({
+  fix: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("replace"), from: z.string(), to: z.string() }),
+    z.object({ kind: z.literal("banned"), phrase: z.string() }),
+    z.object({ kind: z.literal("ends_with"), phrase: z.string() }),
+  ]).optional().catch(undefined),
+  channelId: z.string().optional().catch(undefined),
+  network: z.string().optional().catch(undefined),
+  count: z.number().optional().catch(undefined),
+  examples: z.array(z.object({ before: z.string(), after: z.string() })).optional().catch(undefined),
+  why: z.string().optional().catch(undefined),
+});
+type Evidence = z.infer<typeof evidenceSchema>;
 
 const quoted = (s: string) => `"${s.length > 80 ? `${s.slice(0, 79).trimEnd()}…` : s}"`;
 
@@ -66,7 +83,7 @@ export async function checkRepeatedFixes(): Promise<RepeatedFixesResult> {
     });
     const account = (id?: string) => (id ? channels.find((c) => c.id === id)?.name : undefined);
     const offers = found.suggestions.map((s): RepeatedFix => {
-      const ev = (s.evidence ?? {}) as Evidence;
+      const ev: Evidence = evidenceSchema.safeParse(s.evidence ?? {}).data ?? {};
       const network = NETWORKS[ev.network ?? ""] ?? ev.network ?? "";
       const name = account(ev.channelId);
       const place = name ? `${name} (${network})` : network || "one account";

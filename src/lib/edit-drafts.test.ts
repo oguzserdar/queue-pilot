@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Channel, Post } from "./buffer/queries";
 import { deleteDraft, updateDraft } from "./edit-drafts";
+type Query = typeof import("./buffer/client").bufferQuery;
+type FakeQuery = (...args: Parameters<Query>) => Promise<unknown>;
+type Gate = NonNullable<Parameters<typeof updateDraft>[7]>;
 
 const channels = [{ id: "x", name: "X", service: "twitter" }] as Channel[];
 const post = (id: string, status: Post["status"], via: Post["via"] = "api"): Post => ({ id, channelId: "x", status, text: "old", dueAt: "2026-11-02T09:00:00Z", via }) as Post;
@@ -10,50 +13,50 @@ const wrote = new Set(["d1", "s1", "t1"]);
 
 describe("updateDraft", () => {
   it("edits only the text of the caller's own draft and keeps it a draft", async () => {
-    const q = vi.fn().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ editPost: { __typename: "PostActionSuccess" } });
-    expect(await updateDraft("tok", "d1", "new text", posts, channels, wrote, q)).toEqual({ ok: true });
+    const q = vi.fn<FakeQuery>().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ editPost: { __typename: "PostActionSuccess" } });
+    expect(await updateDraft("tok", "d1", "new text", posts, channels, wrote, q as Query)).toEqual({ ok: true });
     expect(q.mock.calls[1][2]).toEqual({ input: { id: "d1", text: "new text", saveToDraft: true } });
   });
   it("refuses scheduled, sent and unknown posts without calling Buffer", async () => {
-    const q = vi.fn();
-    for (const id of ["s1", "t1", "someone-elses"]) expect((await updateDraft("tok", id, "x", posts, channels, wrote, q)).ok).toBe(false);
+    const q = vi.fn<FakeQuery>();
+    for (const id of ["s1", "t1", "someone-elses"]) expect((await updateDraft("tok", id, "x", posts, channels, wrote, q as Query)).ok).toBe(false);
     expect(q).not.toHaveBeenCalled();
   });
   it("refuses text over the network's limit without calling Buffer", async () => {
-    const q = vi.fn();
-    expect((await updateDraft("tok", "d1", "a".repeat(400), posts, channels, wrote, q)).ok).toBe(false);
+    const q = vi.fn<FakeQuery>();
+    expect((await updateDraft("tok", "d1", "a".repeat(400), posts, channels, wrote, q as Query)).ok).toBe(false);
     expect(q).not.toHaveBeenCalled();
   });
   it("refuses a change the playbook check refuses, before anything reaches Buffer", async () => {
-    const q = vi.fn();
-    const gate = vi.fn(async () => 'Breaks your playbook: "Never Excited to share" (found "Ravi di condividere").');
-    const res = await updateDraft("tok", "d1", "Ravi di condividere v2", posts, channels, wrote, q, gate);
+    const q = vi.fn<FakeQuery>();
+    const gate = vi.fn<Gate>(async () => 'Breaks your playbook: "Never Excited to share" (found "Ravi di condividere").');
+    const res = await updateDraft("tok", "d1", "Ravi di condividere v2", posts, channels, wrote, q as Query, gate);
     expect(res).toMatchObject({ ok: false });
     expect(!res.ok && res.reason).toContain("Ravi di condividere");
     expect(gate).toHaveBeenCalledWith("Ravi di condividere v2", expect.any(String), "x");
     expect(q).not.toHaveBeenCalled();
   });
   it("passes Buffer's own refusal on", async () => {
-    const q = vi.fn().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ editPost: { __typename: "InvalidInputError", message: "Text is required" } });
-    expect(await updateDraft("tok", "d1", "x", posts, channels, wrote, q)).toEqual({ ok: false, reason: "Text is required" });
+    const q = vi.fn<FakeQuery>().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ editPost: { __typename: "InvalidInputError", message: "Text is required" } });
+    expect(await updateDraft("tok", "d1", "x", posts, channels, wrote, q as Query)).toEqual({ ok: false, reason: "Text is required" });
   });
 });
 
 describe("deleteDraft", () => {
   it("deletes only a draft", async () => {
-    const q = vi.fn().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ deletePost: { __typename: "DeletePostSuccess" } });
-    expect(await deleteDraft("tok", "d1", posts, wrote, q)).toEqual({ ok: true });
+    const q = vi.fn<FakeQuery>().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ deletePost: { __typename: "DeletePostSuccess" } });
+    expect(await deleteDraft("tok", "d1", posts, wrote, q as Query)).toEqual({ ok: true });
     expect(q.mock.calls[1][2]).toEqual({ input: { id: "d1" } });
-    const never = vi.fn();
-    expect((await deleteDraft("tok", "s1", posts, wrote, never)).ok).toBe(false);
-    const refused = vi.fn().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ deletePost: { __typename: "VoidMutationError", message: "Post not found" } });
-    expect(await deleteDraft("tok", "d1", posts, wrote, refused)).toEqual({ ok: false, reason: "Post not found" });
+    const never = vi.fn<FakeQuery>();
+    expect((await deleteDraft("tok", "s1", posts, wrote, never as Query)).ok).toBe(false);
+    const refused = vi.fn<FakeQuery>().mockResolvedValueOnce({ post: posts[0] }).mockResolvedValue({ deletePost: { __typename: "VoidMutationError", message: "Post not found" } });
+    expect(await deleteDraft("tok", "d1", posts, wrote, refused as Query)).toEqual({ ok: false, reason: "Post not found" });
     expect(never).not.toHaveBeenCalled();
   });
   it("does not delete a draft that was approved in Buffer since the queue was read", async () => {
     // The queue copy still says draft; Buffer itself now says scheduled.
-    const q = vi.fn().mockResolvedValueOnce({ post: { ...posts[0], status: "scheduled" } });
-    const res = await deleteDraft("tok", "d1", posts, wrote, q);
+    const q = vi.fn<FakeQuery>().mockResolvedValueOnce({ post: { ...posts[0], status: "scheduled" } });
+    const res = await deleteDraft("tok", "d1", posts, wrote, q as Query);
     expect(res.ok).toBe(false);
     expect(q).toHaveBeenCalledTimes(1);
   });
@@ -64,10 +67,10 @@ describe("drafts the person wrote themselves", () => {
   const noVia = { id: "n1", channelId: "x", status: "draft", text: "old", dueAt: "2026-11-02T09:00:00Z" } as Post;
   const mine = [post("h1", "draft", "buffer"), noVia];
   it("are never changed or deleted, and Buffer is not called", async () => {
-    const q = vi.fn();
+    const q = vi.fn<FakeQuery>();
     for (const id of ["h1", "n1"]) {
-      const edit = await updateDraft("tok", id, "new text", mine, channels, wrote, q);
-      const del = await deleteDraft("tok", id, mine, wrote, q);
+      const edit = await updateDraft("tok", id, "new text", mine, channels, wrote, q as Query);
+      const del = await deleteDraft("tok", id, mine, wrote, q as Query);
       expect(edit.ok).toBe(false);
       expect(del.ok).toBe(false);
     }
@@ -79,9 +82,9 @@ describe("drafts another app wrote through Buffer's API", () => {
   // Buffer marks every API-made post via "api", including Zapier's or n8n's. Only Queue Pilot's own record counts.
   const other = [post("z1", "draft", "api")];
   it("are never changed or deleted, and Buffer is not called", async () => {
-    const q = vi.fn();
-    const edit = await updateDraft("tok", "z1", "new text", other, channels, wrote, q);
-    const del = await deleteDraft("tok", "z1", other, wrote, q);
+    const q = vi.fn<FakeQuery>();
+    const edit = await updateDraft("tok", "z1", "new text", other, channels, wrote, q as Query);
+    const del = await deleteDraft("tok", "z1", other, wrote, q as Query);
     expect(edit).toEqual({ ok: false, reason: expect.stringMatching(/Queue Pilot did not write/) });
     expect(del.ok).toBe(false);
     expect(q).not.toHaveBeenCalled();
@@ -89,18 +92,18 @@ describe("drafts another app wrote through Buffer's API", () => {
 });
 
 it("reads again after judging and does not overwrite a newer Buffer edit", async () => {
-  const q = vi.fn().mockResolvedValue({ post: { ...posts[0], text: "Edited in Buffer" } });
-  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q, async () => null, "old");
+  const q = vi.fn<FakeQuery>().mockResolvedValue({ post: { ...posts[0], text: "Edited in Buffer" } });
+  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q as Query, async () => null, "old");
   expect(result).toMatchObject({ ok: false, reason: expect.stringContaining("Nothing was overwritten") });
   expect(q).toHaveBeenCalledTimes(1);
 });
 it("refuses a draft scheduled while the AI check was running", async () => {
-  const q = vi.fn().mockResolvedValue({ post: { ...posts[0], status: "scheduled" } });
-  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q);
+  const q = vi.fn<FakeQuery>().mockResolvedValue({ post: { ...posts[0], status: "scheduled" } });
+  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q as Query);
   expect(result.ok).toBe(false); expect(q).toHaveBeenCalledTimes(1);
 });
 it("refuses a proposal read before the current snapshot", async () => {
-  const q = vi.fn().mockResolvedValue({ post: posts[0] });
-  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q, async () => null, "even older");
+  const q = vi.fn<FakeQuery>().mockResolvedValue({ post: posts[0] });
+  const result = await updateDraft("tok", "d1", "proposal", posts, channels, wrote, q as Query, async () => null, "even older");
   expect(result.ok).toBe(false); expect(q).toHaveBeenCalledTimes(1);
 });

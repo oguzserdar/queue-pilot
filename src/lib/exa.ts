@@ -53,6 +53,13 @@ const isWebAddress = (value: string): boolean => {
   try { const u = new URL(value); return (u.protocol === "https:" || u.protocol === "http:") && !u.username && !u.password; } catch { return false; }
 };
 
+/** Which sites a search keeps to: podcast transcripts only, the given domains, or anywhere. */
+function domainsFilter(input: SearchInput): { includeDomains?: string[] } {
+  if (input.podcasts) return { includeDomains: [PODCAST_DOMAIN] };
+  if (input.domains?.length) return { includeDomains: input.domains };
+  return {};
+}
+
 /** Searches the web. Each hit carries a few short excerpts, not the page: read a page with readPage. */
 export async function searchWeb(input: SearchInput, apiKey: string, fetchImpl: typeof fetch = fetch): Promise<{ status: "ready"; results: Hit[] } | Problem> {
   if (!apiKey) return { status: "not-configured", message: "Web search is not set up. The operator adds an Exa key in /admin." };
@@ -62,7 +69,7 @@ export async function searchWeb(input: SearchInput, apiKey: string, fetchImpl: t
     numResults: Math.min(Math.max(input.numResults ?? 5, 1), 8),
     ...(input.category ? { category: input.category } : {}),
     ...(input.since ? { startPublishedDate: input.since } : {}),
-    ...(input.podcasts ? { includeDomains: [PODCAST_DOMAIN] } : input.domains?.length ? { includeDomains: input.domains } : {}),
+    ...domainsFilter(input),
     contents: { highlights: { maxCharacters: EXCERPT_CHARS * EXCERPTS_PER_HIT } },
   }, apiKey, fetchImpl);
   if ("problem" in out) return out.problem;

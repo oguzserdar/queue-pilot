@@ -16,7 +16,7 @@ import type { Channel, Post } from "./buffer/queries";
 import { MIN_REFRESH_MS, refreshSnapshot, withScheduled } from "./buffer/snapshot";
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
 import { knownRange } from "./open-slots";
-import { bufferAccessToken } from "./buffer-token";
+import { NoBufferAccount, bufferAccessToken } from "./buffer-token";
 import { waitRefusal } from "./buffer/not-sent";
 import { scheduleEcho } from "./echo-run";
 import { hasDatabase } from "./db";
@@ -36,6 +36,8 @@ export type BufferContext = {
   /** Buffer's RateLimit windows as of fetchedAt. */
   rateLimit: RateLimitWindow[];
   range: { start: Date; end: Date };
+  /** Signed up with email: no Buffer account, so no channels or posts from Buffer. */
+  noBuffer?: boolean;
 };
 
 /**
@@ -203,6 +205,11 @@ export const getCurrentUser = cache(async (): Promise<{ signInOpen: boolean; use
       },
     };
   } catch (e) {
+    if (e instanceof NoBufferAccount) {
+      const { session } = await currentSession();
+      const now = new Date();
+      return { signInOpen: true, user: { email: session?.user.email ?? "", timeZone: "UTC", organizationIds: [], channels: [], posts: [], fetchedAt: now, needsRefresh: false, rateLimit: [], range: { start: now, end: now }, noBuffer: true } };
+    }
     console.error(JSON.stringify({ event: "qp-account-read-failed", message: e instanceof Error ? e.message : String(e) }));
     return { signInOpen: true, user: null, unreadable: { retryAt: waitRefusal(e)?.retryAt?.toISOString() ?? null } };
   }

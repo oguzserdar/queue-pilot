@@ -22,7 +22,7 @@ function source(dir = "src"): string {
   return readdirSync(dir).map((f) => {
     const p = join(dir, f);
     if (statSync(p).isDirectory()) return source(p);
-    return /\.ts$/.test(f) && !/\.test\.|test-support/.test(f) ? readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1") : "";
+    return f.endsWith(".ts") && !/\.test\.|test-support/.test(f) ? readFileSync(p, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1") : "";
   }).join("\n");
 }
 const SRC = source();

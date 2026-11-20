@@ -6,7 +6,7 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const getSession = vi.fn();
+const getSession = vi.fn<NonNullable<Awaited<ReturnType<typeof import("@/lib/auth").getAuth>>>["api"]["getSession"]>();
 const authOn = { value: true };
 vi.mock("@/lib/auth", () => ({ getAuth: async () => (authOn.value ? { api: { getSession } } : null) }));
 
@@ -45,7 +45,7 @@ describe("GET /auth/expired", () => {
   });
 
   it("leaves a live session alone and just goes home", async () => {
-    getSession.mockResolvedValue({ user: { id: "person-a" }, session: { id: "s" } });
+    getSession.mockResolvedValue({ user: { id: "person-a" }, session: { id: "s" } } as never);
     const res = await GET(req());
     expect(res.headers.get("location")).toBe("/");
     expect(res.headers.getSetCookie()).toEqual([]);

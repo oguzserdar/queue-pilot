@@ -5,12 +5,12 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn() }))
+vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn<typeof import("@/lib/current-user").bufferForReading>() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
-vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn(async () => ({ ok: true })) }))
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
-vi.mock("@/lib/buffer/workspace", () => ({ textLimits: vi.fn(async () => new Map([["x", 25000]])) }))
-const flow = vi.hoisted(() => ({ save: vi.fn(), promote: vi.fn() }))
+vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn<typeof import("@/lib/rate-limit").limit>(async () => ({ ok: true }) as import("@/lib/rate-limit").Limited) }))
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn<typeof import("next/cache").revalidatePath>() }))
+vi.mock("@/lib/buffer/workspace", () => ({ textLimits: vi.fn<typeof import("@/lib/buffer/workspace").textLimits>(async () => new Map([["x", 25000]])) }))
+const flow = vi.hoisted(() => ({ save: vi.fn<ReturnType<typeof import("@/lib/content-item-flow").contentItemFlow>["save"]>(), promote: vi.fn<ReturnType<typeof import("@/lib/content-item-flow").contentItemFlow>["promote"]>() }))
 vi.mock("@/lib/content-item-flow", () => ({ contentItemFlow: () => flow }))
 
 const { bufferForReading } = await import("@/lib/current-user")
@@ -22,12 +22,12 @@ const channels = [
   { id: "li", name: "My LinkedIn", service: "linkedin", organizationId: "org", isDisconnected: false },
   { id: "other", name: "Client page", service: "facebook", organizationId: "org-2", isDisconnected: false },
 ]
-const draftItem = (text: string) => ({ id: "ci-1", organizationId: "org", title: null, targetDate: null, createdAt: "", allowedActions: [], tags: [], body: { kind: "draft", text, aiAssisted: true, mediaCount: 0 } })
+const draftItem = (text: string): import("@/lib/buffer/content-items").ContentItemView => ({ id: "ci-1", organizationId: "org", title: null, targetDate: null, createdAt: "", allowedActions: [], tags: [], body: { kind: "draft", text, aiAssisted: true, mediaCount: 0 } })
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(bufferForReading).mockResolvedValue({ userId: "person-a", token: "tok", posts: [], channels, teamSizes: {} } as never)
-  flow.save.mockImplementation(async (_b: unknown, input: { text: string }) => ({ text: "Draft saved", isError: false, item: draftItem(input.text) }))
+  flow.save.mockImplementation(async (_b, input) => ({ text: "Draft saved", isError: false, item: draftItem(input.text) }))
   flow.promote.mockResolvedValue({ text: "Buffer has 2 drafts", isError: false, created: 2, recorded: 2 })
 })
 

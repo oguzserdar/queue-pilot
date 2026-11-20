@@ -24,6 +24,66 @@ type Options = {
   source: TeammateSource | null;
 };
 
+type Loaded = { teammates: NoteTeammate[]; more: boolean };
+
+/** The teammates to match against: a search's result once it is back, else the list read first; none before that. */
+function poolFor(all: Loaded | null | "failed", query: string, found: Record<string, NoteTeammate[]>): NoteTeammate[] {
+  if (typeof all !== "object" || !all) return [];
+  return all.more && query ? found[query] ?? all.teammates : all.teammates;
+}
+
+/** The "@" query at the caret, and whether the list is open for it (not after Escape closed it there). */
+function openQuery(text: string, caret: number | null, on: boolean, dismissed: number | null) {
+  const q = on && caret !== null ? mentionQuery(text, caret) : null;
+  return { q, open: !!q && q.start !== dismissed, query: q?.query.trim() ?? "" };
+}
+
+/** A team longer than one read is searched in Buffer for a query not searched yet. */
+function needsSearch(open: boolean, all: Loaded | null | "failed", query: string, found: Record<string, NoteTeammate[]>): boolean {
+  if (!open || typeof all !== "object" || !all?.more || !query) return false;
+  return !(query in found);
+}
+
+/** The quiet line under the list: loading, a failed read, no match, or nothing when there are options. */
+function statusLine(loading: boolean, failed: boolean, options: number, query: string): string {
+  if (loading) return "Loading teammates…";
+  if (failed) return "Buffer did not return your teammates. Type the note without a mention, or try again.";
+  return options ? "" : `No teammate matches “${query}”.`;
+}
+
+/** The open list under the field: the matching teammates (locked ones say so) and one quiet status line. */
+function MentionList({ box, listId, optionId, options, at, status, onHover, onPick }: {
+  box: RefObject<HTMLDivElement | null>;
+  listId: string;
+  optionId: (i: number) => string;
+  options: NoteTeammate[];
+  at: number;
+  status: string;
+  onHover: (i: number) => void;
+  onPick: (t: NoteTeammate) => void;
+}) {
+  return (
+    <div ref={box} className={styles.mentions}>
+      {options.length > 0 && (
+        <ul id={listId} role="listbox" aria-label="Teammates" className={styles.mentionList}>
+          {options.map((t, i) => (
+            <li key={t.urn} id={optionId(i)} role="option" aria-selected={i === at} className={styles.mentionOption}
+              onMouseDown={(e) => e.preventDefault()} onPointerMove={() => i !== at && onHover(i)} onClick={() => onPick(t)}
+              title={t.locked ? "Locked in Buffer: they can read this note and be mentioned, but get no notification while locked." : undefined}>
+              <Avatar name={t.name} src={t.avatar ?? undefined} size="sm" aria-hidden="true" />
+              <span className={styles.mentionText}>
+                <span className={styles.author}>{t.name}</span>
+                <span className={styles.muted}>{t.locked ? "Locked in Buffer, gets no notification" : t.email}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className={styles.muted} role="status" aria-live="polite">{status}</p>
+    </div>
+  );
+}
+
 /**
  * Wires the picker to one textarea.
  *
@@ -38,32 +98,32 @@ type Options = {
 export function useNoteMentions({ text, setText, picked, setPicked, field, source }: Options) {
   const uid = useId();
   const [caret, setCaret] = useState<number | null>(null);
-  const [all, setAll] = useState<{ teammates: NoteTeammate[]; more: boolean } | null | "loading" | "failed">(null);
+  // Null until the read answers; the read starts once, when "@" is first typed in this field.
+  const [all, setAll] = useState<Loaded | null | "failed">(null);
+  const asked = useRef(false);
   const [found, setFound] = useState<Record<string, NoteTeammate[]>>({});
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState<number | null>(null);
 
-  const q = source && caret !== null ? mentionQuery(text, caret) : null;
-  const open = !!q && q.start !== dismissed;
-  const query = q?.query.trim() ?? "";
+  const { q, open, query } = openQuery(text, caret, source !== null, dismissed);
 
   // The list is read once, when "@" is first typed in this field.
   useEffect(() => {
-    if (!open || all !== null || !source) return;
-    setAll("loading");
+    if (!open || asked.current || !source) return;
+    asked.current = true;
     source().then((r) => setAll(r ?? "failed"), () => setAll("failed"));
-  }, [open, all, source]);
+  }, [open, source]);
 
   // A team longer than one read is searched in Buffer as the person types, a moment after they pause.
-  const searching = open && typeof all === "object" && all?.more && query && !(query in found);
+  const searching = needsSearch(open, all, query, found);
   useEffect(() => {
     if (!searching || !source) return;
     const t = setTimeout(() => { source(query).then((r) => r && setFound((f) => ({ ...f, [query]: r.teammates })), () => {}); }, 250);
     return () => clearTimeout(t);
   }, [searching, query, source]);
 
-  const pool = typeof all === "object" && all ? (all.more && query ? found[query] ?? all.teammates : all.teammates) : [];
-  const options = open ? matchTeammates(pool, q!.query) : [];
+  const pool = poolFor(all, query, found);
+  const options = open && q ? matchTeammates(pool, q.query) : [];
   const at = Math.min(active, Math.max(0, options.length - 1));
   const listId = `${uid}-teammates`;
   const optionId = (i: number) => `${uid}-teammate-${i}`;
@@ -98,16 +158,18 @@ export function useNoteMentions({ text, setText, picked, setPicked, field, sourc
       choose(options[at]);
       return true;
     }
-    if (e.key === "Escape") {
+    if (e.key === "Escape" && q) {
       e.preventDefault();
       e.stopPropagation();
-      setDismissed(q!.start);
+      setDismissed(q.start);
       return true;
     }
     return false;
   }
 
-  const status = all === "loading" || (searching && !options.length) ? "Loading teammates…" : all === "failed" ? "Buffer did not return your teammates. Type the note without a mention, or try again." : options.length ? "" : `No teammate matches “${q?.query ?? ""}”.`;
+  // Open with a source and no answer yet means the read is on its way.
+  const loading = (all === null && open && source !== null) || (!!searching && !options.length);
+  const status = statusLine(loading, all === "failed", options.length, q?.query ?? "");
 
   const fieldProps = {
     role: "combobox" as const,
@@ -126,26 +188,7 @@ export function useNoteMentions({ text, setText, picked, setPicked, field, sourc
     if (open) box.current?.scrollIntoView({ block: "nearest" });
   }, [open]);
 
-  const list = open ? (
-    <div ref={box} className={styles.mentions}>
-      {options.length > 0 && (
-        <ul id={listId} role="listbox" aria-label="Teammates" className={styles.mentionList}>
-          {options.map((t, i) => (
-            <li key={t.urn} id={optionId(i)} role="option" aria-selected={i === at} className={styles.mentionOption}
-              onMouseDown={(e) => e.preventDefault()} onPointerMove={() => i !== at && setActive(i)} onClick={() => choose(t)}
-              title={t.locked ? "Locked in Buffer: they can read this note and be mentioned, but get no notification while locked." : undefined}>
-              <Avatar name={t.name} src={t.avatar ?? undefined} size="sm" aria-hidden="true" />
-              <span className={styles.mentionText}>
-                <span className={styles.author}>{t.name}</span>
-                <span className={styles.muted}>{t.locked ? "Locked in Buffer, gets no notification" : t.email}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className={styles.muted} role="status" aria-live="polite">{status}</p>
-    </div>
-  ) : null;
+  const list = open ? <MentionList box={box} listId={listId} optionId={optionId} options={options} at={at} status={status} onHover={setActive} onPick={choose} /> : null;
 
   return { fieldProps, onKeyDown, list, track };
 }

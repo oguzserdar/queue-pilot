@@ -22,6 +22,7 @@ export const TRIAGE_GROUPS = [
   { kind: "failed", label: "Didn't go out" },
   { kind: "overdue", label: "Overdue in Buffer" },
   { kind: "approve", label: "Ready to approve" },
+  { kind: "taken", label: "You took off the schedule" },
   { kind: "check", label: "Check before approving" },
   { kind: "comment", label: "Reviewers said" },
   { kind: "empty", label: "Empty times" },
@@ -37,6 +38,60 @@ export type TriageItem = { id: string; kind: TriageKind; title: string; detail: 
 
 const short = (t: string, n = 200) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
 
+type Week = ReturnType<typeof weekFromBuffer>;
+type WeekPost = Week["posts"][number];
+type Named = (id: string) => string;
+
+/** Repeated fixes are one line, like empty times: the Playbook shows each one with its edits and the rule. */
+function repeatItems(repeats: TriageRepeat[], name: Named): TriageItem[] {
+  if (!repeats.length) return [];
+  const where = [...new Set(repeats.map((r) => `${r.channelId ? name(r.channelId) : "Every account"} · ${NETWORKS[r.network] ?? r.network}`))].join(", ");
+  const title = repeats.length === 1 ? `You made the same fix in ${repeats[0].count} drafts` : `You repeated ${repeats.length} fixes in your drafts`;
+  return [{ id: "repeat-fixes", kind: "repeat", title, detail: where, href: "/playbook#fixes", action: "See the rule" }];
+}
+
+/** The line for one draft next week, or none when it has nothing to say. */
+function draftItem(p: WeekPost, where: string, r: Readiness | undefined, pulled: boolean): TriageItem | null {
+  // Opens Next week, where its card says why it is left out of Approve all and can be scheduled again on its own.
+  if (pulled) return { id: `taken-${p.id}`, kind: "taken", title: short(p.text), detail: where, href: "/week", action: "Open", postId: p.id, full: p.text, why: "You moved this back to draft in Buffer. It is left out of Approve all; open it to schedule it again." };
+  if (worstTone(p) === "danger" || r?.state === "breaks") {
+    const why = p.checks?.find((c) => c.tone === "danger")?.label ?? r?.reason ?? "It breaks a rule in your playbook.";
+    return { id: `breaks-${p.id}`, kind: "breaks", title: short(p.text), detail: where, href: "/week", action: "Fix", full: p.text, why };
+  }
+  if (r?.state === "ok" || r?.state === "flagged") return { id: `approve-${p.id}`, kind: "approve", title: short(p.text), detail: where, href: "/week", action: "Approve", postId: p.id, run: "approve", full: p.text, why: r.reason ?? undefined };
+  if (r?.state === "check") return { id: `check-${p.id}`, kind: "check", title: short(p.text), detail: where, href: "/week", action: r.stale ? "Check again" : "Read it", postId: p.id, run: r.stale ? "recheck" : undefined, full: p.text, why: r.reason };
+  return null;
+}
+
+/** One line per draft next week that needs the person. */
+function draftItems(week: Week, checks: Record<string, Readiness>, pulled: Set<string>, name: Named): TriageItem[] {
+  return week.posts.filter((p) => p.status === "draft").flatMap((p) => {
+    const item = draftItem(p, `${week.days[p.day]} ${p.time} · ${name(p.channel)}`, checks[p.id], pulled.has(p.id));
+    return item ? [item] : [];
+  });
+}
+
+/**
+ * A draft whose time passed is never posted: Buffer marks it Overdue and waits for a new time. Only the last seven
+ * days are in the snapshot, so older ones are not counted here.
+ */
+function overdueItems(posts: Post[], past: { start: Date; end: Date }, timeZone: string, name: Named): TriageItem[] {
+  const when = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  return postsBetween(posts, past.start, past.end).flatMap((p): TriageItem[] => (p.status === "draft" && p.dueAt
+    ? [{ id: `overdue-${p.id}`, kind: "overdue", title: short(p.text), detail: `${when.format(new Date(p.dueAt))} · ${name(p.channelId)}`, href: BUFFER_PUBLISH_URL, action: "Open Buffer", full: p.text, why: "Its time passed while it was a draft, so Buffer did not post it. Pick a new time or delete it in Buffer." }]
+    : []));
+}
+
+/** Empty times are one line, never one per time: a new account can have dozens, and none of them is urgent. */
+function emptyItems(week: Week): TriageItem[] {
+  let empty = 0;
+  for (const ch of week.channels.filter((c) => !c.isDisconnected))
+    for (let day = 0; day < 7; day++)
+      for (const e of cellEntries(week, ch.id, day))
+        if (e.slot && !e.posts.some((p) => p.status !== "error")) empty++;
+  return empty ? [{ id: "empty-week", kind: "empty", title: `${empty} empty time${empty === 1 ? "" : "s"} next week`, count: empty, detail: "No posts yet", href: "/week", action: "Open next week" }] : [];
+}
+
 export function triageFromBuffer(input: {
   channels: Channel[];
   posts: Post[];
@@ -48,50 +103,25 @@ export function triageFromBuffer(input: {
   comments: (ReviewComment & { draft: string })[];
   /** Fixes repeated across drafts and not yet kept or set aside. Found without AI; the Playbook asks the model. */
   repeats?: TriageRepeat[];
+  /** Drafts the person took off the schedule in Buffer: listed apart, never as ready to approve. */
+  pulledBack?: string[];
 }): TriageItem[] {
   const { channels, posts, now, timeZone, checks, comments, repeats = [] } = input;
+  const pulled = new Set(input.pulledBack ?? []);
   const range = nextWeekRange(now, timeZone);
   const week = weekFromBuffer(channels, postsBetween(posts, range.start, range.end), range, timeZone);
   const name = (id: string) => channels.find((c) => c.id === id)?.name ?? "Account";
-  const items: TriageItem[] = [];
-
-  // Repeated fixes are one line, like empty times: the Playbook shows each one with its edits and the rule.
-  if (repeats.length) {
-    const where = [...new Set(repeats.map((r) => `${r.channelId ? name(r.channelId) : "Every account"} · ${NETWORKS[r.network] ?? r.network}`))].join(", ");
-    const title = repeats.length === 1 ? `You made the same fix in ${repeats[0].count} drafts` : `You repeated ${repeats.length} fixes in your drafts`;
-    items.push({ id: "repeat-fixes", kind: "repeat", title, detail: where, href: "/playbook#fixes", action: "See the rule" });
-  }
-
-  for (const p of week.posts.filter((p) => p.status === "draft")) {
-    const where = `${week.days[p.day]} ${p.time} · ${name(p.channel)}`;
-    const r = checks[p.id];
-    if (worstTone(p) === "danger" || r?.state === "breaks") {
-      const why = p.checks?.find((c) => c.tone === "danger")?.label ?? r?.reason ?? "It breaks a rule in your playbook.";
-      items.push({ id: `breaks-${p.id}`, kind: "breaks", title: short(p.text), detail: where, href: "/week", action: "Fix", full: p.text, why });
-    } else if (r?.state === "ok" || r?.state === "flagged") items.push({ id: `approve-${p.id}`, kind: "approve", title: short(p.text), detail: where, href: "/week", action: "Approve", postId: p.id, run: "approve", full: p.text, why: r.reason ?? undefined });
-    else if (r?.state === "check") items.push({ id: `check-${p.id}`, kind: "check", title: short(p.text), detail: where, href: "/week", action: r.stale ? "Check again" : "Read it", postId: p.id, run: r.stale ? "recheck" : undefined, full: p.text, why: r.reason });
-  }
-
   const past = { start: new Date(now.getTime() - 7 * 86_400_000), end: now };
-  for (const d of deliveriesFromBuffer(channels, postsBetween(posts, past.start, past.end), past, now).filter((d) => d.tone === "danger"))
-    items.push({ id: `failed-${d.id}`, kind: "failed", title: d.title, detail: `${d.channel} · ${d.error?.message ?? "Buffer did not say why."}`, href: "/delivery", action: "See why", full: d.title, why: d.error?.message ?? "Buffer did not say why." });
-
-  // A draft whose time passed is never posted: Buffer marks it Overdue and waits for a new time. Only the last seven
-  // days are in the snapshot, so older ones are not counted here.
-  const when = new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-  for (const p of postsBetween(posts, past.start, past.end).filter((p) => p.status === "draft" && p.dueAt))
-    items.push({ id: `overdue-${p.id}`, kind: "overdue", title: short(p.text), detail: `${when.format(new Date(p.dueAt!))} · ${name(p.channelId)}`, href: BUFFER_PUBLISH_URL, action: "Open Buffer", full: p.text, why: "Its time passed while it was a draft, so Buffer did not post it. Pick a new time or delete it in Buffer." });
-
-  for (const c of comments)
-    items.push({ id: `comment-${c.id}`, kind: "comment", title: `${c.name}: "${short(c.text, 70)}"`, detail: `On "${short(c.draft, 50)}"`, href: "/reviews", action: "Suggest edits", full: `${c.name}: "${c.text}"`, why: `On "${c.draft}"` });
-
-  // Empty times are one line, never one per time: a new account can have dozens, and none of them is urgent.
-  let empty = 0;
-  for (const ch of week.channels.filter((c) => !c.isDisconnected))
-    for (let day = 0; day < 7; day++)
-      for (const e of cellEntries(week, ch.id, day))
-        if (e.slot && !e.posts.some((p) => p.status !== "error")) empty++;
-  if (empty) items.push({ id: "empty-week", kind: "empty", title: `${empty} empty time${empty === 1 ? "" : "s"} next week`, count: empty, detail: "No posts yet", href: "/week", action: "Open next week" });
-
-  return items;
+  const failed = deliveriesFromBuffer(channels, postsBetween(posts, past.start, past.end), past, now).filter((d) => d.tone === "danger").map((d): TriageItem => (
+    { id: `failed-${d.id}`, kind: "failed", title: d.title, detail: `${d.channel} · ${d.error?.message ?? "Buffer did not say why."}`, href: "/delivery", action: "See why", full: d.title, why: d.error?.message ?? "Buffer did not say why." }));
+  const commented = comments.map((c): TriageItem => (
+    { id: `comment-${c.id}`, kind: "comment", title: `${c.name}: "${short(c.text, 70)}"`, detail: `On "${short(c.draft, 50)}"`, href: "/reviews", action: "Suggest edits", full: `${c.name}: "${c.text}"`, why: `On "${c.draft}"` }));
+  return [
+    ...repeatItems(repeats, name),
+    ...draftItems(week, checks, pulled, name),
+    ...failed,
+    ...overdueItems(posts, past, timeZone, name),
+    ...commented,
+    ...emptyItems(week),
+  ];
 }

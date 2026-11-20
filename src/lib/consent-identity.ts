@@ -19,16 +19,27 @@ export function consentIdentity(client: string, clientId: string, redirectUri: s
   const redirect = parseUrl(redirectUri);
   const metadata = parseUrl(clientId);
   const requested = aiBrand(client);
-  const family = requested === "Codex" ? "ChatGPT" : requested === "Claude Code" ? "Claude" : requested;
+  const family = familyOf(requested);
   const callbackBrand = redirect?.protocol === "https:" && !redirect.port ? HOST_BRANDS[redirect.hostname] : null;
   // URL client IDs are metadata documents validated by the OAuth provider, not DCR client_uri values.
   const metadataBrand = metadata?.protocol === "https:" && !metadata.port ? HOST_BRANDS[metadata.hostname] : null;
   const brand = requested && (callbackBrand === family || metadataBrand === family) ? requested : null;
   const place = returnPlace(redirectUri);
-  const destination = place === THIS_COMPUTER ? "Returns you to a program on this computer"
-    : place ? `Returns you to ${place.startsWith("The ") ? `the ${place.slice(4)}` : place}`
-    : "Return destination unavailable";
-  return { brand, destination };
+  return { brand, destination: destinationOf(place) };
+}
+
+/** The app family whose callback and metadata hosts may carry the requested brand: Codex is ChatGPT's, Claude Code is Claude's. */
+function familyOf(requested: ReturnType<typeof aiBrand>) {
+  if (requested === "Codex") return "ChatGPT";
+  if (requested === "Claude Code") return "Claude";
+  return requested;
+}
+
+/** Where the consent sends the person back, in words. */
+function destinationOf(place: ReturnType<typeof returnPlace>): string {
+  if (place === THIS_COMPUTER) return "Returns you to a program on this computer";
+  if (place) return `Returns you to ${place.startsWith("The ") ? `the ${place.slice(4)}` : place}`;
+  return "Return destination unavailable";
 }
 
 const THIS_COMPUTER = "This computer";

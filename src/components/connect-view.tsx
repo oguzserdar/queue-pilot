@@ -12,6 +12,7 @@ import { APP_ONLY, CONNECTOR_CATALOG } from "@/lib/connector-catalog";
 import { SetupSteps, type SetupAccount } from "./setup-steps";
 import { Term } from "./term";
 import styles from "./connect-view.module.css";
+import Image from "next/image";
 
 /** One chat app's setup, shown in its modal. Coding agents set themselves up from the copied prompt instead. */
 type AiSetup = {
@@ -91,6 +92,102 @@ export const CHAT_GUIDES: Record<string, string[]> = Object.fromEntries(AIS.map(
 /** The chat apps whose setup steps can be opened from another page with `/connect?setup=<name>`. */
 const OPENABLE = new Set(Object.keys(CHAT_GUIDES).filter((n) => n !== "Grok Bot desktop"));
 
+/** The name a chat app's tile shows: Grok's web and desktop setups share one tile. */
+const tileName = (name: string) => (name === "Grok web" ? "Grok" : name);
+
+/** How to add Queue Pilot: the setup steps for the AI app picked, then the address and a tile per chat app. */
+function AddAi({ connectorUrl, account, approved, example, onOpen }: { connectorUrl: string; account: SetupAccount | null; approved: ApprovedApp[] | null; example: boolean; onOpen: (name: string) => void }) {
+  return (
+    <>
+      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={CHAT_GUIDES}
+        openApp={onOpen} />
+
+      <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
+      <div className={styles.address}>
+        <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
+        <code className={styles.code}>{connectorUrl}</code>
+        <CopyButton value={connectorUrl} label="Copy" />
+      </div>
+
+      <ul className={styles.tiles}>
+        {AIS.filter((a) => a.name !== "Grok Bot desktop").map((a) => (
+          <li key={a.name} className={styles.tile}>
+            <div className={styles.cardHead}>
+              <strong className={styles.name}><AiMark name={a.mark ?? a.name} size={20} />{tileName(a.name)}</strong>
+              {example && a.name === "Claude" ? <span className={styles.ok}><span className={styles.okMark} aria-hidden="true" />Connected</span> : null}
+            </div>
+            <p className={styles.does}>{a.name === "Grok web" ? "Connect on grok.com or in Grok Bot desktop." : a.does}</p>
+            <Button variant="secondary" size="sm" onClick={() => onOpen(tileName(a.name))} aria-label={`Set up ${tileName(a.name)}`}>Set up</Button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** One line confirming what is connected, and what is allowed but not used yet; connections are managed in Settings. */
+function ConnectedLine({ used, waiting }: { used: ApprovedApp[]; waiting: ApprovedApp[] }) {
+  const names = (apps: ApprovedApp[]) => [...new Set(apps.map((a) => a.brand ?? a.name))].join(", ");
+  if (used.length === 0 && waiting.length === 0) return null;
+  return (
+    <p className={styles.connectedLine}>
+      <span className={styles.connectedMarks} aria-hidden="true">{[...new Set([...used, ...waiting].map((a) => a.brand).filter((b): b is string => !!b))].map((b) => <AiMark key={b} name={b} size={16} />)}</span>
+      <span>{[used.length ? `Connected: ${names(used)}` : "", waiting.length ? `Allowed, not used yet: ${names(waiting)}` : ""].filter(Boolean).join(". ")}</span>
+      <a href="/settings?tab=ai">Manage</a>
+    </p>
+  );
+}
+
+/** What a connected AI can do, by group, and what stays in the app only. */
+function CanDo() {
+  return (
+    <section className={styles.can} aria-labelledby="can-title">
+      <div className={styles.canHead}>
+        <h2 id="can-title" className={styles.chatTitle}>What your AI can do here</h2>
+        <a href="/settings?tab=ai" className={styles.manage}>Manage apps and approving</a>
+      </div>
+      <div className={styles.canGrid}>
+        {CONNECTOR_CATALOG.map((g) => (
+          <div key={g.key} className={styles.canCol} data-group={g.key}>
+            <h3 className={styles.canTitle}><span className={styles.canDot} aria-hidden="true" />{g.title}</h3>
+            <p className={styles.muted}>{g.note}</p>
+            <ul className={styles.canList}>{g.items.map((i) => <li key={i.label}>{i.label}</li>)}</ul>
+          </div>
+        ))}
+      </div>
+      <p className={styles.muted}>{APP_ONLY}</p>
+    </section>
+  );
+}
+
+/** One app's setup steps in the dialog: its marks, Grok's surface choice, the address, the steps and the checks. */
+function SetupGuide({ app, grok, surface, onSurface, connectorUrl }: { app: AiSetup; grok: boolean; surface: string; onSurface: (surface: string) => void; connectorUrl: string }) {
+  return (
+    <div className={styles.dialogBody}>
+    {aiBrand(app.mark ?? app.name) && <div className={styles.connectionMarks} aria-hidden="true">
+      <span><AiMark name={app.mark ?? app.name} size={28} /></span>
+      <Image src="/icon-192.png" width={48} height={48} alt="" />
+    </div>}
+    {grok && <div className={styles.surfaceChoice} role="group" aria-label="Where you use Grok">
+      <button type="button" aria-pressed={surface === "Grok web"} onClick={() => onSurface("Grok web")}>Web</button>
+      <button type="button" aria-pressed={surface === "Grok Bot desktop"} onClick={() => onSurface("Grok Bot desktop")}>Grok Bot desktop</button>
+    </div>}
+    {app.image && <img className={styles.shot} src={app.image} alt={`Where Queue Pilot is added in ${app.name}`} width={1200} height={750} />}
+    <div className={styles.address}>
+      <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
+      <code className={styles.code}>{connectorUrl}</code>
+      <CopyButton value={connectorUrl} label="Copy" />
+    </div>
+    <ol className={styles.steps}>{app.steps.map((st) => <li key={st}>{st}</li>)}</ol>
+    {app.setupPrompt && <CopyButton value={app.setupPrompt(connectorUrl)} label="Copy setup request" />}
+    <p className={styles.muted}>{app.plan}</p>
+    {!app.setupPrompt && <CopyButton value={CONNECTION_CHECK} label="Copy connection check" />}
+    {app.help && <p className={styles.muted}>{app.help}</p>}
+    {app.docs && <a href={app.docs} target="_blank" rel="noreferrer">Official {app.name} instructions</a>}
+    </div>
+  );
+}
+
 /**
  * Connect: how to add Queue Pilot to each AI the person already pays for. The address is this deployment's connector.
  * `approved` lists the AI apps the person approved, with when each last called the connector, so "connected" here
@@ -104,7 +201,7 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
   const used = example ? [] : (approved ?? []).filter((a) => a.lastUsedAt);
   const waiting = example ? [] : (approved ?? []).filter((a) => !a.lastUsedAt);
   const connected = used.length > 0;
-  const names = (apps: ApprovedApp[]) => [...new Set(apps.map((a) => a.brand ?? a.name))].join(", ");
+  const openSetup = (name: string) => { setGrokSurface("Grok web"); setOpen(name); };
   const current = AIS.find((x) => x.name === (open === "Grok" ? grokSurface : open));
 
   return (
@@ -113,111 +210,23 @@ export function ConnectView({ connectorUrl, example = false, approved = null, ac
         <h1 className={styles.title}>Connect your AI</h1>
         <p className={styles.sub}>Your AI does the writing. Queue Pilot gives it your empty Buffer times and your material, and checks what it writes before you approve.</p>
         {/* Connections are managed in one place, Settings; here a single line confirms what is connected. */}
-        {(used.length > 0 || waiting.length > 0) && (
-          <p className={styles.connectedLine}>
-            <span className={styles.connectedMarks} aria-hidden="true">{[...new Set([...used, ...waiting].map((a) => a.brand).filter((b): b is string => !!b))].map((b) => <AiMark key={b} name={b} size={16} />)}</span>
-            <span>{[used.length ? `Connected: ${names(used)}` : "", waiting.length ? `Allowed, not used yet: ${names(waiting)}` : ""].filter(Boolean).join(". ")}</span>
-            <a href="/settings?tab=ai">Manage</a>
-          </p>
-        )}
+        <ConnectedLine used={used} waiting={waiting} />
       </header>
 
       {/* Once an AI has really reached Queue Pilot, setup folds away: the page leads with what it can do. */}
       {connected ? (
         <details className={styles.another}>
           <summary className={styles.anotherSummary}>Add another AI</summary>
-      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={CHAT_GUIDES}
-        openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
-
-      <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
-      <div className={styles.address}>
-        <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
-        <code className={styles.code}>{connectorUrl}</code>
-        <CopyButton value={connectorUrl} label="Copy" />
-      </div>
-
-      <ul className={styles.tiles}>
-        {AIS.filter((a) => a.name !== "Grok Bot desktop").map((a) => (
-          <li key={a.name} className={styles.tile}>
-            <div className={styles.cardHead}>
-              <strong className={styles.name}><AiMark name={a.mark ?? a.name} size={20} />{a.name === "Grok web" ? "Grok" : a.name}</strong>
-              {example && a.name === "Claude" ? <span className={styles.ok}><span className={styles.okMark} aria-hidden="true" />Connected</span> : null}
-            </div>
-            <p className={styles.does}>{a.name === "Grok web" ? "Connect on grok.com or in Grok Bot desktop." : a.does}</p>
-            <Button variant="secondary" size="sm" onClick={() => { setGrokSurface("Grok web"); setOpen(a.name === "Grok web" ? "Grok" : a.name); }} aria-label={`Set up ${a.name === "Grok web" ? "Grok" : a.name}`}>Set up</Button>
-          </li>
-        ))}
-      </ul>
+          <AddAi connectorUrl={connectorUrl} account={account} approved={approved} example={example} onOpen={openSetup} />
         </details>
-      ) : <>
-      <SetupSteps origin={connectorUrl.replace(/\/api\/mcp$/, "")} account={account} approved={approved} example={example} guides={CHAT_GUIDES}
-        openApp={(name) => { setGrokSurface("Grok web"); setOpen(name === "Grok" ? "Grok" : name); }} />
+      ) : <AddAi connectorUrl={connectorUrl} account={account} approved={approved} example={example} onOpen={openSetup} />}
 
-      <h2 className={styles.chatTitle}>Or add it in a chat app</h2>
-      <div className={styles.address}>
-        <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
-        <code className={styles.code}>{connectorUrl}</code>
-        <CopyButton value={connectorUrl} label="Copy" />
-      </div>
-
-      <ul className={styles.tiles}>
-        {AIS.filter((a) => a.name !== "Grok Bot desktop").map((a) => (
-          <li key={a.name} className={styles.tile}>
-            <div className={styles.cardHead}>
-              <strong className={styles.name}><AiMark name={a.mark ?? a.name} size={20} />{a.name === "Grok web" ? "Grok" : a.name}</strong>
-              {example && a.name === "Claude" ? <span className={styles.ok}><span className={styles.okMark} aria-hidden="true" />Connected</span> : null}
-            </div>
-            <p className={styles.does}>{a.name === "Grok web" ? "Connect on grok.com or in Grok Bot desktop." : a.does}</p>
-            <Button variant="secondary" size="sm" onClick={() => { setGrokSurface("Grok web"); setOpen(a.name === "Grok web" ? "Grok" : a.name); }} aria-label={`Set up ${a.name === "Grok web" ? "Grok" : a.name}`}>Set up</Button>
-          </li>
-        ))}
-      </ul>
-      </>}
-
-
-      <section className={styles.can} aria-labelledby="can-title">
-        <div className={styles.canHead}>
-          <h2 id="can-title" className={styles.chatTitle}>What your AI can do here</h2>
-          <a href="/settings?tab=ai" className={styles.manage}>Manage apps and approving</a>
-        </div>
-        <div className={styles.canGrid}>
-          {CONNECTOR_CATALOG.map((g) => (
-            <div key={g.key} className={styles.canCol} data-group={g.key}>
-              <h3 className={styles.canTitle}><span className={styles.canDot} aria-hidden="true" />{g.title}</h3>
-              <p className={styles.muted}>{g.note}</p>
-              <ul className={styles.canList}>{g.items.map((i) => <li key={i.label}>{i.label}</li>)}</ul>
-            </div>
-          ))}
-        </div>
-        <p className={styles.muted}>{APP_ONLY}</p>
-      </section>
+      <CanDo />
 
       <Dialog open={current !== undefined} onOpenChange={(o) => { if (!o) setOpen(null); }}>
         {current && (
           <DialogContent title={`Connect ${open}`} description={open === "Grok" ? "Choose where you use Grok. Each has its own sign-in." : current.does} className={styles.dialog}>
-            <div className={styles.dialogBody}>
-            {aiBrand(current.mark ?? current.name) && <div className={styles.connectionMarks} aria-hidden="true">
-              <span><AiMark name={current.mark ?? current.name} size={28} /></span>
-              {/* eslint-disable-next-line @next/next/no-img-element -- fixed local product icon */}
-              <img src="/icon-192.png" width={48} height={48} alt="" />
-            </div>}
-            {open === "Grok" && <div className={styles.surfaceChoice} role="group" aria-label="Where you use Grok">
-              <button type="button" aria-pressed={grokSurface === "Grok web"} onClick={() => setGrokSurface("Grok web")}>Web</button>
-              <button type="button" aria-pressed={grokSurface === "Grok Bot desktop"} onClick={() => setGrokSurface("Grok Bot desktop")}>Grok Bot desktop</button>
-            </div>}
-            {current.image && <img className={styles.shot} src={current.image} alt={`Where Queue Pilot is added in ${current.name}`} width={1200} height={750} />}
-            <div className={styles.address}>
-              <span className={styles.label}><Term term="Connector URL, or MCP server URL" note="Claude calls it a custom connector URL, ChatGPT a server URL. They all mean this address.">Queue Pilot's address</Term></span>
-              <code className={styles.code}>{connectorUrl}</code>
-              <CopyButton value={connectorUrl} label="Copy" />
-            </div>
-            <ol className={styles.steps}>{current.steps.map((st) => <li key={st}>{st}</li>)}</ol>
-            {current.setupPrompt && <CopyButton value={current.setupPrompt(connectorUrl)} label="Copy setup request" />}
-            <p className={styles.muted}>{current.plan}</p>
-            {!current.setupPrompt && <CopyButton value={CONNECTION_CHECK} label="Copy connection check" />}
-            {current.help && <p className={styles.muted}>{current.help}</p>}
-            {current.docs && <a href={current.docs} target="_blank" rel="noreferrer">Official {current.name} instructions</a>}
-            </div>
+            <SetupGuide app={current} grok={open === "Grok"} surface={grokSurface} onSurface={setGrokSurface} connectorUrl={connectorUrl} />
           </DialogContent>
         )}
       </Dialog>

@@ -57,7 +57,7 @@ describe("prices", () => {
     expect(openRouterPriceIn(OPENROUTER, "half-priced")).toBeNull();
   });
   it("asks OpenRouter for OpenRouter models and the price list for the rest, each once a day", async () => {
-    const f = vi.fn(async (url: string) => Response.json(url === OPENROUTER_PRICES_URL ? OPENROUTER : LIST));
+    const f = vi.fn<(url: string) => Promise<Response>>(async (url: string) => Response.json(url === OPENROUTER_PRICES_URL ? OPENROUTER : LIST));
     const fetchImpl = f as unknown as typeof fetch;
     expect(await priceFor("openrouter", "anthropic/claude-sonnet-5.5", fetchImpl, 0)).toEqual(SONNET);
     expect(await priceFor("anthropic", "claude-sonnet-5-5", fetchImpl, 0)).toEqual(SONNET);
@@ -65,9 +65,9 @@ describe("prices", () => {
     expect(f.mock.calls.map((c) => c[0])).toEqual([OPENROUTER_PRICES_URL, PRICE_LIST_URL]);
   });
   it("retries after a failed read", async () => {
-    const bad = vi.fn(async () => new Response("", { status: 503 }));
+    const bad = vi.fn<() => Promise<Response>>(async () => new Response("", { status: 503 }));
     await expect(priceFor("anthropic", "x", bad as unknown as typeof fetch, 0)).rejects.toThrow("503");
-    const ok = vi.fn(async () => Response.json(LIST));
+    const ok = vi.fn<() => Promise<Response>>(async () => Response.json(LIST));
     expect(await priceFor("anthropic", "claude-sonnet-5-5", ok as unknown as typeof fetch, 0)).not.toBeNull();
   });
   it("prices tokens in micro-dollars: 10,000 in and 2,000 out on Sonnet 5.5 is 4 cents", () => {

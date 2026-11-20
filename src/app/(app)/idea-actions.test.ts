@@ -4,7 +4,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn() }))
+vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn<typeof import("@/lib/current-user").bufferForReading>() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
 const buffer = { answer: (() => ({})) as (query: string) => unknown, calls: 0 }
 vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: async (_t: string, q: string) => { buffer.calls++; const a = buffer.answer(q); if (a instanceof Error) throw a; return a } }))

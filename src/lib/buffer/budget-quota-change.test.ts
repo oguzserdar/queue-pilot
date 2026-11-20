@@ -12,7 +12,7 @@ const testDb = drizzle(pg, { schema: { ...(await import("../../db/schema")), ...
 vi.mock("../../db", () => ({ db: () => testDb, schema: {} }));
 
 const { parseRateLimit } = await import("./client");
-const { TOOL_RESERVE, currentAllowance, releaseRequest, reserveRequest, withBudget } = await import("./budget");
+const { BufferAllowanceLowError, TOOL_RESERVE, currentAllowance, releaseRequest, reserveRequest, withBudget } = await import("./budget");
 
 beforeAll(async () => {
   await pg.query(`insert into "user" (id, name, email) values ('u1', 'u1', 'u1@x')`);
@@ -66,6 +66,6 @@ describe("a window whose quota changes", () => {
     await answer(T0 + 1_000, headers(120, 24));
     const daily = (await currentAllowance(T0 + 2_000))!.windows.find((w) => w.policy === "600-in-1day");
     expect(daily?.remaining).toBeLessThanOrEqual(12);
-    await expect(withBudget("list_tags", "u1", () => reserveRequest(T0 + 3_000))).rejects.toThrow();
+    await expect(withBudget("list_tags", "u1", () => reserveRequest(T0 + 3_000))).rejects.toThrow(BufferAllowanceLowError);
   });
 });

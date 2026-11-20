@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { supadataKey } from "./env";
 import { fetchTranscript, isYouTubeVideo, type TranscriptResult } from "./transcripts";
 import { claimSourceJob, pendingTranscriptJob, releaseSourceJob, saveTranscriptJob } from "./source-store";
@@ -10,7 +10,8 @@ export async function transcriptForUser(userId: string, url: string): Promise<Tr
   const parsed = new URL(url);
   const videoId = parsed.searchParams.get("v") ?? parsed.pathname.split("/").pop();
   url = `https://www.youtube.com/watch?v=${videoId}`;
-  const key = `transcript:${createHash("sha256").update(`${url}:${apiKey}`).digest("hex")}`;
+  // A job key per video and transcript key: a keyed hash, so the key itself is never stored or recoverable from it.
+  const key = `transcript:${createHmac("sha256", apiKey).update(url).digest("hex")}`;
   const pending = await pendingTranscriptJob(userId, key);
   if (pending?.value.jobId) {
     const result = await fetchTranscript(url, apiKey, pending.value.jobId);

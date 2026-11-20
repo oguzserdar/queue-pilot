@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { proposeCommentChanges, keepReviewPreference } from "@/app/(app)/review-actions";
 import { editDraftText } from "@/app/(app)/actions";
 import type { FeedbackResult } from "@/lib/feedback-flow";
+import type { KeepScope } from "@/lib/rule-suggestions";
 import { NETWORKS } from "@/lib/rules";
 import { Button } from "@/registry/components/button/button";
 import { Checkbox } from "@/registry/components/checkbox/checkbox";
@@ -13,6 +14,25 @@ export type ReviewCandidate = { id: string; channelId: string; network?: string;
 
 /** At most this many drafts can change from one comment. */
 const MAX_PICKS = 30;
+
+/** The preview button's words: reading while the first preview is made, then Preview again, else how many drafts. */
+function previewLabel(busy: boolean, hasPlan: boolean, count: number): string {
+  if (busy && !hasPlan) return "Reading the comment…";
+  if (hasPlan) return "Preview again";
+  return `Preview changes to ${count} draft${count === 1 ? "" : "s"}`;
+}
+
+/** The scope picked in the plan ("shared", "network:<id>" or "accounts"), as the rule store takes it. */
+function keepScope(value: string): KeepScope {
+  if (value === "shared") return { level: "shared" };
+  return value.startsWith("network:") ? { level: "network", network: value.slice(8) } : { level: "accounts" };
+}
+
+/** Keeps the comment's lasting preference. The plan only offers Keep when it has a token; without one nothing is kept. */
+function keepPreference(token: string | null, value: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (!token) return Promise.resolve({ ok: false, message: "This comment has no lasting preference to keep." });
+  return keepReviewPreference(token, keepScope(value));
+}
 
 /**
  * The drafts a comment starts with: only the draft it was written on, when that draft is still one of the candidates.
@@ -85,7 +105,7 @@ export function ReviewFeedback({ linkId, commentId, postId, reviewer, candidates
           ))}
         </ul>
         <div className={styles.row}>
-          <Button variant="primary" size="sm" disabled={busy || !selected.size} onClick={preview}>{busy && !plan ? "Reading the comment…" : plan ? "Preview again" : `Preview changes to ${selected.size} draft${selected.size === 1 ? "" : "s"}`}</Button>
+          <Button variant="primary" size="sm" disabled={busy || !selected.size} onClick={preview}>{previewLabel(busy, plan !== null, selected.size)}</Button>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setOpen(false); setPlan(null); setMessage(""); }}>Close</Button>
         </div>
       </div>
@@ -96,7 +116,7 @@ export function ReviewFeedback({ linkId, commentId, postId, reviewer, candidates
         <FeedbackPlanView key={previews} plan={plan} from={`${reviewer}'s comment`} scopes={scopes}
           labelFor={(postId) => candidates.find(c => c.id === postId)?.label ?? "a draft"}
           onApply={(postId, after, before) => editDraftText(postId, after, before)}
-          onKeep={(value) => keepReviewPreference(plan.suggestionToken!, value === "shared" ? { level: "shared" } : value.startsWith("network:") ? { level: "network", network: value.slice(8) } : { level: "accounts" })} />
+          onKeep={(value) => keepPreference(plan.suggestionToken, value)} />
       )}
     </div>
   );

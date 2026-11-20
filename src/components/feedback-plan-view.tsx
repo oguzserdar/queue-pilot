@@ -17,11 +17,23 @@ const KIND = {
 /** A rule check line without doubled punctuation: "Explain why it matters: no reason is given." */
 const flagLine = (rule: string, reason: string) => `${rule.trim().replace(/[.!?]+$/, "")}: ${reason.trim()}`;
 
+/** A change's mark once acted on: applied, skipped, or none while it waits or after a failure. */
+function changeState(state: { ok: boolean; text: string } | undefined): "applied" | "skipped" | undefined {
+  if (state?.ok) return "applied";
+  return state?.text === "Skipped" ? "skipped" : undefined;
+}
+
+/** One stretch of the diff: kept words plain, removed words struck through, added words marked. */
+function DiffPart({ part }: { part: ReturnType<typeof wordDiff>[number] }) {
+  if (part.kind === "same") return <span>{part.text}</span>;
+  return part.kind === "removed" ? <del>{part.text}</del> : <ins>{part.text}</ins>;
+}
+
 /** The proposed text with removed words struck through and added words marked, inside the post itself. */
 function InlineDiff({ before, after }: { before: string; after: string }) {
   return (
     <p className={styles.diffText}>
-      {wordDiff(before, after).map((p, i) => p.kind === "same" ? <span key={i}>{p.text}</span> : p.kind === "removed" ? <del key={i}>{p.text}</del> : <ins key={i}>{p.text}</ins>)}
+      {wordDiff(before, after).map((p, i) => <DiffPart key={i} part={p} />)}
     </p>
   );
 }
@@ -81,7 +93,7 @@ export function FeedbackPlanView({ plan, from, labelFor, scopes, onApply, onKeep
           const state = done[f.postId];
           const flags = plan.flags.filter(flag => flag.postId === f.postId);
           return (
-            <li key={f.postId} className={styles.change} data-state={state?.ok ? "applied" : state?.text === "Skipped" ? "skipped" : undefined}>
+            <li key={f.postId} className={styles.change} data-state={changeState(state)}>
               <div className={styles.stepHead}>
                 <strong>{labelFor(f.postId)}</strong>
                 {state?.ok && <Badge tone="success" size="sm">Applied</Badge>}

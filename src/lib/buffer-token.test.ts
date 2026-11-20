@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { bufferAccessToken, type WithLock } from "./buffer-token";
+import { NoBufferAccount, bufferAccessToken, type WithLock } from "./buffer-token";
 
 vi.mock("./db", () => ({ dbLockPool: () => { throw new Error("no database in tests"); } }));
 vi.mock("./auth", () => ({ BUFFER_PROVIDER_ID: "buffer" }));
 
 /** A fake Better Auth whose getAccessToken counts calls, standing in for the refresh that spends Buffer's single-use token. */
 function fakeAuth(delayMs = 5) {
-  const getAccessToken = vi.fn(async () => {
+  const getAccessToken = vi.fn<(opts: { body: { accountId: string; userId: string } }) => Promise<{ accessToken: string }>>(async () => {
     await new Promise((r) => setTimeout(r, delayMs));
     return { accessToken: "fresh" };
   });
@@ -47,9 +47,9 @@ describe("bufferAccessToken", () => {
   });
 
   it("fails plainly when the account has no Buffer connection, and the next call can retry", async () => {
-    const auth = { $context: Promise.resolve({ internalAdapter: { findAccounts: async () => [] } }), api: { getAccessToken: vi.fn() } } as never;
+    const auth = { $context: Promise.resolve({ internalAdapter: { findAccounts: async () => [] } }), api: { getAccessToken: vi.fn<(opts: { body: { accountId: string; userId: string } }) => Promise<{ accessToken: string }>>() } } as never;
     const { lock } = recordingLock();
-    await expect(bufferAccessToken(auth, "u3", lock)).rejects.toThrow("no Buffer connection");
-    await expect(bufferAccessToken(auth, "u3", lock)).rejects.toThrow("no Buffer connection");
+    await expect(bufferAccessToken(auth, "u3", lock)).rejects.toBeInstanceOf(NoBufferAccount);
+    await expect(bufferAccessToken(auth, "u3", lock)).rejects.toBeInstanceOf(NoBufferAccount);
   });
 });

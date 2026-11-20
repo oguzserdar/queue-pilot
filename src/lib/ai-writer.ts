@@ -110,7 +110,8 @@ export const DraftsSchema = z.object({ drafts: z.array(DraftAnswer) });
 
 /** A draft as the rest of Queue Pilot sees it: the trimmed text, without the writer's fit answers. */
 function written(answer: DraftAnswer | WrittenDraft): WrittenDraft {
-  const { fit: _fit, ...draft } = answer as DraftAnswer;
+  if (!("fit" in answer)) return { ...answer, text: answer.text.trim() };
+  const { fit: _fit, ...draft } = answer;
   return { ...draft, text: draft.text.trim() };
 }
 

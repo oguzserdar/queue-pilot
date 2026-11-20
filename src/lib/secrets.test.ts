@@ -12,13 +12,13 @@ describe("encryptSecret / decryptSecret", () => {
     expect(encryptSecret("same", KEY)).not.toBe(encryptSecret("same", KEY));
   });
   it("refuses a value encrypted with another master key", () => {
-    expect(() => decryptSecret(encryptSecret("x", OTHER), KEY)).toThrow();
+    expect(() => decryptSecret(encryptSecret("x", OTHER), KEY)).toThrow("unable to authenticate data");
   });
   it("refuses a changed ciphertext instead of returning garbage", () => {
     const stored = encryptSecret("buffer-client-secret", KEY);
     const raw = Buffer.from(stored.slice(3), "base64url");
     raw[raw.length - 1] ^= 1;
-    expect(() => decryptSecret(`v1:${raw.toString("base64url")}`, KEY)).toThrow();
+    expect(() => decryptSecret(`v1:${raw.toString("base64url")}`, KEY)).toThrow("unable to authenticate data");
   });
   it("rejects a master key that is not 32 bytes of hex", () => {
     expect(() => encryptSecret("x", "short")).toThrow("64 hex");

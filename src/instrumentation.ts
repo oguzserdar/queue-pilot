@@ -10,7 +10,7 @@ export async function register() {
   void logShadowedSettings(postgresSettingsStore()).catch((e) => {
     // Drizzle wraps a database error in "Failed query: ..."; the reason (and Postgres's code) is on its cause.
     const cause = e instanceof Error && e.cause instanceof Error ? e.cause : null;
-    const raw = (cause as unknown as { code?: unknown } | null)?.code;
+    const raw = cause && "code" in cause ? cause.code : undefined;
     const code = typeof raw === "string" ? raw : undefined;
     console.error(JSON.stringify({ event: "qp-setting-shadows-check-failed", message: e instanceof Error ? e.message : String(e), ...(cause ? { cause: cause.message } : {}), ...(code ? { code } : {}) }));
   });

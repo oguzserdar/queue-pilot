@@ -56,15 +56,20 @@ function refused(r: NoteRefusal, mentioned: boolean): { ok: false; message: stri
 
 const toTeammate = (m: TeamMember): NoteTeammate => ({ urn: m.urn, name: mentionSpan(m).slice(1), email: m.email, avatar: m.avatar || null, locked: m.isLocked });
 
+/** Picked teammates as sent by the page: at most 20 non-empty ids, each under 200 characters. */
+function isUrnList(urns: unknown): urns is string[] {
+  return Array.isArray(urns) && urns.length <= 20 && urns.every((u) => typeof u === "string" && u.length > 0 && u.length <= 200);
+}
+
 /**
  * The annotations for the picked teammates, each placed where its @Name is in the text. A teammate already mentioned
  * in the saved note keeps that name; a new one must be someone who can read notes on the post's channel. A picked
  * teammate whose name is no longer in the text is left out.
  */
 async function pickedMentions(token: string, channelId: string, text: string, urns: unknown, saved: NoteMention[]): Promise<{ ok: true; annotations: MentionAnnotation[] } | { ok: false; message: string }> {
-  if (!Array.isArray(urns) || urns.length > 20 || urns.some((u) => typeof u !== "string" || !u || u.length > 200)) return { ok: false, message: "Pick each teammate again." };
+  if (!isUrnList(urns)) return { ok: false, message: "Pick each teammate again." };
   const wanted: WantedMention[] = [];
-  const picked = [...new Set(urns as string[])];
+  const picked = [...new Set(urns)];
   const fresh = picked.filter((urn) => !saved.some((m) => m.urn === urn));
   // Only the newly picked people are looked up, page by page until found, so a teammate past the first pages counts.
   const members = fresh.length ? await findTeamMembers(token, { channelId }, fresh, undefined, undefined, "urn") : [];

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteMyAccount } from "@/app/(app)/actions";
+import { deleteMyAccount } from "@/app/(app)/settings-actions";
 import { Button } from "@/registry/components/button/button";
 import { Input } from "@/registry/components/input/input";
 import styles from "./settings-view.module.css";

@@ -93,7 +93,8 @@ export async function feedbackForNote(userId: string, loadBuffer: () => Promise<
   // Read only the note's own account, live: the note is found on its thread whatever its age, and a note that was
   // changed or deleted, or an account no longer connected, is refused.
   const account = b.channels.find((c) => c.id === channelId && c.organizationId);
-  const note = account ? notesOn(await read(b.token, account.organizationId!, [channelId]), [account]).find((n) => n.key === key) : undefined;
+  const organizationId = account?.organizationId;
+  const note = account && organizationId ? notesOn(await read(b.token, organizationId, [channelId]), [account]).find((n) => n.key === key) : undefined;
   if (!note) return { ok: false, message: "That note is no longer on an open post in Buffer. Read the notes again." };
   const channels = new Map(b.channels.map((c) => [c.id, c]));
   const candidates = b.posts.filter((p) => p.status === "draft" && p.channelId === note.channelId);

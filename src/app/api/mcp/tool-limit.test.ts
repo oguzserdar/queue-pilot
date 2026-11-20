@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const src = readFileSync("src/app/api/mcp/route.ts", "utf8");
+const src = readFileSync("src/lib/mcp-guard.ts", "utf8");
 const table = src.slice(src.indexOf("const TOOL_LIMIT"), src.indexOf("};", src.indexOf("const TOOL_LIMIT")));
 
 describe("the connector's write allowance", () => {

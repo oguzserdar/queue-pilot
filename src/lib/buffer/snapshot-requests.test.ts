@@ -26,7 +26,7 @@ function fakeBuffer(orgs: Org[], pageSize = 100) {
     const aliases = [...text.matchAll(/\b([a-z]\d+):\s*(channels|posts)\(/g)];
     if (aliases.length > MAX_ALIASES) throw new Error(`too many aliases: ${aliases.length}`);
     // Buffer fails the whole request when it names an organization the person no longer belongs to.
-    const named = Object.entries(vars).flatMap(([k, v]) => /^o\d+$/.test(k) ? [v as string] : /^p\d+$|^input$/.test(k) ? [(v as { organizationId: string }).organizationId] : []);
+    const named = Object.entries(vars).flatMap(([k, v]) => { if (/^o\d+$/.test(k)) return [v as string]; return /^p\d+$|^input$/.test(k) ? [(v as { organizationId: string }).organizationId] : []; });
     if (named.some((id) => !orgs.some((o) => o.id === id))) throw new BufferApiError("You do not have access to this organization", 200, "FORBIDDEN");
     const out: Record<string, unknown> = {};
     if (/\baccount\s*\{/.test(text)) out.account = { email: "a@b.co", timezone: "UTC", organizations: orgs.map((o) => ({ id: o.id, members: { totalCount: 1 } })) };
@@ -40,7 +40,7 @@ function fakeBuffer(orgs: Org[], pageSize = 100) {
       };
     };
     for (const [, alias, field] of aliases) {
-      if (field === "channels") out[alias] = [{ id: `${vars[alias.replace("c", "o")]}-c`, name: "X" }];
+      if (field === "channels") out[alias] = [{ id: `${vars[alias.replace("c", "o")] as string}-c`, name: "X" }];
       else {
         const input = vars[alias] as { organizationId: string };
         out[alias] = { ...page(input.organizationId, null, Number(vars.first ?? pageSize)) };
@@ -50,7 +50,7 @@ function fakeBuffer(orgs: Org[], pageSize = 100) {
       const input = vars.input as { organizationId: string };
       out.posts = page(input.organizationId, (vars.after as string | null) ?? null, Number(vars.first));
     }
-    if (!aliases.length && /\bchannels\(/.test(text)) out.channels = [{ id: `${vars.id}-c`, name: "X" }];
+    if (!aliases.length && /\bchannels\(/.test(text)) out.channels = [{ id: `${vars.id as string}-c`, name: "X" }];
     return out;
   }) as unknown as typeof bufferQuery;
   return { query, requests };

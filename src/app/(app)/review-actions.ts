@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { signedInUserId } from "@/lib/current-user";
 import { postgresReviewStore, TooManyLinksError } from "@/lib/review-store";
 import { fixesForRule, rulesFromComments, shareDrafts, type ShownFix } from "@/lib/review-flow";
-import type { FirstRuleOffer } from "@/app/(app)/actions";
+import type { FirstRuleOffer } from "@/app/(app)/rule-actions";
 
 export type { ShownFix };
 const signedOut = { ok: false as const, message: "Sign in with Buffer first." };

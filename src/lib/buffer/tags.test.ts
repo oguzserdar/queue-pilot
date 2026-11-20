@@ -2,7 +2,6 @@
  * @fileoverview Buffer tags: documented types and fields only, paging, typed refusals, and setting tags keeps a draft
  * a draft.
  */
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bufferReference, documentedFields } from "./reference.test-support";
 import { createTag, deleteTag, listTags, setDraftTags, updateTag } from "./tags";
@@ -13,7 +12,7 @@ const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
 type Call = { query: string; variables: Record<string, unknown> };
 function fake(answers: unknown[]) {
   const calls: Call[] = [];
-  const run = vi.fn(async (_t: string, query: string, variables?: Record<string, unknown>) => {
+  const run = vi.fn<(t: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async (_t: string, query: string, variables?: Record<string, unknown>) => {
     calls.push({ query, variables: variables ?? {} });
     return answers.shift();
   }) as unknown as typeof import("./client").bufferQuery;
@@ -23,7 +22,7 @@ const tag = (id: string) => ({ id, name: `Tag ${id}`, color: "#8F2457", isLocked
 
 describe("Buffer tags", () => {
   it("control: a made-up type is caught", () => {
-    expect(() => fieldsOf("MadeUpInput")).toThrow();
+    expect(() => fieldsOf("MadeUpInput")).toThrow("type MadeUpInput not in the reference");
   });
 
   it("names only input types Buffer documents, and asks for and sends only documented fields", async () => {
@@ -36,7 +35,8 @@ describe("Buffer tags", () => {
     await listTags("t", "org", run);
     await createTag("t", "org", "Soups", undefined, run);
     expect(await setDraftTags("t", "p1", ["t1"], run)).toEqual({ ok: true });
-    for (const c of calls) for (const [, type] of c.query.matchAll(/\$\w+: (\w+)!/g)) if (!["String", "Int"].includes(type)) expect(() => fieldsOf(type), type).not.toThrow();
+    const types = calls.flatMap((c) => [...c.query.matchAll(/\$\w+: (\w+)!/g)].map(([, type]) => type)).filter((type) => !["String", "Int"].includes(type));
+    for (const type of types) expect(() => fieldsOf(type)).not.toThrow();
     for (const f of ["id", "name", "color", "isLocked"]) expect(fieldsOf("Tag").has(f)).toBe(true);
     expect(fieldsOf("TagsInput").has("organizationId")).toBe(true);
     for (const f of ["organizationId", "tag"]) expect(fieldsOf("CreateTagInput").has(f)).toBe(true);

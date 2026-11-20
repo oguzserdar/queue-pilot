@@ -101,3 +101,8 @@
   .footRight > * { flex: 1 1 auto; max-width: 100%; white-space: normal; text-align: center; }
   .chipToggle, .chipChannel { white-space: nowrap; }
 }
+
+/* Mastodon and Bluesky: a plain post card, the account at the top. */
+.social { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow-resting); display: grid; gap: 8px; }
+.socialHead { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.socialTime { margin-left: auto; font-weight: 400; opacity: .6; font-size: 12px; }

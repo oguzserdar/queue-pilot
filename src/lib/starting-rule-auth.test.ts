@@ -4,7 +4,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const seeded = vi.hoisted(() => vi.fn(async (_userId: string) => {}));
+const seeded = vi.hoisted(() => vi.fn<typeof import("./starting-rule").seedStartingRuleSafely>(async () => {}));
 vi.mock("./starting-rule", () => ({ seedStartingRuleSafely: seeded }));
 vi.mock("./security-events", () => ({ recordSecurityEvent: async () => {} }));
 vi.mock("../db", () => ({ db: () => ({}), schema: {} }));

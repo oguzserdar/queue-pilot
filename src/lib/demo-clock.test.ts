@@ -50,7 +50,7 @@ describe("the example story", () => {
       ];
       for (const at of past) expect(Date.parse(at), `${at} on ${now.toISOString()}`).toBeLessThanOrEqual(now.getTime());
       const start = Date.parse(demoWeekFor(shift).startsAt ?? "");
-      if (shift > 0) expect(start).toBeGreaterThan(now.getTime());
+      expect(shift <= 0 || start > now.getTime()).toBe(true);
       expect(start - now.getTime()).toBeLessThanOrEqual(8 * 86_400_000);
     }
   });

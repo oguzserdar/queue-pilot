@@ -5,10 +5,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { mcpToolSource, registeredToolNames } from "@/test/mcp-tool-sources";
 
 const ROOT = join(__dirname, "../..");
-const route = readFileSync(join(ROOT, "src/app/api/mcp/route.ts"), "utf8") + readFileSync(join(ROOT, "src/lib/mcp-controls.ts"), "utf8");
-const tools = new Set([...route.matchAll(/registerTool\(\s*"([a-z_]+)"/g)].map((m) => m[1]));
+const tools = new Set(registeredToolNames(mcpToolSource("mcp-controls.ts")));
 const skillsDir = join(ROOT, "plugin/skills");
 const skills = readdirSync(skillsDir).map((name) => ({ name, body: readFileSync(join(skillsDir, name, "SKILL.md"), "utf8") }));
 

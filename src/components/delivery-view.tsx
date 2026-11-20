@@ -16,6 +16,24 @@ export type CopyMarks = Record<string, { kind: "telegram" | "discord"; state: "s
 
 const COPY_NAME = { telegram: "Telegram", discord: "Discord" } as const;
 
+/** The page title: how many went out, and what still needs a look (failed first, then late). */
+function deliveryTitle(total: number, openCount: number, wentOut: number, failedCount: number, late: number): string {
+  if (total === 0) return "Delivery";
+  if (openCount) return `${wentOut} of ${total} posts went out last week. ${failedCount === 1 ? "One did not." : `${failedCount} did not.`}`;
+  if (late) return `${wentOut} of ${total} posts went out last week. ${late} ${late === 1 ? "is" : "are"} late.`;
+  return "Every post from last week is accounted for.";
+}
+
+type SlotState = "sent" | "late" | "failed";
+
+/** A slot's state from its tone: success went out, warning is late, anything else failed. */
+function slotState(tone: DeliveryItem["tone"]): SlotState {
+  if (tone === "success") return "sent";
+  return tone === "warning" ? "late" : "failed";
+}
+
+const SLOT_WORDS: Record<SlotState, string> = { sent: "Went out", late: "Late", failed: "Failed" };
+
 export function DeliveryView({ deliveries, copies = {} }: { deliveries: DeliveryItem[]; copies?: CopyMarks }) {
   const open = deliveries.filter((d) => d.tone === "danger");
   const wentOut = deliveries.filter((d) => d.tone === "success").length;
@@ -26,13 +44,7 @@ export function DeliveryView({ deliveries, copies = {} }: { deliveries: Delivery
     <div className={styles.page}>
       <header className={styles.head}>
         <h1 className={styles.title}>
-          {deliveries.length === 0
-            ? "Delivery"
-            : open.length
-              ? `${wentOut} of ${deliveries.length} posts went out last week. ${failedCount === 1 ? "One did not." : `${failedCount} did not.`}`
-              : late
-                ? `${wentOut} of ${deliveries.length} posts went out last week. ${late} ${late === 1 ? "is" : "are"} late.`
-                : "Every post from last week is accounted for."}
+          {deliveryTitle(deliveries.length, open.length, wentOut, failedCount, late)}
         </h1>
         <p className={styles.sub}>After each slot, Queue Pilot asks Buffer whether the post went out, and shows Buffer's own reason when it did not. Checked each time Queue Pilot reads your Buffer account.</p>
       </header>
@@ -47,14 +59,14 @@ export function DeliveryView({ deliveries, copies = {} }: { deliveries: Delivery
       {deliveries.length > 0 && (
       <ol className={styles.ledger} aria-label="Last week's slots">
         {deliveries.map((d) => {
-          const state = d.tone === "success" ? "sent" : d.tone === "warning" ? "late" : "failed";
+          const state = slotState(d.tone);
           return (
             <li key={d.id} className={styles.slot} data-state={state}>
               <span className={styles.mark} aria-hidden="true" />
               <span className={styles.slotDay}>{day(d)}</span>
               <span className={styles.slotMeta}>{d.channel}, <span className="tnum">{time(d)}</span></span>
               <CopyLine marks={copies[d.id] ?? []} />
-              <span className={styles.slotState}>{state === "sent" ? "Went out" : state === "late" ? "Late" : "Failed"}</span>
+              <span className={styles.slotState}>{SLOT_WORDS[state]}</span>
             </li>
           );
         })}

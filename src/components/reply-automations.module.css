@@ -1,0 +1,13 @@
+/* The automation editor: the sentence form on the left, the comment and its reply on the right. Theme tokens only,
+   so it follows light and dark (src/app/theme.css). */
+.editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 18rem); gap: var(--space-5); align-items: start; }
+.form { display: grid; gap: var(--space-3); }
+/* A caption above a segmented control, in the same voice as the field labels; the control carries it for screen readers. */
+.caption { font-size: var(--text-sm); font-weight: 500; margin-bottom: calc(-1 * var(--space-2, 0.5rem)); }
+.preview { display: grid; gap: var(--space-3); position: sticky; top: var(--space-3); }
+.phone { display: grid; gap: var(--space-2, 0.5rem); padding: var(--space-3); border-radius: var(--radius-panel); background: var(--surface-muted); }
+.comment, .reply, .miss { margin: 0; padding: 0.5rem 0.75rem; border-radius: var(--radius-control); font-size: var(--text-sm); line-height: 1.4; overflow-wrap: anywhere; }
+.comment { background: var(--surface-raised); justify-self: start; max-width: 90%; }
+.reply { background: var(--accent-subtle); justify-self: end; max-width: 90%; }
+.miss { color: var(--text-muted); font-style: italic; }
+@media (max-width: 720px) { .editor { grid-template-columns: 1fr; } .preview { position: static; } }

@@ -14,7 +14,7 @@ import { checkedTextOf } from "./checked-text";
 import type { Written } from "./written-store";
 
 /** `stale` marks evidence that needs a fresh check before approval. */
-export type Readiness = { state: "ok" | "flagged" | "check" | "breaks"; reason?: string; stale?: boolean };
+export type Readiness = { state: "ok"; reason?: string; stale?: boolean } | { state: "flagged" | "check" | "breaks"; reason: string; stale?: boolean };
 
 export function draftReadiness(written: Written | undefined, currentText: string, rules: Rule[], target?: { network: string; channelId?: string }): Readiness {
   const applicable = rules.filter(r => appliesTo(r, target?.network ?? written?.network ?? "", target?.channelId));
@@ -50,10 +50,11 @@ export function approvable(ids: string[], written: Written[], posts: { id: strin
   const refused: { id: string; reason: string }[] = [];
   for (const id of ids) {
     // Drafts Queue Pilot did not write, or that left the queue, are refused later with their own reason.
-    if (!byId.has(id) || !current.has(id)) { allowed.push(id); continue; }
-    const post = current.get(id)!;
-    const r = draftReadiness(byId.get(id), post.text, rules, { network: post.network ?? byId.get(id)!.network, channelId: post.channelId });
-    if (r.state === "breaks" || r.state === "check") refused.push({ id, reason: r.reason! });
+    const written = byId.get(id);
+    const post = current.get(id);
+    if (!written || !post) { allowed.push(id); continue; }
+    const r = draftReadiness(written, post.text, rules, { network: post.network ?? written.network, channelId: post.channelId });
+    if (r.state === "breaks" || r.state === "check") refused.push({ id, reason: r.reason });
     else allowed.push(id);
   }
   return { allowed, refused };

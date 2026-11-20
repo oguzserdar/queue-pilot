@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const state = vi.hoisted(() => ({ cookie: "", userId: null as string | null, authOn: true }))
 vi.mock("next/headers", () => ({ headers: async () => new Headers(state.cookie ? { cookie: state.cookie } : {}) }))
-vi.mock("next/navigation", () => ({ redirect: vi.fn((to: string) => { throw new Error(`redirect:${to}`) }) }))
+vi.mock("next/navigation", () => ({ redirect: vi.fn<typeof import("next/navigation").redirect>((to: string) => { throw new Error(`redirect:${to}`) }) }))
 vi.mock("@/components/app-shell", () => ({ AppShell: () => null }))
 vi.mock("@/components/buffer-unreadable", () => ({ BufferUnreadable: () => null }))
 vi.mock("@/lib/current-user", () => ({

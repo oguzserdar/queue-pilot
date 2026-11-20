@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/(app)/review-actions", () => ({ shareForReview: vi.fn() }));
+vi.mock("@/app/(app)/review-actions", () => ({ shareForReview: vi.fn<typeof import("@/app/(app)/review-actions").shareForReview>() }));
 // Draw the dialog's content in place: the real one portals to the page only while open.
 vi.mock("@/registry/components/dialog/dialog", () => ({
   Dialog: ({ children }: { children: React.ReactNode }) => <>{children}</>,

@@ -3,7 +3,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const run = vi.hoisted(() => vi.fn(async () => ({ handled: 0, sent: 0, next: null })));
+const run = vi.hoisted(() => vi.fn<typeof import("@/lib/direct-post-run").runDueDirectPosts>(async () => ({ handled: 0, sent: 0, next: null })));
 vi.mock("@/lib/direct-post-run", () => ({ runDueDirectPosts: run }));
 const { GET } = await import("./route");
 const call = (auth?: string) => GET(new Request("http://x/api/cron/due", auth ? { headers: { authorization: auth } } : {}));

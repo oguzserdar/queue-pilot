@@ -18,32 +18,32 @@ it("processes every section after a real context-size rejection, retaining the e
    const passages = ["Opening finding.", "Closing correction."].filter(quote => source.includes(quote)).map(quote => ({ quote }));
    return { content: [{ type: "text", text: JSON.stringify({ passages }) }], finishReason: { unified: "stop", raw: "stop" }, usage, warnings: [] };
  } });
- const renew = vi.fn(async () => {});
- const run = vi.fn(async (sources: { text: string }[], extracted: boolean) => { if (!extracted) throw tooBig(); return sources[0].text; });
+ const renew = vi.fn<() => Promise<void>>(async () => {});
+ const run = vi.fn<Parameters<typeof withSourceContext>[3]>(async (sources: { text: string }[], extracted: boolean) => { if (!extracted) throw tooBig(); return sources[0].text; });
  const result = await withSourceContext(model, [{ text }], "Find the opening and closing findings.", run, renew);
  expect(read.join("")).toBe(text); expect(read.length).toBeGreaterThan(1);
  expect(result).toContain("Opening finding."); expect(result).toContain("Closing correction.");
  expect(renew.mock.calls.length).toBe(model.doGenerateCalls.length + run.mock.calls.length);
 });
 it("does not treat arbitrary provider failures as context-size rejections", async () => {
- const run = vi.fn(async () => { throw new Error("offline"); }); const model = answering({ passages: [] });
+ const run = vi.fn<Parameters<typeof withSourceContext>[3]>(async () => { throw new Error("offline"); }); const model = answering({ passages: [] });
  await expect(withSourceContext(model, [{ text: "Source." }], "task", run)).rejects.toThrow("offline");
  expect(model.doGenerateCalls).toHaveLength(0);
  expect(contextTooLarge(new APICallError({ message: "too many tokens", url: "https://provider.test", requestBodyValues: {}, statusCode: 429 }))).toBe(false);
 });
 it("does not produce a final answer after an extraction invents a quote", async () => {
- const run = vi.fn(async () => { throw tooBig(); });
+ const run = vi.fn<Parameters<typeof withSourceContext>[3]>(async () => { throw tooBig(); });
  await expect(withSourceContext(answering({ passages: [{ quote: "Invented." }] }), [{ text: "Real." }], "task", run)).rejects.toThrow("not in the source");
  expect(run).toHaveBeenCalledOnce();
 });
 it("stops explicitly when reduction makes no progress rather than dropping the end", async () => {
- const run = vi.fn(async () => { throw tooBig(); });
+ const run = vi.fn<Parameters<typeof withSourceContext>[3]>(async () => { throw tooBig(); });
  await expect(withSourceContext(answering({ passages: [{ quote: "Entire source." }] }), [{ text: "Entire source.", segments: [] }], "task", run)).rejects.toThrow("larger context window");
  expect(run).toHaveBeenCalledOnce();
 });
 it("keeps a verified cross-caption closing timestamp after extraction", async () => {
  const quote = "A closing sentence with evidence.";
- const run = vi.fn(async (sources: { text: string; segments?: { seconds: number }[] }[], extracted: boolean) => { if (!extracted) throw tooBig(); return sources[0]; });
+ const run = vi.fn<Parameters<typeof withSourceContext>[3]>(async (sources: { text: string; segments?: { seconds: number }[] }[], extracted: boolean) => { if (!extracted) throw tooBig(); return sources[0]; });
  const result = await withSourceContext(answering({ passages: [{ quote, locator: "t=7190" }] }), [{ text: "Background. " + quote, segments: [{ text: "A closing sentence", seconds: 7190 }, { text: "with evidence.", seconds: 7194 }] }], "task", run);
  expect(result).toMatchObject({ text: quote, segments: [{ seconds: 7190 }] });
 });

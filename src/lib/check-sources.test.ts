@@ -1,14 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
-const state = vi.hoisted(() => ({ response: null as unknown, reports: vi.fn(), transcript: vi.fn(), uri: "https://example.com/post", old: { text: "Old source", metadata: { truncated: false, kind: "transcript", etag: '"version-1"' } } }));
-vi.mock("./source-check", () => ({ listSourcesToCheck: async () => [{ sourceKey: "feed:item", uri: state.uri, title: "Post", lastCheckedAt: "2026-11-01T00:00:00Z" }], reportSourceVersion: (...args: unknown[]) => state.reports(...args) }));
+const state = vi.hoisted(() => ({ response: null as unknown, reports: vi.fn<typeof import("./source-check").reportSourceVersion>(), transcript: vi.fn<typeof import("./transcript-for-user").transcriptForUser>(), uri: "https://example.com/post", old: { text: "Old source", metadata: { truncated: false, kind: "transcript", etag: '"version-1"' } } }));
+vi.mock("./source-check", () => ({ listSourcesToCheck: async () => [{ sourceKey: "feed:item", uri: state.uri, title: "Post", lastCheckedAt: "2026-11-01T00:00:00Z" }], reportSourceVersion: state.reports }));
 vi.mock("./sources-store", () => ({ postgresSourceStore: () => ({ list: async () => [{ id: "feed", url: "https://example.com/feed" }] }) }));
 vi.mock("./source-store", () => ({ latestSource: async () => state.old }));
-vi.mock("./safe-fetch", () => ({ safeFetch: vi.fn(async () => state.response), BlockedAddressError: class extends Error {} }));
-vi.mock("./transcript-for-user", () => ({ transcriptForUser: (...a: unknown[]) => state.transcript(...a) }));
+vi.mock("./safe-fetch", () => ({ safeFetch: vi.fn<typeof import("./safe-fetch").safeFetch>(async () => state.response as Response), BlockedAddressError: class extends Error {} }));
+vi.mock("./transcript-for-user", () => ({ transcriptForUser: state.transcript }));
 const { checkSources } = await import("./check-sources");
 const { safeFetch } = await import("./safe-fetch");
-beforeEach(() => { state.uri = "https://example.com/post"; state.old.metadata.truncated = false; state.reports.mockReset(); state.reports.mockResolvedValue({ changed: false, proposals: 0, pending: 0, scheduled: [] }); });
+beforeEach(() => { state.uri = "https://example.com/post"; state.old.metadata.truncated = false; state.reports.mockReset(); state.reports.mockResolvedValue({ changed: false, proposals: 0, pending: 0, scheduled: [] } as unknown as Awaited<ReturnType<typeof import("./source-check").reportSourceVersion>>); });
 describe("feed checks", () => {
   it("keeps the old snapshot on an outage or missing item", async () => {
     state.response = new Response("down", { status: 404 });

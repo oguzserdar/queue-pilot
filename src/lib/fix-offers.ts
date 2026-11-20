@@ -31,13 +31,16 @@ export function editsFrom(written: Written[], posts: { id: string; channelId?: s
  */
 export function fixToRule(fix: Fix, network: string, channelId?: string, sentence?: string): NewRule {
   const channels = network in NETWORKS ? [network] : "all";
-  const raw =
-    fix.kind === "replace" ? { kind: "replace", from: fix.from, to: fix.to, channels, level: "block" }
-    : fix.kind === "banned" ? { kind: "banned", phrase: fix.phrase, channels, level: "block" }
-    : { kind: "ends_with", phrase: fix.phrase, channels, level: "warn" };
-  const rule = parseNewRule({ ...raw, ...(channelId ? { accountIds: [channelId] } : {}) });
+  const rule = parseNewRule({ ...ruleInputFor(fix, channels), ...(channelId ? { accountIds: [channelId] } : {}) });
   if (typeof rule === "string") throw new Error(`A found fix did not make a valid rule: ${rule}`);
   return rule.kind === "ends_with" && sentence ? { ...rule, text: sentence } : rule;
+}
+
+/** The rule input a fix stands for: a replacement and a cut word block, an added ending warns. */
+function ruleInputFor(fix: Fix, channels: string[] | "all"): Record<string, unknown> {
+  if (fix.kind === "replace") return { kind: "replace", from: fix.from, to: fix.to, channels, level: "block" };
+  if (fix.kind === "banned") return { kind: "banned", phrase: fix.phrase, channels, level: "block" };
+  return { kind: "ends_with", phrase: fix.phrase, channels, level: "warn" };
 }
 
 /** Stable key for an offer, so a "Not now" is remembered. */
@@ -48,11 +51,14 @@ export function offerKey(o: FixOffer): string {
 
 /** True when an existing rule already covers this fix, on any network. */
 function covered(fix: Fix, rules: Rule[]): boolean {
-  return rules.some((r) =>
-    fix.kind === "replace" ? r.kind === "replace" && r.from.toLowerCase() === fix.from && r.to.toLowerCase() === fix.to
-    : fix.kind === "banned" ? r.kind === "banned" && r.phrases.some((p) => p.toLowerCase() === fix.phrase.toLowerCase())
-    : r.kind === "ends_with" && r.phrase.toLowerCase() === fix.phrase.toLowerCase(),
-  );
+  return rules.some((r) => coversFix(r, fix));
+}
+
+/** True when this one rule already covers the fix. */
+function coversFix(r: Rule, fix: Fix): boolean {
+  if (fix.kind === "replace") return r.kind === "replace" && r.from.toLowerCase() === fix.from && r.to.toLowerCase() === fix.to;
+  if (fix.kind === "banned") return r.kind === "banned" && r.phrases.some((p) => p.toLowerCase() === fix.phrase.toLowerCase());
+  return r.kind === "ends_with" && r.phrase.toLowerCase() === fix.phrase.toLowerCase();
 }
 
 /** Repeated fixes still worth offering: not a rule yet, and not set aside with Not now. */

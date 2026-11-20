@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
 
-vi.mock("@/lib/current-user", () => ({ signedInUserId: vi.fn() }))
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
+vi.mock("@/lib/current-user", () => ({ signedInUserId: vi.fn<typeof import("@/lib/current-user").signedInUserId>() }))
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn<typeof import("next/cache").revalidatePath>() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
 vi.mock("@/lib/voice-store", async (original) => ({ ...await original<typeof import("@/lib/voice-store")>(), postgresVoiceStore: () => store }))
 
 const { memoryVoiceStore, MAX_EXAMPLES, MAX_PASTED_TEXT, MAX_NOTE } = await import("@/lib/voice-store")
 const { signedInUserId } = await import("@/lib/current-user")
 const { revalidatePath } = await import("next/cache")
-const { addPastedVoiceExample, saveVoiceNote } = await import("./actions")
+const { addPastedVoiceExample, saveVoiceNote } = await import("./voice-actions")
 const { VoiceView } = await import("@/components/voice-view")
 let store = memoryVoiceStore()
 

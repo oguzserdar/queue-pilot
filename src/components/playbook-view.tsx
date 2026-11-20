@@ -4,9 +4,9 @@ import { RuleRouting, type RuleAccount } from "./rule-routing";
 import type { Inheritance } from "@/lib/rule-scopes";
 import { DRAFT_CHECKS } from "@/lib/draft-checks";
 
-import { useEffect, useId, useState, useTransition } from "react";
+import { useEffect, useId, useState, useTransition, type ComponentProps } from "react";
 import { PAGE_ACTION_EVENT } from "./keyboard-shortcuts";
-import { addRule, readRule, removeRule, setRuleException } from "@/app/(app)/actions";
+import { addRule, readRule, removeRule, setRuleException } from "@/app/(app)/rule-actions";
 import { Badge } from "@/registry/components/badge/badge";
 import { Button } from "@/registry/components/button/button";
 import { appliesTo, NETWORKS, ruleHold, type NewRule, type Rule } from "@/lib/rules";
@@ -28,10 +28,11 @@ import styles from "./playbook-view.module.css";
 /** A rule as the Playbook shows it: the rule, and the edits it came from when there were any. */
 export type ShownRule = Rule & { origin?: string };
 
+/** A rule that came from a review comment: the comment and the reason, from its record. */
 function reviewEvidence(value: unknown): { comment: string; reason: string } | null {
   if (!value || typeof value !== "object") return null;
-  const e = value as Record<string, unknown>;
-  return e.kind === "review" && typeof e.comment === "string" && typeof e.reason === "string" ? { comment: e.comment, reason: e.reason } : null;
+  if (!("kind" in value) || value.kind !== "review" || !("comment" in value) || !("reason" in value)) return null;
+  return typeof value.comment === "string" && typeof value.reason === "string" ? { comment: value.comment, reason: value.reason } : null;
 }
 
 const EXAMPLE: ShownRule[] = EXAMPLE_RULES;
@@ -44,12 +45,23 @@ const EXAMPLE_NETWORKS = ["twitter", "linkedin", "instagram"];
 /** The one plain line that explains the starting rule while it is the only rule in the playbook. */
 export const STARTING_RULE_LINE = "Queue Pilot starts you with one rule that keeps private matters out of your posts. Remove it any time, or add your own wording below.";
 
-const groupName = (r: Rule, accounts: RuleAccount[]) => (r.accountIds?.length ? r.accountIds.map(id => accounts.find(a => a.id === id)?.name ?? "Disconnected account").join(", ") : r.channels === "all" ? "Every network" : r.channels.map((c) => NETWORKS[c] ?? c).join(", "));
+/** The heading a rule is listed under: its accounts by name, every network, or its networks. */
+function groupName(r: Rule, accounts: RuleAccount[]): string {
+  if (r.accountIds?.length) return r.accountIds.map(id => accounts.find(a => a.id === id)?.name ?? "Disconnected account").join(", ");
+  if (r.channels === "all") return "Every network";
+  return r.channels.map((c) => NETWORKS[c] ?? c).join(", ");
+}
+
+/** Headings in name order, with "Every network" last. */
+function byGroupName(a: string, b: string): number {
+  if (a === "Every network") return 1;
+  return b === "Every network" ? -1 : a.localeCompare(b);
+}
 
 function groups(rules: ShownRule[], accounts: RuleAccount[]): [string, ShownRule[]][] {
   const m = new Map<string, ShownRule[]>();
   for (const r of rules) m.set(groupName(r, accounts), [...(m.get(groupName(r, accounts)) ?? []), r]);
-  return [...m.entries()].sort(([a], [b]) => (a === "Every network" ? 1 : b === "Every network" ? -1 : a.localeCompare(b)));
+  return [...m.entries()].sort(([a], [b]) => byGroupName(a, b));
 }
 
 /** What the same-fix offer says: the edit, where it happened, and the rule it would keep. */
@@ -105,17 +117,167 @@ export function SameFixOffer({ content, onKeep, onDismiss, pending = false }: { 
   );
 }
 
+/** The rules the page starts with: the person's own when live, none on a first visit, else Alex's. */
+function startingRules(live: boolean, firstVisit: boolean, initial: ShownRule[]): ShownRule[] {
+  if (live) return initial;
+  return firstVisit ? [] : EXAMPLE;
+}
+
+/** A first rule kept from the example finder, with the proof it was offered with. */
+function ruleFromOffer(o: Parameters<NonNullable<ComponentProps<typeof FirstRulesFinder>["onExampleKeep"]>>[0]): ShownRule {
+  return { id: o.key, kind: "guidance", channels: o.channels, level: "warn", text: o.text, origin: o.proof.kind === "note" ? "From a note on your post" : `Followed in ${o.proof.followed} of your ${o.proof.of} posts` };
+}
+
+/** The page title: the count of the person's rules, or Alex's, or the first visit. */
+function PlaybookTitle({ live, count }: { live: boolean; count: number }) {
+  if (live) return <h1 className={styles.title}>{count ? <>Playbook <span className={styles.count}>{count} rule{count === 1 ? "" : "s"}</span></> : "Your playbook"}</h1>;
+  return <h1 className={styles.title}>{count ? `Alex's playbook: ${count} rule${count === 1 ? "" : "s"} across 4 accounts` : "Alex's first visit"}</h1>;
+}
+
+/** The line under the title: how to get first rules while there are none, else what the rules are for. */
+function introLine(p: { live: boolean; firstVisit: boolean; count: number; startingOnly: boolean; routed: boolean }): string {
+  if (!p.live && p.firstVisit && !p.count) return "No rules yet. Queue Pilot checks each draft against your rules before saving it in Buffer, so the first ones come from what you already posted.";
+  if (p.live && !p.count) return "No rules yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.";
+  if (p.startingOnly) return `No rules of your own yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. ${STARTING_RULE_LINE}`;
+  if (p.routed) return "Pick an account to see what applies there. What you changed for it comes first.";
+  return `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${p.live || p.firstVisit ? "" : " Each came from a fix Alex made more than once."}`;
+}
+
+/** How many rules apply on each network. */
+function NetworkCounts({ networks, rules }: { networks: string[]; rules: ShownRule[] }) {
+  return (
+    <p className={styles.muted} aria-label="Rules by network">
+      {networks.map((n) => `${NETWORKS[n] ?? n}: ${rules.filter((r) => appliesTo(r, n)).length} rule${rules.filter((r) => appliesTo(r, n)).length === 1 ? "" : "s"}`).join(" · ")}
+    </p>
+  );
+}
+
+/** Where a rule came from, after its hold: review feedback, its recorded origin, or nothing more. */
+function originNote(evidence: boolean, origin: string | undefined): string {
+  if (evidence) return ". Kept from review feedback.";
+  return origin ? `. ${origin}.` : ".";
+}
+
+/** An every-network rule's switches, one per network (example only): on, or off for that network. */
+function NetworkToggles({ r, networks, pending, onToggle }: { r: ShownRule; networks: string[]; pending: boolean; onToggle: (r: ShownRule, network: string) => void }) {
+  return (
+    <span className={styles.nets} role="group" aria-label={`Networks for: ${r.text}`}>
+      {networks.map((n) => {
+        const on = appliesTo(r, n);
+        return (
+          <button key={n} type="button" className={styles.net} aria-pressed={on} disabled={pending} onClick={() => onToggle(r, n)} title={on ? `On for ${NETWORKS[n] ?? n}. Switch it off there.` : `Off for ${NETWORKS[n] ?? n}. Switch it back on.`}>
+            {NETWORKS[n] ?? n}{on ? "" : " off"}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+/** One heading's rules: each with how it holds a draft, where it came from, and Delete. */
+function RuleGroup({ name, rules, networks, pending, onToggle, onDelete }: { name: string; rules: ShownRule[]; networks: string[]; pending: boolean; onToggle: (r: ShownRule, network: string) => void; onDelete: (id: string) => void }) {
+  return (
+    <section className={styles.block} aria-label={`${name} rules`}>
+      <h2 className={styles.h2}>{name}</h2>
+      <ul className={styles.rows}>
+        {rules.map((r) => {
+          const hold = ruleHold(r);
+          const evidence = reviewEvidence(r.learnedFrom);
+          return (
+            <li key={r.id} className={styles.row}>
+              <span className={styles.text}>
+                <strong>{r.text}</strong>
+                <span className={styles.muted}>{HOLD_HINT[hold]}{originNote(evidence !== null, r.origin)}</span>
+                {evidence && <details><summary>Why this became a rule</summary><blockquote className={styles.quote}>{evidence.comment}</blockquote><p className={styles.muted}>{evidence.reason}</p></details>}
+                {r.channels === "all" && networks.length > 0 && <NetworkToggles r={r} networks={networks} pending={pending} onToggle={onToggle} />}
+              </span>
+              <span className={styles.rowEnd}>
+                <Badge tone={HOLD_TONE[hold]} size="sm">{hold}</Badge>
+                <ConfirmButton label="Delete" ariaLabel={`Delete rule: ${r.text}`} question="Delete this rule?" confirmLabel="Delete rule" onConfirm={() => onDelete(r.id)} />
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** Finding first rules: open at the top while the person has none of their own, or on the example's first visit. */
+function FirstFinder({ live, hasOwn, firstVisit, onExampleKeep }: { live: boolean; hasOwn: boolean; firstVisit: boolean; onExampleKeep: NonNullable<ComponentProps<typeof FirstRulesFinder>["onExampleKeep"]> }) {
+  if (live) return hasOwn ? null : <FirstRulesFinder open />;
+  return firstVisit ? <FirstRulesFinder open onExampleKeep={onExampleKeep} /> : null;
+}
+
+/** The example's same-fix offer, or the line that confirms it was kept. */
+function ExampleOffer({ offer, onKeep, onDismiss }: { offer: "open" | "kept" | "dismissed"; onKeep: () => void; onDismiss: () => void }) {
+  if (offer === "open") return <SameFixOffer content={EXAMPLE_SAME_FIX} onKeep={onKeep} onDismiss={onDismiss} />;
+  return offer === "kept" ? <p className={styles.done} role="status">Kept. Instagram drafts now start with the result.</p> : null;
+}
+
+/** Below the form: more ways to find rules once there are some, rewrites, and trying a draft. */
+function MoreFinders({ live, hasOwn, firstVisit, accounts }: { live: boolean; hasOwn: boolean; firstVisit: boolean; accounts: RuleAccount[] }) {
+  return (
+    <>
+      {live && hasOwn && <FirstRulesFinder />}
+      {live && <RewriteFinder />}
+      {!firstVisit && <RuleTester live={live} example={EXAMPLE_TRY} accounts={accounts} />}
+    </>
+  );
+}
+
+/**
+ * The rules: by account, through the routing view, when the person has accounts; otherwise grouped by where they
+ * apply, with a count per network.
+ */
+function RuleList({ rules, live, networks, accounts, inheritance, pending, onToggle, onDelete, onAdd }: {
+  rules: ShownRule[];
+  live: boolean;
+  networks: string[];
+  accounts: RuleAccount[];
+  inheritance: Inheritance;
+  pending: boolean;
+  onToggle: (r: ShownRule, network: string) => void;
+  onDelete: (id: string) => void;
+  onAdd: () => void;
+}) {
+  if (accounts.length > 0) return <RuleRouting rules={rules} accounts={accounts} inheritance={inheritance} onDelete={(r) => onDelete(r.id)} onAdd={onAdd} example={!live} />;
+  return (
+    <>
+      {networks.length > 1 && rules.length > 0 && <NetworkCounts networks={networks} rules={rules} />}
+      {groups(rules, accounts).map(([name, rs]) => (
+        <RuleGroup key={name} name={name} rules={rs} networks={live ? [] : networks} pending={pending} onToggle={onToggle} onDelete={onDelete} />
+      ))}
+    </>
+  );
+}
+
+/** The four checks every draft gets besides the rules. */
+function ChecksBlock() {
+  return (
+    <section className={styles.checksBlock} aria-labelledby="checks-title">
+      <h2 id="checks-title" className={styles.checksTitle}>Every draft is also checked for</h2>
+      <p className={styles.muted}>Your rules above are judged by meaning, in any language, by a model. These four run on every draft too, before it is saved in Buffer.</p>
+      <ul className={styles.checks}>
+        {DRAFT_CHECKS.map((c) => (
+          <li key={c.name}><strong>{c.name}</strong><span className={styles.muted}>{c.note}</span></li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Example mode: Alex's playbook and one repeated fix waiting for Alex's yes. Live mode: the person's own rules. */
 export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit = false, reader, networks = EXAMPLE_NETWORKS, accounts = [], inheritance = {}, demoShift = 0, repeats, fixesPreview }: { mode?: "example" | "live"; /** Live: open repeated fixes found without AI, and the drafts the first was made in. */ repeats?: { count: number; edits: number }; /** Development screens only: the offer's answer, drawn without the server. */ fixesPreview?: RepeatedFixesResult | "reading"; initial?: ShownRule[]; firstVisit?: boolean; reader?: (text: string) => Promise<NewRule | null>; networks?: string[]; accounts?: RuleAccount[]; inheritance?: Inheritance; /** Days the example note moves with the example week (demoShiftDays() from the page). */ demoShift?: number }) {
   const live = mode === "live";
   // Networks a shared rule was switched off for on this screen, ahead of the server's answer.
   const [except, setExcept] = useState<Record<string, string[]>>({});
-  const [rules, setRules] = useState<ShownRule[]>(live ? initial : firstVisit ? [] : EXAMPLE);
-  const [offer, setOffer] = useState<"open" | "kept" | "dismissed">(live || firstVisit ? "dismissed" : "open");
+  const [rules, setRules] = useState<ShownRule[]>(() => startingRules(live, firstVisit, initial));
+  const [offer, setOffer] = useState<"open" | "kept" | "dismissed">(() => (live || firstVisit ? "dismissed" : "open"));
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, start] = useTransition();
   // Kept once shown: keeping the rule clears the repeat on the server, and the confirmation stays on screen.
-  const [fixes] = useState(live && !!repeats?.count ? repeats : null);
+  const [fixes] = useState(() => (live && !!repeats?.count ? repeats : null));
   const shown = (live ? initial : rules).map((r) => (except[r.id] ? { ...r, except: except[r.id] } : r));
   // The starting rule Queue Pilot gave the account is checked like any rule, but it is not one of the person's own: with
   // only it, the page still invites them to find their first rules.
@@ -138,7 +300,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   const focusAdd = () => { const f = document.getElementById("add-rule"); f?.scrollIntoView({ behavior: "smooth", block: "center" }); f?.querySelector<HTMLElement>("textarea, input")?.focus({ preventScroll: true }); };
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("do") === "add-rule") { window.history.replaceState(null, "", window.location.pathname); focusAdd(); }
-    const on = (e: Event) => { if ((e as CustomEvent).detail === "add-rule") focusAdd(); };
+    const on = (e: Event) => { if (e instanceof CustomEvent && e.detail === "add-rule") focusAdd(); };
     window.addEventListener(PAGE_ACTION_EVENT, on);
     return () => window.removeEventListener(PAGE_ACTION_EVENT, on);
   }, []);
@@ -160,7 +322,7 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   };
   const add = async (rule: NewRule, raw: Record<string, unknown>): Promise<string | null> => {
     if (!live) {
-      setRules((rs) => [...rs, { ...rule, id: `x${rs.length + 1}`, origin: "Added by you" } as ShownRule]);
+      setRules((rs) => [...rs, { ...rule, id: `x${rs.length + 1}`, origin: "Added by you" }]);
       toast({ type: "success", title: "Rule added", description: "On this example page only." });
       return null;
     }
@@ -172,87 +334,24 @@ export function PlaybookView({ mode = "example", initial = EXAMPLE, firstVisit =
   return (
     <div className={styles.page}>
       <header className={styles.head}>
-        <h1 className={styles.title}>{live ? (shown.length ? <>Playbook <span className={styles.count}>{shown.length} rule{shown.length === 1 ? "" : "s"}</span></> : "Your playbook") : shown.length ? `Alex's playbook: ${shown.length} rule${shown.length === 1 ? "" : "s"} across 4 accounts` : "Alex's first visit"}</h1>
-        <p className={styles.sub}>
-          {!live && firstVisit && !shown.length
-            ? "No rules yet. Queue Pilot checks each draft against your rules before saving it in Buffer, so the first ones come from what you already posted."
-            : live && !shown.length
-            ? "No rules yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike."
-            : startingOnly
-            ? `No rules of your own yet. Start from your past posts, add one below, or keep a fix you made twice when Queue Pilot offers it. ${STARTING_RULE_LINE}`
-            : accounts.length ? "Pick an account to see what applies there. What you changed for it comes first." : `Queue Pilot checks each draft against these rules before saving it in Buffer, for ChatGPT, Claude and Grok alike.${live || firstVisit ? "" : " Each came from a fix Alex made more than once."}`}
-        </p>
+        <PlaybookTitle live={live} count={shown.length} />
+        <p className={styles.sub}>{introLine({ live, firstVisit, count: shown.length, startingOnly, routed: accounts.length > 0 })}</p>
       </header>
 
       {fixes && <RepeatedFixes repeats={fixes.count} edits={fixes.edits} preview={fixesPreview} />}
-      {live && !own.length && <FirstRulesFinder open />}
-      {!live && firstVisit && <FirstRulesFinder open onExampleKeep={(o) => setRules((rs) => [...rs, { id: o.key, kind: "guidance", channels: o.channels, level: "warn", text: o.text, origin: o.proof.kind === "note" ? "From a note on your post" : `Followed in ${o.proof.followed} of your ${o.proof.of} posts` } as ShownRule])} />}
+      <FirstFinder live={live} hasOwn={own.length > 0} firstVisit={firstVisit} onExampleKeep={(o) => setRules((rs) => [...rs, ruleFromOffer(o)])} />
 
-      {offer === "open" && (
-        <SameFixOffer content={EXAMPLE_SAME_FIX} onKeep={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }} onDismiss={() => setOffer("dismissed")} />
-      )}
-      {offer === "kept" && <p className={styles.done} role="status">Kept. Instagram drafts now start with the result.</p>}
+      <ExampleOffer offer={offer} onKeep={() => { setRules((rs) => [...rs, OFFERED]); setOffer("kept"); }} onDismiss={() => setOffer("dismissed")} />
       {(live || !firstVisit) && <TeamNotesFinder example={!live} shift={demoShift} onExampleKeep={() => setRules((rs) => { const rule = exampleNoteRule(demoShift); return rs.some((r) => r.id === rule.id) ? rs : [...rs, rule]; })} />}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
 
-      {accounts.length > 0 && <RuleRouting rules={shown} accounts={accounts} inheritance={inheritance} onDelete={(r) => remove(r.id)} onAdd={focusAdd} example={!live} />}
-      {networks.length > 1 && shown.length > 0 && !accounts.length && (
-        <p className={styles.muted} aria-label="Rules by network">
-          {networks.map((n) => `${NETWORKS[n] ?? n}: ${shown.filter((r) => appliesTo(r, n)).length} rule${shown.filter((r) => appliesTo(r, n)).length === 1 ? "" : "s"}`).join(" · ")}
-        </p>
-      )}
-      {!accounts.length && groups(shown, accounts).map(([name, rs]) => (
-        <section key={name} className={styles.block} aria-label={`${name} rules`}>
-          <h2 className={styles.h2}>{name}</h2>
-          <ul className={styles.rows}>
-            {rs.map((r) => {
-              const hold = ruleHold(r);
-              const evidence = reviewEvidence(r.learnedFrom);
-              return (
-                <li key={r.id} className={styles.row}>
-                  <span className={styles.text}>
-                    <strong>{r.text}</strong>
-                    <span className={styles.muted}>{HOLD_HINT[hold]}{evidence ? ". Kept from review feedback." : r.origin ? `. ${r.origin}.` : "."}</span>
-                    {evidence && <details><summary>Why this became a rule</summary><blockquote className={styles.quote}>{evidence.comment}</blockquote><p className={styles.muted}>{evidence.reason}</p></details>}
-                    {!live && r.channels === "all" && networks.length > 0 && (
-                      <span className={styles.nets} role="group" aria-label={`Networks for: ${r.text}`}>
-                        {networks.map((n) => {
-                          const on = appliesTo(r, n);
-                          return (
-                            <button key={n} type="button" className={styles.net} aria-pressed={on} disabled={pending} onClick={() => toggle(r, n)} title={on ? `On for ${NETWORKS[n] ?? n}. Switch it off there.` : `Off for ${NETWORKS[n] ?? n}. Switch it back on.`}>
-                              {NETWORKS[n] ?? n}{on ? "" : " off"}
-                            </button>
-                          );
-                        })}
-                      </span>
-                    )}
-                  </span>
-                  <span className={styles.rowEnd}>
-                    <Badge tone={HOLD_TONE[hold]} size="sm">{hold}</Badge>
-                    <ConfirmButton label="Delete" ariaLabel={`Delete rule: ${r.text}`} question="Delete this rule?" confirmLabel="Delete rule" onConfirm={() => remove(r.id)} />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ))}
+      <RuleList rules={shown} live={live} networks={networks} accounts={accounts} inheritance={inheritance} pending={pending} onToggle={toggle} onDelete={remove} onAdd={focusAdd} />
 
       {/* Adding sits right under the rules it adds to; finding and trying rules come after. */}
       <div id="add-rule"><RuleForm accounts={accounts} onAdd={add} read={reader ?? (live ? readRule : undefined)} /></div>
-      {live && own.length > 0 && <FirstRulesFinder />}
-      {live && <RewriteFinder />}
-      {!firstVisit && <RuleTester live={live} example={EXAMPLE_TRY} accounts={accounts} />}
+      <MoreFinders live={live} hasOwn={own.length > 0} firstVisit={firstVisit} accounts={accounts} />
 
-      <section className={styles.checksBlock} aria-labelledby="checks-title">
-        <h2 id="checks-title" className={styles.checksTitle}>Every draft is also checked for</h2>
-        <p className={styles.muted}>Your rules above are judged by meaning, in any language, by a model. These four run on every draft too, before it is saved in Buffer.</p>
-        <ul className={styles.checks}>
-          {DRAFT_CHECKS.map((c) => (
-            <li key={c.name}><strong>{c.name}</strong><span className={styles.muted}>{c.note}</span></li>
-          ))}
-        </ul>
-      </section>
+      <ChecksBlock />
     </div>
   );
 }

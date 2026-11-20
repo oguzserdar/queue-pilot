@@ -5,6 +5,7 @@
  * On HTTP 429 a short Retry-After gets one retry; a long one (the daily window) fails at once with the reset time,
  * so a page never stalls waiting for a window that will not reopen in time.
  */
+import * as z from "zod";
 import { releaseRequest, reserveRequest } from "./budget";
 import { windowKey } from "./rate-limit-window";
 
@@ -73,13 +74,27 @@ export function retryAfterMs(header: string | null, now: number): number {
 
 /** Buffer's own error text from a failed response body, when there is one. */
 async function errorDetail(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { errors?: { message?: string }[]; error?: string };
-    const messages = body.errors?.map((e) => e.message).filter(Boolean) ?? [];
-    return messages.length ? messages.join("; ") : body.error ?? "";
-  } catch {
-    return "";
-  }
+  const body = ErrorBody.safeParse(await res.json().catch(() => null));
+  if (!body.success) return "";
+  const messages = body.data.errors?.map((e) => e.message).filter(Boolean) ?? [];
+  return messages.length ? messages.join("; ") : body.data.error ?? "";
+}
+
+// A failed response's body, checked instead of trusted: a body that is not JSON or not this shape gives no detail.
+const ErrorBody = z.object({
+  errors: z.array(z.object({ message: z.string().optional().catch(undefined) })).optional(),
+  error: z.string().optional().catch(undefined),
+});
+
+/** A GraphQL answer. `data` is typed by the caller's query; Buffer's schema, not this client, decides its shape. */
+type GraphqlAnswer<T> = { data?: T; errors?: { message: string; extensions?: { code?: string } }[] };
+
+/** The data of a 200 answer, or Buffer's own errors as a BufferApiError. */
+async function readData<T>(res: Response): Promise<T> {
+  const json: GraphqlAnswer<T> = await res.json();
+  if (json.errors?.length) throw new BufferApiError(json.errors.map((e) => e.message).join("; "), 200, json.errors.find((e) => e.extensions?.code)?.extensions?.code);
+  if (!json.data) throw new BufferApiError("Buffer API returned no data", 200);
+  return json.data;
 }
 
 type Fetch = typeof fetch;
@@ -129,10 +144,7 @@ export async function bufferQuery<T>(token: string, query: string, variables?: R
       const detail = await errorDetail(res);
       throw new BufferApiError(`Buffer API returned ${res.status}${detail ? `: ${detail}` : ""}`, res.status);
     }
-    const json = (await res.json()) as { data?: T; errors?: { message: string; extensions?: { code?: string } }[] };
-    if (json.errors?.length) throw new BufferApiError(json.errors.map((e) => e.message).join("; "), 200, json.errors.find((e) => e.extensions?.code)?.extensions?.code);
-    if (!json.data) throw new BufferApiError("Buffer API returned no data", 200);
-    return json.data;
+    return readData<T>(res);
   }
   throw new BufferApiError("Buffer request failed after retrying", 429);
 }

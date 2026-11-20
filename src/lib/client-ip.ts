@@ -70,7 +70,7 @@ function trustedRanges(env: Env): [ipaddr.IPv4 | ipaddr.IPv6, number][] | null {
   return ranges;
 }
 
-const inRange = (ip: ipaddr.IPv4 | ipaddr.IPv6, [net, bits]: [ipaddr.IPv4 | ipaddr.IPv6, number]) => ip.kind() === net.kind() && ip.match(net as never, bits);
+const inRange = (ip: ipaddr.IPv4 | ipaddr.IPv6, [net, bits]: [ipaddr.IPv4 | ipaddr.IPv6, number]) => ip.kind() === net.kind() && ip.match(net, bits);
 
 /**
  * The caller's address for rate limiting, decided from X-Forwarded-For only.

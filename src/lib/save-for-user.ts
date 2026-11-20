@@ -31,10 +31,13 @@ export type Flag = { slotId: string; rule: string; verdict: "fail" | "unsure"; r
 
 export type Judge = (drafts: JudgeInput[], rules: Rule[]) => Promise<Map<string, Verdict[]>>;
 
+/** What the playbook check needs to know of a slot: its network and its account (unknown for a single edit). */
+export type SlotFacts = Pick<OpenSlot, "id" | "service"> & { channelId?: string };
+
 /** Splits drafts by the playbook: refused (a "do not save" rule fails), and the rest with their verdicts. */
 export async function applyPlaybook(
   drafts: DraftInput[],
-  open: OpenSlot[],
+  open: SlotFacts[],
   rules: Rule[] | null,
   judge: Judge | null,
   /** Why no model could judge, when the reason is the daily AI cap rather than a missing key. */
@@ -94,7 +97,7 @@ async function judgeFor(userId: string) {
 
 /** Flags for saved drafts: "flag it" rules that fail and any rule the model was unsure about. */
 export const flagsFor = (saved: { slotId: string }[], verdicts: Map<string, Verdict[]>): Flag[] =>
-  saved.flatMap((s) => (verdicts.get(s.slotId) ?? []).filter((v) => v.verdict !== "pass").map((v) => ({ slotId: s.slotId, rule: v.rule, verdict: v.verdict as "fail" | "unsure", reason: v.reason, quote: v.quote })));
+  saved.flatMap((s) => (verdicts.get(s.slotId) ?? []).flatMap((v) => (v.verdict === "pass" ? [] : [{ slotId: s.slotId, rule: v.rule, verdict: v.verdict, reason: v.reason, quote: v.quote }])));
 
 const warn = (event: string) => (e: unknown) => console.warn(JSON.stringify({ event, message: e instanceof Error ? e.message : String(e) }));
 
@@ -116,45 +119,12 @@ export async function saveDraftsForUser(
   /** The AI an enclosing action already took; the check then judges with it instead of taking another action. */
   within?: JudgeModel,
 ): Promise<SaveResult & { flags: Flag[]; check: PlaybookCheck; judgedWith?: string }> {
-  const evidenceWarnings: Flag[] = [];
-  const evidenceSources = new Map<string, string[]>();
-  const unresolved = new Set<string>();
-  // Drafts that name no snapshot and no material key.
-  const uncited = new Set<string>();
-  const resolved = new Map<string, Awaited<ReturnType<typeof resolveSource>>>();
-  for (const draft of input.drafts) {
-    if (draft.snapshotId) {
-      // An explicit foreign snapshot is never silently accepted.
-      const snapshot = await sourceById(userId, draft.snapshotId);
-      if (!snapshot) throw new Error("The source is not in this account.");
-      evidenceSources.set(draft.slotId, [snapshot.id ?? draft.snapshotId]);
-    } else {
-      const keys = draft.sourceKey ? [draft.sourceKey] : input.sourceKeys ?? [];
-      const ids: string[] = [];
-      for (const key of keys) {
-        if (!resolved.has(key)) resolved.set(key, await resolveSource(userId, key).catch(() => null));
-        const snapshot = resolved.get(key);
-        if (snapshot) ids.push(snapshot.id); else unresolved.add(draft.slotId);
-      }
-      evidenceSources.set(draft.slotId, [...new Set(ids)]);
-      if (keys.length) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "Source citation needs review before approving. The draft can still be saved.", quote: "" });
-      else if (!input.byHand) uncited.add(draft.slotId);
-    }
-    for (const id of evidenceSources.get(draft.slotId) ?? []) {
-      const snapshot = await sourceById(userId, id);
-      if (!snapshot) { unresolved.add(draft.slotId); continue; }
-      if (!draft.evidence?.length || !draft.snapshotId) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "No source quote supplied. Check evidence before approving.", quote: "" });
-      for (const e of draft.evidence ?? []) {
-        const problem = evidenceProblem(draft.text, snapshot.text, e, snapshot.metadata);
-        if (problem) evidenceWarnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: `${problem} Repair the saved draft's evidence with update_draft; do not save a duplicate.`, quote: "" });
-      }
-    }
-  }
+  const ev = await gatherEvidence(userId, input);
   const rules = await postgresRulesStore().list(userId).catch((e) => {
     console.error(JSON.stringify({ event: "qp-rules-read-failed", message: e instanceof Error ? e.message : String(e) }));
     return null;
   });
-  const { jm, cappedReason } = !rules?.length ? { jm: null, cappedReason: null } : within ? { jm: within, cappedReason: null } : await judgeFor(userId);
+  const { jm, cappedReason } = await judgeToUse(userId, rules, within);
   // Only drafts for real open slots are judged: the rest are refused by saveDrafts anyway, and judging them would spend
   // the AI budget on drafts that can never be saved.
   const open = new Set(input.open.map((o) => o.id));
@@ -163,41 +133,123 @@ export async function saveDraftsForUser(
   const gate = await applyPlaybook(known, input.open, rules, jm ? (d, r) => judgeDrafts(jm.judges, d, r) : null, cappedReason).finally(() => (within ? undefined : jm?.settle()));
   const toSave = [...gate.keep, ...unknown];
   const res = toSave.length ? await saveDrafts(accessToken, { title: input.title, drafts: toSave, open: input.open }) : { saved: [], refused: [], requests: 0 };
-  if (res.saved.length) {
-    const filled = res.saved.flatMap((x) => {
-      const slot = parseSlotId(x.slotId)
-      return slot ? [{ ...slot, postId: x.postId, text: x.text }] : []
-    })
-    try {
-      await postgresSnapshotStore().patch(userId, (s) => withSavedDrafts(s, filled), new Date());
-    } catch (e) {
-      warn("qp-snapshot-mark-drafts-failed")(e);
-    }
-    // What Queue Pilot wrote and how it was judged, so later edits can be read back and the week shows the verdicts.
-    const wrote = res.saved
-      .filter((x): x is typeof x & { postId: string } => x.postId !== null)
-      .map((x) => ({ postId: x.postId, network: x.network, text: x.text, playbookRevision: rules ? playbookVersion(rules) : null, verdicts: gate.check === "judged" ? (gate.verdicts.get(x.slotId) ?? []) : null }));
-    const missingEvidence = new Set<string>();
-    for (const saved of res.saved) {
-      const draft = input.drafts.find(d => d.slotId === saved.slotId);
-      if (!saved.postId || !draft) continue;
-      if (unresolved.has(saved.slotId)) missingEvidence.add(saved.postId);
-      // Legacy batch source keys are ambiguous: record each as unchecked, never invent a citation.
-      for (const snapshotId of evidenceSources.get(saved.slotId) ?? []) {
-        const evidence = draft.snapshotId && draft.evidence?.length ? draft.evidence : [{ claim: draft.text.slice(0, 500), quote: "[No source quote supplied]" }];
-        await recordEvidence(userId, saved.postId, saved.text, snapshotId, evidence).catch(() => {
-          missingEvidence.add(saved.postId!);
-          evidenceWarnings.push({ slotId: saved.slotId, rule: "Source evidence", verdict: "unsure", reason: "Draft saved, but its evidence could not be recorded. Do not retry saving the draft.", quote: "" });
-        });
-      }
-    }
-    // If evidence bookkeeping failed, do not create an ownership record that would allow QP approval.
-    await postgresWrittenStore().record(userId, wrote.filter(w => !missingEvidence.has(w.postId))).catch(warn("qp-record-written-failed"));
-    if (input.sourceKeys?.length) await postgresSourceStore().markUsed(userId, input.sourceKeys).catch(warn("qp-mark-used-failed"));
-  }
+  if (res.saved.length) await recordSaved(userId, input, res.saved, ev, rules, gate);
   // Only a draft that was saved is flagged for having no source; a refused one already has its reason.
-  const noSource: Flag[] = res.saved.filter((x) => uncited.has(x.slotId)).map((x) => ({ slotId: x.slotId, rule: "Source evidence", verdict: "unsure", reason: NO_SOURCE_REASON, quote: "" }));
-  return { saved: res.saved, refused: [...gate.refused, ...res.refused], requests: res.requests, flags: [...flagsFor(res.saved, gate.verdicts), ...evidenceWarnings, ...noSource], check: gate.check, judgedWith: jm?.source };
+  const noSource: Flag[] = res.saved.filter((x) => ev.uncited.has(x.slotId)).map((x) => ({ slotId: x.slotId, rule: "Source evidence", verdict: "unsure", reason: NO_SOURCE_REASON, quote: "" }));
+  return { saved: res.saved, refused: [...gate.refused, ...res.refused], requests: res.requests, flags: [...flagsFor(res.saved, gate.verdicts), ...ev.warnings, ...noSource], check: gate.check, judgedWith: jm?.source };
+}
+
+type SaveInput = { title: string; drafts: WrittenDraft[]; open: OpenSlot[]; sourceKeys?: string[]; byHand?: boolean };
+
+/** The sources each draft cites and what is wrong with its evidence, found before anything is saved. */
+type Evidence = {
+  /** Flags to show the person; bookkeeping after the save adds to them. */
+  warnings: Flag[];
+  /** The snapshot ids each draft's evidence is recorded against. */
+  sources: Map<string, string[]>;
+  /** Drafts whose cited source could not be found. */
+  unresolved: Set<string>;
+  /** Drafts that name no snapshot and no material key. */
+  uncited: Set<string>;
+};
+
+/** The model the playbook check judges with: none without rules, the enclosing action's when given, else the person's own. */
+async function judgeToUse(userId: string, rules: Rule[] | null, within: JudgeModel | undefined): Promise<{ jm: JudgeModel | null; cappedReason: string | null }> {
+  if (!rules?.length) return { jm: null, cappedReason: null };
+  if (within) return { jm: within, cappedReason: null };
+  return judgeFor(userId);
+}
+
+/**
+ * Resolves each draft's sources and checks its quotes against them.
+ *
+ * @throws Error if a draft names a source snapshot that is not in this account
+ */
+async function gatherEvidence(userId: string, input: SaveInput): Promise<Evidence> {
+  const ev: Evidence = { warnings: [], sources: new Map(), unresolved: new Set(), uncited: new Set() };
+  const resolved = new Map<string, Awaited<ReturnType<typeof resolveSource>>>();
+  for (const draft of input.drafts) {
+    if (draft.snapshotId) {
+      // An explicit foreign snapshot is never silently accepted.
+      const snapshot = await sourceById(userId, draft.snapshotId);
+      if (!snapshot) throw new Error("The source is not in this account.");
+      ev.sources.set(draft.slotId, [snapshot.id ?? draft.snapshotId]);
+    } else {
+      await resolveKeys(userId, draft, input, resolved, ev);
+    }
+    await checkQuotes(userId, draft, ev);
+  }
+  return ev;
+}
+
+/** A draft without a snapshot: its material key, or the batch's keys, resolved to snapshots. */
+async function resolveKeys(userId: string, draft: WrittenDraft, input: SaveInput, resolved: Map<string, Awaited<ReturnType<typeof resolveSource>>>, ev: Evidence): Promise<void> {
+  const keys = draft.sourceKey ? [draft.sourceKey] : input.sourceKeys ?? [];
+  const ids: string[] = [];
+  for (const key of keys) {
+    if (!resolved.has(key)) resolved.set(key, await resolveSource(userId, key).catch(() => null));
+    const snapshot = resolved.get(key);
+    if (snapshot) ids.push(snapshot.id); else ev.unresolved.add(draft.slotId);
+  }
+  ev.sources.set(draft.slotId, [...new Set(ids)]);
+  if (keys.length) ev.warnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "Source citation needs review before approving. The draft can still be saved.", quote: "" });
+  else if (!input.byHand) ev.uncited.add(draft.slotId);
+}
+
+/** Checks each quote a draft gives against the sources it cites. */
+async function checkQuotes(userId: string, draft: WrittenDraft, ev: Evidence): Promise<void> {
+  for (const id of ev.sources.get(draft.slotId) ?? []) {
+    const snapshot = await sourceById(userId, id);
+    if (!snapshot) { ev.unresolved.add(draft.slotId); continue; }
+    if (!draft.evidence?.length || !draft.snapshotId) ev.warnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: "No source quote supplied. Check evidence before approving.", quote: "" });
+    for (const e of draft.evidence ?? []) {
+      const problem = evidenceProblem(draft.text, snapshot.text, e, snapshot.metadata);
+      if (problem) ev.warnings.push({ slotId: draft.slotId, rule: "Source evidence", verdict: "unsure", reason: `${problem} Repair the saved draft's evidence with update_draft; do not save a duplicate.`, quote: "" });
+    }
+  }
+}
+
+type Saved = SaveResult["saved"];
+
+/** Bookkeeping after Buffer accepted the drafts: never an error, so a caller does not retry a save that happened. */
+async function recordSaved(userId: string, input: SaveInput, saved: Saved, ev: Evidence, rules: Rule[] | null, gate: Awaited<ReturnType<typeof applyPlaybook>>): Promise<void> {
+  const filled = saved.flatMap((x) => {
+    const slot = parseSlotId(x.slotId)
+    return slot ? [{ ...slot, postId: x.postId, text: x.text }] : []
+  })
+  try {
+    await postgresSnapshotStore().patch(userId, (s) => withSavedDrafts(s, filled), new Date());
+  } catch (e) {
+    warn("qp-snapshot-mark-drafts-failed")(e);
+  }
+  // What Queue Pilot wrote and how it was judged, so later edits can be read back and the week shows the verdicts.
+  const wrote = saved
+    .filter((x): x is typeof x & { postId: string } => x.postId !== null)
+    .map((x) => ({ postId: x.postId, network: x.network, text: x.text, playbookRevision: rules ? playbookVersion(rules) : null, verdicts: gate.check === "judged" ? (gate.verdicts.get(x.slotId) ?? []) : null }));
+  const missingEvidence = await recordEvidenceFor(userId, input, saved, ev);
+  // If evidence bookkeeping failed, do not create an ownership record that would allow QP approval.
+  await postgresWrittenStore().record(userId, wrote.filter(w => !missingEvidence.has(w.postId))).catch(warn("qp-record-written-failed"));
+  if (input.sourceKeys?.length) await postgresSourceStore().markUsed(userId, input.sourceKeys).catch(warn("qp-mark-used-failed"));
+}
+
+/** Records each saved draft's evidence; returns the post ids whose evidence is missing or could not be recorded. */
+async function recordEvidenceFor(userId: string, input: SaveInput, saved: Saved, ev: Evidence): Promise<Set<string>> {
+  const missingEvidence = new Set<string>();
+  for (const one of saved) {
+    const draft = input.drafts.find(d => d.slotId === one.slotId);
+    const postId = one.postId;
+    if (!postId || !draft) continue;
+    if (ev.unresolved.has(one.slotId)) missingEvidence.add(postId);
+    // Legacy batch source keys are ambiguous: record each as unchecked, never invent a citation.
+    for (const snapshotId of ev.sources.get(one.slotId) ?? []) {
+      const evidence = draft.snapshotId && draft.evidence?.length ? draft.evidence : [{ claim: draft.text.slice(0, 500), quote: "[No source quote supplied]" }];
+      await recordEvidence(userId, postId, one.text, snapshotId, evidence).catch(() => {
+        missingEvidence.add(postId);
+        ev.warnings.push({ slotId: one.slotId, rule: "Source evidence", verdict: "unsure", reason: "Draft saved, but its evidence could not be recorded. Do not retry saving the draft.", quote: "" });
+      });
+    }
+  }
+  return missingEvidence;
 }
 
 /** What to tell the person about how their playbook was applied; undefined when it was judged or there are no rules. */
@@ -208,6 +260,18 @@ export function checkNote(check: PlaybookCheck): string | undefined {
   return undefined;
 }
 
+/** The verdicts kept for an edit: the judged ones; none to keep when there are no rules; null when it was not judged. */
+function editVerdicts(gate: Awaited<ReturnType<typeof applyPlaybook>>, rules: Rule[] | null): Verdict[] | null {
+  if (gate.check === "judged") return gate.verdicts.get("edit") ?? [];
+  return rules?.length === 0 ? [] : null;
+}
+
+/** The verdicts recorded for a rechecked draft: the judged ones, none with no rules, null when it was not judged. */
+function recheckVerdicts(gate: Awaited<ReturnType<typeof applyPlaybook>>, postId: string, rules: Rule[]): Verdict[] | null {
+  if (gate.check === "judged") return gate.verdicts.get(postId) ?? [];
+  return rules.length ? null : [];
+}
+
 /**
  * The playbook check for one changed draft (update_draft), so a draft cannot be saved clean and then edited past a
  * "do not save" rule. Returns the refusal reason, or null when the text may be saved, with how it was checked.
@@ -215,9 +279,9 @@ export function checkNote(check: PlaybookCheck): string | undefined {
 export async function judgeEdit(userId: string, text: string, network: string, channelId?: string): Promise<{ refusal: string | null; check: PlaybookCheck; verdicts: Verdict[] | null; playbookRevision: string | null }> {
   const rules = await postgresRulesStore().list(userId).catch(() => null);
   const { jm, cappedReason } = rules?.length ? await judgeFor(userId) : { jm: null, cappedReason: null };
-  const slot = { id: "edit", service: network, channelId } as OpenSlot;
+  const slot: SlotFacts = channelId === undefined ? { id: "edit", service: network } : { id: "edit", service: network, channelId };
   const gate = await applyPlaybook([{ slotId: "edit", text }], [slot], rules, jm ? (d, r) => judgeDrafts(jm.judges, d, r) : null, cappedReason).finally(() => jm?.settle());
-  return { refusal: gate.refused[0]?.reason ?? null, check: gate.check, verdicts: gate.check === "judged" ? (gate.verdicts.get("edit") ?? []) : rules?.length === 0 ? [] : null, playbookRevision: rules ? playbookVersion(rules) : null };
+  return { refusal: gate.refused[0]?.reason ?? null, check: gate.check, verdicts: editVerdicts(gate, rules), playbookRevision: rules ? playbookVersion(rules) : null };
 }
 
 /**
@@ -230,10 +294,10 @@ export async function recheckDrafts(userId: string, drafts: { postId: string; te
   if (rules === null) return { ok: false, message: "Your playbook could not be read just now. Try again." };
   const { jm, cappedReason } = rules.length ? await judgeFor(userId) : { jm: null, cappedReason: null };
   if (rules.length && !jm) return { ok: false, message: cappedReason ?? "AI is unavailable. Check the allowance or your own key in Settings." };
-  const slots = drafts.map((d) => ({ id: d.postId, service: d.network, channelId: d.channelId }) as OpenSlot);
+  const slots = drafts.map((d): SlotFacts => ({ id: d.postId, service: d.network, channelId: d.channelId }));
   const gate = await applyPlaybook(drafts.map((d) => ({ slotId: d.postId, text: d.text })), slots, rules, jm ? (x, r) => judgeDrafts(jm.judges, x, r) : null, cappedReason).finally(() => jm?.settle());
   if (gate.check === "failed") return { ok: false, message: "The check could not run just now. Try again." };
   // A check is recorded beside what Queue Pilot wrote, never over it: the person's edit must stay visible as an edit.
-  await postgresWrittenStore().recordCheck(userId, drafts.map((d) => ({ postId: d.postId, text: d.text, playbookRevision: playbookVersion(rules), verdicts: gate.check === "judged" ? (gate.verdicts.get(d.postId) ?? []) : rules.length ? null : [] })));
+  await postgresWrittenStore().recordCheck(userId, drafts.map((d) => ({ postId: d.postId, text: d.text, playbookRevision: playbookVersion(rules), verdicts: recheckVerdicts(gate, d.postId, rules) })));
   return { ok: true, checked: drafts.length };
 }

@@ -16,6 +16,12 @@ function Gauge({ label, value, unit, left, total, note }: { label: string; value
   );
 }
 
+/** Everyone's actions today on /admin: a gauge of what is left under a daily cap, or the plain count without one. */
+function EveryoneToday({ today, totalCap, perPerson, resetsAt }: { today: number; totalCap: number | null; perPerson: number; resetsAt: string }) {
+  if (totalCap) return <Gauge label="Actions today, everyone" value={String(Math.max(0, totalCap - today))} unit={`of ${totalCap} left`} left={Math.max(0, totalCap - today)} total={totalCap} note={`${today} used. Each person can use ${perPerson} a day. Starts again at ${resetsAt}.`} />;
+  return <div className={styles.gauge}><div className={styles.label}>Actions today, everyone</div><div className={styles.big}>{today} <span className={styles.unit}>used</span></div><div className={styles.note}>No daily cap for everyone. Each person can use {perPerson} a day. Starts again at {resetsAt}.</div></div>;
+}
+
 /**
  * Built-in AI usage, the same block on Settings (one person) and /admin (everyone): what is left today and what is
  * left of the shared budget. Numbers are live text, never part of a picture.
@@ -29,9 +35,7 @@ export function AiUsage(props:
     <div className={styles.meters}>
       {props.view === "person"
         ? <Gauge label="Your actions today" value={String(Math.max(0, props.cap - props.used))} unit={`of ${props.cap} left`} left={Math.max(0, props.cap - props.used)} total={props.cap} note={`Starts again at ${props.resetsAt} your time`} />
-        : props.totalCap
-          ? <Gauge label="Actions today, everyone" value={String(Math.max(0, props.totalCap - props.today))} unit={`of ${props.totalCap} left`} left={Math.max(0, props.totalCap - props.today)} total={props.totalCap} note={`${props.today} used. Each person can use ${props.perPerson} a day. Starts again at ${props.resetsAt}.`} />
-          : <div className={styles.gauge}><div className={styles.label}>Actions today, everyone</div><div className={styles.big}>{props.today} <span className={styles.unit}>used</span></div><div className={styles.note}>No daily cap for everyone. Each person can use {props.perPerson} a day. Starts again at {props.resetsAt}.</div></div>}
+        : <EveryoneToday today={props.today} totalCap={props.totalCap} perPerson={props.perPerson} resetsAt={props.resetsAt} />}
       {budget}
     </div>
   );

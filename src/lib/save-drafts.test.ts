@@ -4,11 +4,11 @@ import { MAX_LIMIT_CHECKS, groupByChannel, saveDrafts } from "./save-drafts";
 import { BufferRateLimitedError } from "./buffer/client";
 import { BufferAllowanceLowError } from "./buffer/budget";
 
+const NETWORKS: Record<string, { channel: string; service: string }> = { x: { channel: "X", service: "twitter" }, li: { channel: "LinkedIn", service: "linkedin" } };
 const slot = (channelId: string, at: string, over: Partial<OpenSlot> = {}): OpenSlot => ({
   id: `${channelId}@${at}`,
   channelId,
-  channel: channelId === "x" ? "X" : channelId === "li" ? "LinkedIn" : "Bluesky",
-  service: channelId === "x" ? "twitter" : channelId === "li" ? "linkedin" : "bluesky",
+  ...(NETWORKS[channelId] ?? { channel: "Bluesky", service: "bluesky" }),
   organizationId: "org1",
   at,
   local: at,
@@ -31,7 +31,7 @@ describe("saveDrafts", () => {
   it("saves every post as a Buffer draft marked as AI-assisted, never scheduled", async () => {
     const { q, calls } = fakeBuffer(ok);
     await saveDrafts("t", { title: "v1.4", drafts: [{ slotId: open[0].id, text: "CSV export is live" }], open }, q);
-    const post = calls[0].variables.input.posts[0];
+    const post = calls[0].variables.input!.posts![0];
     expect(post).toMatchObject({ channelId: "x", dueAt: MON, saveToDraft: true, aiAssisted: true, mode: "customScheduled" });
   });
 
@@ -44,7 +44,7 @@ describe("saveDrafts", () => {
     expect(calls).toHaveLength(2);
     // Plus one request for the limit checks: Monday and Tuesday, one alias each.
     expect(res.requests).toBe(3);
-    expect(calls[0].variables.input.posts.map((p: any) => p.channelId)).toEqual(["x", "li", "bs"]);
+    expect(calls[0].variables.input!.posts!.map((p: { channelId: string }) => p.channelId)).toEqual(["x", "li", "bs"]);
   });
 
   it("refuses a slot that is no longer open instead of double-booking it", async () => {
@@ -91,13 +91,12 @@ describe("saveDrafts", () => {
   });
 
   it("when Buffer refuses a group, retries its posts one by one so only the bad one is refused", async () => {
-    const { q, calls } = fakeBuffer((call) =>
-      call.query.includes("createContentItem")
-        ? { createContentItem: { __typename: "CreateContentItemFailure", message: "Instagram posts need an image." } }
-        : call.variables.input.channelId === "li"
-          ? { createPost: { __typename: "MutationError", message: "LinkedIn refused this one." } }
-          : { createPost: { __typename: "PostActionSuccess", post: { id: "p" } } },
-    );
+    const { q, calls } = fakeBuffer((call) => {
+      if (call.query.includes("createContentItem")) return { createContentItem: { __typename: "CreateContentItemFailure", message: "Instagram posts need an image." } };
+      return call.variables.input!.channelId === "li"
+        ? { createPost: { __typename: "MutationError", message: "LinkedIn refused this one." } }
+        : { createPost: { __typename: "PostActionSuccess", post: { id: "p" } } };
+    });
     const res = await saveDrafts("t", { title: "t", drafts: [{ slotId: open[0].id, text: "a" }, { slotId: open[1].id, text: "b" }], open }, q);
     expect(res.saved.map((x) => x.slotId)).toEqual([open[0].id]);
     expect(res.refused).toEqual([{ slotId: open[1].id, reason: "LinkedIn refused this one." }]);
@@ -147,12 +146,12 @@ describe("daily posting limits", () => {
 
   it("refuses a slot whose channel is at its limit, with Buffer's numbers, and saves the rest", async () => {
     const { q, calls } = fakeBuffer(ok, (c) => ({
-      dailyPostingLimits: c.variables.input.channelIds.map((channelId: string) => ({ channelId, isAtLimit: channelId === "x" && c.variables.input.date === MON, limit: 17, scheduled: 15, sent: 2 })),
+      dailyPostingLimits: c.variables.input!.channelIds!.map((channelId: string) => ({ channelId, isAtLimit: channelId === "x" && c.variables.input!.date === MON, limit: 17, scheduled: 15, sent: 2 })),
     }));
     const res = await saveDrafts("t", { title: "w", drafts: open.map((x) => ({ slotId: x.id, text: "hi" })), open }, q);
     expect(res.refused).toEqual([{ slotId: `x@${MON}`, reason: "X is at its daily posting limit in Buffer for that time (17 of 17 posts). Pick another slot." }]);
     expect(res.saved).toHaveLength(3);
-    expect(calls.flatMap((c) => c.variables.input.posts.map((p: any) => `${p.channelId}@${p.dueAt}`))).not.toContain(`x@${MON}`);
+    expect(calls.flatMap((c) => c.variables.input!.posts!.map((p: { channelId: string; dueAt?: string }) => `${p.channelId}@${p.dueAt}`))).not.toContain(`x@${MON}`);
   });
 
   it("does not block saving when the check itself fails", async () => {
@@ -181,7 +180,7 @@ describe("saveDrafts checks platform facts only", () => {
 describe("saveDrafts reports what it wrote", () => {
   it("returns each saved draft's Buffer post id, network and exact text, so edits can be read back later", async () => {
     const { q } = fakeBuffer((call) => ({
-      createContentItem: { __typename: "CreateContentItemSuccess", content: { id: "ci", body: { __typename: "PostContent", posts: call.variables.input.posts.map((p: { channelId: string }, i: number) => ({ id: `post-${i}`, channelId: p.channelId })) } } },
+      createContentItem: { __typename: "CreateContentItemSuccess", content: { id: "ci", body: { __typename: "PostContent", posts: call.variables.input!.posts!.map((p: { channelId: string }, i: number) => ({ id: `post-${i}`, channelId: p.channelId })) } } },
     }));
     const res = await saveDrafts("t", { title: "v1.4", drafts: [{ slotId: open[0].id, text: "CSV export is live" }, { slotId: open[1].id, text: "CSV export, now live" }], open }, q);
     expect(res.saved).toEqual(expect.arrayContaining([
@@ -215,7 +214,7 @@ describe("saveDrafts when Buffer does not answer", () => {
     expect(r.saved).toMatchObject([{ slotId: open[0].id, postId: "p9" }]);
     expect(r.refused).toEqual([]);
     const readBack = calls.find((c) => c.query.includes("posts("))!;
-    expect(readBack.variables.input.filter).toMatchObject({ channelIds: ["x"] });
+    expect(readBack.variables.input!.filter).toMatchObject({ channelIds: ["x"] });
     expect(calls.filter((c) => !c.query.includes("posts("))).toHaveLength(1);
   });
 

@@ -18,7 +18,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
   if (!loaded) return <section><h1>Playbook unavailable</h1><p role="alert">Could not read the rules and their account settings. Refresh to try again.</p></section>;
   const [stored, inheritance] = loaded;
   // Where each rule came from, from its record; an older rule with no record says nothing rather than guess.
-  const rules: ShownRule[] = stored.map(({ fixes, ...r }) => ({ ...r, origin: ruleOrigin(r) ?? (fixes > 0 ? `From ${fixes} of your fixes` : undefined) }) as ShownRule);
+  const rules: ShownRule[] = stored.map(({ fixes, ...r }): ShownRule => ({ ...r, origin: ruleOrigin(r) ?? (fixes > 0 ? `From ${fixes} of your fixes` : undefined) }));
   // A fix repeated across drafts is found without AI, but only offered as a rule after a model calls it a lasting
   // preference: the offer at #fixes asks the model when the page opens. A failed read just leaves the offer out.
   const open = await waitingRepeats(userId).catch(() => []);

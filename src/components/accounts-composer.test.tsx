@@ -5,9 +5,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/(app)/library-actions", () => ({ readComposerTemplates: vi.fn(), readComposerSnippets: vi.fn() }));
-vi.mock("@/app/(app)/accounts-actions", () => ({ readComposerAccounts: vi.fn(), saveForAccounts: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("@/app/(app)/library-actions", () => ({ readComposerTemplates: vi.fn<typeof import("@/app/(app)/library-actions").readComposerTemplates>(), readComposerSnippets: vi.fn<typeof import("@/app/(app)/library-actions").readComposerSnippets>() }));
+vi.mock("@/app/(app)/accounts-actions", () => ({ readComposerAccounts: vi.fn<typeof import("@/app/(app)/accounts-actions").readComposerAccounts>(), saveForAccounts: vi.fn<typeof import("@/app/(app)/accounts-actions").saveForAccounts>() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["refresh"]>() }) }));
 
 const { insertInto, unfilledFor } = await import("./accounts-composer");
 const { ComposerLibrary } = await import("./composer-library");

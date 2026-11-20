@@ -28,7 +28,7 @@ function splitSource(source: ContextSource): ContextSource[] {
     return [{ text: source.text.slice(0, cut.at), segments: captions.slice(0, cut.index) }, { text: source.text.slice(cut.at), segments: captions.slice(cut.index) }];
   }
   // Prefer a sentence boundary, preserving every character. Fall back to a word boundary.
-  const boundaries = [...source.text.matchAll(/[.!?]\s+|\n+/g)].map(m => m.index! + m[0].length).filter(i => i > 0 && i < source.text.length);
+  const boundaries = [...source.text.matchAll(/[.!?]\s+|\n+/g)].flatMap(m => (m.index === undefined ? [] : [m.index + m[0].length])).filter(i => i > 0 && i < source.text.length);
   const cut = boundaries.sort((a, b) => Math.abs(a - midpoint) - Math.abs(b - midpoint))[0] ?? source.text.indexOf(" ", midpoint);
   if (cut <= 0 || cut >= source.text.length) throw new SourceContextError("The selected model cannot fit this source passage. Choose a model with a larger context window. No source text was discarded.");
   return [source.text.slice(0, cut), source.text.slice(cut)].map(text => ({ text, segments: source.segments?.filter(s => text.includes(s.text)) }));

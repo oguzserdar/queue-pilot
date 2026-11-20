@@ -15,10 +15,10 @@ const st = vi.hoisted(() => ({
   sent: [] as string[],
   store: null as unknown,
 }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn<typeof import("next/cache").revalidatePath>() }));
 vi.mock("@/lib/current-user", () => ({ signedInUserId: async () => st.user }));
 vi.mock("@/lib/rate-limit", () => ({ limit: async () => ({ ok: true }) }));
-vi.mock("@/lib/security-events", () => ({ recordAction: vi.fn() }));
+vi.mock("@/lib/security-events", () => ({ recordAction: vi.fn<typeof import("@/lib/security-events").recordAction>() }));
 vi.mock("@/lib/echo-run", () => ({ botTokens: async () => ({ telegram: "T", discord: "D" }) }));
 vi.mock("@/lib/echo-store", () => ({
   postgresEchoStore: () => ({
@@ -32,6 +32,19 @@ vi.mock("@/lib/discord", async (orig) => ({
   ...(await orig<typeof import("@/lib/discord")>()),
   channelsWithAccess: async (_t: string, guildId: string) => (guildId === "guild-u1" ? [{ id: "c1", name: "news", canPost: true }, { id: "c2", name: "staff", canPost: false }] : [{ id: "x9", name: "other", canPost: true }]),
 }));
+// Each person's Mastodon and Bluesky accounts: u1 owns m1 (Mastodon), b1 (Bluesky) and gone1 (refused sign-in).
+vi.mock("@/lib/social-accounts", () => {
+  const all = [
+    { userId: "u1", id: "m1", network: "mastodon", handle: "@ada@mastodon.example", server: "mastodon.example", credentials: {}, broken: false },
+    { userId: "u1", id: "b1", network: "bluesky", handle: "ada.bsky.social", server: "bsky.social", credentials: {}, broken: false },
+    { userId: "u1", id: "gone1", network: "mastodon", handle: "@old@mastodon.example", server: "mastodon.example", credentials: {}, broken: true },
+    { userId: "u2", id: "m2", network: "mastodon", handle: "@bob@mastodon.example", server: "mastodon.example", credentials: {}, broken: false },
+  ];
+  return {
+    readSocialAccount: async (userId: string, id: string) => all.find((a) => a.userId === userId && a.id === id) ?? null,
+    listSocialAccounts: async (userId: string) => all.filter((a) => a.userId === userId).map(({ id, network, handle, server, broken }) => ({ id, network, handle, server, broken, repliesOn: false, connectedAt: "" })),
+  };
+});
 vi.mock("@/lib/buffer/snapshot-store", () => ({ postgresSnapshotStore: () => ({ get: async () => ({ data: { posts: st.posts } }) }) }));
 // The page read is the store's recent list in one page here; paging itself is tested on Postgres.
 vi.mock("@/lib/direct-post-store", () => ({ postgresDirectPostStore: () => st.store, directPostPage: async (userId: string) => ({ rows: await (st.store as DirectPostDeps["store"]).recent(userId, 12), older: null, newer: null }) }));
@@ -66,7 +79,7 @@ describe("saveFollowUpAction", () => {
     const id = await followUpIdFor("u1", "bp1");
     await actions.saveFollowUpAction("bp1", { telegram: { text: "Edited" } });
     let rows = await (st.store as ReturnType<typeof memoryDirectPostStore>).rows("u1", id);
-    expect(rows.map((r) => [r.kind, r.status, r.text]).sort()).toEqual([["discord", "scheduled", "Hey"], ["telegram", "scheduled", "Edited"]]);
+    expect(rows.map((r) => [r.kind, r.status, r.text]).sort((a, b) => String(a[0]).localeCompare(String(b[0])))).toEqual([["discord", "scheduled", "Hey"], ["telegram", "scheduled", "Edited"]]);
     await actions.saveFollowUpAction("bp1", { discord: null });
     rows = await (st.store as ReturnType<typeof memoryDirectPostStore>).rows("u1", id);
     expect(rows.find((r) => r.kind === "discord")?.status).toBe("cancelled");
@@ -138,5 +151,32 @@ describe("another person's post", () => {
 
   it("answers a change with no change object with a message", async () => {
     expect((await actions.changeScheduledPostAction("x", null as never)).ok).toBe(false);
+  });
+});
+
+describe("posting to Mastodon and Bluesky accounts", () => {
+  it("lists the person's own accounts as places, leaving out one whose sign-in was refused", async () => {
+    const t = await actions.postTargets();
+    expect(t.accounts?.map((a) => a.id)).toEqual(["m1", "b1"]);
+    expect(t.accounts?.find((a) => a.id === "b1")?.limit).toBe(300);
+  });
+
+  it("sends to the person's own Mastodon and Bluesky accounts with no Buffer post behind it", async () => {
+    const r = await actions.sendPostAction({ key: "k-social-1", accounts: [{ id: "m1", text: "Out now." }, { id: "b1", text: "Out now." }] });
+    expect(r.ok).toBe(true);
+    expect(st.sent).toEqual(["mastodon", "bluesky"]);
+  });
+
+  it("control: refuses another person's account and sends nothing", async () => {
+    const r = await actions.sendPostAction({ key: "k-social-2", accounts: [{ id: "m2", text: "Hi" }] });
+    expect(r).toEqual({ ok: false, message: "That account is not connected to Queue Pilot. Connect it in Settings, Channels." });
+    expect(st.sent).toEqual([]);
+  });
+
+  it("refuses an account whose sign-in was refused, and text over Bluesky's 300", async () => {
+    expect((await actions.sendPostAction({ key: "k-social-3", accounts: [{ id: "gone1", text: "Hi" }] })).ok).toBe(false);
+    const long = await actions.sendPostAction({ key: "k-social-4", accounts: [{ id: "b1", text: "x".repeat(301) }] });
+    expect(long).toEqual({ ok: false, message: "The Bluesky message is 301 characters; Bluesky takes up to 300." });
+    expect(st.sent).toEqual([]);
   });
 });

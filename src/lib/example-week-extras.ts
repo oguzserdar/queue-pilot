@@ -46,10 +46,17 @@ const EVIDENCE: EvidenceCard[] = [
 /** The evidence cards, each last checked the evening the newsletter went out, moved by `shift` days. */
 export const exampleEvidenceFor = (shift: number): EvidenceCard[] => EVIDENCE.map((c) => ({ ...c, lastCheckedAt: c.lastCheckedAt && shiftIso(c.lastCheckedAt, storyShift(shift)) }));
 
+/** Sam's example note; it always carries its time, so a missing one is a broken example, not a case to draw. */
+function samNote(shift: number): { at: string; text: string } {
+  const { at, text } = exampleTeamNote(shift);
+  if (!at) throw new Error("The example team note has no time");
+  return { at, text };
+}
+
 const noteOn = (shift: number): Record<string, DraftNote[]> => ({
   // Newest first, as Buffer returns them. Sam's note is the one the Playbook turns into a LinkedIn rule (example-notes.ts).
   d1: [
-    { id: "n2", author: "Sam", avatar: null, createdAt: exampleTeamNote(shift).at!, edited: false, text: exampleTeamNote(shift).text, canEdit: false, canDelete: false },
+    { id: "n2", author: "Sam", avatar: null, createdAt: samNote(shift).at, edited: false, text: samNote(shift).text, canEdit: false, canDelete: false },
     { id: "n1", author: "Alex Rivera", avatar: null, createdAt: shiftIso("2026-11-01T19:10:00Z", storyShift(shift)), edited: false, text: "Add the SEC-bench Pro chart from the Google post before this goes out.", canEdit: true, canDelete: true },
   ],
 });
@@ -61,13 +68,24 @@ export const exampleNotes = (ids: string[], shift: number) => Object.fromEntries
 
 const TAGS: DraftTag[] = [{ id: "t1", name: "Releases", color: "#8F2457" }, { id: "t2", name: "Agents", color: "#2F6F4E" }, { id: "t3", name: "Newsletter", color: "#3B5BA5" }];
 /** Tags on each example draft, from Alex's three Buffer tags. */
-export const exampleTags = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { selected: id === "d1" || id === "d3" || id === "d4" ? [TAGS[0]] : id === "d2" || id === "d5" ? [TAGS[1]] : [], all: TAGS, canEdit: true }]));
+export const exampleTags = (ids: string[]) => Object.fromEntries(ids.map((id) => [id, { selected: exampleTagsOn(id), all: TAGS, canEdit: true }]));
+
+/** The tags Alex put on one example draft: Releases on the release drafts, Agents on the agent drafts. */
+function exampleTagsOn(id: string): DraftTag[] {
+  if (id === "d1" || id === "d3" || id === "d4") return [TAGS[0]];
+  if (id === "d2" || id === "d5") return [TAGS[1]];
+  return [];
+}
 
 /** Alex's playbook, which the draft window summarises per account. */
 export const exampleRules: Rule[] = EXAMPLE_RULES;
 
 /** The last approval recorded through Queue Pilot for the example's scheduled posts, as the week shows it under each one. */
-export const exampleApprovalsFor = (shift: number): Record<string, string> => ({ p1: approverLine(APPROVED_IN_APP, shiftIso("2026-11-01T20:00:00Z", storyShift(shift)))! });
+export function exampleApprovalsFor(shift: number): Record<string, string> {
+  const line = approverLine(APPROVED_IN_APP, shiftIso("2026-11-01T20:00:00Z", storyShift(shift)));
+  if (!line) throw new Error("The example approval has no approver line");
+  return { p1: line };
+}
 
 /** The example writer: built-in AI, ready. Pressing it on the example changes nothing. */
 export const exampleWriting: WritingAvailability = { ready: true, source: "built-in AI" };

@@ -5,7 +5,7 @@
 const DOCS = ["README.md", "CHANGELOG.md", "ROADMAP.md", "CONTRIBUTING.md"];
 
 export default {
-  "*.{ts,tsx,mjs}": () => ["pnpm typecheck", "pnpm check:gates"],
+  "*.{ts,tsx,mjs}": () => ["pnpm typecheck", "pnpm lint", "pnpm check:gates"],
   "*.{css,md}": () => "pnpm check:gates",
   "*.md": (files) => {
     const docs = files.filter((f) => DOCS.some((d) => f.endsWith(`/${d}`)));

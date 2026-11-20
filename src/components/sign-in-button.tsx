@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/registry/components/button/button";
 import { Alert } from "@/registry/components/alert/alert";
@@ -48,18 +48,35 @@ export function SignInButton({ children = "Sign in with Buffer", returnTo, class
 }
 
 /**
+ * The sign-in problem this address was opened with, read once per address. After the notice cleans the error out of
+ * the address it records the clean address with the same problem, so the notice stays until it is dismissed.
+ */
+let readFor: { href: string; problem: SignInProblem | null } | null = null;
+function addressProblem(): SignInProblem | null {
+  const href = window.location.href;
+  if (readFor?.href !== href) readFor = { href, problem: signInProblem(new URL(href).searchParams.get("error")) };
+  return readFor.problem;
+}
+/** The server renders no notice; the browser reads its own address. */
+const noProblemOnServer = () => null;
+/** The address is read when the notice renders; it does not need waking. */
+const noAddressEvents = () => () => {};
+
+/**
  * Shows why a Buffer sign-in failed when the page was reached with ?error=<code>, then removes the error from the
  * address so a refresh or a later sign-in does not show it again. Renders nothing otherwise.
  */
 export function SignInNotice() {
-  const [problem, setProblem] = useState<SignInProblem | null>(null);
+  const found = useSyncExternalStore(noAddressEvents, addressProblem, noProblemOnServer);
+  const [dismissed, setDismissed] = useState(false);
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const found = signInProblem(url.searchParams.get("error"));
     if (!found) return;
-    setProblem(found);
-    window.history.replaceState(window.history.state, "", withoutSignInError(url).toString());
-  }, []);
-  if (!problem) return null;
-  return <Alert tone="danger" title={problem.title} style={{ marginBottom: 24 }} onDismiss={() => setProblem(null)}>{problem.text}</Alert>;
+    const clean = withoutSignInError(new URL(window.location.href)).toString();
+    readFor = { href: clean, problem: found };
+    window.history.replaceState(window.history.state, "", clean);
+    // A later visit to this page reads its address afresh.
+    return () => { readFor = null; };
+  }, [found]);
+  if (!found || dismissed) return null;
+  return <Alert tone="danger" title={found.title} style={{ marginBottom: 24 }} onDismiss={() => setDismissed(true)}>{found.text}</Alert>;
 }

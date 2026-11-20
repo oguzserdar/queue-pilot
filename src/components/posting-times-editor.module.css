@@ -1,0 +1,15 @@
+.dialog { max-width: 640px; }
+.days { display: grid; gap: 4px; }
+.day { display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.day:last-child { border-bottom: 0; }
+.dayName { font-size: 14px; font-weight: 600; }
+.times { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center; }
+.none { font-size: 13px; opacity: .55; }
+.time { border: 1px solid var(--border); border-radius: 999px; background: var(--surface); padding: 2px 10px; font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color 150ms ease; }
+.time:hover { background: var(--surface-muted); }
+.add { display: flex; align-items: center; gap: 6px; }
+.problem { color: var(--danger, #b42318); font-size: 13px; margin: 8px 0 0; }
+.foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+@media (max-width: 560px) { .day { grid-template-columns: 1fr; gap: 6px; } }
+/* The picker's own label stays for screen readers; the row already names the day on screen. */
+.picker > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

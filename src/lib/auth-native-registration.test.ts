@@ -22,7 +22,7 @@ async function register(redirect: string, extra: Record<string, unknown> = {}) {
 describe("native MCP client registration through the real auth handler", () => {
   it.each(["http://localhost:8787/callback", "http://127.0.0.1:8787/callback", "http://[::1]:8787/callback"])("accepts an omitted application type for exact loopback %s", async (uri) => {
     const result = await register(uri);
-    expect(result.status, JSON.stringify(result.body)).toBe(201);
+    expect(result).toMatchObject({ status: 201 });
     expect(result.body).toMatchObject({ application_type: "native", token_endpoint_auth_method: "none" });
     expect(result.body.client_id).toBeTruthy();
     const authorize = new URL(`${baseURL}/api/auth/oauth2/authorize`);

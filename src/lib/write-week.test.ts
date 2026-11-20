@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { MAX_SLOTS, emptyTimesAhead, slotsToWrite, writeWeek, type WriteWeekDeps } from "./write-week";
 import { PLAYBOOK_REFUSAL } from "./save-for-user";
 import type { OpenSlot } from "./open-slots";
@@ -8,14 +8,16 @@ const slot = (id: string, at: string): OpenSlot => ({ id, channelId: "c", channe
 const saved = (slotId: string, text: string) => ({ slotId, channel: "Mark Evans", local: "", postId: `p-${slotId}`, network: "linkedin", text });
 const done = (drafts: { slotId: string; text: string }[]) => ({ saved: drafts.map((d) => saved(d.slotId, d.text)), refused: [], requests: 1, flags: [], check: "judged" as const });
 
-function deps(over: Partial<WriteWeekDeps> = {}): WriteWeekDeps {
+// The three dependencies tests assert on are typed as mocks, so a test reads them as properties, not as methods.
+type MockDeps = Omit<WriteWeekDeps, "write" | "save" | "shorten"> & { write: Mock<WriteWeekDeps["write"]>; save: Mock<WriteWeekDeps["save"]>; shorten: Mock<WriteWeekDeps["shorten"]> };
+function deps(over: Partial<MockDeps> = {}): MockDeps {
   return {
     material: async () => [{ key: "s1:41", title: "Issue 41", url: null, text: "Soup." }],
     voice: async () => ({ note: null, examples: [] }),
     rules: async () => [],
-    write: vi.fn(async (b) => b.slots.map((s: { id: string }) => ({ slotId: s.id, text: "Soup tonight.", sourceKey: "s1:41" }))),
-    save: vi.fn(async (drafts) => done(drafts)),
-    shorten: vi.fn(async () => null),
+    write: vi.fn<WriteWeekDeps["write"]>(async (b) => b.slots.map((s: { id: string }) => ({ slotId: s.id, text: "Soup tonight.", sourceKey: "s1:41" }))),
+    save: vi.fn<WriteWeekDeps["save"]>(async (drafts) => done(drafts)),
+    shorten: vi.fn<WriteWeekDeps["shorten"]>(async () => null),
     ...over,
   };
 }
@@ -87,21 +89,21 @@ describe("writeWeek", () => {
 
   it("rewrites once, with the reason, only the slots the playbook refused", async () => {
     let call = 0;
-    const save = vi.fn(async (drafts: { slotId: string; text: string }[]) => {
+    const save = vi.fn<WriteWeekDeps["save"]>(async (drafts: { slotId: string; text: string }[]) => {
       call++;
       if (call === 1) return { ...done(drafts.filter((x) => x.slotId === "a")), refused: [{ slotId: "b", reason: `${PLAYBOOK_REFUSAL}: "stock" (found "Brühe").` }] };
       return done(drafts);
     });
     const d = deps({ save });
     const r = await writeWeek(open, now, d);
-    const second = (d.write as ReturnType<typeof vi.fn>).mock.calls[1][0];
+    const second = d.write.mock.calls[1][0];
     expect(second.slots.map((s: { id: string }) => s.id)).toEqual(["b"]);
     expect(second.retry).toEqual({ b: `${PLAYBOOK_REFUSAL}: "stock" (found "Brühe").` });
     expect(r).toMatchObject({ kind: "done", retried: 1, refused: [] });
   });
 
   it("reports a draft refused twice instead of forcing it in", async () => {
-    const save = vi.fn(async (drafts: { slotId: string }[]) => ({ saved: [], refused: drafts.map((x) => ({ slotId: x.slotId, reason: `${PLAYBOOK_REFUSAL}: no` })), requests: 0, flags: [], check: "judged" as const }));
+    const save = vi.fn<WriteWeekDeps["save"]>(async (drafts: { slotId: string }[]) => ({ saved: [], refused: drafts.map((x) => ({ slotId: x.slotId, reason: `${PLAYBOOK_REFUSAL}: no` })), requests: 0, flags: [], check: "judged" as const }));
     const r = await writeWeek(open, now, deps({ save }));
     expect(save).toHaveBeenCalledTimes(2);
     expect(r).toMatchObject({ kind: "done", saved: [], retried: 2 });
@@ -109,14 +111,14 @@ describe("writeWeek", () => {
   });
 
   it("does not rewrite a slot refused for a platform reason, such as a filled slot", async () => {
-    const d = deps({ save: vi.fn(async () => ({ saved: [], refused: [{ slotId: "a", reason: "That slot is no longer empty" }], requests: 0, flags: [], check: "judged" as const })) });
+    const d = deps({ save: vi.fn<WriteWeekDeps["save"]>(async () => ({ saved: [], refused: [{ slotId: "a", reason: "That slot is no longer empty" }], requests: 0, flags: [], check: "judged" as const })) });
     await writeWeek(open, now, d);
     expect(d.write).toHaveBeenCalledTimes(1);
   });
 });
 
 it("preserves successful saves when the retry writer throws", async () => {
- const d = deps({ write: vi.fn().mockResolvedValueOnce([{ slotId: "a", text: "A" }, { slotId: "b", text: "B" }]).mockRejectedValueOnce(new Error("provider unavailable")), save: vi.fn(async () => ({ ...done([{ slotId: "a", text: "A" }]), refused: [{ slotId: "b", reason: `${PLAYBOOK_REFUSAL}: hype` }] })) });
+ const d = deps({ write: vi.fn<WriteWeekDeps["write"]>().mockResolvedValueOnce([{ slotId: "a", text: "A" }, { slotId: "b", text: "B" }]).mockRejectedValueOnce(new Error("provider unavailable")), save: vi.fn<WriteWeekDeps["save"]>(async () => ({ ...done([{ slotId: "a", text: "A" }]), refused: [{ slotId: "b", reason: `${PLAYBOOK_REFUSAL}: hype` }] })) });
  const r = await writeWeek([slot("a", "2026-10-27T09:00:00Z"), slot("b", "2026-10-28T09:00:00Z")], now, d);
  expect(r).toMatchObject({ kind: "done", saved: [{ slotId: "a" }], refused: [expect.objectContaining({ slotId: "b" })] });
  expect(d.save).toHaveBeenCalledOnce();
@@ -128,8 +130,8 @@ describe("writeWeek, drafts over the slot's limit", () => {
 
   it("asks once for a shorter version of an over-limit X draft and saves that, with no notice", async () => {
     const d = deps({
-      write: vi.fn(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }]),
-      shorten: vi.fn(async (draft) => ({ ...draft, text: "a".repeat(250) })),
+      write: vi.fn<WriteWeekDeps["write"]>(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }]),
+      shorten: vi.fn<WriteWeekDeps["shorten"]>(async (draft) => ({ ...draft, text: "a".repeat(250) })),
     });
     const r = await writeWeek([xSlot("x", "2026-10-27T09:00:00Z")], now, d);
     expect(d.shorten).toHaveBeenCalledOnce();
@@ -142,10 +144,10 @@ describe("writeWeek, drafts over the slot's limit", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     let running = 0, most = 0;
     const d = deps({
-      write: vi.fn(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }, { slotId: "y", text: long, sourceKey: "s1:41" }, { slotId: "z", text: "Fits.", sourceKey: "s1:41" }]),
-      shorten: vi.fn(async (draft) => { running++; most = Math.max(most, running); await new Promise((r) => setTimeout(r, 5)); running--; return { ...draft, text: draft.slotId === "x" ? "short" : "a".repeat(281) }; }),
-      fitted: vi.fn(async () => { throw new Error("db down"); }),
-      dropped: vi.fn(async () => { throw new Error("db down"); }),
+      write: vi.fn<WriteWeekDeps["write"]>(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }, { slotId: "y", text: long, sourceKey: "s1:41" }, { slotId: "z", text: "Fits.", sourceKey: "s1:41" }]),
+      shorten: vi.fn<WriteWeekDeps["shorten"]>(async (draft) => { running++; most = Math.max(most, running); await new Promise((r) => setTimeout(r, 5)); running--; return { ...draft, text: draft.slotId === "x" ? "short" : "a".repeat(281) }; }),
+      fitted: vi.fn<NonNullable<WriteWeekDeps["fitted"]>>(async () => { throw new Error("db down"); }),
+      dropped: vi.fn<NonNullable<WriteWeekDeps["dropped"]>>(async () => { throw new Error("db down"); }),
     });
     const r = await writeWeek([xSlot("x", "2026-10-27T09:00:00Z"), xSlot("y", "2026-10-28T09:00:00Z"), xSlot("z", "2026-10-29T09:00:00Z")], now, d);
     expect(most).toBe(2);
@@ -155,8 +157,8 @@ describe("writeWeek, drafts over the slot's limit", () => {
 
   it("leaves out a draft that is still too long after shortening, without a Too long notice", async () => {
     const d = deps({
-      write: vi.fn(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }, { slotId: "y", text: "Fits.", sourceKey: "s1:41" }]),
-      shorten: vi.fn(async (draft) => ({ ...draft, text: "a".repeat(281) })),
+      write: vi.fn<WriteWeekDeps["write"]>(async () => [{ slotId: "x", text: long, sourceKey: "s1:41" }, { slotId: "y", text: "Fits.", sourceKey: "s1:41" }]),
+      shorten: vi.fn<WriteWeekDeps["shorten"]>(async (draft) => ({ ...draft, text: "a".repeat(281) })),
     });
     const r = await writeWeek([xSlot("x", "2026-10-27T09:00:00Z"), xSlot("y", "2026-10-28T09:00:00Z")], now, d);
     expect(d.save).toHaveBeenCalledWith([expect.objectContaining({ slotId: "y" })], ["s1:41"]);
@@ -168,8 +170,8 @@ describe("writeWeek, drafts over the slot's limit", () => {
 
   it("leaves out an over-limit draft when shortening fails, and never calls the shortener for one that fits", async () => {
     const d = deps({
-      write: vi.fn(async () => [{ slotId: "x", text: long }, { slotId: "y", text: "a".repeat(280) }]),
-      shorten: vi.fn(async () => { throw new Error("provider down"); }),
+      write: vi.fn<WriteWeekDeps["write"]>(async () => [{ slotId: "x", text: long }, { slotId: "y", text: "a".repeat(280) }]),
+      shorten: vi.fn<WriteWeekDeps["shorten"]>(async () => { throw new Error("provider down"); }),
     });
     const r = await writeWeek([xSlot("x", "2026-10-27T09:00:00Z"), xSlot("y", "2026-10-28T09:00:00Z")], now, d);
     expect(d.shorten).toHaveBeenCalledOnce();

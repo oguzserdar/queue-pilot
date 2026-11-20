@@ -54,7 +54,7 @@ describe("skill reference files", () => {
   });
 
   it("lists a skill with reference files as an archive whose digest and contents match what is served", async () => {
-    const index = await (await getIndex(new Request("https://qp.example.com/.well-known/agent-skills/index.json"))).json();
+    const index = await getIndex(new Request("https://qp.example.com/.well-known/agent-skills/index.json")).json();
     for (const name of Object.keys(PLUGIN_SKILL_FILES)) {
       const entry = index.skills.find((s: { name: string }) => s.name === name);
       expect(entry).toMatchObject({ type: "archive", url: `/.well-known/agent-skills/${name}/skill.zip` });
@@ -67,7 +67,7 @@ describe("skill reference files", () => {
   });
 
   it("keeps single-file skills as SKILL.md entries with no archive", async () => {
-    const index = await (await getIndex(new Request("https://qp.example.com/.well-known/agent-skills/index.json"))).json();
+    const index = await getIndex(new Request("https://qp.example.com/.well-known/agent-skills/index.json")).json();
     expect(index.skills.find((s: { name: string }) => s.name === "queue-pilot-check-week")).toMatchObject({ type: "skill-md" });
     expect((await zip("queue-pilot-check-week")).status).toBe(404);
     expect((await zip("__proto__")).status).toBe(404);

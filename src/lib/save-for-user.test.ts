@@ -23,7 +23,7 @@ describe("applyPlaybook", () => {
     expect((await applyPlaybook(drafts, [slot("a"), slot("c")], [block], null)).keep).toEqual([]);
   });
   it("refuses a draft that fails a do-not-save rule, with the rule and the quoted words", async () => {
-    const judge = vi.fn(async () => new Map([["a", [v("b", "block", "fail", "Brühe")]], ["c", [v("b", "block", "pass")]]]));
+    const judge = vi.fn<NonNullable<Parameters<typeof applyPlaybook>[3]>>(async () => new Map([["a", [v("b", "block", "fail", "Brühe")]], ["c", [v("b", "block", "pass")]]]));
     const r = await applyPlaybook(drafts, [slot("a"), slot("c")], [block], judge);
     expect(r.keep.map((d) => d.slotId)).toEqual(["c"]);
     expect(r.refused[0].reason).toBe(`${PLAYBOOK_REFUSAL}: "${block.text}" (found "Brühe"). why`);

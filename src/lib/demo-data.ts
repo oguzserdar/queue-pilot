@@ -4,7 +4,7 @@
  * and an optional error. Drafts also carry, when Alex changed one, the edit.
  */
 
-import { channels, type Channel, type ChannelId } from "./example-channels";
+import { channels, type ChannelId } from "./example-channels";
 export { channels, type Channel, type ChannelId } from "./example-channels";
 
 import type { WeekModel } from "./week-model";
@@ -122,7 +122,11 @@ export function demoPosts(shift: number): Post[] {
 }
 
 /** One example post's text. Text never depends on the date. */
-export const postText = (id: string): string => draftsAndPosts(0).find((p) => p.id === id)!.text;
+export function postText(id: string): string {
+  const post = draftsAndPosts(0).find((p) => p.id === id);
+  if (!post) throw new Error(`The example has no post ${id}`);
+  return post.text;
+}
 
 /** Delivery watch: past slots and what happened, using the post error Buffer reports. */
 const DELIVERIES = [

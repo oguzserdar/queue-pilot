@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { CONTENT_LIMIT, DiscordError, PERMISSIONS, defaultChannel, installState, stateMatches, exchangeInstall, installUrl, postableChannels, sendCopy, canPost, postText, messageUrl } from "./discord";
 
-function fakeDiscord(answer: (url: string, init: any) => { status: number; body: unknown }) {
-  const calls: { url: string; init: any }[] = [];
-  const doFetch = (async (url: string, init: any = {}) => {
+function fakeDiscord(answer: (url: string, init: { body?: string | URLSearchParams; headers?: Record<string, string> }) => { status: number; body: unknown }) {
+  const calls: { url: string; init: { body?: string | URLSearchParams; headers?: Record<string, string> } }[] = [];
+  const doFetch = (async (url: string, init: { body?: string | URLSearchParams; headers?: Record<string, string> } = {}) => {
     calls.push({ url, init });
     const a = answer(url, init);
     return { ok: a.status < 400, status: a.status, json: async () => a.body };
-  }) as any;
+  }) as unknown as typeof fetch;
   return { doFetch, calls };
 }
 
@@ -51,8 +51,8 @@ describe("posting", () => {
   it("posts with mentions switched off and the image as an embed", async () => {
     const { doFetch, calls } = fakeDiscord(() => ({ status: 200, body: { id: "m1" } }));
     expect(await sendCopy("B", "c1", { text: "@everyone CSV export is live", imageUrl: "https://img.example/a.png" }, doFetch)).toEqual({ messageId: "m1" });
-    const body = JSON.parse(calls[0].init.body);
-    expect(calls[0].init.headers.authorization).toBe("Bot B");
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(calls[0].init.headers?.authorization).toBe("Bot B");
     expect(body.allowed_mentions).toEqual({ parse: [] });
     expect(body.embeds).toEqual([{ image: { url: "https://img.example/a.png" } }]);
   });
@@ -60,7 +60,7 @@ describe("posting", () => {
   it("keeps content within Discord's 2,000 limit", async () => {
     const { doFetch, calls } = fakeDiscord(() => ({ status: 200, body: { id: "m2" } }));
     await sendCopy("B", "c1", { text: "word ".repeat(600) }, doFetch);
-    expect(JSON.parse(calls[0].init.body).content.length).toBeLessThanOrEqual(CONTENT_LIMIT);
+    expect(JSON.parse(calls[0].init.body as string).content.length).toBeLessThanOrEqual(CONTENT_LIMIT);
   });
 
   it("surfaces Discord's message and retry_after on 429", async () => {
@@ -68,6 +68,13 @@ describe("posting", () => {
     const err = await sendCopy("B", "c1", { text: "hi" }, doFetch).catch((e) => e);
     expect(err).toBeInstanceOf(DiscordError);
     expect(err.retryAfterSeconds).toBe(1.5);
+    expect(err.global).toBe(false);
+  });
+
+  it("marks a 429 Discord says is global (the whole bot)", async () => {
+    const { doFetch } = fakeDiscord(() => ({ status: 429, body: { message: "You are being rate limited.", retry_after: 3, global: true } }));
+    const err = await sendCopy("B", "c1", { text: "hi" }, doFetch).catch((e) => e);
+    expect(err.global).toBe(true);
   });
 });
 
@@ -127,7 +134,7 @@ describe("postText", () => {
   });
   it("sends the text unchanged with mentions off and returns the message id", async () => {
     let body: Record<string, unknown> = {};
-    const out = await postText("t", "c1", "Patch 1.4 is out @everyone", async (_u, init) => { body = JSON.parse(String(init?.body)); return new Response(JSON.stringify({ id: "m1" })); });
+    const out = await postText("t", "c1", "Patch 1.4 is out @everyone", async (_u, init) => { body = JSON.parse(init?.body as string); return new Response(JSON.stringify({ id: "m1" })); });
     expect(body).toEqual({ content: "Patch 1.4 is out @everyone", allowed_mentions: { parse: [] } });
     expect(out).toEqual({ messageId: "m1" });
     expect(messageUrl("g", "c1", "m1")).toBe("https://discord.com/channels/g/c1/m1");

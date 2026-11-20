@@ -115,10 +115,8 @@ describe("typed settings", () => {
     await expect(saveSetting(store, "ai_budget_usd", "lots", KEY)).rejects.toThrow(/dollar/i);
   });
   it("puts every setting in a known section, with help text", () => {
-    for (const [key, def] of Object.entries(SETTINGS)) {
-      expect(GROUPS, key).toHaveProperty(def.group);
-      expect(def.help.length, key).toBeGreaterThan(10);
-    }
+    expect(Object.entries(SETTINGS).filter(([, def]) => !Object.hasOwn(GROUPS, def.group)).map(([key]) => key)).toEqual([]);
+    expect(Object.entries(SETTINGS).filter(([, def]) => def.help.length <= 10).map(([key]) => key)).toEqual([]);
   });
 });
 
@@ -130,7 +128,7 @@ describe("bot settings saved in /admin", () => {
     await saveSetting(store, "telegram_bot_username", "qp1Bot", KEY);
     await expect(saveSetting(store, "telegram_bot_username", "@QueuePilot_bot", KEY)).rejects.toThrow(/without the @/);
     for (const bad of ["abot", "QueuePilot", "queue-pilot_bot", `${"a".repeat(30)}bot`]) {
-      await expect(saveSetting(store, "telegram_bot_username", bad, KEY), bad).rejects.toThrow(/Telegram bot username/);
+      await expect(saveSetting(store, "telegram_bot_username", bad, KEY)).rejects.toThrow(/Telegram bot username/);
     }
   });
 
@@ -138,7 +136,7 @@ describe("bot settings saved in /admin", () => {
     const store = memoryStore();
     await saveSetting(store, "discord_client_id", "123456789012345678", KEY);
     for (const bad of ["1234567890123456", "123456789012345678901", "12345678901234567a", "my-app"]) {
-      await expect(saveSetting(store, "discord_client_id", bad, KEY), bad).rejects.toThrow(/Discord application ID must be 17 to 20 digits/);
+      await expect(saveSetting(store, "discord_client_id", bad, KEY)).rejects.toThrow(/Discord application ID must be 17 to 20 digits/);
     }
   });
 
