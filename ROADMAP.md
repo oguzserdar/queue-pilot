@@ -33,6 +33,11 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 - **The posting machinery, used for messages.** The queue, playbook and checks that handle a post answer comments and messages, send a DM to someone who asked for a guide, a link or a code, and carry customer conversations. Every reply is checked against your rules first, and each person gets one DM per post, within the time the network allows.
 - **Direct posting to more networks.** Just like Telegram and Discord in 1.0, more networks get their own direct path, with posting times per account, beside your Buffer queue.
 - **Run your copy from chat.** With admin access, every action that changes your copy is going to be available through the MCP connector, so you manage it by chatting with ChatGPT or Claude. You can take that access away in Settings.
+- **Images, in your own visual style.** Instagram, Pinterest and TikTok need a photo or video on every post, and YouTube needs a video. Queue Pilot writes text only for now, so it says so before it writes and leaves those times to you. Images come next. Queue Pilot learns how your posts look the way it learned how you write, from the images you already published. You pick which of your posts count as your style.
+  - **Your own photos first.** When you add a photo, Queue Pilot fits it to each network instead of replacing it: the crop, the size and any words on the image, in your style.
+  - **New images when you want them.** It makes them with an image model you choose: ChatGPT's own image model when you work from chat and the app can hand the image over, or a gateway such as OpenRouter, Vercel AI Gateway or fal for Queue Pilot's own writer. Which route comes first is still open.
+  - **You approve each image.** An image goes into Buffer only after you say it is fine. On a network that needs one, the draft waits in Queue Pilot until then. The model and the prompt are saved beside it.
+  - **Hosted where Buffer can read it.** Buffer takes an image only as a public link and has no upload. Queue Pilot stores each image you approved at a link that is hard to guess and keeps it there until the post is out. Most chat apps cannot hand an image file to a connector yet. Where one can, an image made in the chat comes along.
 
 ## Next: teams and clients
 
