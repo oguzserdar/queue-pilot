@@ -5,8 +5,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { PAGE_CEILING, readPage, searchWeb } from "./exa";
 
-const reply = (status: number, body: unknown = {}) => vi.fn(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
-const sent = (f: typeof fetch) => JSON.parse(String((vi.mocked(f).mock.calls[0][1] as RequestInit).body));
+const reply = (status: number, body: unknown = {}) => vi.fn<typeof fetch>(async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+const sent = (f: typeof fetch) => JSON.parse((vi.mocked(f).mock.calls[0][1] as RequestInit).body as string);
 
 describe("searchWeb", () => {
   it("asks for short excerpts, never whole pages, and keeps only what the AI needs", async () => {
@@ -42,7 +42,7 @@ describe("searchWeb", () => {
   });
 
   it("turns a network failure and a malformed answer into a failed status", async () => {
-    expect(await searchWeb({ query: "x" }, "k", vi.fn(async () => { throw new Error("offline"); }) as unknown as typeof fetch)).toMatchObject({ status: "failed" });
+    expect(await searchWeb({ query: "x" }, "k", vi.fn<typeof fetch>(async () => { throw new Error("offline"); }) as unknown as typeof fetch)).toMatchObject({ status: "failed" });
     expect(await searchWeb({ query: "x" }, "k", reply(200, { results: "nope" }))).toMatchObject({ status: "failed" });
   });
 });
@@ -53,13 +53,13 @@ describe("readPage", () => {
     expect(episode.length).toBeGreaterThan(90_000);
     const r = await readPage("https://example.com/a", "k", reply(200, { results: [{ title: "T", url: "https://example.com/a", text: episode }], statuses: [{ id: "https://example.com/a", status: "success" }] }));
     expect(r).toMatchObject({ status: "ready", page: { title: "T", truncated: false } });
-    if (r.status === "ready") expect(r.page.text.endsWith("final correction.")).toBe(true);
+    expect(r.status === "ready" && r.page.text.endsWith("final correction.")).toBe(true);
   });
 
   it("says when a page passed the ceiling and keeps exactly the ceiling", async () => {
     const r = await readPage("https://example.com/a", "k", reply(200, { results: [{ title: "T", url: "https://example.com/a", text: "a".repeat(PAGE_CEILING + 50) }] }));
     expect(r).toMatchObject({ status: "ready", page: { truncated: true } });
-    if (r.status === "ready") expect(r.page.text.length).toBe(PAGE_CEILING);
+    expect(r.status === "ready" && r.page.text.length).toBe(PAGE_CEILING);
   });
 
   it("does not call a page that is exactly the ceiling long cut", async () => {

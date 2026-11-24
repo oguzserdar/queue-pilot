@@ -47,3 +47,12 @@ describe("withoutSignInError", () => {
     expect(signInProblem("Your account is suspended, call +1 555")?.text).toBe("Try again.");
   });
 });
+
+describe("a Buffer sign-in for an email that already has an account", async () => {
+  const { signInProblem } = await import("./sign-in-errors");
+  it("says to sign in with email and password, and why they are not joined", () => {
+    const p = signInProblem("account_not_linked");
+    expect(p?.title).toBe("This email already has a Queue Pilot account");
+    expect(p?.text).toContain("sign in that way");
+  });
+});

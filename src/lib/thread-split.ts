@@ -19,11 +19,17 @@ export type ThreadSplit = { ok: true; posts: string[] } | { ok: false; reason: "
 const BREAKS: RegExp[] = [/\n\s*\n/g, /\n/g, /(?<=[.!?…])\s+/g, /\s+/g];
 const URL_RE = /https?:\/\/\S+/g;
 
+/** Where a match starts; matchAll always sets it. */
+function startOf(m: RegExpMatchArray): number {
+  if (m.index === undefined) throw new Error("A text match came back without its position");
+  return m.index;
+}
+
 /** Positions where `text` may be cut by this break kind: the end of the text before the gap, and the start after it. */
 function cutPoints(text: string, kind: RegExp): { end: number; next: number }[] {
-  const urls = [...text.matchAll(URL_RE)].map((m) => [m.index!, m.index! + m[0].length]);
+  const urls = [...text.matchAll(URL_RE)].map((m) => [startOf(m), startOf(m) + m[0].length]);
   const inUrl = (i: number) => urls.some(([a, b]) => i > a && i < b);
-  return [...text.matchAll(kind)].filter((m) => m.index! > 0 && !inUrl(m.index!)).map((m) => ({ end: m.index!, next: m.index! + m[0].length }));
+  return [...text.matchAll(kind)].filter((m) => startOf(m) > 0 && !inUrl(startOf(m))).map((m) => ({ end: startOf(m), next: startOf(m) + m[0].length }));
 }
 
 /**
@@ -34,8 +40,9 @@ function cutPoints(text: string, kind: RegExp): { end: number; next: number }[] 
  * @returns The posts, each an unchanged piece of the text, or the reason it cannot be a thread
  */
 export function splitThread(service: string, text: string): ThreadSplit {
-  if (!(THREAD_NETWORKS as readonly string[]).includes(service)) return { ok: false, reason: "not-a-thread-network" };
-  const limit = limitFor(service)!;
+  if (!THREAD_NETWORKS.some((n) => n === service)) return { ok: false, reason: "not-a-thread-network" };
+  const limit = limitFor(service);
+  if (limit === null) throw new Error(`No character limit is known for ${service}`);
   const body = text.trim();
   if (countFor(service, body) <= limit) return { ok: false, reason: "fits" };
 

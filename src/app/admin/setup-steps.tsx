@@ -16,6 +16,25 @@ export function AdminRecovery() {
   );
 }
 
+/** The claim itself: the recovery steps without a setup code, else the claim form once signed in. */
+function ClaimStep({ ready, signedIn, needsCode }: { ready: boolean; signedIn: boolean; needsCode: boolean }) {
+  if (!ready) {
+    return (
+      <>
+        <p className={styles.error} role="alert">This deployment has no setup code, so nobody can claim it from the web.</p>
+        <AdminRecovery />
+      </>
+    );
+  }
+  if (!signedIn) return null;
+  return (
+    <form action={claimAdmin} className={styles.claim}>
+      {needsCode ? <PasswordField name="code" label="Setup code" description="The ADMIN_SETUP_CODE value from this deployment's settings." autoComplete="off" required /> : null}
+      <Button type="submit" variant="primary" size="md">Become the admin</Button>
+    </form>
+  );
+}
+
 /**
  * First-run setup, two numbered steps: sign in with Buffer, then claim the deployment. A done step shows its tick. In
  * production the claim needs the setup code; without a usable one the claim button is not offered and the recovery
@@ -40,17 +59,7 @@ export function SetupSteps({ email, needsCode, ready, problem }: { email: string
           <div className={styles.stepBody}>
             <strong>Become the admin</strong>
             <span className={styles.muted}>Only one person can claim a new deployment. More admins are added later from the server.</span>
-            {!ready ? (
-              <>
-                <p className={styles.error} role="alert">This deployment has no setup code, so nobody can claim it from the web.</p>
-                <AdminRecovery />
-              </>
-            ) : email ? (
-              <form action={claimAdmin} className={styles.claim}>
-                {needsCode ? <PasswordField name="code" label="Setup code" description="The ADMIN_SETUP_CODE value from this deployment's settings." autoComplete="off" required /> : null}
-                <Button type="submit" variant="primary" size="md">Become the admin</Button>
-              </form>
-            ) : null}
+            <ClaimStep ready={ready} signedIn={!!email} needsCode={needsCode} />
             {problem === "code" ? <p className={styles.error} role="alert">That setup code does not match this deployment&apos;s.</p> : null}
           </div>
         </li>

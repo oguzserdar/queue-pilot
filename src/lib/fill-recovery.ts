@@ -37,11 +37,16 @@ export function settleFillDrafts(open: OpenFillDraft[], posts: Post[], now: Date
     if (ours) return { runId: d.runId, slotId: d.slotId, kind: "adopt", postId: ours.id };
     return {
       runId: d.runId, slotId: d.slotId, kind: "fail",
-      reason: there.length ? "Something else was saved to this time before the draft could be."
-        : d.callStartedAt ? "Buffer did not confirm the save, and the draft is not in your queue. The time is still empty."
-        : "The run stopped before this draft was saved. The time is still empty.",
+      reason: failReason(there.length > 0, Boolean(d.callStartedAt)),
     };
   });
+}
+
+/** Why a fill draft did not land: the time was taken, the save went unconfirmed, or the run stopped before saving. */
+function failReason(timeTaken: boolean, callStarted: boolean): string {
+  if (timeTaken) return "Something else was saved to this time before the draft could be.";
+  if (callStarted) return "Buffer did not confirm the save, and the draft is not in your queue. The time is still empty.";
+  return "The run stopped before this draft was saved. The time is still empty.";
 }
 
 /**
@@ -59,7 +64,13 @@ export async function recoverFillDrafts(userId: string, posts: Post[], networkOf
   if (!open.length) return 0;
   const decisions = settleFillDrafts(open, posts, now);
   if (!decisions.length) return 0;
-  const adopted = decisions.flatMap((d) => d.kind === "adopt" ? [{ postId: d.postId, network: networkOf(d.slotId.slice(0, d.slotId.lastIndexOf("@"))), text: open.find((o) => o.runId === d.runId && o.slotId === d.slotId)!.text, verdicts: null }] : []);
+  const adopted = decisions.flatMap((d) => {
+    if (d.kind !== "adopt") return [];
+    // Every decision comes from one of these records (settleFillDrafts), so the record is always found.
+    const record = open.find((o) => o.runId === d.runId && o.slotId === d.slotId);
+    if (!record) throw new Error(`No fill record for ${d.slotId}`);
+    return [{ postId: d.postId, network: networkOf(d.slotId.slice(0, d.slotId.lastIndexOf("@"))), text: record.text, verdicts: null }];
+  });
   if (adopted.length) await deps.record(userId, adopted);
   await deps.settle(userId, decisions);
   return decisions.length;

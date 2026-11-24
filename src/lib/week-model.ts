@@ -94,6 +94,11 @@ export function createdLine(iso: string, by: string | null, now = Date.now(), ti
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
   const day = (t: number) => Date.parse(`${fmt.format(new Date(t))}T00:00:00Z`);
   const days = Math.round((day(now) - day(Date.parse(iso))) / 86_400_000);
-  const when = days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
-  return `Created ${when}${by ? ` by ${by}` : ""}`;
+  return `Created ${daysAgo(days)}${by ? ` by ${by}` : ""}`;
+}
+
+/** Whole calendar days back in words: "today" (or a future day), "yesterday", else "N days ago". */
+function daysAgo(days: number): string {
+  if (days <= 0) return "today";
+  return days === 1 ? "yesterday" : `${days} days ago`;
 }

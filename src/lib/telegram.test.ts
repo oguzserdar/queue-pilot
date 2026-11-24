@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { CAPTION_LIMIT, TelegramError, connectCodeFor, connectMessages, drainConnectCodes, fit, newConnectCode, sendCopy, postText } from "./telegram";
 
-function fakeTelegram(answer: (method: string, body: any) => unknown) {
-  const calls: { method: string; body: any }[] = [];
+type SentBody = { offset?: number; limit?: number; caption: string; [field: string]: unknown };
+function fakeTelegram(answer: (method: string, body: SentBody) => unknown) {
+  const calls: { method: string; body: SentBody }[] = [];
   const doFetch = (async (url: string, init: { body: string }) => {
     const method = url.split("/").pop() as string;
-    const body = JSON.parse(init.body);
+    const body: SentBody = JSON.parse(init.body);
     calls.push({ method, body });
     return { status: 200, json: async () => answer(method, body) };
-  }) as any;
+  }) as unknown as typeof fetch;
   return { doFetch, calls };
 }
 

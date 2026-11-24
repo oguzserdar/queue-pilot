@@ -1,6 +1,6 @@
 import { readPage, timeText, type Page, type PageFrom } from "./page-bookmark"
 import { createHash } from "node:crypto"
-import { and, desc, eq, notExists } from "drizzle-orm"
+import { and, eq, notExists } from "drizzle-orm"
 import { z } from "zod"
 import { db } from "../db"
 import { material, sourceUsed } from "../db/schema"
@@ -25,7 +25,8 @@ export type MaterialStore = {
   remove(userId: string, key: string): Promise<void>
 }
 
-function itemFor(input: z.infer<typeof materialInput>): Material {
+/** The checked item and its key, as saved. Also used to copy an agent's material into a person's at claim. */
+export function itemFor(input: z.infer<typeof materialInput>): Material {
   const clean = materialInput.parse(input)
   const key = `material:${createHash("sha256").update(JSON.stringify([clean.title, clean.text, clean.link ?? null])).digest("hex")}`
   return { ...clean, key }

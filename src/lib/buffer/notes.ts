@@ -55,9 +55,14 @@ type RawAnnotation = { type: string; text: string; indices: number[]; displayVal
 type RawNote = { id: string; text: string; authorId: string; author: { id: string; name: string | null; avatar?: string | null } | null; annotations?: RawAnnotation[]; allowedActions: string[]; createdAt: string; updatedAt: string };
 
 const toMentions = (list: RawAnnotation[] = []): NoteMention[] => list
-  .filter((a) => a.type === "mention" && !!a.serviceEntityId && a.indices?.length === 2)
-  .map((a) => ({ urn: a.serviceEntityId!, text: a.text, displayValue: a.displayValue || a.text.replace(/^@/, ""), indices: [a.indices[0], a.indices[1]] as [number, number] }))
+  .flatMap((a) => toMention(a))
   .sort((a, b) => a.indices[0] - b.indices[0]);
+
+/** One mention annotation as a NoteMention; none for other annotations or one without a URN or two indices. */
+function toMention(a: RawAnnotation): NoteMention[] {
+  if (a.type !== "mention" || !a.serviceEntityId || a.indices?.length !== 2) return [];
+  return [{ urn: a.serviceEntityId, text: a.text, displayValue: a.displayValue || a.text.replace(/^@/, ""), indices: [a.indices[0], a.indices[1]] }];
+}
 
 const toNote = (n: RawNote): BufferNote => ({ id: n.id, text: n.text, author: n.author?.name ?? null, avatar: n.author?.avatar || null, authorId: n.authorId, allowedActions: n.allowedActions ?? [], mentions: toMentions(n.annotations), createdAt: n.createdAt, updatedAt: n.updatedAt });
 
@@ -104,9 +109,16 @@ export type NoteRefusal = { ok: false; kind: "closed" | "limit" | "invalid" | "o
 /** A create's outcome: the saved note, or Buffer's typed refusal. */
 export type CreateNoteResult = { ok: true; note: BufferNote } | NoteRefusal;
 
+/** Buffer's typed refusals of a note write; any other type is "other". */
+const NOTE_REFUSALS: Partial<Record<string, "closed" | "limit" | "invalid">> = {
+  CollaborationNoteThreadClosedError: "closed",
+  LimitReachedError: "limit",
+  InvalidInputError: "invalid",
+};
+
 const refusal = (r: { __typename: string; message?: string }, fallback: string): NoteRefusal => ({
   ok: false,
-  kind: r.__typename === "CollaborationNoteThreadClosedError" ? "closed" : r.__typename === "LimitReachedError" ? "limit" : r.__typename === "InvalidInputError" ? "invalid" : "other",
+  kind: NOTE_REFUSALS[r.__typename] ?? "other",
   message: r.message ?? fallback,
 });
 

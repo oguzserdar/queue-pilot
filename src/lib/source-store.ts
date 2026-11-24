@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lte } from "drizzle-orm";
 import { db } from "../db";
 import { draftEvidence, sourceJob, sourceSnapshot } from "../db/schema";
 import { evidenceProblem, sourceHash, sourceVersionInput, verifyEvidence, type EvidenceInput, type SourceMetadata } from "./source-evidence";

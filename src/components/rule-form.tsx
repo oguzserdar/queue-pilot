@@ -1,5 +1,6 @@
 "use client";
 
+import { actionLabel } from "./action-label";
 import { useConfirmed } from "./use-confirmed";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/registry/components/button/button";
@@ -10,6 +11,8 @@ import styles from "./playbook-view.module.css";
 
 /** Wait this long after the last keystroke before reading the rule, so a reading costs one model call per pause. */
 const READ_AFTER_MS = 700;
+/** Shorter than this, a sentence is not read yet. */
+const MIN_READ_LENGTH = 4;
 
 /**
  * The rule field's hint: says so in plain words once the text reaches the most one rule may hold, since the field then
@@ -22,14 +25,35 @@ export function ruleTextHint(length: number): string | undefined {
   return length >= MAX_RULE_TEXT ? `${MAX_RULE_TEXT} characters is the most for one rule.` : undefined;
 }
 
+/** Where a banned phrase is banned, in the tag's words. */
+function bannedLead(where: "start" | "end" | undefined): string {
+  if (where === "start") return "Never opens with";
+  return where === "end" ? "Never ends with" : "Never uses";
+}
+
 /** The parts of a reading the person sees as tags under the box. */
 function tagsFor(r: NewRule): string[] {
   switch (r.kind) {
-    case "banned": return [r.where === "start" ? "Never opens with" : r.where === "end" ? "Never ends with" : "Never uses", `"${r.phrases[0]}"`];
+    case "banned": return [bannedLead(r.where), `"${r.phrases[0]}"`];
     case "replace": return [`Says "${r.to}"`, `never "${r.from}"`];
     case "ends_with": return ["Every post ends with", `"${r.phrase}"`];
     case "guidance": return ["Judged by meaning"];
   }
+}
+
+/** How Queue Pilot reads the sentence, as tags, with Keep as written for a reading it narrowed; Reading… until then. */
+function ReadsAs({ rule, onKeepAsWritten }: { rule: NewRule | null; onKeepAsWritten: () => void }) {
+  return (
+    <div className={styles.reading} aria-live="polite">
+      <span className={styles.readingLabel}>Reads as</span>
+      {rule ? (
+        <>
+          {tagsFor(rule).map((t) => <span key={t} className={styles.tag} data-kind={rule.kind}>{t}</span>)}
+          {rule.kind !== "guidance" && <button type="button" className={styles.untag} onClick={onKeepAsWritten}>Keep as written</button>}
+        </>
+      ) : <span className={styles.readingWait}>Reading…</span>}
+    </div>
+  );
 }
 
 /**
@@ -49,19 +73,19 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
   // Set at once, unlike state: a held or doubled ⌘ Enter must not add the same rule twice before the re-render.
   const adding = useRef(false);
   const [reading, setReading] = useState<{ for: string; rule: NewRule | null } | null>(null);
-  const [pending, setPending] = useState(false);
   const asked = useRef(0);
 
+  // Long enough to read: the reading for exactly this text is pending until its answer comes back.
+  const readable = !!read && text.trim().length >= MIN_READ_LENGTH;
+  const pending = readable && reading?.for !== text;
   useEffect(() => {
-    if (!read || text.trim().length < 4) { setReading(null); setPending(false); return; }
+    if (!read || text.trim().length < MIN_READ_LENGTH) return;
     // Back to text already read: cancel any request still out, so its late answer cannot replace this one.
-    if (reading?.for === text) { asked.current++; setPending(false); return; }
+    if (reading?.for === text) { asked.current++; return; }
     const ask = ++asked.current;
-    setPending(true);
     const t = setTimeout(async () => {
       const r = await read(text).catch(() => null);
       if (ask !== asked.current) return;
-      setPending(false);
       setReading({ for: text, rule: r });
     }, READ_AFTER_MS);
     return () => clearTimeout(t);
@@ -96,29 +120,21 @@ export function RuleForm({ onAdd, read, accounts = [] }: { accounts?: { id: stri
         maxLength={MAX_RULE_TEXT}
         description={ruleTextHint(text.length)}
         error={fieldProblem ?? undefined}
-        onChange={(e) => { setText(e.target.value); setProblem(null); setFieldProblem(null); }}
+        onChange={(e) => {
+          setText(e.target.value); setProblem(null); setFieldProblem(null);
+          // Too short to read: the last reading goes, so the next long-enough text is read afresh.
+          if (e.target.value.trim().length < MIN_READ_LENGTH) setReading(null);
+        }}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submit(); } }}
       />
       {text.length > 150 && text.length < MAX_RULE_TEXT && <p className={styles.count} aria-live="polite"><span className="tnum">{text.length}</span> of {MAX_RULE_TEXT} characters</p>}
-      {read && text.trim().length >= 4 && !(read_ && !pending && !current) && (
-        <div className={styles.reading} aria-live="polite">
-          <span className={styles.readingLabel}>Reads as</span>
-          {current ? (
-            <>
-              {tagsFor(current).map((t) => <span key={t} className={styles.tag} data-kind={current.kind}>{t}</span>)}
-              {current.kind !== "guidance" && (
-                <button type="button" className={styles.untag} onClick={() => setReading({ for: text, rule: { kind: "guidance", text, channels: "all", level: "warn" } })}>Keep as written</button>
-              )}
-            </>
-          ) : <span className={styles.readingWait}>Reading…</span>}
-        </div>
-      )}
+      {readable && !(read_ && !pending && !current) && <ReadsAs rule={current} onKeepAsWritten={() => setReading({ for: text, rule: { kind: "guidance", text, channels: "all", level: "warn" } })} />}
       <div className={styles.formFields}>
         <Select label="Applies to" value={network} onValueChange={setNetwork} options={[{ value: "all", label: "Every network" }, ...Object.entries(NETWORKS).map(([value, label]) => ({ value, label: `All ${label} accounts` })), ...accounts.map(a => ({ value: `account:${a.id}`, label: `${a.name} · ${NETWORKS[a.service] ?? a.service}` }))]} />
         <Select label="If a draft breaks it" value={level} onValueChange={setLevel} options={[{ value: "warn", label: "Flag it, and still save it" }, { value: "block", label: "Stop it, and do not save it" }]} />
       </div>
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
-      <div><Button type="submit" variant="primary" disabled={busy || (!text.trim() && !added)}>{busy ? "Adding…" : added ? "✓ Added" : "Add rule"}</Button></div>
+      <div><Button type="submit" variant="primary" disabled={busy || (!text.trim() && !added)}>{actionLabel(busy, added, { busy: "Adding…", again: "✓ Added", first: "Add rule" })}</Button></div>
     </form>
   );
 }

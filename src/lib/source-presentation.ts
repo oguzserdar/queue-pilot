@@ -22,18 +22,32 @@ export async function sourceCards(userId: string, posts: Post[], channels: Chann
     const current = latest.find(s => s?.sourceKey === old?.sourceKey);
     const post = waiting.find(p => p.id === e.bufferPostId);
     if (!old || !current || !post) return [];
-    const judgment = e.judgment?.snapshotId === current.id && e.judgment.draftText === post.text ? e.judgment : null;
-    const needsCheck = evidenceNeedsCheck(e, current, post.text);
-    const edited = needsCheck && !judgment && current.id === old.id && post.text !== e.draftText;
-    const channel = channels.find(c => c.id === post.channelId);
-    return [{ sourceKey: current.sourceKey, channel: channel?.name ?? post.channelId, network: channel?.service, dueAt: post.dueAt, timeZone: channel?.timezone, postId: post.id, snapshotId: e.snapshotId, title: current.title ?? "Source", uri: current.uri, claim: e.claim, quote: e.quote, locator: e.locator,
-      kind: old.metadata.kind, captions: old.metadata.captions, paidPreview: old.metadata.paidPreview, truncated: old.metadata.truncated, lastCheckedAt: current.lastCheckedAt.toISOString(), needsCheck, changed: current.id !== old.id,
-      scheduled: post.status === "scheduled", editable: post.status === "draft", oldText: old.text, newText: current.text, draftText: post.text,
-      why: judgment?.why ?? (edited ? EDITED_DRAFT_LINE : needsCheck ? "Check this draft against the current source." : "The quote matches the saved source version."),
-      ...(edited ? { edited } : {}),
-      ...(judgment && !judgment.holds && judgment.rewrite ? { rewrite: judgment.rewrite } : {}),
-    }];
+    return [cardOf(e, old, current, post, channels.find(c => c.id === post.channelId))];
   });
+}
+
+type Evidence = Awaited<ReturnType<typeof evidenceForPosts>>[number];
+type Original = NonNullable<Awaited<ReturnType<typeof sourceById>>>;
+type Current = NonNullable<Awaited<ReturnType<typeof latestSource>>>;
+
+/** One draft's evidence card: the quote it rests on, the source then and now, and whether it needs a check. */
+function cardOf(e: Evidence, old: Original, current: Current, post: Post, channel: Channel | undefined): EvidenceCard {
+  const judgment = e.judgment?.snapshotId === current.id && e.judgment.draftText === post.text ? e.judgment : null;
+  const needsCheck = evidenceNeedsCheck(e, current, post.text);
+  const edited = needsCheck && !judgment && current.id === old.id && post.text !== e.draftText;
+  return { sourceKey: current.sourceKey, channel: channel?.name ?? post.channelId, network: channel?.service, dueAt: post.dueAt, timeZone: channel?.timezone, postId: post.id, snapshotId: e.snapshotId, title: current.title ?? "Source", uri: current.uri, claim: e.claim, quote: e.quote, locator: e.locator,
+    kind: old.metadata.kind, captions: old.metadata.captions, paidPreview: old.metadata.paidPreview, truncated: old.metadata.truncated, lastCheckedAt: current.lastCheckedAt.toISOString(), needsCheck, changed: current.id !== old.id,
+    scheduled: post.status === "scheduled", editable: post.status === "draft", oldText: old.text, newText: current.text, draftText: post.text,
+    why: judgment?.why ?? whyLine(edited, needsCheck),
+    ...(edited ? { edited } : {}),
+    ...(judgment && !judgment.holds && judgment.rewrite ? { rewrite: judgment.rewrite } : {}),
+  };
+}
+
+/** The card's line when no current judgment explains it. */
+function whyLine(edited: boolean, needsCheck: boolean): string {
+  if (edited) return EDITED_DRAFT_LINE;
+  return needsCheck ? "Check this draft against the current source." : "The quote matches the saved source version.";
 }
 
 /** The pages already loaded these cards. Do not query the same evidence again for their approval state. */

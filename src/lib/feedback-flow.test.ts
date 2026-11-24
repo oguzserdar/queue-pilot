@@ -4,7 +4,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-const planFeedback = vi.fn();
+const planFeedback = vi.fn<typeof import("./feedback-plan").planFeedback>();
 vi.mock("./review-store", () => ({ postgresReviewStore: () => ({ list: async () => [{ id: "l1", createdAt: "2026-10-31T00:00:00Z", comments: [{ id: "c1", postId: "p1", text: "Say QP", quote: null }], drafts: [{ postId: "p1", text: "Queue Pilot ships." }] }] }) }));
 vi.mock("./buffer/snapshot-store", () => ({ postgresSnapshotStore: () => ({ get: async () => ({ data: { channels: [{ id: "ch1", service: "linkedin" }], posts: [{ id: "p1", status: "draft", channelId: "ch1", text: "Queue Pilot ships." }] } }) }) }));
 vi.mock("./written-store", () => ({ wroteIds: async () => new Set(["p1"]) }));

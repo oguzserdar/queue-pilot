@@ -4,7 +4,7 @@
  */
 import { appWords } from "./app-identity";
 import { deviceName } from "./device-name";
-import type { SecurityEvent } from "./security-events";
+import type { SecurityEvent, SecurityEventKind } from "./security-events";
 
 /** One line of the security activity list, already worded and dated. */
 export type ShownSecurityEvent = { what: string; where: string | null; when: string; items?: string[] };
@@ -23,27 +23,39 @@ function slotWords(slot: string): string {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** An event's detail and its counts: count is how many things one action covered. */
+type Told = { d: Record<string, string>; count: number; times: number };
+
+const postedTo = ({ d }: Told) => (d.name ? `Posted to ${d.name}` : "Posted to Telegram or Discord");
+
+/** The words for each kind of event. */
+const WORDS = {
+  sign_in: () => "Signed in",
+  // Older removals carry no verified flag and keep the name they were recorded with.
+  app_revoked: ({ d }) => (d.app ? `Removed ${appWords({ name: d.app, verified: d.verified !== "false" })}` : "Removed an AI app"),
+  account_deleted: () => "Account deleted",
+  app_connected: ({ d }) => {
+    const name = d.app ?? d.by;
+    return name ? `Connected ${appWords({ name, verified: d.verified !== "false" })}` : "Connected an AI app";
+  },
+  drafts_approved: ({ count }) => `Scheduled ${plural(count, "draft")}`,
+  moved_to_draft: ({ count }) => `Took ${plural(count, "post")} off the schedule, kept as ${count === 1 ? "a draft" : "drafts"}`,
+  draft_deleted: ({ times }) => (times > 1 ? `Deleted ${plural(times, "draft")}` : "Deleted a draft"),
+  content_item_deleted: ({ times }) => (times > 1 ? `Deleted ${plural(times, "post")} kept before choosing accounts` : "Deleted a post kept before choosing accounts"),
+  tag_deleted: ({ d }) => (d.name ? `Deleted the tag "${d.name}"` : "Deleted a tag"),
+  snippet_deleted: ({ times }) => (times > 1 ? `Deleted ${plural(times, "hashtag set")}` : "Deleted a hashtag set"),
+  note_deleted: ({ times }) => (times > 1 ? `Deleted ${plural(times, "note")}` : "Deleted a note"),
+  direct_post_sent: postedTo,
+  announcement_sent: postedTo,
+} satisfies Record<SecurityEventKind, (told: Told) => string>;
+
 /** What happened, in words. */
 function what(e: SecurityEvent): string {
   const d = e.detail ?? {};
   const count = Number(d.count ?? "1") || 1;
   // A delete records one thing per line, but its ids can include linked posts; times is how many lines were folded.
   const times = Number(d.times ?? "1") || 1;
-  switch (e.event) {
-    case "sign_in": return "Signed in";
-    // Older removals carry no verified flag and keep the name they were recorded with.
-    case "app_revoked": return d.app ? `Removed ${appWords({ name: d.app, verified: d.verified !== "false" })}` : "Removed an AI app";
-    case "account_deleted": return "Account deleted";
-    case "app_connected": return d.app ?? d.by ? `Connected ${appWords({ name: (d.app ?? d.by)!, verified: d.verified !== "false" })}` : "Connected an AI app";
-    case "drafts_approved": return `Scheduled ${plural(count, "draft")}`;
-    case "draft_deleted": return times > 1 ? `Deleted ${plural(times, "draft")}` : "Deleted a draft";
-    case "content_item_deleted": return times > 1 ? `Deleted ${plural(times, "post")} kept before choosing accounts` : "Deleted a post kept before choosing accounts";
-    case "tag_deleted": return d.name ? `Deleted the tag "${d.name}"` : "Deleted a tag";
-    case "snippet_deleted": return times > 1 ? `Deleted ${plural(times, "hashtag set")}` : "Deleted a hashtag set";
-    case "note_deleted": return times > 1 ? `Deleted ${plural(times, "note")}` : "Deleted a note";
-    case "direct_post_sent":
-    case "announcement_sent": return d.name ? `Posted to ${d.name}` : "Posted to Telegram or Discord";
-  }
+  return WORDS[e.event]({ d, count, times });
 }
 
 /** Who did it for actions, or the browser and address for a sign-in. */

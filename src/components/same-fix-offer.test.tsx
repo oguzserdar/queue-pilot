@@ -6,9 +6,10 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
-vi.mock("@/app/(app)/actions", () => ({ addRule: vi.fn(), readRule: vi.fn(), removeRule: vi.fn(), setRuleException: vi.fn() }))
-vi.mock("@/app/(app)/fix-actions", () => ({ checkRepeatedFixes: vi.fn(() => new Promise(() => {})), keepRepeatedFix: vi.fn(), setRepeatedFixAside: vi.fn() }))
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
+vi.mock("@/app/(app)/rule-actions", () => ({ addRule: vi.fn<typeof import("@/app/(app)/rule-actions").addRule>(), readRule: vi.fn<typeof import("@/app/(app)/rule-actions").readRule>(), removeRule: vi.fn<typeof import("@/app/(app)/rule-actions").removeRule>(), setRuleException: vi.fn<typeof import("@/app/(app)/rule-actions").setRuleException>() }))
+vi.mock("@/app/(app)/actions", () => ({}));
+vi.mock("@/app/(app)/fix-actions", () => ({ checkRepeatedFixes: vi.fn<typeof import("@/app/(app)/fix-actions").checkRepeatedFixes>(() => new Promise(() => {})), keepRepeatedFix: vi.fn<typeof import("@/app/(app)/fix-actions").keepRepeatedFix>(), setRepeatedFixAside: vi.fn<typeof import("@/app/(app)/fix-actions").setRepeatedFixAside>() }))
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["refresh"]>(), push: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["push"]>() }) }))
 
 const { SameFixOffer, EXAMPLE_SAME_FIX } = await import("./playbook-view")
 const { RepeatedFixes, readingLine } = await import("./repeated-fixes")

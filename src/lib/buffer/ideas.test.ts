@@ -2,7 +2,6 @@
  * @fileoverview Buffer ideas board: documented fields only, columns by name, paging, both success shapes, typed
  * refusals, and no retry after a failed create.
  */
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bufferReference, documentedFields, typeSection } from "./reference.test-support";
 import { createIdea, IDEA_SERVICES, listIdeas } from "./ideas";
@@ -14,7 +13,7 @@ const fieldsOf = (type: string) => documentedFields(REFERENCE, type);
 type Call = { query: string; variables: Record<string, unknown> };
 function fake(answers: unknown[]) {
   const calls: Call[] = [];
-  const run = vi.fn(async (_t: string, query: string, variables?: Record<string, unknown>) => {
+  const run = vi.fn<(t: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async (_t: string, query: string, variables?: Record<string, unknown>) => {
     calls.push({ query, variables: variables ?? {} });
     const a = answers.shift();
     if (a instanceof Error) throw a;

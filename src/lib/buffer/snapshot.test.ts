@@ -11,7 +11,7 @@ const NOW = new Date("2026-10-26T09:00:00Z");
  */
 function fakeBuffer() {
   const calls: string[] = [];
-  const query = vi.fn(async (_t: string, text: string, _v?: unknown, opts?: { onRateLimit?: (w: unknown) => void }) => {
+  const query = vi.fn<(t: string, text: string, v?: unknown, opts?: { onRateLimit?: (w: unknown) => void }) => Promise<unknown>>(async (_t: string, text: string, _v?: unknown, opts?: { onRateLimit?: (w: unknown) => void }) => {
     opts?.onRateLimit?.([{ policy: "250-in-24h", remaining: 200, resetSeconds: 3600 }]);
     const out: Record<string, unknown> = {};
     const asked: string[] = [];
@@ -84,7 +84,7 @@ describe("refreshSnapshot", () => {
 
   it("releases the claim when Buffer fails, so the next refresh can run", async () => {
     const store = memorySnapshotStore();
-    const failing = vi.fn(async () => { throw new Error("Buffer down"); }) as unknown as typeof bufferQuery;
+    const failing = vi.fn<() => Promise<never>>(async () => { throw new Error("Buffer down"); }) as unknown as typeof bufferQuery;
     await expect(refreshSnapshot("u1", "tok", { store, query: failing, now: () => NOW })).rejects.toThrow("Buffer down");
     expect(await store.claim("u1", NOW, new Date(NOW.getTime() + 1000))).toBe(true);
   });
@@ -114,8 +114,8 @@ describe("withSavedDrafts", () => {
     const { openSlots } = await import("../open-slots");
     const { withSavedDrafts } = await import("./snapshot");
     const channel = { id: "x", name: "X", service: "twitter", timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, organizationId: "o",
-      postingSchedule: [{ day: "mon", paused: false, times: ["09:00"] }] } as any;
-    const snap = { fetchedAt: new Date("2026-10-30T00:00:00Z"), rateLimit: [], data: { email: "e", organizationIds: ["o"], channels: [channel], posts: [] } } as any;
+      postingSchedule: [{ day: "mon", paused: false, times: ["09:00"] }] } as import("./queries").Channel;
+    const snap = { fetchedAt: new Date("2026-10-30T00:00:00Z"), rateLimit: [], data: { email: "e", organizationIds: ["o"], channels: [channel], posts: [] } } as unknown as Parameters<typeof withSavedDrafts>[0];
     const range = { start: new Date("2026-11-02T00:00:00Z"), end: new Date("2026-11-03T00:00:00Z") };
     const before = openSlots(snap.data.channels, snap.data.posts, range).slots;
     expect(before).toHaveLength(1);

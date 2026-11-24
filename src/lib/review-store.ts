@@ -7,6 +7,7 @@
 import { readPage, timeText, type Page, type PageFrom } from "./page-bookmark";
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, gt, sql } from "drizzle-orm";
+import * as z from "zod";
 import { user } from "../db/auth-schema";
 import { db } from "../db";
 import { reviewComment, reviewLink } from "../db/schema";
@@ -42,16 +43,40 @@ export function checkComment(drafts: SharedDraft[], input: CommentInput): { ok: 
   const hasStart = input.start !== undefined && input.start !== null;
   const hasEnd = input.end !== undefined && input.end !== null;
   if (!hasStart && !hasEnd) return { ok: true, comment: { postId: draft.postId, name, text, quote: null, start: null, end: null } };
-  const start = input.start;
-  const end = input.end;
-  if (!Number.isInteger(start) || !Number.isInteger(end) || (start as number) < 0 || (end as number) <= (start as number) || (end as number) > draft.text.length) {
-    return { ok: false, message: "Highlight the words again." };
-  }
-  return { ok: true, comment: { postId: draft.postId, name, text, quote: draft.text.slice(start as number, end as number), start: start as number, end: end as number } };
+  const span = highlight(input.start, input.end, draft.text.length);
+  if (!span) return { ok: false, message: "Highlight the words again." };
+  return { ok: true, comment: { postId: draft.postId, name, text, quote: draft.text.slice(span.start, span.end), start: span.start, end: span.end } };
+}
+
+/** A highlight as whole character offsets inside a draft of this length, or null when it is not one. */
+function highlight(start: unknown, end: unknown, length: number): { start: number; end: number } | null {
+  if (typeof start !== "number" || typeof end !== "number" || !Number.isInteger(start) || !Number.isInteger(end)) return null;
+  if (start < 0 || end <= start || end > length) return null;
+  return { start, end };
+}
+
+// The drafts a link holds, copied when it was shared (create). Read instead of trusted: a draft without its post id
+// cannot be commented on or shown, so it is skipped; a missing text field reads as empty.
+const SharedDraftShape = z.looseObject({
+  postId: z.string(),
+  channelId: z.string().optional().catch(undefined),
+  network: z.string().catch(""),
+  channel: z.string().catch(""),
+  dueAt: z.string().nullable().catch(null),
+  text: z.string().catch(""),
+});
+
+/** The stored drafts column as shared drafts. */
+function sharedDrafts(stored: unknown): SharedDraft[] {
+  if (!Array.isArray(stored)) return [];
+  return stored.flatMap((d) => {
+    const draft = SharedDraftShape.safeParse(d);
+    return draft.success ? [draft.data] : [];
+  });
 }
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
-const toLink = (r: typeof reviewLink.$inferSelect): ReviewLink => ({ id: r.id, drafts: r.drafts as SharedDraft[], createdAt: r.createdAt.toISOString(), revokedAt: iso(r.revokedAt), expiresAt: r.expiresAt.toISOString() });
+const toLink = (r: typeof reviewLink.$inferSelect): ReviewLink => ({ id: r.id, drafts: sharedDrafts(r.drafts), createdAt: r.createdAt.toISOString(), revokedAt: iso(r.revokedAt), expiresAt: r.expiresAt.toISOString() });
 const toComment = (r: typeof reviewComment.$inferSelect): ReviewComment => ({ id: r.id, postId: r.postId, name: r.name, text: r.text, quote: r.quote, start: r.start, end: r.end, createdAt: r.createdAt.toISOString() });
 
 /** Review links per page on the Reviews page. */
@@ -135,7 +160,7 @@ export function postgresReviewStore() {
       return db().transaction(async tx => {
         const [link] = await tx.select().from(reviewLink).where(eq(reviewLink.id, linkId)).for("update");
         if (!link || link.revokedAt || link.expiresAt.getTime() <= Date.now()) return false;
-        const checked = checkComment(link.drafts as SharedDraft[], c);
+        const checked = checkComment(sharedDrafts(link.drafts), c);
         if (!checked.ok) return false;
         const [{ count }] = await tx.select({ count: sql<number>`count(*)::int` }).from(reviewComment).where(eq(reviewComment.linkId, linkId));
         if (count >= MAX_COMMENTS) return false;

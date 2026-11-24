@@ -40,6 +40,28 @@ export const rulesFor = (rules: Rule[], network: string, channelId?: string) => 
 /** The person's sentence, closed with a full stop when it has none, so the precision after it reads as a new sentence. */
 const closed = (t: string) => (/[.!?…]["'”»)]?$/.test(t.trim()) ? t.trim() : `${t.trim()}.`);
 
+/** Where a banned phrase may not stand, as the judge reads it. */
+function bannedPlace(where: "start" | "end" | undefined): string {
+  if (where === "start") return "open the post with";
+  if (where === "end") return "end the post with";
+  return "use";
+}
+
+/** What a replacement rule asks about capitalization. */
+function capitalization(from: string, to: string): string {
+  return from.toLocaleLowerCase() === to.toLocaleLowerCase()
+    ? "This is a capitalization change: require the replacement’s exact capitalization."
+    : "Capitalization variants of the replacement are allowed. This wording replacement does not impose lowercase or uppercase spelling.";
+}
+
+/** What the typed kind adds to the person's sentence; empty for a rule in their own words. */
+function precisionFor(r: Rule): string {
+  if (r.kind === "banned") return `Never ${bannedPlace(r.where)} ${r.phrases.map((p) => `"${p}"`).join(" or ")}, nor a translation of it or wording that means the same.${r.where ? ` Elsewhere in the post it is allowed.` : ""}`;
+  if (r.kind === "replace") return `Say "${r.to}", never "${r.from}", when referring to this subject. This covers translations, other word forms and words that mean the same as "${r.from}". If the post does not refer to this subject, pass this rule: a replacement does not require the subject to be mentioned. ${capitalization(r.from, r.to)}`;
+  if (r.kind === "ends_with") return `The words to end with are "${r.phrase}", or the same line in the post's language.`;
+  return "";
+}
+
 /**
  * A rule as the model reads it: the person's own sentence first, so its scope ("every post", "posts about the
  * cookbook") is kept, then what the typed kind adds: the exact words, and that translations and rephrasings count.
@@ -48,10 +70,7 @@ const closed = (t: string) => (/[.!?…]["'”»)]?$/.test(t.trim()) ? t.trim() 
  * @returns One instruction for the judge, the writer or a connected AI
  */
 export function describeRule(r: Rule): string {
-  const precision = r.kind === "banned" ? `Never ${r.where === "start" ? "open the post with" : r.where === "end" ? "end the post with" : "use"} ${r.phrases.map((p) => `"${p}"`).join(" or ")}, nor a translation of it or wording that means the same.${r.where ? ` Elsewhere in the post it is allowed.` : ""}`
-    : r.kind === "replace" ? `Say "${r.to}", never "${r.from}", when referring to this subject. This covers translations, other word forms and words that mean the same as "${r.from}". If the post does not refer to this subject, pass this rule: a replacement does not require the subject to be mentioned. ${r.from.toLocaleLowerCase() === r.to.toLocaleLowerCase() ? "This is a capitalization change: require the replacement’s exact capitalization." : "Capitalization variants of the replacement are allowed. This wording replacement does not impose lowercase or uppercase spelling."}`
-    : r.kind === "ends_with" ? `The words to end with are "${r.phrase}", or the same line in the post's language.`
-    : "";
+  const precision = precisionFor(r);
   return precision ? [r.text.trim() && closed(r.text), precision].filter(Boolean).join(" ") : r.text;
 }
 
@@ -129,6 +148,22 @@ async function decideWithText(model: LanguageModel, draft: JudgeInput, rules: Ru
   return Object.fromEntries(output.verdicts.filter((v) => v.rule in questions).map((v) => [v.rule, { choice: v.choice }]));
 }
 
+// One rule's answer, read instead of trusted. A present answer of another shape still counts as an answer, with no
+// choice and no probabilities, as it did when the answers were taken as typed.
+const AnswersShape = z.record(z.string(), z.unknown()).catch({});
+const AnswerShape = z.object({
+  choice: z.string().optional().catch(undefined),
+  probabilities: z.record(z.string(), z.number()).optional().catch(undefined),
+});
+
+/** The answer for one rule key, or undefined when the check gave none. */
+function answerFor(answers: unknown, key: string): z.infer<typeof AnswerShape> | undefined {
+  const raw = AnswersShape.parse(answers)[key];
+  if (!raw) return undefined;
+  const parsed = AnswerShape.safeParse(raw);
+  return parsed.success ? parsed.data : {};
+}
+
 /** Verdicts for one draft. */
 async function judgeOne(m: Judges, draft: JudgeInput, rules: Rule[], strict: boolean): Promise<Verdict[]> {
   const answers = m.decider
@@ -143,7 +178,7 @@ async function judgeOne(m: Judges, draft: JudgeInput, rules: Rule[], strict: boo
   return Promise.all(
     rules.map(async (r): Promise<Verdict> => {
       const base = { ruleId: r.id, rule: r.text, level: r.level };
-      const a = (answers as Record<string, { choice?: string; probabilities?: Record<string, number> } | undefined>)[`rule_${r.id}`];
+      const a = answerFor(answers, `rule_${r.id}`);
       const choice = a?.choice === "pass" || a?.choice === "fail" ? a.choice : "unsure";
       const probability = a?.probabilities?.[choice] ?? null;
       if (!a) return { ...base, verdict: "unsure", probability: null, quote: "", reason: "The check gave no answer for this rule.", unavailable: true };

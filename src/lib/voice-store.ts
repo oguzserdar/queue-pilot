@@ -110,7 +110,9 @@ export function postgresVoiceStore(): VoiceStore {
  * but a model reads them, so they could carry instructions the person never saw.
  */
 export function visibleText(text: string): string {
-  return text.replace(/[\p{Cf}]|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, "");
+  // Control characters are every Cc (U+0000 to U+001F and U+007F to U+009F) except tab, line feed, carriage return
+  // and the C1 range U+0080 to U+009F: the same set as U+0000-0008, 000B, 000C, 000E-001F and 007F.
+  return text.replace(/\p{Cf}|(?![\t\n\r\u0080-\u009F])\p{Cc}/gu, "");
 }
 
 /**

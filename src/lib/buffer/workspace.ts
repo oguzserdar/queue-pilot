@@ -138,12 +138,16 @@ export async function channelSettings(token: string, organizationId: string, run
     features: c.authorizationStatus,
     content: c.content.map((k) => ({
       types: k.configurationContentTypes,
-      rules: k.rules.flatMap((r): ContentRule[] =>
-        r.__typename === "LengthRule" && typeof r.maxLength === "number" ? [{ kind: "length", property: r.property, maxLength: r.maxLength }]
-        : r.__typename === "CountRule" ? [{ kind: "count", property: r.property, min: r.min ?? null, max: r.max ?? null }]
-        : []),
+      rules: k.rules.flatMap(toContentRule),
     })),
   }));
+}
+
+/** One of Buffer's content rules in our terms; none for a rule kind we do not read yet. */
+function toContentRule(r: RawRule): ContentRule[] {
+  if (r.__typename === "LengthRule" && typeof r.maxLength === "number") return [{ kind: "length", property: r.property, maxLength: r.maxLength }];
+  if (r.__typename === "CountRule") return [{ kind: "count", property: r.property, min: r.min ?? null, max: r.max ?? null }];
+  return [];
 }
 
 /** Whether the channel may post now: only an explicit entry from Buffer counts; no entry means Buffer did not say. */

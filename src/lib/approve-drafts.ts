@@ -29,6 +29,18 @@ const EDIT_POST = `mutation ($input: EditPostInput!) {
   }
 }`;
 
+/** Why a draft cannot be scheduled before Buffer is asked, or null when it may be. Checked in this order. */
+async function refusalBeforeScheduling(id: string, p: Post | undefined, wrote: ReadonlySet<string>, now: Date, checkImage: (url: string) => Promise<Check>): Promise<string | null> {
+  if (!p) return "This post is no longer in your Buffer queue.";
+  if (p.status !== "draft") return "This post is not a draft any more.";
+  if (!wrote.has(id)) return "Queue Pilot did not write this draft. Schedule it in Buffer.";
+  if (!p.dueAt || Date.parse(p.dueAt) <= now.getTime()) return "Its time has passed; pick a new time in Buffer.";
+  // A broken image link fails at publish time, so it is caught here instead (at most four images per post).
+  const images = (p.assets ?? []).filter((a) => a.type === "image").slice(0, 4);
+  const failed = (await Promise.all(images.map((a) => checkImage(a.source)))).find((c) => c.result === "fail");
+  return failed ? failed.detail : null;
+}
+
 /** Schedules drafts on approval. `posts` and `wrote` must both come from the signed-in person. */
 export async function approveDrafts(
   token: string,
@@ -50,14 +62,8 @@ export async function approveDrafts(
   for (let i = 0; i < batch.length; i++) {
     const id = batch[i];
     const p = byId.get(id);
-    if (!p) { refused.push({ id, reason: "This post is no longer in your Buffer queue." }); continue; }
-    if (p.status !== "draft") { refused.push({ id, reason: "This post is not a draft any more." }); continue; }
-    if (!wrote.has(id)) { refused.push({ id, reason: "Queue Pilot did not write this draft. Schedule it in Buffer." }); continue; }
-    if (!p.dueAt || Date.parse(p.dueAt) <= now.getTime()) { refused.push({ id, reason: "Its time has passed; pick a new time in Buffer." }); continue; }
-    // A broken image link fails at publish time, so it is caught here instead (at most four images per post).
-    const images = (p.assets ?? []).filter((a) => a.type === "image").slice(0, 4);
-    const failed = (await Promise.all(images.map((a) => checkImage(a.source)))).find((c) => c.result === "fail");
-    if (failed) { refused.push({ id, reason: failed.detail }); continue; }
+    const refusal = await refusalBeforeScheduling(id, p, wrote, now, checkImage);
+    if (refusal !== null || !p) { refused.push({ id, reason: refusal ?? "This post is no longer in your Buffer queue." }); continue; }
     try {
       const res = await q<{ editPost: { __typename: string; message?: string } }>(token, EDIT_POST, {
         // The text as just read from Buffer: without it Buffer treats the post as empty and refuses it.

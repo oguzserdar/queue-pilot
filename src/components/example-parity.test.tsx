@@ -6,11 +6,12 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("@/app/(app)/actions", () => ({}));
+vi.mock("@/app/(app)/rule-actions", () => ({}));
 vi.mock("@/app/(app)/review-actions", () => ({}));
 vi.mock("@/app/(app)/note-actions", () => ({}));
 vi.mock("@/app/(app)/tag-actions", () => ({}));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }), usePathname: () => "/", useSearchParams: () => new URLSearchParams() }));
-vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["refresh"]>(), push: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["push"]>() }), usePathname: () => "/", useSearchParams: () => new URLSearchParams() }));
+vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn<ReturnType<typeof import("@/registry/components/toast-stack/toast-stack").useToastStack>["toast"]>() }) }));
 
 const { WeekView } = await import("./week-view");
 const { PlaybookView } = await import("./playbook-view");

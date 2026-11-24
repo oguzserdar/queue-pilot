@@ -1,3 +1,9 @@
 Arc (https://github.com/kuratlielia/arc-library) at commit 55c0d3ebd7cc643ec118c4d8a11413e6fadcc7df, MIT, Copyright (c) 2026 Elia Kuratli.
-Copied: registry/ -> src/registry, lib/ -> src/lib. Unmodified unless noted here.
-Not copied: registry/blocks (page blocks; unused, and blog-grid has an upstream type error).
+The full license is in third-party/arc/LICENSE.
+
+Copied: registry/ -> src/registry, lib/motion-tokens.ts -> src/lib/motion-tokens.ts.
+Only the 33 components Queue Pilot uses are kept; the rest of Arc's components and its page blocks are not included.
+
+Changed by Queue Pilot: 16 files. Each one, with its hash and the reason for the change, is listed under
+"ourPatches" in scripts/registry-upstream.json. Every other file is byte for byte Arc's own at the commit above;
+scripts/check-registry.mjs (part of `pnpm lint`) checks that.

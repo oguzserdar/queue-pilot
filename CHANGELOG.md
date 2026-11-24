@@ -5,6 +5,10 @@ All notable changes to Queue Pilot are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A post you take off the schedule in Buffer no longer comes back as a draft that "Approve all" would schedule again. Queue Pilot marks it as moved back by you. It is left out of Approve all, your AI can never schedule it, and you can still approve it on its own card.
+
 ## [1.0.0] - 2026-11-12 Stable enough
 
 ### Added

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { refreshBuffer, type RefreshResult } from "@/app/(app)/actions";
 import { RefreshCWIcon } from "./animated-icons/refresh-cw";
+import { useReaderClock } from "./reader-clock";
 import styles from "./buffer-sync.module.css";
 
 /**
@@ -26,7 +27,8 @@ export function BufferSyncProvider({ fetchedAt, needsRefresh, preview, children 
   children: ReactNode;
 }) {
   const [status, setStatus] = useState<Status>(preview ?? { kind: "idle" });
-  const [now, setNow] = useState<number | null>(null);
+  // The clock starts after mount, so server and browser render the same markup; it moves every 30 seconds.
+  const now = useReaderClock(30_000);
   const busy = useRef(false);
 
   const sync = useCallback(() => {
@@ -42,13 +44,6 @@ export function BufferSyncProvider({ fetchedAt, needsRefresh, preview, children 
       .catch(() => setStatus({ kind: "failed" }))
       .finally(() => { busy.current = false; });
   }, [preview]);
-
-  // The clock starts after mount, so server and browser render the same markup.
-  useEffect(() => {
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, [fetchedAt]);
 
   // An old copy syncs once on load, and again whenever the tab comes back and the copy has aged past 5 minutes.
   useEffect(() => {

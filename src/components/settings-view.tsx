@@ -4,6 +4,9 @@ import { ChannelsPanel, EXAMPLE_CHANNELS, type ChannelsPanelProps } from "./sour
 
 
 import { SignInButton } from "./sign-in-button";
+import { SocialAccounts } from "./social-accounts";
+import { ReplyAutomations, type AutomationRow } from "./reply-automations";
+import type { SocialAccountView } from "@/lib/social-accounts";
 import { UrlTabs } from "./url-tabs";
 
 import { Avatar } from "@/registry/components/avatar/avatar";
@@ -36,6 +39,8 @@ export type SettingsAccount = {
   /** AI apps allowed to use this account through the connector. */
   /** Null when the list could not be read. */
   apps: ApprovedApp[] | null;
+  /** For the admin only: the connections (approval ids) given admin access. Absent for everyone else. */
+  adminApps?: string[];
   /** The person's own AI key in masked form; null when none is saved, undefined when it could not be read. */
   aiKey?: ShownAiKey;
   /** Today's use of Queue Pilot's built-in key; null when there is none or the person has their own key. */
@@ -56,6 +61,12 @@ export type SettingsAccount = {
   rateLimit?: { policy: string; remaining: number }[];
   /** Buffer channels and the Telegram and Discord copies, for the Channels tab. */
   channelsPanel?: ChannelsPanelProps;
+  /** Connected Mastodon and Bluesky accounts; null when they could not be read. */
+  socialAccounts?: SocialAccountView[] | null;
+  /** The person's reply automations; null when they could not be read. */
+  automations?: AutomationRow[] | null;
+  /** The code the Mastodon connect sent back, shown once on the Channels tab. */
+  mastodonResult?: string | null;
 };
 
 /** Settings: the example account when signed out, the person's own tabs when signed in. */
@@ -79,9 +90,11 @@ const EXAMPLE_ACCOUNT: SettingsAccount = {
     { event: "draft_deleted", detail: { by: "Queue Pilot", via: "app", count: "1", ids: "example-4", slots: "Instagram|Alex Rivera|2026-11-18T23:00:00.000Z" }, ip: null, userAgent: null, createdAt: "2026-10-28T08:05:00.000Z" },
     { event: "sign_in", detail: null, ip: null, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/140.0 Safari/537.36", createdAt: "2026-10-28T08:00:00.000Z" },
     { event: "app_connected", detail: { by: "Claude", via: "ai" }, ip: null, userAgent: null, createdAt: "2026-10-20T09:00:00.000Z" },
-  ] as SecurityEvent[]),
+  ] satisfies SecurityEvent[]),
   notice: null,
   channelsPanel: EXAMPLE_CHANNELS,
+  socialAccounts: [{ id: "example-mastodon", network: "mastodon", handle: "@alex@mastodon.social", server: "https://mastodon.social", repliesOn: true, broken: false, connectedAt: "2026-10-20T09:00:00.000Z", postingSchedule: [{ day: "tue", times: ["09:00"] }, { day: "thu", times: ["09:00", "17:30"] }], timeZone: "Europe/London" }],
+  automations: [{ id: "example-auto", accountId: "example-mastodon", name: "Weekly guide", active: true, post: { scope: "any" }, keywords: ["guide"], replyMode: "fixed", replyTexts: ["Here is this week's guide!", "Sent! Enjoy the guide."], link: "https://alex.example/guide" }],
 };
 
 /** Settings: the person's own tabs when signed in, the same screen with the example account when not. */
@@ -92,25 +105,13 @@ export function SettingsView({ account, tab }: { account?: SettingsAccount; tab?
 /** The settings tabs; the open one lives in the address (?tab=ai) so a reload or a shared link opens it again. */
 const TABS = ["account", "channels", "ai", "security"] as const;
 type Tab = (typeof TABS)[number];
+const isTab = (v: string): v is Tab => TABS.some((t) => t === v);
 
-function LiveSettings({ account, tab, example = false }: { account: SettingsAccount; tab?: string; example?: boolean }) {
-  const open: Tab = TABS.includes(tab as Tab) ? (tab as Tab) : "account";
+/** The Account tab: the Buffer account, downloading your data, and deleting the account. */
+function AccountTab({ account, example }: { account: SettingsAccount; example: boolean }) {
   const n = account.channelNames.length;
   return (
-    <div className={styles.page}>
-      <header className={styles.head}>
-        <h1 className={styles.title}>Settings</h1>
-      </header>
-
-      <UrlTabs key={open} initial={open} first="account">
-        <TabsList aria-label="Settings sections">
-          <TabsTrigger value="account">Account</TabsTrigger>
-          <TabsTrigger value="channels">Channels</TabsTrigger>
-          <TabsTrigger value="ai">AI</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-        </TabsList>
-        <TabsContent value="account">
-          <div className={styles.tab}>
+    <>
       <section className={styles.block} aria-labelledby="buffer">
         <h2 id="buffer" className={styles.h2}>Buffer</h2>
         <p className={styles.muted}>You sign in with Buffer, so your name, email and picture come from your Buffer account. Change them in Buffer, and Queue Pilot picks them up the next time you sign in.</p>
@@ -151,14 +152,18 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
         <p className={styles.muted}>Removes everything Queue Pilot keeps for you: your saved queue copy, sources, voice, Telegram and Discord copies, sign-ins and AI approvals. Your Buffer account, posts and drafts stay as they are. This cannot be undone.</p>
         {example ? <div><SignInButton>Sign in to manage your account</SignInButton></div> : <DeleteAccount />}
       </section>
-          </div>
-        </TabsContent>
-        <TabsContent value="ai">
-          <div className={styles.tab}>
+    </>
+  );
+}
+
+/** The AI tab: connected AI apps, whether they may schedule, and your own AI key. */
+function AiTab({ account, example }: { account: SettingsAccount; example: boolean }) {
+  return (
+    <>
       <section className={styles.block} aria-labelledby="ai-apps">
         <h2 id="ai-apps" className={styles.h2}>Connected AI apps</h2>
         <p className={styles.muted}>AI apps you allowed to read your queue and save drafts through Queue Pilot.</p>
-        <AiApps apps={account.apps} />
+        <AiApps apps={account.apps} adminApps={account.adminApps} />
       </section>
       <section className={styles.block} aria-labelledby="ai-approve">
         <h2 id="ai-approve" className={styles.h2}>Can your AI schedule posts?</h2>
@@ -169,15 +174,58 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
         <p className={styles.muted}>For writing drafts here without connecting an AI app. Calls go from Queue Pilot to your provider with your key, and you pay your provider for them.</p>
         <AiKeyCard shown={account.aiKey} allowance={account.allowance ?? null} notice={account.notice ?? null} />
       </section>
-          </div>
-        </TabsContent>
-        <TabsContent value="channels">
-          <div className={styles.tab}>
-            {account.channelsPanel ? <ChannelsPanel {...account.channelsPanel} /> : <p className={styles.muted}>Your channels could not be read just now.</p>}
-          </div>
-        </TabsContent>
-        <TabsContent value="security">
-          <div className={styles.tab}>
+    </>
+  );
+}
+
+/** The Channels tab: Buffer channels, other social accounts, and reply automations. */
+function ChannelsTab({ account, example }: { account: SettingsAccount; example: boolean }) {
+  return (
+    <>
+      {account.channelsPanel ? <ChannelsPanel {...account.channelsPanel} /> : <p className={styles.muted}>Your channels could not be read just now.</p>}
+      <SocialAccounts accounts={account.socialAccounts ?? null} mastodonResult={account.mastodonResult} example={example} />
+      {account.automations === null
+        ? <p className={styles.muted}>Your reply automations could not be read just now.</p>
+        : <ReplyAutomations accounts={(account.socialAccounts ?? []).filter((a) => !a.broken).map((a) => ({ id: a.id, handle: a.handle, network: a.network }))} automations={account.automations ?? []} example={example} />}
+    </>
+  );
+}
+
+/** The security activity list: each event with where and when; a batch of drafts opens to show which ones. */
+function SecurityEvents({ events }: { events: SettingsAccount["security"] }) {
+  if (events === null) return <p className={styles.muted}>Security activity could not be read just now.</p>;
+  if (!events?.length) return <p className={styles.muted}>No activity recorded yet.</p>;
+  return (
+    <ul className={styles.events}>
+      {events.map((e, i) => (
+        <li key={i}>
+          {e.items ? (
+            // Which drafts it was: account and time slot only, never the post's text.
+            <details className={styles.eventItems}>
+              <summary>
+                <strong>{e.what}</strong>
+                {e.where && <span className={styles.muted}>{e.where}</span>}
+                <time className={styles.muted}>{e.when}</time>
+              </summary>
+              <ul>{e.items.map((t, j) => <li key={j} className={styles.muted}>{t}</li>)}</ul>
+            </details>
+          ) : (
+            <>
+              <strong>{e.what}</strong>
+              {e.where && <span className={styles.muted}>{e.where}</span>}
+              <time className={styles.muted}>{e.when}</time>
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The Security tab: where you are signed in and the security activity. */
+function SecurityTab({ account }: { account: SettingsAccount }) {
+  return (
+    <>
       <section className={styles.block} aria-labelledby="devices">
         <h2 id="devices" className={styles.h2}>Where you are signed in</h2>
         <SignedInDevices devices={account.devices} />
@@ -185,37 +233,46 @@ function LiveSettings({ account, tab, example = false }: { account: SettingsAcco
       <section className={styles.block} aria-labelledby="security">
         <h2 id="security" className={styles.h2}>Security activity</h2>
         <p className={styles.muted}>Sign-ins, AI apps connected or removed, and every draft scheduled or deleted, with who did it.</p>
-        {account.security === null ? (
-          <p className={styles.muted}>Security activity could not be read just now.</p>
-        ) : !account.security?.length ? (
-          <p className={styles.muted}>No activity recorded yet.</p>
-        ) : (
-          <ul className={styles.events}>
-            {account.security.map((e, i) => (
-              <li key={i}>
-                {e.items ? (
-                  // Which drafts it was: account and time slot only, never the post's text.
-                  <details className={styles.eventItems}>
-                    <summary>
-                      <strong>{e.what}</strong>
-                      {e.where && <span className={styles.muted}>{e.where}</span>}
-                      <time className={styles.muted}>{e.when}</time>
-                    </summary>
-                    <ul>{e.items.map((t, j) => <li key={j} className={styles.muted}>{t}</li>)}</ul>
-                  </details>
-                ) : (
-                  <>
-                    <strong>{e.what}</strong>
-                    {e.where && <span className={styles.muted}>{e.where}</span>}
-                    <time className={styles.muted}>{e.when}</time>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+        <SecurityEvents events={account.security} />
         {account.securityPages && <Pager path="/settings" query={{ tab: "security" }} older={account.securityPages.older} newer={account.securityPages.newer} label="Security activity pages" hash="security" />}
       </section>
+    </>
+  );
+}
+
+function LiveSettings({ account, tab, example = false }: { account: SettingsAccount; tab?: string; example?: boolean }) {
+  const open: Tab = tab !== undefined && isTab(tab) ? tab : "account";
+  return (
+    <div className={styles.page}>
+      <header className={styles.head}>
+        <h1 className={styles.title}>Settings</h1>
+      </header>
+
+      <UrlTabs key={open} initial={open} first="account">
+        <TabsList aria-label="Settings sections">
+          <TabsTrigger value="account">Account</TabsTrigger>
+          <TabsTrigger value="channels">Channels</TabsTrigger>
+          <TabsTrigger value="ai">AI</TabsTrigger>
+          <TabsTrigger value="security">Security</TabsTrigger>
+        </TabsList>
+        <TabsContent value="account">
+          <div className={styles.tab}>
+            <AccountTab account={account} example={example} />
+          </div>
+        </TabsContent>
+        <TabsContent value="ai">
+          <div className={styles.tab}>
+            <AiTab account={account} example={example} />
+          </div>
+        </TabsContent>
+        <TabsContent value="channels">
+          <div className={styles.tab}>
+            <ChannelsTab account={account} example={example} />
+          </div>
+        </TabsContent>
+        <TabsContent value="security">
+          <div className={styles.tab}>
+            <SecurityTab account={account} />
           </div>
         </TabsContent>
       </UrlTabs>

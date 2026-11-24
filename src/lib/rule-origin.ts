@@ -5,6 +5,7 @@
  * (`addedBy`), and the approver on a written draft. A rule with no record has no origin: never guess one.
  */
 
+import * as z from "zod";
 import { appWords, capAppName, type ConnectedApp } from "./app-identity";
 
 /**
@@ -69,16 +70,22 @@ export function serializeApprover(approver: Approver): string {
   return JSON.stringify(approver.via === "app" ? { via: "app" } : { via: "ai", app: capAppName(approver.app), verified: approver.verified });
 }
 
+const StoredApprover = z.object({ via: z.unknown().optional(), app: z.unknown().optional(), verified: z.unknown().optional() });
+
 /** Reads a stored approver: the tagged JSON form, or an older bare string. */
 function parseApprover(stored: string): Approver | string {
   if (!stored.startsWith("{")) return stored;
   try {
-    const v = JSON.parse(stored) as Record<string, unknown>;
-    if (v.via === "app") return APPROVED_IN_APP;
-    if (v.via === "ai" && typeof v.app === "string") return { via: "ai", app: v.app, verified: v.verified === true };
+    const v = StoredApprover.safeParse(JSON.parse(stored));
+    if (!v.success) return stored;
+    if (v.data.via === "app") return APPROVED_IN_APP;
+    if (v.data.via === "ai" && typeof v.data.app === "string") return { via: "ai", app: v.data.app, verified: v.data.verified === true };
   } catch { /* Not a tagged value: an older bare name. */ }
   return stored;
 }
+
+// Kept evidence, read field by field: every field may be missing or of another type in an older record.
+const Evidence = z.object({ kind: z.unknown().optional(), author: z.unknown().optional(), by: z.unknown().optional(), at: z.unknown().optional(), count: z.unknown().optional() });
 
 const day = (iso: unknown) => {
   const t = typeof iso === "string" ? Date.parse(iso) : NaN;
@@ -95,24 +102,47 @@ const times = (n: number) => (n === 2 ? "twice" : `${n} times`);
  */
 export function ruleOrigin(rule: { learnedFrom?: unknown; addedBy?: AddedBy }): string | null {
   const e = rule.learnedFrom;
-  if (e && typeof e === "object" && !Array.isArray(e)) {
-    const ev = e as Record<string, unknown>;
-    if (ev.kind === "note") {
-      const by = typeof ev.author === "string" && ev.author ? ev.author : typeof ev.by === "string" && ev.by ? ev.by : "a teammate";
-      const on = day(ev.at);
-      return `A note from ${by}${on ? ` on ${on}` : ""}`;
-    }
-    if (ev.kind === "review") return "A reviewer's comment";
-    if (ev.kind === "posts") return "Your past posts";
-    if (typeof ev.count === "number" && ev.count > 1) return `Your edit, ${times(ev.count)}`;
-  }
+  const learned = learnedOrigin(e);
+  if (learned) return learned;
   if (Array.isArray(e) && e.length) return "Your rewrites";
-  if (rule.addedBy === "you") return "Added by you";
-  if (rule.addedBy === "starting") return STARTING_RULE_ORIGIN;
-  if (rule.addedBy && typeof rule.addedBy === "object" && typeof rule.addedBy.app === "string") {
-    return rule.addedBy.verified === false ? `Added by ${appWords({ name: rule.addedBy.app, verified: false })}` : `Added by your AI (${rule.addedBy.app})`;
+  return addedByOrigin(rule.addedBy);
+}
+
+/** Where kept evidence says a rule came from, or null when the evidence is not a recorded object. */
+function learnedOrigin(e: unknown): string | null {
+  if (!e || typeof e !== "object" || Array.isArray(e)) return null;
+  const ev = Evidence.parse(e);
+  if (ev.kind === "note") {
+    const on = day(ev.at);
+    return `A note from ${noteAuthor(ev.author, ev.by)}${on ? ` on ${on}` : ""}`;
+  }
+  if (ev.kind === "review") return "A reviewer's comment";
+  if (ev.kind === "posts") return "Your past posts";
+  if (typeof ev.count === "number" && ev.count > 1) return `Your edit, ${times(ev.count)}`;
+  return null;
+}
+
+/** Who left a kept note: its author, else the older `by` field, else "a teammate". */
+function noteAuthor(author: unknown, by: unknown): string {
+  if (typeof author === "string" && author) return author;
+  if (typeof by === "string" && by) return by;
+  return "a teammate";
+}
+
+/** Who added a rule by hand, in words, or null when nobody was recorded. */
+function addedByOrigin(addedBy: AddedBy | undefined): string | null {
+  if (addedBy === "you") return "Added by you";
+  if (addedBy === "starting") return STARTING_RULE_ORIGIN;
+  if (addedBy && typeof addedBy === "object" && typeof addedBy.app === "string") {
+    return addedBy.verified === false ? `Added by ${appWords({ name: addedBy.app, verified: false })}` : `Added by your AI (${addedBy.app})`;
   }
   return null;
+}
+
+/** The approver in words: "you" for the in-app button, else the app's name. */
+function approverWho(a: Approver | string): string {
+  if (typeof a === "string") return a === LEGACY_IN_APP ? "you" : a;
+  return a.via === "app" ? "you" : appWords({ name: a.app, verified: a.verified });
 }
 
 /**
@@ -128,9 +158,7 @@ export function ruleOrigin(rule: { learnedFrom?: unknown; addedBy?: AddedBy }): 
 export function approverLine(approvedBy: Approver | string | null | undefined, approvedAt?: string | null): string | null {
   if (!approvedBy) return null;
   const a = typeof approvedBy === "string" ? parseApprover(approvedBy) : approvedBy;
-  const who = typeof a === "string"
-    ? a === LEGACY_IN_APP ? "you" : a
-    : a.via === "app" ? "you" : appWords({ name: a.app, verified: a.verified });
+  const who = approverWho(a);
   const on = day(approvedAt);
   return `Last approved through Queue Pilot: by ${who}${on ? `, ${on}` : ""}`;
 }

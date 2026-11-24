@@ -5,6 +5,7 @@
  * route and the callback, and the callback refuses anything that does not match all three.
  */
 import { createHash, randomBytes } from "node:crypto";
+import * as z from "zod";
 import { providerOf } from "./ai-key-store";
 
 /** The cookie that carries the PKCE verifier, state and user between start and callback. */
@@ -42,6 +43,9 @@ export function verifierFor(cookie: string | undefined, state: string | null, us
   return cookieUser === userId && cookieState === state ? verifier : null;
 }
 
+/** The key exchange's answer; anything without a string key reads as no key. */
+const KeyAnswer = z.object({ key: z.string() });
+
 /** Exchanges the callback's code for the person's OpenRouter key. */
 export async function exchangeCode(code: string, verifier: string, fetchImpl: typeof fetch = fetch): Promise<string> {
   const res = await fetchImpl(KEYS_URL, {
@@ -53,8 +57,8 @@ export async function exchangeCode(code: string, verifier: string, fetchImpl: ty
     throw new OpenRouterConnectError("Could not reach OpenRouter. Try again.");
   });
   if (!res.ok) throw new OpenRouterConnectError(`OpenRouter did not accept the sign-in (${res.status}). Try again.`);
-  const body = (await res.json().catch(() => null)) as { key?: unknown } | null;
-  const key = typeof body?.key === "string" ? body.key : "";
+  const body = KeyAnswer.safeParse(await res.json().catch(() => null));
+  const key = body.success ? body.data.key : "";
   if (providerOf(key) !== "openrouter") throw new OpenRouterConnectError("OpenRouter answered without a key Queue Pilot recognises.");
   return key;
 }

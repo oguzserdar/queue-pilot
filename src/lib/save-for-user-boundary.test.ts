@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Channel, Post } from "./buffer/queries";
 import type { OpenSlot } from "./open-slots";
+import type { StoredRule } from "./rules-store";
+import type { JudgeModel } from "./judge-model";
 
-const mocks = vi.hoisted(() => ({ rules: vi.fn(), model: vi.fn(), judge: vi.fn(), save: vi.fn(), edit: vi.fn(), settle: vi.fn() }));
+const mocks = vi.hoisted(() => ({ rules: vi.fn<ReturnType<typeof import("./rules-store").postgresRulesStore>["list"]>(), model: vi.fn<typeof import("./judge-model").judgeModelFor>(), judge: vi.fn<typeof import("./judge").judgeDrafts>(), save: vi.fn<typeof import("./save-drafts").saveDrafts>(), edit: vi.fn<(token: string, query: string, variables?: Record<string, unknown>) => Promise<never>>(), settle: vi.fn<import("./judge-model").JudgeModel["settle"]>() }));
 vi.mock("./rules-store", () => ({ postgresRulesStore: () => ({ list: mocks.rules }) }));
 vi.mock("./judge-model", () => ({ judgeModelFor: mocks.model, AiCapError: class extends Error {} }));
 vi.mock("./judge", async (original) => ({ ...await original<typeof import("./judge")>(), judgeDrafts: mocks.judge }));
@@ -12,8 +14,8 @@ import { updateDraft } from "./edit-drafts";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.rules.mockResolvedValue([{ id: "b", kind: "guidance", channels: "all", level: "block", text: "No hype." }]);
-  mocks.model.mockResolvedValue({ judges: {}, settle: mocks.settle });
+  mocks.rules.mockResolvedValue([{ id: "b", kind: "guidance", channels: "all", level: "block", text: "No hype." } as StoredRule]);
+  mocks.model.mockResolvedValue({ judges: {}, settle: mocks.settle } as unknown as JudgeModel);
   mocks.judge.mockResolvedValue(new Map());
 });
 

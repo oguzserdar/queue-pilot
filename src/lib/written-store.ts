@@ -50,7 +50,7 @@ export function postgresWrittenStore(): WrittenStore {
     async get(userId, postIds) {
       if (!postIds.length) return [];
       const rows = await db().select().from(written).where(and(eq(written.userId, userId), inArray(written.postId, postIds)));
-      return rows.map((r) => ({ postId: r.postId, network: r.network, text: r.text, ...(r.checkedText !== null ? { checkedText: r.checkedText } : {}), verdicts: (r.verdicts as Verdict[] | null) ?? null, ...(r.playbookRevision ? { playbookRevision: r.playbookRevision } : {}), ...(r.approvedBy ? { approvedBy: r.approvedBy, approvedAt: r.approvedAt?.toISOString() } : {}) }));
+      return rows.map((r) => ({ postId: r.postId, network: r.network, text: r.text, ...(r.checkedText !== null ? { checkedText: r.checkedText } : {}), verdicts: r.verdicts ?? null, ...(r.playbookRevision ? { playbookRevision: r.playbookRevision } : {}), ...(r.approvedBy ? { approvedBy: r.approvedBy, approvedAt: r.approvedAt?.toISOString() } : {}) }));
     },
     async markApproved(userId, postIds, by) {
       if (!postIds.length) return;

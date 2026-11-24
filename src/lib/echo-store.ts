@@ -65,7 +65,12 @@ export function memoryEchoStore(now: () => Date = () => new Date()): EchoStore {
 }
 
 type DestRow = typeof echoDestination.$inferSelect;
-const toDest = (r: DestRow): StoredDestination => ({ id: r.id, kind: r.kind, label: r.label, target: r.target, guildId: r.guildId, connectedAt: r.connectedAt.toISOString() });
+/** Bot destinations are only ever Telegram or Discord; any other value in this table is a bug, not a destination. */
+function botKind(kind: DestRow["kind"]): "telegram" | "discord" {
+  if (kind !== "telegram" && kind !== "discord") throw new Error(`Unexpected destination kind ${kind}`);
+  return kind;
+}
+const toDest = (r: DestRow): StoredDestination => ({ id: r.id, kind: botKind(r.kind), label: r.label, target: r.target, guildId: r.guildId, connectedAt: r.connectedAt.toISOString() });
 
 /** Destinations and copy records in Postgres through Drizzle. Every statement is scoped to the user id. */
 export function postgresEchoStore(): EchoStore {

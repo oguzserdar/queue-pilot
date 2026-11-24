@@ -2,7 +2,6 @@
  * @fileoverview Buffer collaboration Notes: documented fields only, paging, the missing-permission case, typed
  * refusals, and no retry after a failed create.
  */
-import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { bufferReference, documentedFields } from "./reference.test-support";
 import { BufferApiError } from "./client";
@@ -15,7 +14,7 @@ const node = (id: string, author: { id: string; name: string } | null = { id: "a
 type Call = { query: string; variables: Record<string, unknown> };
 function fake(answers: unknown[]) {
   const calls: Call[] = [];
-  const run = vi.fn(async (_t: string, query: string, variables?: Record<string, unknown>) => {
+  const run = vi.fn<(t: string, query: string, variables?: Record<string, unknown>) => Promise<unknown>>(async (_t: string, query: string, variables?: Record<string, unknown>) => {
     calls.push({ query, variables: variables ?? {} });
     const a = answers.shift();
     if (a instanceof Error) throw a;
@@ -100,7 +99,7 @@ describe("note mentions", () => {
       { type: "mention", content: "@Sara", text: "@Sara", displayValue: "Sara", serviceEntityId: "urn:buffer:account:a1", indices: [7, 12] },
       { type: "mention", content: "@bo@x.com", text: "@bo@x.com", displayValue: "bo@x.com", serviceEntityId: "urn:buffer:account:b2", indices: [17, 26] },
     ] });
-    if (r.ok) for (const k of Object.keys(r.annotations[0])) expect(documentedFields(ref, "AnnotationInput").has(k), k).toBe(true);
+    expect(r.ok && Object.keys(r.annotations[0]).filter((k) => !documentedFields(ref, "AnnotationInput").has(k))).toEqual([]);
     expect(documentedFields(ref, "CreateCollaborationNoteInput").has("annotations")).toBe(true);
   });
 
@@ -123,7 +122,7 @@ describe("mentions on read, edit and channel-less drafts", () => {
     expect(calls[0].query).toContain("annotations {");
     const sub = /annotations \{([^}]*)\}/.exec(NOTE_FIELDS)?.[1].trim().split(/\s+/) ?? [];
     expect(sub.length).toBeGreaterThan(0);
-    for (const f of sub) expect(fieldsOf("Annotation").has(f), f).toBe(true);
+    expect(sub.filter((f) => !fieldsOf("Annotation").has(f))).toEqual([]);
     expect(fieldsOf("CollaborationNote").has("annotations")).toBe(true);
   });
 

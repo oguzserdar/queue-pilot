@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { signOutOtherDevices } from "@/app/(app)/actions";
+import { signOutOtherDevices } from "@/app/(app)/settings-actions";
 import { Button } from "@/registry/components/button/button";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import styles from "./settings-view.module.css";

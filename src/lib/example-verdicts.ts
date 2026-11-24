@@ -5,7 +5,11 @@
 import { EXAMPLE_RULES } from "./example-playbook";
 import type { Verdict } from "./judge";
 
-const rule = (id: string) => EXAMPLE_RULES.find((r) => r.id === id)!;
+const rule = (id: string) => {
+  const found = EXAMPLE_RULES.find((r) => r.id === id);
+  if (!found) throw new Error(`No example rule ${id}`);
+  return found;
+};
 const v = (id: string, verdict: Verdict["verdict"], quote: string, reason: string): Verdict => ({ ruleId: id, rule: rule(id).text, level: rule(id).level, verdict, probability: null, quote, reason });
 
 /** By example draft id (demo-data.ts). */

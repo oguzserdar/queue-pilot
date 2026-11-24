@@ -7,7 +7,9 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("@/app/(app)/actions", () => ({}));
-vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn() }) }));
+vi.mock("@/app/(app)/settings-actions", () => ({}));
+vi.mock("@/app/admin/actions", () => ({}));
+vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn<ReturnType<typeof import("@/registry/components/toast-stack/toast-stack").useToastStack>["toast"]>() }) }));
 const { AiApps } = await import("./ai-apps");
 
 const row = (over: Record<string, unknown>) => ({ consentId: "c", name: "Cursor", brand: "Cursor", site: null, approvedAt: "2026-11-01T00:00:00.000Z", lastUsedAt: null, calls: 0, label: null, returnsTo: ["This computer"], unused: false, ...over });
@@ -27,5 +29,12 @@ describe("AiApps", () => {
     expect(html).toContain('aria-label="Claude"');
     expect(html).not.toContain("connection</span>");
     expect(html).not.toContain("connections</span>");
+  });
+
+  it("marks a connection with admin access only for the admin, and never for anyone else", () => {
+    const apps = [row({ consentId: "a" }), row({ consentId: "b" })] as never;
+    expect(renderToStaticMarkup(<AiApps now={now} apps={apps} />)).not.toContain("Admin access");
+    const html = renderToStaticMarkup(<AiApps now={now} apps={apps} adminApps={["b"]} />);
+    expect(html.match(/Admin access/g)).toHaveLength(1);
   });
 });

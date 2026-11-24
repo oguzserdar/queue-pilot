@@ -3,8 +3,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 import { rule as ruleTable, ruleInheritance } from "../db/schema";
 import { postgresSnapshotStore } from "./buffer/snapshot-store";
-import { NETWORKS, type NewRule } from "./rules";
-import type { Inheritance } from "./rule-scopes";
+import { NETWORKS, storedRuleSpec } from "./rules";
+import { inheritanceFrom, type Inheritance } from "./rule-scopes";
 
 export type RuleTarget = { level: "network" | "account"; id: string };
 export async function ownedAccounts(userId: string, ids: string[]) {
@@ -20,7 +20,7 @@ export async function setRuleOverride(userId: string, ruleId: string, target: Ru
   return db().transaction(async tx => {
     const [row] = await tx.select().from(ruleTable).where(and(eq(ruleTable.userId, userId), eq(ruleTable.id, ruleId))).for("update");
     if (!row) return false;
-    const spec = row.spec as NewRule;
+    const spec = storedRuleSpec(row.spec);
     // An account rule never flows to another account, even through an explicit include.
     if (spec.accountIds?.length || (target.level === "network" && spec.channels !== "all")) return false;
     if (target.level === "account" && spec.channels !== "all") {
@@ -29,9 +29,10 @@ export async function setRuleOverride(userId: string, ruleId: string, target: Ru
       if (!channel || !spec.channels.includes(channel.service)) return false;
     }
     const key = target.level === "network" ? "networks" : "accounts";
-    const next = { ...spec, overrides: { ...spec.overrides, [key]: { ...spec.overrides?.[key] } } };
-    if (value === null) delete next.overrides[key]![target.id];
-    else next.overrides[key]![target.id] = value;
+    const group: Record<string, boolean> = { ...spec.overrides?.[key] };
+    if (value === null) delete group[target.id];
+    else group[target.id] = value;
+    const next = { ...spec, overrides: { ...spec.overrides, [key]: group } };
     // A reset removes a legacy exclusion too; an explicit include can override it.
     if (target.level === "network" && value === null) next.except = next.except?.filter(n => n !== target.id);
     await tx.update(ruleTable).set({ spec: next }).where(and(eq(ruleTable.userId, userId), eq(ruleTable.id, ruleId)));
@@ -40,7 +41,7 @@ export async function setRuleOverride(userId: string, ruleId: string, target: Ru
 }
 export async function readInheritance(userId: string): Promise<Inheritance> {
   const [row] = await db().select().from(ruleInheritance).where(eq(ruleInheritance.userId, userId));
-  return (row?.settings ?? {}) as Inheritance;
+  return inheritanceFrom(row?.settings);
 }
 export async function setInheritance(userId: string, target: RuleTarget, shared: boolean, network: boolean): Promise<boolean> {
   if (typeof shared !== "boolean" || typeof network !== "boolean" || !(await validTarget(userId, target))) return false;

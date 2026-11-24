@@ -7,9 +7,10 @@ import { describe, expect, it, vi } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
 import type { ShownRule } from "./playbook-view"
 
-vi.mock("@/app/(app)/actions", () => ({ addRule: vi.fn(), readRule: vi.fn(), removeRule: vi.fn(), setRuleException: vi.fn() }))
+vi.mock("@/app/(app)/rule-actions", () => ({ addRule: vi.fn<typeof import("@/app/(app)/rule-actions").addRule>(), readRule: vi.fn<typeof import("@/app/(app)/rule-actions").readRule>(), removeRule: vi.fn<typeof import("@/app/(app)/rule-actions").removeRule>(), setRuleException: vi.fn<typeof import("@/app/(app)/rule-actions").setRuleException>() }))
+vi.mock("@/app/(app)/actions", () => ({}));
 vi.mock("@/app/(app)/review-actions", () => ({}))
-vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn() }) }))
+vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn<ReturnType<typeof import("@/registry/components/toast-stack/toast-stack").useToastStack>["toast"]>() }) }))
 vi.mock("./first-rules-finder", () => ({ FirstRulesFinder: ({ open }: { open?: boolean }) => <div data-finder={open ? "open" : "closed"} /> }))
 vi.mock("./rewrite-finder", () => ({ RewriteFinder: () => null }))
 vi.mock("./rule-tester", () => ({ RuleTester: () => null }))

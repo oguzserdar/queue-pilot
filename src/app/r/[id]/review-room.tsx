@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { Button } from "@/registry/components/button/button";
 import { Input } from "@/registry/components/input/input";
 import { Textarea } from "@/registry/components/textarea/textarea";
@@ -29,19 +29,44 @@ function selectionIn(el: HTMLElement): { start: number; end: number; rect: DOMRe
 const WHEN: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" };
 const AGO: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" };
 
+type Span = ReviewComment & { start: number; end: number };
+
+/** The reviewer's name remembered on this device, or empty when there is none or storage is blocked. */
+function rememberedName(): string {
+  try { return localStorage.getItem(NAME_KEY) ?? ""; } catch { return ""; }
+}
+const inBrowser = () => true;
+const onServer = () => false;
+const noEvents = () => () => {};
+
 /** The draft's text with every commented span marked; the active comment's span is emphasised. */
 function Marked({ text, comments, active, onPick }: { text: string; comments: ReviewComment[]; active: string | null; onPick: (id: string) => void }) {
-  const spans = comments.filter((c) => c.start !== null && c.end !== null && c.end! <= text.length).sort((a, b) => a.start! - b.start!);
+  const spans = comments.filter((c): c is Span => c.start !== null && c.end !== null && c.end <= text.length).sort((a, b) => a.start - b.start);
   const parts: React.ReactNode[] = [];
   let at = 0;
   for (const c of spans) {
-    if (c.start! < at) continue;
-    parts.push(text.slice(at, c.start!));
-    parts.push(<mark key={c.id} className={styles.hl} data-active={active === c.id} onClick={() => onPick(c.id)} onMouseEnter={() => onPick(c.id)}>{text.slice(c.start!, c.end!)}</mark>);
-    at = c.end!;
+    if (c.start < at) continue;
+    parts.push(text.slice(at, c.start));
+    parts.push(<mark key={c.id} className={styles.hl} data-active={active === c.id} onClick={() => onPick(c.id)} onMouseEnter={() => onPick(c.id)}>{text.slice(c.start, c.end)}</mark>);
+    at = c.end;
   }
   parts.push(text.slice(at));
   return <>{parts}</>;
+}
+
+/** The comments on one draft; hovering one marks its words in the draft. */
+function CommentList({ comments, active, onActive }: { comments: ReviewComment[]; active: string | null; onActive: (id: string | null) => void }) {
+  return (
+    <ul className={styles.comments}>
+      {comments.map((c) => (
+        <li key={c.id} className={styles.comment} data-active={active === c.id} onMouseEnter={() => onActive(c.id)} onMouseLeave={() => onActive(null)}>
+          <span className={styles.who}><span className={styles.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>{c.name}<span className={styles.time}><LocalTime iso={c.createdAt} options={AGO} relative /></span></span>
+          {c.quote && <q className={styles.quote}>{c.quote}</q>}
+          <span className={styles.body}>{c.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /** The public review page: each shared draft beside its comments; select words for a floating Comment button. */
@@ -57,8 +82,16 @@ export function ReviewRoom({ id, drafts, initial }: { id: string; drafts: Shared
   const [pending, start] = useTransition();
   const texts = useRef(new Map<string, HTMLParagraphElement>());
 
-  // The name is remembered on this device only, so a reviewer types it once.
-  useEffect(() => { try { const n = localStorage.getItem(NAME_KEY) ?? ""; setName(n); setSavedName(n); } catch {} }, []);
+  // The name is remembered on this device only, so a reviewer types it once. It is read once, after the page is running
+  // in the browser (the server has no storage), into both the field and the "Commenting as" line.
+  const running = useSyncExternalStore(noEvents, inBrowser, onServer);
+  const [readName, setReadName] = useState(false);
+  if (running && !readName) {
+    setReadName(true);
+    const n = rememberedName();
+    setName(n);
+    setSavedName(n);
+  }
   // The floating button goes away when the selection does.
   useEffect(() => {
     const clear = () => { const s = window.getSelection(); if (!s || s.isCollapsed) setFloating(null); };
@@ -114,17 +147,7 @@ export function ReviewRoom({ id, drafts, initial }: { id: string; drafts: Shared
               </article>
               <aside className={styles.side} aria-label={`Comments on draft ${i + 1}`}>
                 {mine.length === 0 && target?.postId !== d.postId && <p className={styles.empty}>No comments yet.</p>}
-                {mine.length > 0 && (
-                  <ul className={styles.comments}>
-                    {mine.map((c) => (
-                      <li key={c.id} className={styles.comment} data-active={active === c.id} onMouseEnter={() => setActive(c.id)} onMouseLeave={() => setActive(null)}>
-                        <span className={styles.who}><span className={styles.avatar} aria-hidden="true">{c.name.trim().charAt(0).toUpperCase()}</span>{c.name}<span className={styles.time}><LocalTime iso={c.createdAt} options={AGO} relative /></span></span>
-                        {c.quote && <q className={styles.quote}>{c.quote}</q>}
-                        <span className={styles.body}>{c.text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {mine.length > 0 && <CommentList comments={mine} active={active} onActive={setActive} />}
                 {target?.postId === d.postId ? (
                   <form className={styles.form} onSubmit={(e) => { e.preventDefault(); send(); }}>
                     <p className={styles.on}>{quote ? <>On <q className={styles.quote}>{quote}</q></> : "On the whole draft"}</p>

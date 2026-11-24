@@ -1,22 +1,23 @@
+vi.mock("@/lib/pulled-back", () => ({ pulledBackFor: async () => new Set<string>(), postgresPulledBackStore: () => ({ list: async () => new Set<string>(), apply: async () => {} }) }));
 vi.mock("@/lib/source-store", () => ({ sourceHoldsForPosts: async () => new Map() }));
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Post } from "@/lib/buffer/queries"
 
-vi.mock("@/lib/current-user", () => ({ signedInUserId: vi.fn(), freshBufferForCurrentUser: vi.fn() }))
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
-vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn(async () => ({ ok: true })) }))
-const written = vi.hoisted(() => ({ get: vi.fn() }))
-vi.mock("@/lib/written-store", () => ({ wroteIds: vi.fn(), postgresWrittenStore: () => written }))
+vi.mock("@/lib/current-user", () => ({ signedInUserId: vi.fn<typeof import("@/lib/current-user").signedInUserId>(), freshBufferForCurrentUser: vi.fn<typeof import("@/lib/current-user").freshBufferForCurrentUser>() }))
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn<typeof import("next/cache").revalidatePath>() }))
+vi.mock("@/lib/rate-limit", () => ({ limit: vi.fn<typeof import("@/lib/rate-limit").limit>(async () => ({ ok: true }) as import("@/lib/rate-limit").Limited) }))
+const written = vi.hoisted(() => ({ get: vi.fn<import("@/lib/written-store").WrittenStore["get"]>() }))
+vi.mock("@/lib/written-store", () => ({ wroteIds: vi.fn<typeof import("@/lib/written-store").wroteIds>(), postgresWrittenStore: () => written }))
 vi.mock("@/lib/rules-store", () => ({ postgresRulesStore: () => ({ list: async () => [] }) }))
-vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: vi.fn() }))
+vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: vi.fn<typeof import("@/lib/buffer/client").bufferQuery>() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
-vi.mock("@/lib/security-events", async (orig) => ({ draftSlot: (await orig<typeof import("@/lib/security-events")>()).draftSlot, recordAction: vi.fn() }))
+vi.mock("@/lib/security-events", async (orig) => ({ draftSlot: (await orig<typeof import("@/lib/security-events")>()).draftSlot, recordAction: vi.fn<typeof import("@/lib/security-events").recordAction>() }))
 
 const { freshBufferForCurrentUser, signedInUserId } = await import("@/lib/current-user")
 const { bufferQuery } = await import("@/lib/buffer/client")
 const { approveDrafts } = await import("./actions")
 const { recordAction } = await import("@/lib/security-events")
-const markScheduled = vi.fn()
+const markScheduled = vi.fn<(ids: string[]) => Promise<void>>()
 const post = (id: string): Post => ({ id, channelId: "ch", status: "draft", via: "api", text: "Draft", dueAt: "2099-11-01T09:00:00Z", sentAt: null, externalLink: null, error: null })
 
 beforeEach(() => {

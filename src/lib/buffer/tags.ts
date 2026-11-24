@@ -40,9 +40,16 @@ export async function listTags(token: string, organizationId: string, run: Run =
 /** A tag write's outcome, with Buffer's reason when it refused. */
 export type TagWriteResult<T> = { ok: true; value: T } | { ok: false; kind: "duplicate" | "limit" | "invalid" | "other"; message: string };
 
+/** Buffer's typed refusals of a tag write; any other type is "other". */
+const TAG_REFUSALS: Partial<Record<string, "duplicate" | "limit" | "invalid">> = {
+  DuplicateError: "duplicate",
+  LimitReachedError: "limit",
+  InvalidInputError: "invalid",
+};
+
 const refusal = (typename: string, message?: string): TagWriteResult<never> => ({
   ok: false,
-  kind: typename === "DuplicateError" ? "duplicate" : typename === "LimitReachedError" ? "limit" : typename === "InvalidInputError" ? "invalid" : "other",
+  kind: TAG_REFUSALS[typename] ?? "other",
   message: message ?? "Buffer did not save the tag.",
 });
 

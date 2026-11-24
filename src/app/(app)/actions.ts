@@ -1,63 +1,38 @@
 "use server";
 
 import { placeholdersIn } from "@/lib/placeholders";
+import { overLimit, tooMany, tooManyKind } from "./action-limits";
 
 import { revalidatePath } from "next/cache";
+import { NoBufferAccount } from "@/lib/buffer-token";
 import { waitMessage, waitRefusal } from "@/lib/buffer/not-sent";
 import { nextSteps, type NextStep } from "@/lib/next-step";
 import { bufferForWriting, forceRefreshCurrentUser, freshBufferForCurrentUser, signedInUserId } from "@/lib/current-user";
-import { postgresAiKeyStore, providerOf } from "@/lib/ai-key-store";
 import { writeSlotsForUser, type WriteWeekActionResult } from "@/lib/write-slots-for-user";
-import { aiErrorMessage } from "@/lib/ai-model";
-import { APICallError, NoObjectGeneratedError } from "ai";
-import { listModels, ModelListError } from "@/lib/ai-models";
 import { openSlots, parseSlotId } from "@/lib/open-slots";
 import { checkNote, judgeEdit, saveDraftsForUser } from "@/lib/save-for-user";
-import { deleteDraft, updateDraft } from "@/lib/edit-drafts";
+import { deleteDraft, updateDraft, moveToDraft } from "@/lib/edit-drafts";
 import { draftSlot, recordAction } from "@/lib/security-events";
 import { postgresWrittenStore, wroteIds } from "@/lib/written-store";
-import { APPROVE_MODES, setApproveMode, type ApproveMode } from "@/lib/agent-permission";
-import { listRecentSent, readPostsNow, type Post } from "@/lib/buffer/queries";
+import { readPostsNow, type Post } from "@/lib/buffer/queries";
 import { FeedError, findFeed } from "@/lib/feeds"
-import { approvedApps, removeUnusedApps, renameApp, revokeApp } from "@/lib/ai-access";
-import { MAX_LABEL } from "@/lib/ai-app-limits";
-import { getAuth } from "@/lib/auth";
-import { deleteAccount, LastAdminError } from "@/lib/delete-account";
+import { approvedApps } from "@/lib/ai-access";
 import { dismissOffer, isOfferKey } from "@/lib/offer-store";
-import { addPastedExample, exampleFromQueue, InvalidVoiceExampleError, MAX_NOTE, postgresVoiceStore, TooManyExamplesError } from "@/lib/voice-store"
+import { postgresVoiceStore } from "@/lib/voice-store";
 import { postgresSnapshotStore } from "@/lib/buffer/snapshot-store";
 import { TelegramError, connectCodeFor, drainConnectCodes } from "@/lib/telegram";
 import { postgresEchoStore, postgresTelegramCodes } from "@/lib/echo-store";
-import { clearSignInCookies } from "@/lib/sign-in-cookies";
 import { postgresDirectPostStore } from "@/lib/direct-post-store";
 import { installState, installUrl } from "@/lib/discord";
 import { operatorSetting, operatorSettings } from "@/lib/env";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { publicOrigin } from "@/lib/origin";
 import { postgresSourceStore, TooManySourcesError } from "@/lib/sources-store";
 import { type ApproveResult } from "@/lib/approve-drafts";
 import { approveChecked, recordApprover } from "@/lib/approve-checked";
 import { APPROVED_IN_APP } from "@/lib/rule-origin";
 import { recheckDrafts } from "@/lib/save-for-user";
-import { postgresRulesStore, TooManyRulesError } from "@/lib/rules-store";
-import { NETWORKS, parseNewRule, type NewRule, ruleInput } from "@/lib/rules";
-import { structureRule } from "@/lib/structure-rule";
-import { judgeDrafts, type Verdict } from "@/lib/judge";
-import { AiCapError, judgeModelFor } from "@/lib/judge-model";
-import { limit, type Action, type Limited } from "@/lib/rate-limit";
-import { currentRewrites } from "@/lib/read-back";
-import { proposeRules } from "@/lib/rewrite-rules";
-import { channelsByOrganization, firstRuleKey, pastPosts, proposeFirstRules } from "@/lib/day-one-rules";
 
-/** The signed-in person's limit for this action (src/lib/rate-limit.ts), or null while they are within it. */
-async function overLimit(action: Action): Promise<Limited | null> {
-  const userId = await signedInUserId();
-  if (!userId) return null;
-  const l = await limit(action, userId);
-  return l.ok ? null : l;
-}
-const tooMany = (l: Limited) => ({ ok: false as const, message: `Too many requests just now. Try again in ${l.resetSeconds} seconds.` });
-const tooManyKind = (l: Limited) => ({ ok: false as const, kind: "limited" as const, retryAt: new Date(Date.now() + l.resetSeconds * 1000).toISOString() });
 
 export type RefreshResult = { ok: true } | { ok: false; kind: "limited"; retryAt: string } | { ok: false; kind: "failed" | "signedOut" };
 
@@ -67,6 +42,8 @@ export async function refreshBuffer(): Promise<RefreshResult> {
   try {
     if (!(await forceRefreshCurrentUser())) return { ok: false, kind: "signedOut" };
   } catch (e) {
+    // Signed up with email and no Buffer: there is no Buffer to read, which is not a failure.
+    if (e instanceof NoBufferAccount) return { ok: true };
     { const w = waitRefusal(e); if (w) return { ok: false, kind: "limited", retryAt: (w.retryAt ?? new Date(Date.now() + 60_000)).toISOString() }; }
     console.error(JSON.stringify({ event: "qp-refresh-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, kind: "failed" };
@@ -79,14 +56,14 @@ export async function refreshBuffer(): Promise<RefreshResult> {
 export type ApproveActionResult = ({ ok: true; note?: string } & ApproveResult) |{ ok: false; kind: "limited"; retryAt: string } | { ok: false; kind: "failed" | "signedOut" };
 
 /** The Approve buttons: schedules the user's own drafts at their slot times, then refreshes the screens. */
-export async function approveDrafts(ids: string[]): Promise<ApproveActionResult> {
+export async function approveDrafts(ids: string[], opts?: { one?: boolean }): Promise<ApproveActionResult> {
   { const l = await overLimit("bufferWrite"); if (l) return tooManyKind(l); }
   if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100 || ids.some((id) => typeof id !== "string")) return { ok: false, kind: "failed" };
   try {
     const b = await freshBufferForCurrentUser();
     if (!b) return { ok: false, kind: "signedOut" };
     // Read from Buffer now and check the playbook: a draft with an out-of-date check or a broken blocking rule is refused.
-    const { approved, refused } = await approveChecked(b.userId, b.token, ids, new Date(), undefined, undefined, b.channels);
+    const { approved, refused } = await approveChecked(b.userId, b.token, ids, new Date(), undefined, undefined, b.channels, opts?.one === true && ids.length === 1 ? "one" : "bulk");
     // Buffer has already scheduled these. Failing to update our saved copy must not hide that or skip the records.
     let note: string | undefined;
     try { await b.markScheduled(approved); } catch (e) {
@@ -227,153 +204,6 @@ export async function discordInstallLink(): Promise<{ ok: true; url: string } | 
   return { ok: true, url: installUrl({ clientId, redirectUri: `${origin}/api/discord/callback`, state: installState(userId, secret, new Date()) }) };
 }
 
-/** Picks one of the user's own sent posts as a voice example. The text is read from their saved queue, never from the browser. */
-export async function addVoiceExample(postId: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof postId !== "string" || postId.length > 200) return { ok: false, message: "Unknown post." };
-  try {
-    const snap = await postgresSnapshotStore().get(userId);
-    const example = snap ? exampleFromQueue(snap.data, postId) : null;
-    if (!example) return { ok: false, message: "That post is not in your recent sent posts." };
-    await postgresVoiceStore().addExample(userId, example);
-  } catch (e) {
-    if (e instanceof TooManyExamplesError) return { ok: false, message: e.message };
-    console.error(JSON.stringify({ event: "qp-voice-add-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not save that just now. Try again in a minute." };
-  }
-  revalidatePath("/voice");
-  return { ok: true };
-}
-
-/** Saves a post the signed-in person pasted to teach their writing style. */
-export async function addPastedVoiceExample(text: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId()
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." }
-  try {
-    await addPastedExample(postgresVoiceStore(), userId, text)
-  } catch (e) {
-    if (e instanceof TooManyExamplesError || e instanceof InvalidVoiceExampleError) return { ok: false, message: e.message }
-    console.error(JSON.stringify({ event: "qp-voice-paste-failed", message: e instanceof Error ? e.message : String(e) }))
-    return { ok: false, message: "Could not save that just now. Try again in a minute." }
-  }
-  revalidatePath("/voice")
-  return { ok: true }
-}
-
-/** Stops using one post as a voice example. */
-export async function removeVoiceExample(postId: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof postId !== "string" || postId.length > 200) return { ok: false, message: "Unknown post." };
-  try {
-    await postgresVoiceStore().removeExample(userId, postId);
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-voice-remove-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not remove that just now. Try again in a minute." };
-  }
-  revalidatePath("/voice");
-  return { ok: true };
-}
-
-/** Saves the user's note on how they write; an empty note clears it. */
-export async function saveVoiceNote(note: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof note !== "string" || note.length > MAX_NOTE) return { ok: false, message: `Keep the note to ${MAX_NOTE} characters.` }
-  try {
-    await postgresVoiceStore().setNote(userId, note);
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-voice-note-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not save your note just now. Try again in a minute." };
-  }
-  revalidatePath("/voice");
-  return { ok: true };
-}
-
-/** Revokes one AI app's access to the signed-in user's Queue Pilot (approval and tokens). */
-export async function revokeAiApp(consentId: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof consentId !== "string" || consentId.length > 200) return { ok: false, message: "Unknown app." };
-  try {
-    if (!(await revokeApp(userId, consentId))) return { ok: false, message: "That app is not connected to your account." };
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-revoke-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not revoke it just now. Try again in a minute." };
-  }
-  revalidatePath("/settings");
-  revalidatePath("/", "layout");
-  return { ok: true };
-}
-
-/** Names one of the person's AI app connections so it can be told apart from another of the same app. */
-export async function renameAiApp(consentId: string, label: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof consentId !== "string" || consentId.length > 200 || typeof label !== "string") return { ok: false, message: "Unknown app." };
-  if (label.trim().length > MAX_LABEL) return { ok: false, message: `Keep the name under ${MAX_LABEL} characters.` };
-  try {
-    if (!(await renameApp(userId, consentId, label))) return { ok: false, message: "That app is not connected to your account." };
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-rename-app-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not save the name just now. Try again in a minute." };
-  }
-  revalidatePath("/settings");
-  return { ok: true };
-}
-
-/** Removes every AI app connection that has gone unused long enough to stop working. */
-export async function removeUnusedAiApps(): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  try {
-    const removed = await removeUnusedApps(userId);
-    revalidatePath("/settings");
-    revalidatePath("/", "layout");
-    return { ok: true, title: removed === 1 ? "Removed 1 unused connection." : `Removed ${removed} unused connections.` };
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-remove-unused-apps-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not remove them just now. Try again in a minute." };
-  }
-}
-
-/** Signs this person out of Queue Pilot on every other browser; this one stays signed in. */
-export async function signOutOtherDevices(): Promise<SourceActionResult> {
-  { const l = await overLimit("account"); if (l) return tooMany(l); }
-  if (!(await signedInUserId())) return { ok: false, message: "Sign in with Buffer first." };
-  const auth = await getAuth();
-  if (!auth) return { ok: false, message: "Queue Pilot is not open yet." };
-  try {
-    await auth.api.revokeOtherSessions({ headers: await headers() });
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-revoke-sessions-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not sign out the other browsers just now. Try again in a minute." };
-  }
-  revalidatePath("/settings");
-  return { ok: true };
-}
-
-/** Deletes everything Queue Pilot stores for the signed-in person. The browser must send the word "delete". */
-export async function deleteMyAccount(confirm: string): Promise<SourceActionResult> {
-  { const l = await overLimit("account"); if (l) return tooMany(l); }
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof confirm !== "string" || confirm.trim().toLowerCase() !== "delete") return { ok: false, message: "Type delete to confirm." };
-  try {
-    await deleteAccount(userId, process.env.SESSION_SECRET);
-  } catch (e) {
-    if (e instanceof LastAdminError) return { ok: false, message: e.message };
-    console.error(JSON.stringify({ event: "qp-delete-account-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not delete your account just now. Nothing was removed. Try again in a minute." };
-  }
-  // The account and its sessions are gone, but this browser still holds the sign-in cookie. The router only checks
-  // that the cookie exists, so clear it here or the person stays "signed in" to an empty app instead of the homepage.
-  const jar = await cookies();
-  clearSignInCookies(jar.getAll(), jar);
-  return { ok: true };
-}
-
 /** Sets one of Home's offers aside for the signed-in person: "Not now" on the welcome, or × on a connect-your-AI card. */
 export async function setOfferAside(key: unknown): Promise<SourceActionResult> {
   const userId = await signedInUserId();
@@ -386,165 +216,6 @@ export async function setOfferAside(key: unknown): Promise<SourceActionResult> {
     return { ok: false, message: "Queue Pilot could not save that just now. Try again in a minute." };
   }
   revalidatePath("/");
-  return { ok: true };
-}
-
-/** Adds a rule to the signed-in user's playbook. Every draft is checked against it before it is saved in Buffer. */
-export async function addRule(input: unknown): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  const parsed = parseNewRule(input);
-  if (typeof parsed === "string") return { ok: false, message: parsed };
-  let id: string;
-  try {
-    id = await postgresRulesStore().add(userId, { ...(await readingOrTyped(userId, parsed, (input as { reading?: unknown }).reading)), addedBy: "you" });
-  } catch (e) {
-    if (e instanceof TooManyRulesError) return { ok: false, message: e.message };
-    console.error(JSON.stringify({ event: "qp-rule-add-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not save that rule just now. Try again in a minute." };
-  }
-  revalidatePath("/playbook");
-  return { ok: true, id };
-}
-
-/**
- * The reading the person saw while typing, when the form sends one: a typed reading is checked like any input and keeps
- * their sentence as its text, and a "guidance" reading means they chose to keep the rule as written. Without one, the
- * rule is read on the server.
- */
-async function readingOrTyped(userId: string, rule: NewRule, reading: unknown): Promise<NewRule> {
-  if (rule.kind !== "guidance" || !reading || typeof reading !== "object") return typedIfPossible(userId, rule);
-  if ((reading as { kind?: unknown }).kind === "guidance") return rule;
-  // A reading the form saw is a whole rule (a banned one holds `phrases`); turn it back into parser input before checking it.
-  const raw = reading as Record<string, unknown>;
-  const input = raw.kind === "banned" && Array.isArray(raw.phrases) ? ruleInput(raw as NewRule) : raw;
-  const typed = parseNewRule({ ...input, channels: rule.channels, accountIds: rule.accountIds, except: rule.except, overrides: rule.overrides, level: rule.level });
-  return typeof typed === "string" || typed.kind === "guidance" ? typedIfPossible(userId, rule) : { ...typed, text: rule.text };
-}
-
-/** How a rule in the person's words reads, for the form to show while they type; null when it cannot be read now. */
-export async function readRule(text: unknown): Promise<NewRule | null> {
-  const userId = await signedInUserId();
-  if (!userId || typeof text !== "string" || text.trim().length < 4 || text.length > 200) return null;
-  const parsed = parseNewRule({ kind: "guidance", text, channels: "all", level: "warn" });
-  if (typeof parsed === "string") return null;
-  // The live preview runs while the person types, so it never spends the built-in key: only their own key previews.
-  return typedIfPossible(userId, parsed, { ownKeyOnly: true });
-}
-
-/** A rule in the person's words read into a typed rule with their AI; kept as written without a key, over the limit, or on any failure. */
-async function typedIfPossible(userId: string, rule: NewRule, opts: { ownKeyOnly?: boolean } = {}): Promise<NewRule> {
-  if (rule.kind !== "guidance" || (await overLimit("ai"))) return rule;
-  const jm = await judgeModelFor(userId, opts).catch(() => null);
-  if (!jm) return rule;
-  try {
-    return await structureRule(jm.judges.explainer, rule);
-  } finally {
-    await jm.settle();
-  }
-}
-
-/** Deletes one of the signed-in user's rules; another person's rule id deletes nothing. */
-export async function removeRule(id: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof id !== "string" || id.length > 100) return { ok: false, message: "Unknown rule." };
-  try {
-    await postgresRulesStore().remove(userId, id);
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-rule-remove-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not delete that rule just now. Try again in a minute." };
-  }
-  revalidatePath("/playbook");
-  return { ok: true };
-}
-
-/** Switches one of the person's shared rules off for a network, or back on. */
-export async function setRuleException(id: string, network: string, off: boolean): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof id !== "string" || id.length > 100 || typeof network !== "string" || !(network in NETWORKS) || typeof off !== "boolean") return { ok: false, message: "Unknown rule." };
-  try {
-    if (!(await postgresRulesStore().setException(userId, id, network, off))) return { ok: false, message: "Only a rule for every network can be switched off for one." };
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-rule-exception-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not change that rule just now. Try again in a minute." };
-  }
-  revalidatePath("/playbook");
-  return { ok: true };
-}
-
-const aiKeys = () => {
-  const master = process.env.SETTINGS_KEY;
-  return master ? postgresAiKeyStore(master) : null;
-};
-
-/** Saves the person's own AI key, encrypted; the provider is read from the key's prefix. */
-export async function saveAiKey(input: string): Promise<SourceActionResult> {
-  { const l = await overLimit("outbound"); if (l) return tooMany(l); }
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  const key = typeof input === "string" ? input.trim() : "";
-  const provider = providerOf(key);
-  if (!provider) return { ok: false, message: "That does not look like an Anthropic key (sk-ant-…), an OpenAI key (sk-…) or an OpenRouter key (sk-or-v1-…)." };
-  const store = aiKeys();
-  if (!store) return { ok: false, message: "This copy of Queue Pilot cannot store keys yet (SETTINGS_KEY is not set)." };
-  // Listing the key's models checks the key works and gives the default model, before anything is stored.
-  let list;
-  try {
-    list = await listModels(provider, key);
-  } catch (e) {
-    return { ok: false, message: e instanceof ModelListError ? e.message : "Could not check the key just now. Try again." };
-  }
-  if (!list.recommended) return { ok: false, message: "This key cannot use any text model." };
-  try {
-    await store.set(userId, provider, key, list.recommended);
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-ai-key-save-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Could not save the key just now. Try again." };
-  }
-  revalidatePath("/", "layout");
-  return { ok: true };
-}
-
-export async function removeAiKey(): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  const store = aiKeys();
-  if (!userId || !store) return { ok: false, message: "Sign in with Buffer first." };
-  await store.remove(userId).catch(() => {});
-  revalidatePath("/", "layout");
-  return { ok: true };
-}
-
-/** Settings → AI: whether connected apps may approve drafts, and whether they must ask first. Only this screen sets it. */
-export async function setAgentApproveMode(mode: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (!APPROVE_MODES.includes(mode as ApproveMode)) return { ok: false, message: "Unknown choice." };
-  try { await setApproveMode(userId, mode as ApproveMode); }
-  catch (e) {
-    console.error(JSON.stringify({ event: "qp-approve-mode-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "That didn't save. Try again." };
-  }
-  revalidatePath("/settings");
-  return { ok: true };
-}
-
-/** Changes the model for the saved key, after checking the provider still lists it for this key. */
-export async function setAiModel(model: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  const store = aiKeys();
-  if (!userId || !store) return { ok: false, message: "Sign in with Buffer first." };
-  const cfg = await store.get(userId).catch(() => null);
-  if (!cfg) return { ok: false, message: "Add your AI key first." };
-  try {
-    const list = await listModels(cfg.provider, cfg.key);
-    if (!list.models.some((m) => m.id === model)) return { ok: false, message: "That model is not available to this key." };
-    await store.setModel(userId, model);
-  } catch (e) {
-    return { ok: false, message: e instanceof ModelListError ? e.message : "Could not change the model just now. Try again." };
-  }
-  revalidatePath("/", "layout");
   return { ok: true };
 }
 
@@ -611,133 +282,6 @@ async function suggestionsFor(run: Parameters<typeof nextSteps>[0]): Promise<Nex
   }
 }
 
-export type TryDraftResult = { ok: true; verdicts: Verdict[]; judgedWith: string } | { ok: false; message: string };
-
-/** Try a draft: judges typed text against the person's playbook with the same model check saves get. */
-export async function tryDraft(text: string, network: string, channelId?: string): Promise<TryDraftResult> {
-  { const l = await overLimit("ai"); if (l) return tooMany(l); }
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof text !== "string" || !text.trim() || text.length > 5000 || typeof network !== "string" || !(network in NETWORKS)) return { ok: false, message: "Type a draft to check." };
-  const snapshot = await postgresSnapshotStore().get(userId);
-  const channels = snapshot?.data.channels.filter(c => c.service === network) ?? [];
-  const channel = channelId ? channels.find(c => c.id === channelId) : channels.length === 1 ? channels[0] : undefined;
-  if (!channel) return { ok: false, message: "Choose the connected account this draft is for." };
-  const rules = await postgresRulesStore().list(userId).catch(() => null);
-  if (!rules) return { ok: false, message: "Could not read your playbook just now. Try again." };
-  if (!rules.length) return { ok: false, message: "Your playbook has no rules yet." };
-  const jm = await judgeModelFor(userId).catch((e) => (e instanceof AiCapError ? e : null));
-  if (jm instanceof AiCapError) return { ok: false, message: jm.message };
-  if (!jm) return { ok: false, message: "Add your AI key in Settings: a model judges each draft against your rules." };
-  try {
-    const v = await judgeDrafts(jm.judges, [{ slotId: "try", text, network, channelId: channel.id }], rules);
-    return { ok: true, verdicts: v.get("try") ?? [], judgedWith: jm.source };
-  } catch (e) {
-    await jm.giveBack();
-    return { ok: false, message: aiErrorMessage(e, jm.cfg.provider) };
-  } finally {
-    await jm.settle();
-  }
-}
-
-export type RewriteProposal = { accountIds?: string[]; text: string; channels: string[] | "all"; where: string; examples: { before: string; after: string }[] };
-
-/** Find rules in my rewrites: a model reads the drafts the person rewrote and proposes rules they can keep. */
-export async function findRulesInRewrites(): Promise<{ ok: true; proposals: RewriteProposal[]; read: number } | { ok: false; message: string }> {
-  { const l = await overLimit("ai"); if (l) return tooMany(l); }
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  const { rewrites, rules } = await currentRewrites(userId).catch(() => ({ rewrites: [], rules: [] }));
-  if (rewrites.length < 2) return { ok: false, message: "Rewrite at least two of Queue Pilot's drafts in Buffer first. Small fixes are offered above on their own." };
-  const jm = await judgeModelFor(userId).catch((e) => (e instanceof AiCapError ? e : null));
-  if (jm instanceof AiCapError) return { ok: false, message: jm.message };
-  if (!jm) return { ok: false, message: "Add your AI key in Settings: a model reads your rewrites." };
-  try {
-    const found = await proposeRules(jm.judges.explainer, rewrites, rules);
-    return {
-      ok: true,
-      read: rewrites.length,
-      proposals: found.map((p) => ({
-        text: p.rule.text,
-        channels: p.rule.channels,
-        accountIds: p.rule.accountIds,
-        where: p.rule.accountIds?.length ? "Selected account" : p.rule.channels === "all" ? "Every network" : p.rule.channels.map((c) => NETWORKS[c] ?? c).join(", "),
-        examples: p.evidence.map((e) => ({ before: e.before, after: e.after })),
-      })),
-    };
-  } catch (e) {
-    await jm.giveBack();
-    return { ok: false, message: aiErrorMessage(e, jm.cfg.provider) };
-  } finally {
-    await jm.settle();
-  }
-}
-
-export type FirstRuleOffer = {
-  accountIds?: string[];
-  text: string;
-  channels: string[];
-  where: string;
-  key: string;
-  proof: { kind: "posts"; followed: number; of: number; unclear: number; unclearPosts: string[]; examples: string[] } | { kind: "note"; note: string; by: string | null; at: string | null; post: string };
-};
-
-/** Find my first rules: a model reads the person's recent sent posts and their teammates' notes in Buffer, and each rule comes back with its proof. */
-export async function findFirstRules(): Promise<{ ok: true; offers: FirstRuleOffer[]; skipped: string[] } | { ok: false; message: string }> {
-  { const l = await overLimit("ai"); if (l) return tooMany(l); }
-  const b = await bufferForWriting().catch((e) => waitRefusal(e) ?? null);
-  if (b && "message" in b) return { ok: false, message: waitMessage(b) };
-  if (!b) return { ok: false, message: "Sign in with Buffer first." };
-  const jm = await judgeModelFor(b.userId).catch((e) => (e instanceof AiCapError ? e : null));
-  if (jm instanceof AiCapError) return { ok: false, message: jm.message };
-  if (!jm) return { ok: false, message: "Add your AI key in Settings: a model reads your posts." };
-  try {
-    const sent = (await Promise.all([...channelsByOrganization(b.channels)].map(([org, ids]) => listRecentSent(b.token, org, ids)))).flat();
-    if (!sent.length) return { ok: false, message: "Buffer has no sent posts for your channels yet." };
-    // Posts Queue Pilot wrote are not the person's voice, so they teach nothing.
-    const ours = await wroteIds(b.userId, ...sent.map((p) => p.id));
-    const [rules, dismissed] = await Promise.all([postgresRulesStore().list(b.userId).catch(() => []), postgresRulesStore().dismissed(b.userId).catch(() => new Set<string>())]);
-    const { offers, skipped } = await proposeFirstRules(jm.judges.explainer, jm.judges, pastPosts(b.channels, sent.filter((p) => !ours.has(p.id))), rules);
-    return {
-      ok: true,
-      skipped: skipped.map((n) => NETWORKS[n] ?? n),
-      offers: offers.filter(({ rule }) => !dismissed.has(firstRuleKey(rule))).map(({ rule, proof }) => {
-        const channels = rule.channels === "all" ? [] : rule.channels;
-        return {
-          text: rule.text,
-          accountIds: rule.accountIds,
-          channels,
-          where: rule.accountIds?.length ? rule.accountIds.map(id => b.channels.find(c => c.id === id)?.name ?? "Account").join(", ") : channels.map((c) => NETWORKS[c] ?? c).join(", "),
-          key: firstRuleKey(rule),
-          proof,
-        };
-      }),
-    };
-  } catch (e) {
-    { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
-    await jm.giveBack();
-    if (APICallError.isInstance(e) || NoObjectGeneratedError.isInstance(e)) return { ok: false, message: aiErrorMessage(e, jm.cfg.provider) };
-    console.error(JSON.stringify({ event: "qp-first-rules-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Could not read your posts just now. Try again." };
-  } finally {
-    await jm.settle();
-  }
-}
-
-/** Not now on a first rule: it is not offered again. */
-export async function dismissFirstRule(key: string): Promise<SourceActionResult> {
-  const userId = await signedInUserId();
-  if (!userId) return { ok: false, message: "Sign in with Buffer first." };
-  if (typeof key !== "string" || !key.startsWith("first:") || key.length > 500) return { ok: false, message: "Unknown rule." };
-  try {
-    await postgresRulesStore().dismiss(userId, key);
-  } catch (e) {
-    console.error(JSON.stringify({ event: "qp-dismiss-first-rule-failed", message: e instanceof Error ? e.message : String(e) }));
-    return { ok: false, message: "Queue Pilot could not save that just now. Try again in a minute." };
-  }
-  return { ok: true };
-}
-
 /** Applies a change Buffer accepted to the saved copy of the queue, so screens show it without another Buffer read. */
 async function patchSavedQueue(userId: string, change: (posts: Post[]) => Post[]): Promise<void> {
   try {
@@ -771,6 +315,32 @@ export async function editDraftText(postId: string, text: string, expectedText?:
     { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
     console.error(JSON.stringify({ event: "qp-edit-draft-failed", message: e instanceof Error ? e.message : String(e) }));
     return { ok: false, message: "Could not change the draft just now. Try again." };
+  }
+}
+
+/**
+ * Move back to draft in the week dialog: takes one scheduled post off the schedule in Buffer and keeps it as a draft.
+ * Any of the person's scheduled posts, not only ones Queue Pilot wrote: it is their queue and nothing is lost. The saved
+ * copy is updated to draft, which also marks the post as pulled back (left out of Approve all, never scheduled by an AI).
+ */
+export async function moveBackToDraft(postId: string): Promise<SourceActionResult> {
+  { const l = await overLimit("bufferWrite"); if (l) return tooMany(l); }
+  if (typeof postId !== "string") return { ok: false, message: "No post given." };
+  try {
+    const b = await bufferForWriting();
+    if (!b) return { ok: false, message: "Sign in with Buffer first." };
+    if (!b.posts.some((p) => p.id === postId)) return { ok: false, message: "That post is not in your queue. Refresh and try again." };
+    const slot = draftSlot(b.posts.find((p) => p.id === postId), b.channels);
+    const r = await moveToDraft(b.token, postId);
+    if (!r.ok) return { ok: false, message: r.reason };
+    await patchSavedQueue(b.userId, (posts) => posts.map((p) => (p.id === postId ? { ...p, status: "draft" as const } : p)));
+    await recordAction(b.userId, "moved_to_draft", { via: "app" }, { ids: [postId], slots: [slot] });
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) {
+    { const w = waitRefusal(e); if (w) return { ok: false, message: waitMessage(w) }; }
+    console.error(JSON.stringify({ event: "qp-move-to-draft-failed", message: e instanceof Error ? e.message : String(e) }));
+    return { ok: false, message: "Could not move it back to draft just now. Nothing changed. Try again." };
   }
 }
 

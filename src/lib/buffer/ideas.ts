@@ -93,8 +93,21 @@ export async function createIdea(token: string, organizationId: string, idea: { 
     "mutation CreateIdea($input: CreateIdeaInput!) { createIdea(input: $input) { __typename ... on Idea { id } ... on IdeaResponse { idea { id } } ... on MutationError { message } } }",
     { input: { organizationId, content, ...(idea.groupId ? { group: { groupId: idea.groupId } } : {}) } });
   const r = data.createIdea;
-  const id = r.__typename === "Idea" ? r.id : r.__typename === "IdeaResponse" ? r.idea?.id : undefined;
+  const id = savedIdeaId(r);
   if (id) return { ok: true, id };
-  const kind = r.__typename === "LimitReachedError" ? "limit" : r.__typename === "InvalidInputError" ? "invalid" : r.__typename === "UnauthorizedError" ? "unauthorized" : "other";
-  return { ok: false, kind, message: r.message ?? "Buffer did not save the idea." };
+  return { ok: false, kind: IDEA_REFUSALS[r.__typename] ?? "other", message: r.message ?? "Buffer did not save the idea." };
 }
+
+/** The saved idea's id: Buffer answers either the Idea itself or an IdeaResponse wrapping it. */
+function savedIdeaId(r: { __typename: string; id?: string; idea?: { id: string } | null }): string | undefined {
+  if (r.__typename === "Idea") return r.id;
+  if (r.__typename === "IdeaResponse") return r.idea?.id;
+  return undefined;
+}
+
+/** Buffer's typed refusals of createIdea; any other type is "other". */
+const IDEA_REFUSALS: Partial<Record<string, "limit" | "invalid" | "unauthorized">> = {
+  LimitReachedError: "limit",
+  InvalidInputError: "invalid",
+  UnauthorizedError: "unauthorized",
+};

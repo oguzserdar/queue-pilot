@@ -4,7 +4,7 @@
  * Haiku); the post text was rewritten by hand on 6 Nov 2026 when the example account changed from a cooking newsletter
  * to This Week in AI, around real October 2026 news (DeepSeek V4.1-Flash-1017, Kimi K3.1 Pro). Rerun the eval on matching fixtures and regenerate rather than editing further.
  */
-import type { FirstRuleOffer } from "@/app/(app)/actions";
+import type { FirstRuleOffer } from "@/app/(app)/rule-actions";
 
 export const EXAMPLE_FIRST_RULES: { offers: FirstRuleOffer[]; skipped: string[] } = {
   "skipped": [

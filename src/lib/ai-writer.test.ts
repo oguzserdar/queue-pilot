@@ -112,7 +112,7 @@ describe("writeDrafts", () => {
   });
 
   it("fails loudly when the model answers in the wrong shape", async () => {
-    await expect(writeDrafts(answering("Sorry, I can't."), brief)).rejects.toThrow();
+    await expect(writeDrafts(answering("Sorry, I can't."), brief)).rejects.toThrow("No object generated: could not parse the response.");
   });
 });
 

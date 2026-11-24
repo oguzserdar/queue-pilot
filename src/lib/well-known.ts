@@ -18,15 +18,15 @@ export function forwardDiscovery(auth: DiscoveryAuth | null, req: Request): Prom
 /** The provider serves openid-configuration only under the issuer path; this serves the root form clients also try. */
 export function openIdConfiguration(auth: DiscoveryAuth | null, req: Request): Promise<Response> | Response {
   if (!auth) return Response.json({ error: "Sign in with Buffer is not open yet" }, { status: 503 });
-  return oauthProviderOpenIdConfigMetadata(auth as never)(req);
+  return oauthProviderOpenIdConfigMetadata(auth)(req);
 }
 
 /** Route handler for /.well-known/oauth-protected-resource/* and /.well-known/oauth-authorization-server/*. */
 export async function discoveryRoute(req: Request): Promise<Response> {
-  return forwardDiscovery((await getAuth()) as DiscoveryAuth | null, req);
+  return forwardDiscovery(await getAuth(), req);
 }
 
 /** Route handler for /.well-known/openid-configuration/*. */
 export async function openIdRoute(req: Request): Promise<Response> {
-  return openIdConfiguration((await getAuth()) as DiscoveryAuth | null, req);
+  return openIdConfiguration(await getAuth(), req);
 }

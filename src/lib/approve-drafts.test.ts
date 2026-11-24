@@ -18,14 +18,14 @@ const post = (over: Partial<Post>): Post => ({
   ...over,
 });
 
-function fake(answer: (input: any) => unknown) {
-  const inputs: any[] = [];
-  const q = (async (_t: string, _query: string, vars?: any) => {
-    inputs.push(vars.input);
-    const a = answer(vars.input);
+function fake(answer: (input: Record<string, unknown>) => unknown) {
+  const inputs: Record<string, unknown>[] = [];
+  const q = (async (_t: string, _query: string, vars?: { input: Record<string, unknown> }) => {
+    inputs.push(vars!.input);
+    const a = answer(vars!.input);
     if (a instanceof Error) throw a;
     return a;
-  }) as any;
+  }) as unknown as typeof import("./buffer/client").bufferQuery;
   return { q, inputs };
 }
 const success = () => ({ editPost: { __typename: "PostActionSuccess", post: { id: "d1", status: "scheduled" } } });

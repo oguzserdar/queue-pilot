@@ -5,7 +5,6 @@
  */
 import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pg = await migratedPglite();
@@ -13,8 +12,7 @@ const testDb = drizzle(pg, { schema: { ...(await import("../../db/schema")), ...
 const dbState = vi.hoisted(() => ({ broken: false }));
 vi.mock("../../db", () => ({ db: () => { if (dbState.broken) throw new Error("db down"); return testDb; }, schema: {} }));
 
-const { bufferQuery } = await import("./client");
-const { BufferAllowanceLowError, BufferAllowanceUnknownError, PER_PERSON, TOOL_RESERVE, currentAllowance, releaseRequest, reserveRequest, withBudget } = await import("./budget");
+const { BufferAllowanceLowError, TOOL_RESERVE, currentAllowance, releaseRequest, reserveRequest, withBudget } = await import("./budget");
 
 beforeAll(async () => {
   // Reservations belong to a person, so the people these tests act for must exist.
@@ -30,9 +28,6 @@ beforeEach(async () => {
 });
 
 const T0 = Date.parse("2026-11-05T20:00:00Z");
-const reply = (remaining: number, status = 200, extra: Record<string, string> = {}) => new Response(JSON.stringify({ data: { ok: true } }), {
-  status, headers: { "content-type": "application/json", ratelimit: `"110-in-15min";r=${remaining};t=600`, ...extra },
-});
 const seed = async (remaining: number, resetMs = 600_000) => releaseRequest(await reserveRequest(T0), [{ policy: "110-in-15min", remaining, resetSeconds: resetMs / 1000 }], T0);
 
 

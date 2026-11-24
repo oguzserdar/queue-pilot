@@ -23,12 +23,12 @@ const current = () => request.getStore() ?? signedIn;
 const roleOf = async (id: string | null) => (id ? (await pg.query<{ role: string | null }>(`select role from "user" where id = $1`, [id])).rows[0]?.role ?? null : null);
 vi.mock("@/lib/current-user", () => ({
   signedInUserId: async () => current(),
-  adminAccess: async () => (!current() ? "signed-out" : (await roleOf(current())) === "admin" ? "admin" : "not-admin"),
+  adminAccess: async () => { if (!current()) return "signed-out"; return (await roleOf(current())) === "admin" ? "admin" : "not-admin" },
 }));
 vi.mock("@/lib/rate-limit", () => ({ limit: async () => ({ ok: true }) }));
 vi.mock("@/lib/db", async (load) => ({ ...(await load<typeof import("@/lib/db")>()), hasDatabase: () => true }));
 
-const { claimAdmin, clearAdminSetting, keepAdminSetting, saveAdminSetting } = await import("./actions");
+const { claimAdmin, clearAdminSetting, grantAppAdminAccess, keepAdminSetting, removeAppAdminAccess, saveAdminSetting, testSupadataKey } = await import("./actions");
 const { recentSettingChanges } = await import("@/lib/db");
 
 const CODE = "a-long-enough-setup-code-for-tests";
@@ -160,5 +160,34 @@ describe("saying what a change did", () => {
     const r = await result("u1", saveAdminSetting, { key: "ai_cap_per_person", value: "lots" });
     expect(r).toMatchObject({ ok: false });
     expect((r as { message: string }).message.length).toBeGreaterThan(5);
+  });
+});
+
+describe("key tests and app admin access, through the admin door", () => {
+  beforeEach(async () => {
+    vi.stubEnv("SETTINGS_KEY", "c".repeat(64));
+    vi.stubEnv("SUPADATA_API_KEY", "");
+    await pg.query(`update "user" set role = 'admin' where id = 'u1'`);
+  });
+
+  it("sends someone who is not the admin back to /admin, and tells the admin a key is not set yet", async () => {
+    signedIn = "u2";
+    await expect(testSupadataKey()).rejects.toThrow(Redirected);
+    signedIn = "u1";
+    expect(await testSupadataKey()).toEqual({ message: "Not set. Add a Supadata key first." });
+  });
+
+  it("gives and takes one of the admin's own connections admin access, and refuses anyone else", async () => {
+    await pg.query(`insert into oauth_client (id, client_id, name, redirect_uris) values ('cl', 'cl', 'App', '{https://a.example/cb}') on conflict do nothing`);
+    await pg.query(`insert into oauth_consent (id, client_id, user_id, scopes, created_at, updated_at) values ('k1', 'cl', 'u1', '{openid}', now(), now()), ('k2', 'cl', 'u2', '{openid}', now(), now()) on conflict do nothing`);
+    const granted = async () => (await pg.query<{ consent_id: string }>(`select consent_id from qp_app_admin_grant order by consent_id`)).rows.map((r) => r.consent_id);
+    signedIn = "u2";
+    expect(await grantAppAdminAccess("k2")).toEqual({ ok: false, message: "Only this deployment's admin can do this." });
+    signedIn = "u1";
+    expect(await grantAppAdminAccess("k2")).toEqual({ ok: false, message: "That app is not connected to your account." });
+    expect(await grantAppAdminAccess("k1")).toMatchObject({ ok: true });
+    expect(await granted()).toEqual(["k1"]);
+    expect(await removeAppAdminAccess("k1")).toMatchObject({ ok: true });
+    expect(await granted()).toEqual([]);
   });
 });

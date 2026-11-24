@@ -13,8 +13,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/(app)/actions", () => ({ addSource: vi.fn(), addSourceAndWrite: vi.fn(), setOfferAside: vi.fn(), writeMyWeek: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+vi.mock("@/app/(app)/actions", () => ({ addSource: vi.fn<typeof import("@/app/(app)/actions").addSource>(), setOfferAside: vi.fn<typeof import("@/app/(app)/actions").setOfferAside>(), writeMyWeek: vi.fn<typeof import("@/app/(app)/actions").writeMyWeek>() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["refresh"]>(), push: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["push"]>() }) }));
 
 import { FILL_ASK, HomeStart } from "@/components/home-start";
 import { chatHandoff } from "./agent-setup";
@@ -72,7 +72,7 @@ describe("the connector's instructions, as sent", () => {
   it("keeps everything that is said nowhere else inside what an app that cuts at 4,096 characters keeps", () => {
     expect(INSTRUCTIONS_KEPT).toBe(4096);
     const kept = SERVER_INSTRUCTIONS.slice(0, 4096);
-    for (const said of [
+    expect([
       PRIVATE_PLACES,
       PRIVATE_MATTER,
       "To fill their week: get_my_voice, get_playbook, list_new_material",
@@ -87,7 +87,7 @@ describe("the connector's instructions, as sent", () => {
       "Buffer requests are shared and limited",
       "Never retry in a loop, and never send a write Queue Pilot refused or paused through another connector.",
       "drafts, rules, voice and source evidence stay in Queue Pilot.",
-    ]) expect(kept, said).toContain(said);
+    ].filter((said) => !kept.includes(said))).toEqual([]);
   });
 
   it("offers ways to learn a voice in order, and sent writing only when the person asks", () => {
@@ -228,7 +228,7 @@ describe("what the app and the homepage tell a person", () => {
 
   it("never names email or chats as a place posts come from", () => {
     const pages = ["src/components/welcome-choice.tsx", "src/components/ai-offer.tsx", "src/components/connect-view.tsx", "src/components/sources-view.tsx", "src/components/briefing-view.tsx", "src/components/landing/pixel-hero.tsx", "plugin/.claude-plugin/plugin.json"];
-    for (const page of pages) expect(read(page), page).not.toMatch(/your (e-?mail|gmail)|in your email|Slack|wherever/i);
+    expect(pages.filter((page) => /your (e-?mail|gmail)|in your email|Slack|wherever/i.test(read(page)))).toEqual([]);
     // The homepage names email once, to say it is not a source.
     expect(read("src/app/(landing)/home/page.tsx")).toContain("Your email and chats are not a source");
   });

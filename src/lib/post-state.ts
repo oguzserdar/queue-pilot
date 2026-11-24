@@ -24,5 +24,6 @@ export function postState(p: { status: "draft" | "scheduled" | "sent" | "error";
   if (p.status === "sent") return "sent";
   if (p.status === "scheduled" || approved) return "scheduled";
   const tone = worstTone(p);
-  return tone === "danger" ? "breaks" : tone === "warning" ? "check" : "draft";
+  if (tone === "danger") return "breaks";
+  return tone === "warning" ? "check" : "draft";
 }

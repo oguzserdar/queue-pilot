@@ -8,7 +8,7 @@ Last checked: 11 November 2026. Use the [API limits page](https://developers.buf
 
 ## Every Buffer operation Queue Pilot uses
 
-37 of the 49 operations in Buffer's [API reference](https://developers.buffer.com/reference.md): 16 of 24 queries and 21 of 25 mutations, checked 11 November 2026. A test (`src/lib/buffer/operations-used.test.ts`) compares this table with Buffer's reference and with the code, so it cannot drift.
+37 of the 50 operations in Buffer's [API reference](https://developers.buffer.com/reference.md): 16 of 24 queries and 21 of 26 mutations, checked 19 Kasember 2026. A test (`src/lib/buffer/operations-used.test.ts`) compares this table with Buffer's reference and with the code, so it cannot drift.
 
 | Area | Reads | Writes | What Queue Pilot does with them |
 |---|---|---|---|
@@ -29,6 +29,7 @@ Not used, on purpose:
 | `instagramAudio`, `instagramAudioCatalog`, `searchInstagramAudio`, `searchInstagramAudioCatalog`, `trendingInstagramAudio` | Queue Pilot writes text posts, not reels |
 | `createPostTemplate`, `updatePostTemplate`, `deletePostTemplate` | Templates are yours. Queue Pilot reads them and never changes them |
 | `movePostInQueue` | Queue Pilot never reorders your queue |
+| `publishPostNow` | Queue Pilot never publishes on its own. Your Approve schedules the post in Buffer |
 | `channel`, `tag` | Reading one channel or one tag at a time is never needed. The lists above already return all of them in one request |
 
 ## Sign-in and scopes

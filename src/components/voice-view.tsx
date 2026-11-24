@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/registry/components/button/button";
 import { EmptyState } from "@/registry/components/empty-state/empty-state";
 import { Textarea } from "@/registry/components/textarea/textarea";
-import { addPastedVoiceExample, addVoiceExample, removeVoiceExample, saveVoiceNote } from "@/app/(app)/actions"
+import { addPastedVoiceExample, addVoiceExample, removeVoiceExample, saveVoiceNote } from "@/app/(app)/voice-actions"
 import { MAX_EXAMPLES, MAX_NOTE, MAX_PASTED_TEXT, SUGGESTED_EXAMPLES } from "@/lib/voice-limits"
 import styles from "./voice-view.module.css";
 
@@ -32,6 +32,12 @@ export function VoiceView(props: ({ mode: "example" } | ({ mode: "live" } & Voic
   return <ExampleVoice />;
 }
 
+/** What a finished action shows: the done line on success (or nothing), the server's reason on failure. */
+function resultMessage(r: { ok: boolean; message?: string }, done: string | undefined): { tone: "ok" | "bad"; text: string } | null {
+  if (!r.ok) return { tone: "bad", text: r.message ?? "Something went wrong." };
+  return done ? { tone: "ok", text: done } : null;
+}
+
 function LiveVoice({ candidates, examples, note }: VoiceLive) {
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState(note ?? "");
@@ -39,10 +45,11 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
   const [pasteMessage, setPasteMessage] = useState<{ ok: boolean, text: string } | null>(null)
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const picked = new Set(examples.map((e) => e.postId));
+  const unpicked = candidates.filter((c) => !picked.has(c.postId));
   const run = (fn: () => Promise<{ ok: boolean; message?: string }>, done?: string) =>
     start(async () => {
       const r = await fn();
-      setMessage(r.ok ? (done ? { tone: "ok", text: done } : null) : { tone: "bad", text: r.message ?? "Something went wrong." });
+      setMessage(resultMessage(r, done));
     });
 
   return (
@@ -111,13 +118,15 @@ function LiveVoice({ candidates, examples, note }: VoiceLive) {
         <div className={styles.blockHead}>
           <h2 id="recent" className={styles.h2}>Add from Buffer</h2>
         </div>
-        {candidates.length === 0 ? (
+        {candidates.length === 0 && (
           <EmptyState title="No sent posts yet" description="Your posts appear here after Buffer publishes something. Pick a few that sound like you, and your AI writes like them." />
-        ) : candidates.every((c) => picked.has(c.postId)) ? (
+        )}
+        {candidates.length > 0 && unpicked.length === 0 && (
           <p className={styles.muted}>You picked every recent post. New ones show up here after Buffer publishes them.</p>
-        ) : (
+        )}
+        {unpicked.length > 0 && (
           <ul className={styles.examples}>
-            {candidates.filter((c) => !picked.has(c.postId)).map((c) => (
+            {unpicked.map((c) => (
               <li key={c.postId} className={styles.example}>
                 <span className={styles.channel}>{c.channel}</span>
                 <p>{c.text}</p>

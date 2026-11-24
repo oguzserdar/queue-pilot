@@ -2,17 +2,24 @@
 // plugin ships are one set. Run it after editing a plugin skill; plugin-skills.test.ts fails when it was forgotten.
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 
+/** The default sort order, written out: UTF-16 code units, not the locale. */
+function byCodeUnit(a, b) {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
+
 /** Every file under one skill folder except SKILL.md, as sorted relative paths with forward slashes. */
 function extraFiles(dir, prefix = "") {
   return readdirSync(dir, { withFileTypes: true })
     .flatMap((d) => (d.isDirectory() ? extraFiles(`${dir}/${d.name}`, `${prefix}${d.name}/`) : [`${prefix}${d.name}`]))
     .filter((p) => p !== "SKILL.md")
-    .sort();
+    .sort(byCodeUnit);
 }
 
 /** The generated module's text, in the order the folders sort. */
 export function render(root = "plugin/skills") {
-  const names = readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+  const names = readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort(byCodeUnit);
   const entries = names.map((n) => `  ${JSON.stringify(n)}: ${JSON.stringify(readFileSync(`${root}/${n}/SKILL.md`, "utf8"))},`);
   const files = names.flatMap((n) => {
     const paths = extraFiles(`${root}/${n}`);

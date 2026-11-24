@@ -67,8 +67,9 @@ export async function shownPortrait(src: string | undefined, fetchImpl: typeof f
  */
 export async function storedPortrait(stored: string | null | undefined): Promise<string | null> {
   const src = portraitUrl(stored);
-  if (!src) return null;
+  // portraitUrl gives an address only for a stored one, so `stored` is set whenever `src` is.
+  if (!src || !stored) return null;
   const u = new URL(src);
-  const checked = isGravatar(u.hostname) && new URL(stored!).searchParams.get("d") === "404";
+  const checked = isGravatar(u.hostname) && new URL(stored).searchParams.get("d") === "404";
   return checked ? src : (await shownPortrait(src)) ?? null;
 }

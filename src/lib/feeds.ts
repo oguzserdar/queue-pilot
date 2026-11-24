@@ -5,7 +5,7 @@ import "server-only";
  * safeFetch (public addresses only, redirects re-checked) with a time and size limit, because the URL is user input.
  */
 import { parseFeed } from "@rowanmanning/feed-parser";
-import { BlockedAddressError, safeFetch } from "./safe-fetch";
+import { BlockedAddressError, safeFetch, type HttpAnswer } from "./safe-fetch";
 
 export type FeedItem = {
   /** Stable key for "already used": the feed's own id, else the link, else the title. */
@@ -59,29 +59,37 @@ function mediaDescriptions(xml: string): Map<string, string> {
   return out;
 }
 
+/** One parsed feed entry as a FeedItem: a summary for the list, a body that prefers the whole post. */
+function toFeedItem(it: ReturnType<typeof parseFeed>["items"][number], media: Map<string, string>): FeedItem {
+  const fromMedia = it.url ? media.get(it.url) : undefined;
+  const summary = plainText(it.description ?? it.content ?? fromMedia ?? "");
+  // Many feeds put a teaser in the description and the whole post in content; the body prefers the whole post.
+  const html = it.content ?? it.description ?? fromMedia ?? "";
+  const full = plainText(html);
+  const excerpt = full.length > BODY_CHARS || /<a\b[^>]*>\s*Read more\s*<\/a>\s*(?:<\/p>)?\s*$/i.test(html);
+  const title = (it.title ?? "").trim() || summary.slice(0, 80) || "(untitled)";
+  return {
+    ...(excerpt ? { truncated: true } : {}),
+    key: it.id ?? it.url ?? title,
+    title,
+    url: it.url ?? null,
+    published: (it.published ?? it.updated)?.toISOString() ?? null,
+    summary: clip(summary, SUMMARY_CHARS),
+    body: clip(full, BODY_CHARS),
+  };
+}
+
+/** The text cut to at most `max` characters, ending with an ellipsis when it was cut. */
+function clip(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 /** Parses feed XML into items, newest first. Throws when the text is not a feed. */
 export function itemsFromXml(xml: string): { title: string | null; items: FeedItem[] } {
   const feed = parseFeed(xml);
   const media = xml.includes("media:description") ? mediaDescriptions(xml) : new Map<string, string>();
   const items = feed.items
-    .map((it) => {
-      const fromMedia = it.url ? media.get(it.url) : undefined;
-      const summary = plainText(it.description ?? it.content ?? fromMedia ?? "");
-      // Many feeds put a teaser in the description and the whole post in content; the body prefers the whole post.
-      const html = it.content ?? it.description ?? fromMedia ?? "";
-      const full = plainText(html);
-      const excerpt = full.length > BODY_CHARS || /<a\b[^>]*>\s*Read more\s*<\/a>\s*(?:<\/p>)?\s*$/i.test(html);
-      const title = (it.title ?? "").trim() || summary.slice(0, 80) || "(untitled)";
-      return {
-        ...(excerpt ? { truncated: true } : {}),
-        key: it.id ?? it.url ?? title,
-        title,
-        url: it.url ?? null,
-        published: (it.published ?? it.updated)?.toISOString() ?? null,
-        summary: summary.length > SUMMARY_CHARS ? `${summary.slice(0, SUMMARY_CHARS - 1)}…` : summary,
-        body: full.length > BODY_CHARS ? `${full.slice(0, BODY_CHARS - 1)}…` : full,
-      };
-    })
+    .map((it) => toFeedItem(it, media))
     .sort((a, b) => (b.published ?? "").localeCompare(a.published ?? ""));
   return { title: feed.title ?? null, items };
 }
@@ -106,10 +114,10 @@ export function newItems(items: FeedItem[], usedKeys: Set<string>, limit = 10): 
 /** Old/undated items remain readable as background, but are not offered as fresh news. */
 export function freshItems(items: FeedItem[], usedKeys: Set<string>, sourceUrl: string, limit = 10, now = new Date()): FeedItem[] {
   const cutoff = now.getTime() - 14 * 24 * 60 * 60 * 1000;
-  const recent = items.filter(item => {
+  const recent = items.filter((item): item is FeedItem & { published: string } => {
     const date = item.published ? Date.parse(item.published) : NaN;
     return date >= cutoff && date <= now.getTime();
-  }).sort((a, b) => b.published!.localeCompare(a.published!));
+  }).sort((a, b) => b.published.localeCompare(a.published));
   const url = new URL(sourceUrl);
   // Filter before checking usage: using the latest release must not expose an older version next time.
   const candidates = url.hostname === "github.com" && /^\/[^/]+\/[^/]+\/releases(?:\.atom)?\/?$/.test(url.pathname)
@@ -118,7 +126,7 @@ export function freshItems(items: FeedItem[], usedKeys: Set<string>, sourceUrl: 
 }
 
 /** Reads a response body, stopping as soon as it passes `max` bytes, so an undeclared huge body is never held whole. */
-export async function readCapped(res: Response, max: number): Promise<string> {
+export async function readCapped(res: HttpAnswer, max: number): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -155,7 +163,7 @@ export function feedUrl(url: string): string {
 /** Fetches a public address as text, with the feed reader's time and size limits. Errors are written for people. */
 async function fetchText(parsed: URL, accept: string): Promise<string> {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new FeedError("That is not a web address.");
-  let res: Response;
+  let res: HttpAnswer;
   try {
     res = await safeFetch(parsed, { headers: { accept }, signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch (e) {

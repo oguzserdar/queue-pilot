@@ -110,9 +110,16 @@ async function fetchFromBuffer(token: string, now: Date, query: typeof bufferQue
   if (joined.length) for (const [id, read] of (await readOrganizations(token, joined, range, false, q)).orgs) orgs.set(id, read);
 
   // Only the account's current organizations count: one it left is dropped even though it was read.
-  const reads = account.organizationIds.map((id) => orgs.get(id)!);
-  const more = await Promise.all(account.organizationIds.map((id, i) =>
-    reads[i].next ? listPostsDue(token, id, range, q, { after: reads[i].next!, pagesRead: 1 }) : Promise.resolve({ posts: [], truncated: false })));
+  const reads = account.organizationIds.map((id) => {
+    const read = orgs.get(id);
+    // readOrganizations answers every organization it was asked for or throws, so this is never reached.
+    if (!read) throw new IncompleteReadError(`organization ${id}`);
+    return read;
+  });
+  const more = await Promise.all(account.organizationIds.map((id, i) => {
+    const after = reads[i].next;
+    return after ? listPostsDue(token, id, range, q, { after, pagesRead: 1 }) : Promise.resolve({ posts: [], truncated: false });
+  }));
   return {
     data: {
       email: account.email,

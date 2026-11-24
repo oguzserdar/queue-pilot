@@ -22,11 +22,13 @@ export const GROUPS = {
   ai: { title: "Built-in AI", help: "This deployment's own AI key, used for people who have not connected their own AI. Its calls are billed to this key." },
   sources: { title: "Sources", help: "Optional services that bring in material to write from." },
   copies: { title: "Telegram and Discord", help: "Optional. The shared bots that post to people's own Telegram channel or Discord server: copies of published Buffer posts, and posts written in Queue Pilot." },
+  meta: { title: "Meta app (Instagram)", help: "Optional. Your own Meta developer app, for answering Instagram comments and messages. Each server brings its own app; comment notifications need Meta's app review (Advanced Access) before they arrive." },
+  agents: { title: "Agent sign-up", help: "AI agents that sign themselves up with no person present (see /auth.md). They can only save private material and drafts until a person claims them." },
 } as const;
 /** One /admin section. */
 export type GroupId = keyof typeof GROUPS;
 
-type Type = "string" | "secret" | "usd" | "int" | "ai-key";
+type Type = "string" | "secret" | "usd" | "int" | "ai-key" | "switch";
 type Def = { group: GroupId; label: string; help: string; type: Type; env: string; default: string | null };
 
 /** Every operator setting: its section, label, help, type, environment name and default. */
@@ -44,10 +46,19 @@ export const SETTINGS = {
   discord_client_id: { group: "copies", label: "Discord application ID", help: "From the Discord Developer Portal, General Information. It is public and goes in the Add to server link.", type: "string", env: "DISCORD_CLIENT_ID", default: null },
   discord_client_secret: { group: "copies", label: "Discord client secret", help: "From the Discord Developer Portal, OAuth2. Used when someone adds the bot to their server.", type: "secret", env: "DISCORD_CLIENT_SECRET", default: null },
   discord_bot_token: { group: "copies", label: "Discord bot token", help: "From the Discord Developer Portal, Bot. Discord copies turn on when the application ID, client secret and this are all set.", type: "secret", env: "DISCORD_BOT_TOKEN", default: null },
+  meta_app_id: { group: "meta", label: "App ID", help: "From your app's dashboard on developers.facebook.com. Public.", type: "string", env: "META_APP_ID", default: null },
+  meta_app_secret: { group: "meta", label: "App secret", help: "Signs every webhook Meta sends here, so a request without the right signature is refused. Stored encrypted, never shown again.", type: "secret", env: "META_APP_SECRET", default: null },
+  meta_webhook_verify_token: { group: "meta", label: "Webhook verify token", help: "Any long random text. Paste the same text in your app's Webhooks settings; Meta sends it back once to confirm the address. Stored encrypted.", type: "secret", env: "META_WEBHOOK_VERIFY_TOKEN", default: null },
+  agent_signup: { group: "agents", label: "Agent sign-up", help: "on or off. When off, POST /v1/agent/identity answers registration_disabled; agents already signed up keep working and can still be claimed.", type: "switch", env: "AGENT_SIGNUP", default: "off" },
 } as const satisfies Record<string, Def>;
 
 /** One operator setting. */
 export type SettingKey = keyof typeof SETTINGS;
+
+/** True only for the settings' own names, never for names every object inherits such as constructor. */
+export const isSettingKey = (k: string): k is SettingKey => Object.hasOwn(SETTINGS, k);
+/** Every setting, in registry order. */
+const SETTING_KEYS: SettingKey[] = Object.keys(SETTINGS).filter(isSettingKey);
 
 /** True for settings stored encrypted and shown masked. */
 export const isSecret = (key: SettingKey) => SETTINGS[key].type === "secret" || SETTINGS[key].type === "ai-key";
@@ -62,6 +73,7 @@ const PARSERS: Record<Type, z.ZodType<string, string>> = {
     .refine((s) => /^\d+(\.\d{1,2})?$/.test(s), "must be a dollar amount, like 400 or 12.50")
     .transform((s) => Number(s).toFixed(2)),
   int: z.string().trim().min(1, "cannot be empty").refine((s) => /^\d+$/.test(s), "must be a whole number, 0 or more").transform((s) => String(Number(s))),
+  switch: z.string().trim().toLowerCase().refine((s) => s === "on" || s === "off", "must be on or off"),
 };
 
 /** Parses what was typed for a setting into the form it is stored in, or says why it cannot be saved. */
@@ -117,13 +129,13 @@ export async function resolveSetting(store: SettingsStore, key: SettingKey, mast
   const fromEnv = envValue(key, env);
   if (saved !== null && (await savedWins(store, key, fromEnv))) return { value: isSecret(key) ? decryptSecret(saved, masterKeyHex) : saved, source: "saved" };
   if (fromEnv) return { value: fromEnv, source: "environment" };
-  const fallback = SETTINGS[key].default as string | null;
+  const fallback: string | null = SETTINGS[key].default;
   return fallback !== null ? { value: fallback, source: "default" } : null;
 }
 
 /** Settings with both a saved value and an environment value, split by whether the saved one is from before v0.8. */
 async function conflicts(store: SettingsStore, env: Record<string, string | undefined>, legacy: boolean): Promise<SettingKey[]> {
-  const keys = Object.keys(SETTINGS) as SettingKey[];
+  const keys = SETTING_KEYS;
   const hit = await Promise.all(keys.map(async (key) => envValue(key, env) !== null && (await store.get(key)) !== null && (await store.legacy(key)) === legacy));
   return keys.filter((_, i) => hit[i]);
 }
@@ -169,10 +181,10 @@ export async function logShadowedSettings(store: SettingsStore, env: Record<stri
  * being read as before, so an existing deployment's "@name" still works (copies strip the @).
  */
 const SAVE_CHECKS: Partial<Record<SettingKey, (v: string) => string | null>> = {
-  telegram_bot_username: (v) =>
-    v.startsWith("@") ? "Telegram bot username must be typed without the @"
-      : /^[A-Za-z0-9_]{5,32}$/.test(v) && /bot$/i.test(v) ? null
-      : "Telegram bot username must be 5 to 32 letters, digits or underscores, ending in \"bot\"",
+  telegram_bot_username: (v) => {
+    if (v.startsWith("@")) return "Telegram bot username must be typed without the @";
+    return /^[A-Za-z0-9_]{5,32}$/.test(v) && /bot$/i.test(v) ? null : "Telegram bot username must be 5 to 32 letters, digits or underscores, ending in \"bot\"";
+  },
   discord_client_id: (v) => (/^\d{17,20}$/.test(v) ? null : "Discord application ID must be 17 to 20 digits"),
 };
 
@@ -181,11 +193,24 @@ const SAVE_CHECKS: Partial<Record<SettingKey, (v: string) => string | null>> = {
  * admin's user id, taken from the server session by the caller, never from the form.
  */
 export async function saveSetting(store: SettingsStore, key: SettingKey, input: string, masterKeyHex: string, by?: string): Promise<void> {
+  const checked = checkSettingInput(key, input);
+  if (!checked.ok) throw new Error(checked.error);
+  await store.set(key, isSecret(key) ? encryptSecret(checked.value, masterKeyHex) : checked.value, by);
+}
+
+/**
+ * Everything a save checks before writing: the type's parser, then the setting's own shape check. Lets a caller tell a
+ * value the admin must fix apart from a store that failed.
+ *
+ * @param key - The setting
+ * @param input - What was typed
+ * @returns The value as it would be stored (before encryption), or the reason it cannot be saved
+ */
+export function checkSettingInput(key: SettingKey, input: string): { ok: true; value: string } | { ok: false; error: string } {
   const parsed = parseSetting(key, input);
-  if (!parsed.ok) throw new Error(parsed.error);
+  if (!parsed.ok) return parsed;
   const problem = SAVE_CHECKS[key]?.(parsed.value);
-  if (problem) throw new Error(problem);
-  await store.set(key, isSecret(key) ? encryptSecret(parsed.value, masterKeyHex) : parsed.value, by);
+  return problem ? { ok: false, error: problem } : parsed;
 }
 
 /**
@@ -205,31 +230,36 @@ export function clearSetting(store: SettingsStore, key: SettingKey, by?: string)
   return store.remove(key, by);
 }
 
+/** A saved value as typed: secrets are stored encrypted. */
+const readable = (key: SettingKey, saved: string, masterKeyHex: string) => (isSecret(key) ? decryptSecret(saved, masterKeyHex) : saved);
+/** A value as /admin shows it: secrets masked. */
+const masked = (key: SettingKey, v: string) => (isSecret(key) ? maskSecret(v) : v);
+
 /**
  * What /admin shows for each setting: every source in the order it is tried (saved here, server env, default), the one
  * in use marked, secrets masked. Each saved value is read and decrypted once.
  */
 export async function describeSettings(store: SettingsStore, masterKeyHex: string, env: Record<string, string | undefined> = process.env) {
   return Promise.all(
-    (Object.keys(SETTINGS) as SettingKey[]).map(async (key) => {
-      const def = SETTINGS[key];
+    SETTING_KEYS.map(async (key) => {
+      const def: Def = SETTINGS[key];
       const saved = await store.get(key);
       const legacy = saved !== null && (await store.legacy(key));
       const values: Record<Source, string | null> = {
-        saved: saved === null ? null : isSecret(key) ? decryptSecret(saved, masterKeyHex) : saved,
+        saved: saved === null ? null : readable(key, saved, masterKeyHex),
         environment: envValue(key, env),
-        default: def.default as string | null,
+        default: def.default,
       };
       const heldBack = legacy && values.environment !== null;
       const source = ORDER.find((k) => values[k] !== null && !(k === "saved" && heldBack)) ?? null;
-      const shown = (v: string | null) => (v === null ? null : isSecret(key) ? maskSecret(v) : v);
+      const shown = (v: string | null) => (v === null ? null : masked(key, v));
       return {
         key,
-        group: def.group as GroupId,
-        label: def.label as string,
-        help: def.help as string,
-        type: def.type as Type,
-        env: def.env as string,
+        group: def.group,
+        label: def.label,
+        help: def.help,
+        type: def.type,
+        env: def.env,
         source,
         display: source ? shown(values[source]) : null,
         /** True when the value saved here hides one set in the server's environment. */
@@ -243,6 +273,40 @@ export async function describeSettings(store: SettingsStore, masterKeyHex: strin
       };
     }),
   );
+}
+
+/** One setting as an admin operation lists it: never a secret's value, only whether one applies and from where. */
+export type SettingState = { key: SettingKey; label: string; group: GroupId; secret: boolean; set: boolean; source: Source | null; value: string | null };
+
+/**
+ * Every setting's state without decrypting anything: whether a value applies, where it comes from (saved here, the
+ * server's environment or the default, in the same order as resolveSetting), and the value itself only for settings
+ * that are not secret.
+ *
+ * @param store - Where saved values live
+ * @param env - The server's environment
+ * @returns One entry per setting, in registry order
+ */
+export async function settingStates(store: SettingsStore, env: Record<string, string | undefined> = process.env): Promise<SettingState[]> {
+  return Promise.all(
+    SETTING_KEYS.map(async (key) => {
+      const def: Def = SETTINGS[key];
+      const saved = await store.get(key);
+      const fromEnv = envValue(key, env);
+      const usesSaved = saved !== null && (await savedWins(store, key, fromEnv));
+      const values: Record<Source, string | null> = { saved, environment: fromEnv, default: def.default };
+      const source = stateSource(usesSaved, fromEnv, def.default);
+      const shown = source === null ? null : values[source];
+      return { key, label: def.label, group: def.group, secret: isSecret(key), set: source !== null, source, value: isSecret(key) ? null : shown };
+    }),
+  );
+}
+
+/** Where a setting's state comes from, in resolveSetting's order; null when nothing applies. */
+function stateSource(usesSaved: boolean, fromEnv: string | null, fallback: string | null): Source | null {
+  if (usesSaved) return "saved";
+  if (fromEnv !== null) return "environment";
+  return fallback !== null ? "default" : null;
 }
 
 /** In-memory store for tests and local runs without a database. `legacyKeys` marks values saved before v0.8. */

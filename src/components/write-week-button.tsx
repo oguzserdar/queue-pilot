@@ -14,6 +14,53 @@ export type FillEvent = { type: "start"; slotIds: string[] } | { type: "draft"; 
 
 const SAMPLE = "A draft written from what you published appears here, in your voice, with the quote it rests on.";
 
+type Progress = { total: number; written: number; saving: boolean };
+type Done = Extract<WriteWeekActionResult, { ok: true }>;
+
+/** The status line under the button while a run goes: reading, which draft is being written, then the save. */
+function stepLine(progress: Progress, example: boolean): string {
+  // The example shows the same steps as a real run, and says plainly where the real save would happen.
+  if (progress.saving) return example ? "Checking each one against your playbook. A real run saves them to Buffer now. The example saves nothing." : "Checking each one against your playbook and saving to Buffer…";
+  if (!progress.total) return "Reading what you published…";
+  return `Writing draft ${Math.min(progress.written + 1, progress.total)} of ${progress.total} in your voice…`;
+}
+
+/** The short words inside the busy button. */
+function shimmerText(progress: Progress): string {
+  if (progress.saving) return "Saving to Buffer";
+  return progress.total ? `Writing ${Math.min(progress.written + 1, progress.total)} of ${progress.total}` : "Reading";
+}
+
+/** The button while a run goes: moving pixels, the step in a few words, and a bar of drafts written. */
+function BusyLabel({ progress }: { progress: Progress }) {
+  return (
+    <span className={styles.busy}>
+      <span className={styles.pixels} aria-hidden="true"><i /><i /><i /><i /></span>
+      <span className={styles.shimmer}>{shimmerText(progress)}</span>
+      <span className={styles.bar} aria-hidden="true" style={{ transform: `scaleX(${progress.total ? progress.written / progress.total : 0.04})` }} />
+    </span>
+  );
+}
+
+/** The line under the button: the step while it runs, else what a run will write. */
+function UnderLine({ busy, step, example, count, total, week, source }: { busy: boolean; step: string; example: boolean; count: number; total: number; week: "this" | "next"; source: string }) {
+  if (busy) return <p className={styles.step} role="status">{step}</p>;
+  if (example) return <p className={styles.help}>Watch this week get written again: each draft lands in its time as it is written. Nothing is saved.</p>;
+  return <p className={styles.help}>{total > count ? `Writes ${count} of your ${total} empty times` : `Writes ${count} draft${count === 1 ? "" : "s"} into your Buffer posting times`}{week === "this" ? " still ahead this week" : ""}, spread across the days, using {source}. Saved as drafts in Buffer for your review.{total > count ? " Run it again for more." : ""}</p>;
+}
+
+/** What a finished run saved, what the playbook refused, and what it flagged. */
+function SavedAlert({ result }: { result: Done }) {
+  return (
+    <Alert tone={result.refused.length || result.flags.length || result.note ? "warning" : "success"} title={`${result.saved.length} draft${result.saved.length === 1 ? "" : "s"} saved in Buffer`}>
+      {result.retried > 0 && <p>{result.retried} draft{result.retried === 1 ? "" : "s"} broke a "do not save" rule in your playbook and {result.retried === 1 ? "was" : "were"} rewritten once.</p>}
+      {result.refused.map((r) => <p key={r.slotId}>Not saved: {r.reason}</p>)}
+      {result.flags.map((j, i) => <p key={i}>{j.verdict === "fail" ? "Check" : "Not sure"}: {j.where}, "{j.rule}"{j.reason ? `. ${j.reason}` : ""}</p>)}
+      {result.note && <p>{result.note}</p>}
+    </Alert>
+  );
+}
+
 /**
  * Fill the displayed week using either the person's key or the available built-in allowance.
  * The result says what was saved, what the playbook refused, and why.
@@ -22,23 +69,18 @@ export function WriteWeekButton({ availability, count, total = count, inlineActi
   const [result, setResult] = useState<WriteWeekActionResult | null>(null);
   const [pending, start] = useTransition();
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState({ total: 0, written: 0, saving: false });
+  const [progress, setProgress] = useState<Progress>({ total: 0, written: 0, saving: false });
   const router = useRouter();
   const suggest = useNextSteps();
   const busy = pending || running;
-  // onWriting is a state setter in the caller.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { onWriting?.(busy); }, [busy]);
+  // onWriting is a state setter in the caller, so it is stable and the effect runs when busy changes.
+  useEffect(() => { onWriting?.(busy); }, [busy, onWriting]);
   const report = (event: FillEvent | { type: "saving" }) => {
     if (event.type === "start") setProgress({ total: event.slotIds.length, written: 0, saving: false });
     if (event.type === "draft" || event.type === "dropped") setProgress((p) => ({ ...p, written: p.written + 1 }));
     if (event.type === "saving") setProgress((p) => ({ ...p, saving: true }));
     if (event.type !== "saving") onProgress?.(event);
   };
-  // The example shows the same steps as a real run, and says plainly where the real save would happen.
-  const step = progress.saving ? (example ? "Checking each one against your playbook. A real run saves them to Buffer now. The example saves nothing." : "Checking each one against your playbook and saving to Buffer…")
-    : !progress.total ? "Reading what you published…"
-    : `Writing draft ${Math.min(progress.written + 1, progress.total)} of ${progress.total} in your voice…`;
 
   /** Reads the run's report line by line; the last line is the result. */
   const fill = async (): Promise<WriteWeekActionResult> => {
@@ -74,38 +116,26 @@ export function WriteWeekButton({ availability, count, total = count, inlineActi
     setTimeout(() => { setRunning(false); setProgress({ total: 0, written: 0, saving: false }); setResult({ ok: false, message: "That is how a week fills: each draft lands in its time as it is written, then all of them are saved to Buffer as drafts in one go. This is the example account, so nothing was written. Sign in with Buffer and Queue Pilot fills your own empty times." }); }, read + gap * (samples.length - 1) + 1200 + save);
   };
 
+  const run = () => start(async () => {
+    setResult(null); setRunning(true); setProgress({ total: 0, written: 0, saving: false });
+    const r = await fill();
+    setRunning(false);
+    setResult(r);
+    suggest(await nextStepsAfterFill(r.ok ? r.saved.length : 0, r.ok ? undefined : r.reason).catch(() => []));
+    router.refresh();
+  });
+
   if (!availability.ready) return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>{availability.message} <a href="/settings?tab=ai#ai-key">AI settings</a></p>;
   if (!count) return <p style={{ fontSize: "var(--text-sm)", color: "var(--text-muted)" }}>No empty times are left to fill {week === "this" ? "this week" : "next week"}.</p>;
   return (
     <div className={inlineActions ? styles.inline : styles.group}>
-      <Button variant="secondary" size={inlineActions ? "md" : "lg"} disabled={busy} onClick={() => example ? play() : start(async () => {
-        setResult(null); setRunning(true); setProgress({ total: 0, written: 0, saving: false });
-        const r = await fill();
-        setRunning(false);
-        setResult(r);
-        suggest(await nextStepsAfterFill(r.ok ? r.saved.length : 0, r.ok ? undefined : r.reason).catch(() => []));
-        router.refresh();
-      })}>
-        {busy ? (
-          <span className={styles.busy}>
-            <span className={styles.pixels} aria-hidden="true"><i /><i /><i /><i /></span>
-            <span className={styles.shimmer}>{progress.saving ? "Saving to Buffer" : progress.total ? `Writing ${Math.min(progress.written + 1, progress.total)} of ${progress.total}` : "Reading"}</span>
-            <span className={styles.bar} aria-hidden="true" style={{ transform: `scaleX(${progress.total ? progress.written / progress.total : 0.04})` }} />
-          </span>
-        ) : week === "this" ? "Fill this week" : "Fill next week"}
+      <Button variant="secondary" size={inlineActions ? "md" : "lg"} disabled={busy} onClick={example ? play : run}>
+        {busy ? <BusyLabel progress={progress} /> : `Fill ${week === "this" ? "this" : "next"} week`}
       </Button>
-      {busy ? <p className={styles.step} role="status">{step}</p> : example ? <p className={styles.help}>Watch this week get written again: each draft lands in its time as it is written. Nothing is saved.</p> :
-      <p className={styles.help}>{total > count ? `Writes ${count} of your ${total} empty times` : `Writes ${count} draft${count === 1 ? "" : "s"} into your Buffer posting times`}{week === "this" ? " still ahead this week" : ""}, spread across the days, using {availability.source}. Saved as drafts in Buffer for your review.{total > count ? " Run it again for more." : ""}</p>}
+      <UnderLine busy={busy} step={stepLine(progress, example)} example={example} count={count} total={total} week={week} source={availability.source} />
       {result && <div className={styles.result}>
-      {result && !result.ok && <Alert tone={example ? "info" : "danger"} title={example ? "Example only" : "No drafts written"}>{result.message}</Alert>}
-      {result && result.ok && (
-        <Alert tone={result.refused.length || result.flags.length || result.note ? "warning" : "success"} title={`${result.saved.length} draft${result.saved.length === 1 ? "" : "s"} saved in Buffer`}>
-          {result.retried > 0 && <p>{result.retried} draft{result.retried === 1 ? "" : "s"} broke a "do not save" rule in your playbook and {result.retried === 1 ? "was" : "were"} rewritten once.</p>}
-          {result.refused.map((r) => <p key={r.slotId}>Not saved: {r.reason}</p>)}
-          {result.flags.map((j, i) => <p key={i}>{j.verdict === "fail" ? "Check" : "Not sure"}: {j.where}, "{j.rule}"{j.reason ? `. ${j.reason}` : ""}</p>)}
-          {result.note && <p>{result.note}</p>}
-        </Alert>
-      )}
+      {!result.ok && <Alert tone={example ? "info" : "danger"} title={example ? "Example only" : "No drafts written"}>{result.message}</Alert>}
+      {result.ok && <SavedAlert result={result} />}
       </div>}
     </div>
   );

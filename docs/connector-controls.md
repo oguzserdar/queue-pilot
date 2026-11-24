@@ -1,6 +1,6 @@
 # Connector controls
 
-The connector exposes 76 tools. OAuth supplies the account ID; tool inputs cannot select another account. The app and the connector use the same writer and the same setup steps.
+The connector exposes 83 tools. OAuth supplies the account ID; tool inputs cannot select another account. The app and the connector use the same writer and the same setup steps.
 
 | Area | Tools |
 | --- | --- |
@@ -11,11 +11,13 @@ The connector exposes 76 tools. OAuth supplies the account ID; tool inputs canno
 | Review | `share_for_review`, `list_review_comments`, `turn_off_review`, `propose_review_changes`, `propose_note_changes` |
 | Material | `list_sources`, `add_source`, `remove_source`, `add_material`, `remove_material`, `list_new_material`, `read_material`, `get_transcript`, `search_context`, `add_web_page`, `list_sources_to_check`, `report_source_version` |
 | Buffer notes | `list_draft_notes`, `add_draft_note`, `update_draft_note`, `delete_draft_note` |
-| Drafts and delivery | `list_open_slots`, `write_my_week`, `save_drafts`, `list_my_drafts`, `update_draft`, `delete_draft`, `approve_drafts`, `show_next_week`, `show_last_week_delivery` |
+| Drafts and delivery | `list_open_slots`, `write_my_week`, `save_drafts`, `list_my_drafts`, `update_draft`, `delete_draft`, `move_back_to_draft`, `approve_drafts`, `show_next_week`, `show_last_week_delivery` |
 | Ideas | `list_buffer_ideas`, `save_idea` |
 | Tags | `list_tags`, `create_tag`, `rename_tag`, `delete_tag`, `tag_draft` |
 | Templates | `list_post_templates`, `get_post_template`, `fill_post_template` |
 | Hashtag sets | `list_snippets`, `save_snippet`, `delete_snippet` |
+| Mastodon and Bluesky | `list_social_accounts`, `set_replies` |
+| Reply automations | `list_reply_automations`, `save_reply_automation`, `delete_reply_automation`, `try_reply_automation` |
 | Content items | `list_content_items`, `get_content_item`, `save_channel_less_draft`, `promote_to_draft_posts`, `update_content_item`, `delete_content_item`, `link_post_to_content_item`, `unlink_post_from_content_item` |
 
 `write_my_week` calls the same service as the app button. It reads real material, voice and rules, uses the person's key or the metered built-in key, and saves only Buffer drafts. Each run handles at most ten empty slots next week and rewrites refused drafts once. It reports saved drafts, flags and refusals. More empty times may remain after a run, so read the week back before saying it is full.
@@ -28,7 +30,7 @@ Setup progress uses exactly the same helper as the signed-in home screen. Its fi
 
 Only drafts recorded as Queue Pilot's own are returned by `list_my_drafts`. Stored verdicts are hidden when the text has changed since the recorded check. Rule, source, example and research cleanup is scoped to the token owner. Removing sources or research leaves existing drafts intact; research usage history remains.
 
-`approve_drafts` schedules drafts only when the person asks. By default it first returns the drafts and a ten-minute confirm token, and schedules on the second call after the person's yes. The token covers each draft's text, account, time and images as shown, works once, and stops working when the person changes the setting. Drafts whose playbook check is out of date or that break a blocking rule are refused, as they are in the app. Settings → AI can drop the confirm step or turn the tool off; no tool can change that setting. Account deletion, AI keys, revoking apps, admin, sign-out and echo destinations are not connector tools.
+`approve_drafts` schedules drafts only when the person asks. By default it first returns the drafts and a ten-minute confirm token, and schedules on the second call after the person's yes. The token covers each draft's text, account, time and images as shown, works once, and stops working when the person changes the setting. Drafts whose playbook check is out of date or that break a blocking rule are refused, as they are in the app. Settings → AI can drop the confirm step or turn the tool off; no tool can change that setting. `set_replies` only turns automatic replies on or off for an account the person already connected; connecting an account happens in Settings, never through the connector, so no credential passes through an AI app. `save_reply_automation` saves an automation that is on only under the same "act without asking" setting; saved switched off, it waits for the person, and deleting always works. `try_reply_automation` sends nothing and calls no AI. Account deletion, AI keys, revoking apps, admin, sign-out and echo destinations are not connector tools.
 
 ## Verification
 

@@ -17,6 +17,10 @@ export type Channel = {
   isLocked: boolean;
   isQueuePaused: boolean;
   postingSchedule: { day: DayOfWeek; paused: boolean; times: string[] }[];
+  /** The account's id on the network itself (a Mastodon id, a Bluesky DID). Absent on older snapshots. */
+  serviceId?: string | null;
+  /** The account's page on the network. Absent on older snapshots. */
+  externalLink?: string | null;
   /** The organization the channel was listed under; createContentItem needs it. Absent on older snapshots. */
   organizationId?: string;
 };
@@ -67,7 +71,7 @@ const toAccount = (a: RawAccount): Account => ({
   email: a.email,
   timezone: a.timezone || null,
   organizationIds: a.organizations.map((o) => o.id),
-  teamSizes: Object.fromEntries(a.organizations.filter((o) => typeof o.members?.totalCount === "number").map((o) => [o.id, o.members!.totalCount])),
+  teamSizes: Object.fromEntries(a.organizations.flatMap((o): [string, number][] => (typeof o.members?.totalCount === "number" ? [[o.id, o.members.totalCount]] : []))),
 });
 
 /** The ids of every organization the signed-in Buffer account belongs to. */
@@ -76,7 +80,7 @@ export async function listOrganizationIds(token: string, q: Query = bufferQuery)
   return account.organizations.map((o) => o.id);
 }
 
-export const CHANNEL_FIELDS = "id name service timezone isDisconnected isLocked isQueuePaused postingSchedule { day paused times }";
+export const CHANNEL_FIELDS = "id name service serviceId externalLink timezone isDisconnected isLocked isQueuePaused postingSchedule { day paused times }";
 
 /** Every channel in one organization, with its posting slots and whether it can post. */
 export async function listChannels(token: string, organizationId: string, q: Query = bufferQuery): Promise<Channel[]> {
@@ -115,10 +119,17 @@ export async function readPostsNow(token: string, ids: string[], q: Query = buff
     } catch (e) {
       if (!(e instanceof BufferApiError) || e.status !== 200) throw e;
       if (list.length === 1) { if (postGone(e)) continue; throw e; }
-      for (const id of list) {
-        try { posts.push(...(await read([id]))); } catch (one) { if (!postGone(one)) throw one; }
-      }
+      posts.push(...(await readOneByOne(list, read)));
     }
+  }
+  return posts;
+}
+
+/** A failed batch read again one post per request; a post Buffer says is gone is left out, any other failure is thrown. */
+async function readOneByOne(list: string[], read: (list: string[]) => Promise<Post[]>): Promise<Post[]> {
+  const posts: Post[] = [];
+  for (const id of list) {
+    try { posts.push(...(await read([id]))); } catch (one) { if (!postGone(one)) throw one; }
   }
   return posts;
 }
@@ -211,13 +222,14 @@ export async function readOrganizations(
       decl.push(`$o${i}: OrganizationId!`, `$p${i}: PostsInput!`);
       fields.push(`c${i}: channels(input: { organizationId: $o${i} }) { ${CHANNEL_FIELDS} }`, `p${i}: posts(input: $p${i}, first: $first) { ${POSTS_PAGE} }`);
     });
-    type Answer = { account?: RawAccount } & Record<string, Channel[] | { edges: { node: Post }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } | RawAccount | undefined>;
+    type PostsPage = { edges: { node: Post }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } };
+    type Answer = { account?: RawAccount } & Partial<Record<`c${number}`, Channel[]>> & Partial<Record<`p${number}`, PostsPage>>;
     const data = await q<Answer>(token, `query (${decl.join(", ")}) { ${fields.join(" ")} }`, vars);
     if (askAccount && data.account) account = toAccount(data.account);
     if (askAccount && !data.account) throw new IncompleteReadError("account");
     ids.forEach((id, i) => {
-      const channels = data[`c${i}`] as Channel[] | undefined;
-      const page = data[`p${i}`] as { edges: { node: Post }[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } } | undefined;
+      const channels = data[`c${i}` as const];
+      const page = data[`p${i}` as const];
       // A field missing from the answer is not an empty queue: fail, so the last good copy stays.
       if (!Array.isArray(channels) || !page?.edges || !page.pageInfo) throw new IncompleteReadError(`organization ${id}`);
       const more = page.pageInfo.hasNextPage;

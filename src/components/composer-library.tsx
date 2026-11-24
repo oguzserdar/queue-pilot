@@ -15,68 +15,125 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/registry/components/p
 import styles from "./composer-library.module.css";
 
 type Load<T> = { status: "idle" } | { status: "loading" } | { status: "done"; items: T[]; more: boolean; cursor: string | null; loadingMore?: boolean; moreError?: string } | { status: "failed"; message: string };
+/** One batch read from Buffer, in the same shape for templates and hashtag sets. */
+type Batch<T> = { ok: true; items: T[]; more: boolean; cursor: string | null } | { ok: false; message: string };
 
-/** Templates and Hashtags for one slot; `onInsert` receives the text to put into the post. */
-export function ComposerLibrary({ slotId, onInsert, disabled = false }: { slotId: string; onInsert: (text: string, kind: "template" | "hashtags") => void; disabled?: boolean }) {
-  const [templates, setTemplates] = useState<Load<ComposerTemplate>>({ status: "idle" });
-  const [snippets, setSnippets] = useState<Load<ComposerSnippet>>({ status: "idle" });
-  const [openList, setOpenList] = useState<"templates" | "hashtags" | null>(null);
-  const [query, setQuery] = useState("");
-  const search = useRef<HTMLInputElement>(null);
-
-  const loadTemplates = () => {
-    if (templates.status !== "idle" && templates.status !== "failed") return;
-    setTemplates({ status: "loading" });
-    readComposerTemplates(slotId)
-      .then((r) => setTemplates(r.ok ? { status: "done", items: r.templates, more: r.more, cursor: r.cursor } : { status: "failed", message: r.message }))
-      .catch(() => setTemplates({ status: "failed", message: "Buffer did not return the templates." }));
-  };
-  const loadSnippets = () => {
-    if (snippets.status !== "idle" && snippets.status !== "failed") return;
-    setSnippets({ status: "loading" });
-    readComposerSnippets(slotId)
-      .then((r) => setSnippets(r.ok ? { status: "done", items: r.snippets, more: r.more, cursor: r.cursor } : { status: "failed", message: r.message }))
-      .catch(() => setSnippets({ status: "failed", message: "Buffer did not return your hashtags." }));
+/**
+ * One library list that loads when first opened and reads further batches on demand. A failed first read can be tried
+ * again by opening the list again; a failed further read keeps what is loaded and says so.
+ */
+function usePagedList<T>(read: (cursor?: string) => Promise<Batch<T>>, failed: string, moreFailed: string) {
+  const [list, setList] = useState<Load<T>>({ status: "idle" });
+  const load = () => {
+    if (list.status !== "idle" && list.status !== "failed") return;
+    setList({ status: "loading" });
+    read()
+      .then((r) => setList(r.ok ? { status: "done", items: r.items, more: r.more, cursor: r.cursor } : { status: "failed", message: r.message }))
+      .catch(() => setList({ status: "failed", message: failed }));
   };
   /** Reads the next batch and adds it to the list; a failure keeps what is loaded and says so. */
-  const moreTemplates = () => {
-    if (templates.status !== "done" || !templates.cursor || templates.loadingMore) return;
-    const at = templates;
-    setTemplates({ ...at, loadingMore: true, moreError: undefined });
-    readComposerTemplates(slotId, at.cursor)
-      .then((r) => setTemplates(r.ok ? { status: "done", items: [...at.items, ...r.templates], more: r.more, cursor: r.cursor } : { ...at, loadingMore: false, moreError: r.message }))
-      .catch(() => setTemplates({ ...at, loadingMore: false, moreError: "Buffer did not return more templates." }));
+  const more = () => {
+    if (list.status !== "done" || !list.cursor || list.loadingMore) return;
+    const at = list;
+    setList({ ...at, loadingMore: true, moreError: undefined });
+    read(at.cursor ?? undefined)
+      .then((r) => setList(r.ok ? { status: "done", items: [...at.items, ...r.items], more: r.more, cursor: r.cursor } : { ...at, loadingMore: false, moreError: r.message }))
+      .catch(() => setList({ ...at, loadingMore: false, moreError: moreFailed }));
   };
-  const moreSnippets = () => {
-    if (snippets.status !== "done" || !snippets.cursor || snippets.loadingMore) return;
-    const at = snippets;
-    setSnippets({ ...at, loadingMore: true, moreError: undefined });
-    readComposerSnippets(slotId, at.cursor)
-      .then((r) => setSnippets(r.ok ? { status: "done", items: [...at.items, ...r.snippets], more: r.more, cursor: r.cursor } : { ...at, loadingMore: false, moreError: r.message }))
-      .catch(() => setSnippets({ ...at, loadingMore: false, moreError: "Buffer did not return more hashtags." }));
-  };
-  /** The end of a list that Buffer has more of: a button to read the next batch, or why it cannot. */
-  const moreFooter = (l: Load<unknown>, onMore: () => void, noun: string) => l.status === "done" && l.more ? (
+  return { list, load, more };
+}
+
+/** The end of a list that Buffer has more of: a button to read the next batch, or why it cannot. */
+function MoreFooter({ list: l, onMore, noun }: { list: Load<unknown>; onMore: () => void; noun: string }) {
+  if (l.status !== "done" || !l.more) return null;
+  return (
     <div className={styles.more}>
       <p className={styles.muted}>Showing {l.items.length} {noun}. Search looks only at these.</p>
       {l.cursor ? <button type="button" className={styles.moreButton} disabled={l.loadingMore} onClick={onMore}>{l.loadingMore ? "Loading…" : "Load more"}</button>
         : <p className={styles.muted}>Buffer gave no way to read further here.</p>}
       {l.moreError && <p className={styles.error} role="alert">{l.moreError}</p>}
     </div>
-  ) : null;
+  );
+}
+
+/** Loading or a failed read, said in the panel; null once the list is read. */
+function ListState({ list, loading }: { list: Load<unknown>; loading: string }) {
+  if (list.status === "loading" || list.status === "idle") return <p className={styles.muted} role="status">{loading}</p>;
+  if (list.status === "failed") return <p className={styles.error} role="alert">{list.message}</p>;
+  return null;
+}
+
+/** The templates found, the person's own first, then Buffer's library. */
+function TemplateGroups({ templates, onPick }: { templates: ComposerTemplate[]; onPick: (body: string) => void }) {
+  const groups = [{ label: "Yours", list: templates.filter((t) => t.mine) }, { label: "Buffer's library", list: templates.filter((t) => !t.mine) }];
+  return groups.map(({ label, list }) => list.length > 0 && (
+    <section key={label} aria-label={label}>
+      <h3 className={styles.heading}>{label}</h3>
+      <ul className={styles.list} role="list">
+        {list.map((t) => (
+          <li key={t.id}>
+            <button type="button" className={styles.option} onClick={() => onPick(t.body)}>
+              <span className={styles.emoji} aria-hidden="true">{t.emoji}</span>
+              <span className={styles.text}>
+                <span className={styles.title}>{t.title}</span>
+                {t.description && <span className={styles.description}>{t.description}</span>}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ));
+}
+
+/** The saved hashtag sets found. */
+function SnippetList({ snippets, onPick }: { snippets: ComposerSnippet[]; onPick: (text: string) => void }) {
+  return (
+    <ul className={styles.list} role="list">
+      {snippets.map((s) => (
+        <li key={s.id}>
+          <button type="button" className={styles.option} onClick={() => onPick(s.text)}>
+            <span className={styles.text}>
+              <span className={styles.title}>{s.name}</span>
+              <span className={styles.description}>{s.text}</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Why no hashtag set shows: none matches the search, none in this batch, or none saved yet. */
+function noSetsLine(q: string, query: string, more: boolean): string {
+  if (q) return `No loaded set matches “${query.trim()}”.`;
+  return more ? "None in this batch." : "No saved hashtag sets yet. Save one in Buffer or ask your AI.";
+}
+
+const readTemplates = (slotId: string) => (cursor?: string): Promise<Batch<ComposerTemplate>> =>
+  readComposerTemplates(slotId, cursor).then((r) => (r.ok ? { ok: true, items: r.templates, more: r.more, cursor: r.cursor } : r));
+const readSnippets = (slotId: string) => (cursor?: string): Promise<Batch<ComposerSnippet>> =>
+  readComposerSnippets(slotId, cursor).then((r) => (r.ok ? { ok: true, items: r.snippets, more: r.more, cursor: r.cursor } : r));
+
+/** Templates and Hashtags for one slot; `onInsert` receives the text to put into the post. */
+export function ComposerLibrary({ slotId, onInsert, disabled = false }: { slotId: string; onInsert: (text: string, kind: "template" | "hashtags") => void; disabled?: boolean }) {
+  const templates = usePagedList(readTemplates(slotId), "Buffer did not return the templates.", "Buffer did not return more templates.");
+  const snippets = usePagedList(readSnippets(slotId), "Buffer did not return your hashtags.", "Buffer did not return more hashtags.");
+  const [openList, setOpenList] = useState<"templates" | "hashtags" | null>(null);
+  const [query, setQuery] = useState("");
+  const search = useRef<HTMLInputElement>(null);
 
   const q = query.trim().toLowerCase();
-  const shownTemplates = useMemo(() => templates.status === "done" ? templates.items.filter((t) => `${t.title} ${t.description}`.toLowerCase().includes(q)) : [], [templates, q]);
-  const shownSnippets = useMemo(() => snippets.status === "done" ? snippets.items.filter((s) => `${s.name} ${s.text}`.toLowerCase().includes(q)) : [], [snippets, q]);
-  const yours = shownTemplates.filter((t) => t.mine);
-  const library = shownTemplates.filter((t) => !t.mine);
+  const t = templates.list, sn = snippets.list;
+  const shownTemplates = useMemo(() => t.status === "done" ? t.items.filter((x) => `${x.title} ${x.description}`.toLowerCase().includes(q)) : [], [t, q]);
+  const shownSnippets = useMemo(() => sn.status === "done" ? sn.items.filter((x) => `${x.name} ${x.text}`.toLowerCase().includes(q)) : [], [sn, q]);
 
   const pick = (text: string, kind: "template" | "hashtags") => { if (!disabled) onInsert(text, kind); setOpenList(null); };
   const opener = (list: "templates" | "hashtags") => (open: boolean) => {
     setOpenList(open ? list : null);
     if (!open) return;
     setQuery("");
-    if (list === "templates") loadTemplates(); else loadSnippets();
+    if (list === "templates") templates.load(); else snippets.load();
   };
 
   return (
@@ -87,35 +144,17 @@ export function ComposerLibrary({ slotId, onInsert, disabled = false }: { slotId
         </PopoverTrigger>
         <PopoverContent className={styles.panel} onOpenAutoFocus={(e) => { e.preventDefault(); search.current?.focus(); }}>
           <input ref={search} className={styles.search} placeholder="Search templates" aria-label="Search templates" value={query} maxLength={100} onChange={(e) => setQuery(e.target.value)} />
-          {templates.status === "loading" || templates.status === "idle" ? <p className={styles.muted} role="status">Loading templates…</p>
-            : templates.status === "failed" ? <p className={styles.error} role="alert">{templates.message}</p>
-            : shownTemplates.length === 0 ? <>
-                <p className={styles.muted}>{q ? `No loaded template matches “${query.trim()}”.` : "No templates yet."}</p>
-                {moreFooter(templates, moreTemplates, "templates")}
-              </>
-            : (
-              <div className={styles.scroll}>
-                {[["Yours", yours], ["Buffer's library", library]].map(([label, list]) => (list as ComposerTemplate[]).length > 0 && (
-                  <section key={label as string} aria-label={label as string}>
-                    <h3 className={styles.heading}>{label as string}</h3>
-                    <ul className={styles.list} role="list">
-                      {(list as ComposerTemplate[]).map((t) => (
-                        <li key={t.id}>
-                          <button type="button" className={styles.option} onClick={() => pick(t.body, "template")}>
-                            <span className={styles.emoji} aria-hidden="true">{t.emoji}</span>
-                            <span className={styles.text}>
-                              <span className={styles.title}>{t.title}</span>
-                              {t.description && <span className={styles.description}>{t.description}</span>}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))}
-                {moreFooter(templates, moreTemplates, "templates")}
-              </div>
-            )}
+          <ListState list={t} loading="Loading templates…" />
+          {t.status === "done" && shownTemplates.length === 0 && <>
+            <p className={styles.muted}>{q ? `No loaded template matches “${query.trim()}”.` : "No templates yet."}</p>
+            <MoreFooter list={t} onMore={templates.more} noun="templates" />
+          </>}
+          {t.status === "done" && shownTemplates.length > 0 && (
+            <div className={styles.scroll}>
+              <TemplateGroups templates={shownTemplates} onPick={(body) => pick(body, "template")} />
+              <MoreFooter list={t} onMore={templates.more} noun="templates" />
+            </div>
+          )}
         </PopoverContent>
       </Popover>
 
@@ -125,29 +164,17 @@ export function ComposerLibrary({ slotId, onInsert, disabled = false }: { slotId
         </PopoverTrigger>
         <PopoverContent className={styles.panel} onOpenAutoFocus={(e) => { e.preventDefault(); search.current?.focus(); }}>
           <input ref={search} className={styles.search} placeholder="Search saved hashtags" aria-label="Search saved hashtags" value={query} maxLength={100} onChange={(e) => setQuery(e.target.value)} />
-          {snippets.status === "loading" || snippets.status === "idle" ? <p className={styles.muted} role="status">Loading your hashtags…</p>
-            : snippets.status === "failed" ? <p className={styles.error} role="alert">{snippets.message}</p>
-            : shownSnippets.length === 0 ? <>
-                <p className={styles.muted}>{q ? `No loaded set matches “${query.trim()}”.` : snippets.more ? "None in this batch." : "No saved hashtag sets yet. Save one in Buffer or ask your AI."}</p>
-                {moreFooter(snippets, moreSnippets, "sets")}
-              </>
-            : (
-              <div className={styles.scroll}>
-              <ul className={styles.list} role="list">
-                {shownSnippets.map((s) => (
-                  <li key={s.id}>
-                    <button type="button" className={styles.option} onClick={() => pick(s.text, "hashtags")}>
-                      <span className={styles.text}>
-                        <span className={styles.title}>{s.name}</span>
-                        <span className={styles.description}>{s.text}</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {moreFooter(snippets, moreSnippets, "sets")}
-              </div>
-            )}
+          <ListState list={sn} loading="Loading your hashtags…" />
+          {sn.status === "done" && shownSnippets.length === 0 && <>
+            <p className={styles.muted}>{noSetsLine(q, query, sn.more)}</p>
+            <MoreFooter list={sn} onMore={snippets.more} noun="sets" />
+          </>}
+          {sn.status === "done" && shownSnippets.length > 0 && (
+            <div className={styles.scroll}>
+              <SnippetList snippets={shownSnippets} onPick={(text) => pick(text, "hashtags")} />
+              <MoreFooter list={sn} onMore={snippets.more} noun="sets" />
+            </div>
+          )}
         </PopoverContent>
       </Popover>
     </div>

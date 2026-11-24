@@ -83,7 +83,7 @@ describe("following a Buffer post", () => {
     const id = await followUpIdFor("u1", "bp1");
     await d.store.follow("u1", id, tg, AT, new Date(), "bp1");
     await d.store.follow("u1", id, dc, AT, new Date(), "bp1");
-    await d.store.unfollow("u1", id, "telegram", new Date());
+    await d.store.unfollow("u1", id, { kind: "telegram", target: "" }, new Date());
     await d.store.follow("u1", id, { ...dc, text: "Edited." }, AT, new Date(), "bp1");
     at(plus(AT, 1_000));
     await runDue(d);

@@ -20,7 +20,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 import { db } from "../db";
 import { fixVerdict } from "../db/schema";
-import { CONFIRM_VERSION, type Verdict } from "./confirm-fixes";
+import * as z from "zod";
+import { CONFIRM_VERSION, VerdictItem, type Verdict } from "./confirm-fixes";
 import type { FixOffer } from "./fixes";
 
 export const CLEAR_TTL_MS = 24 * 60 * 60_000;
@@ -59,6 +60,8 @@ export type VerdictStore = {
   release(userId: string, key: string, token: string): Promise<void>;
 };
 
+const SavedVerdicts = z.array(VerdictItem);
+
 /** Saved answers in Postgres; every statement is scoped to the user id. */
 export function postgresVerdictStore(): VerdictStore {
   const mine = (userId: string, key: string, token: string) =>
@@ -68,7 +71,10 @@ export function postgresVerdictStore(): VerdictStore {
       const [row] = await db().select({ verdicts: fixVerdict.verdicts }).from(fixVerdict)
         .where(and(eq(fixVerdict.userId, userId), eq(fixVerdict.inputHash, key), gt(fixVerdict.expiresAt, now)));
       if (!row) return null;
-      return Array.isArray(row.verdicts) ? { kind: "answer", verdicts: row.verdicts as Verdict[] } : { kind: "busy" };
+      if (!Array.isArray(row.verdicts)) return { kind: "busy" };
+      // Saved answers are written by put() in this shape; a row that no longer reads as one is asked again.
+      const saved = SavedVerdicts.safeParse(row.verdicts);
+      return saved.success ? { kind: "answer", verdicts: saved.data } : null;
     },
     async claim(userId, key, now = new Date()) {
       const token = randomUUID();

@@ -6,14 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 import type { Channel, SentPost } from "./buffer/queries";
 
 vi.mock("./written-store", () => ({ wroteIds: async () => new Set() }));
-vi.mock("./feedback-flow", () => ({ checkedFeedback: vi.fn(async () => ({ ok: true, plan: { kind: "fact" } })) }));
+vi.mock("./feedback-flow", () => ({ checkedFeedback: vi.fn<typeof import("./feedback-flow").checkedFeedback>(async () => ({ ok: true, plan: { kind: "fact" } }) as Awaited<ReturnType<typeof import("./feedback-flow").checkedFeedback>>) }));
 const { feedbackForNote, teamNotes, noteOrigin } = await import("./note-feedback");
 
 const ch = (id: string, org: string): Channel => ({ id, name: `Account ${id}`, service: "linkedin", organizationId: org, timezone: "UTC", isDisconnected: false, isLocked: false, isQueuePaused: false, postingSchedule: [] });
 
 describe("teamNotes", () => {
   it("reads each organization once and returns notes newest first with author, post and account", async () => {
-    const read = vi.fn(async (_t: string, org: string): Promise<SentPost[]> => org === "o1"
+    const read = vi.fn<(t: string, org: string) => Promise<SentPost[]>>(async (_t: string, org: string): Promise<SentPost[]> => org === "o1"
       ? [{ id: "p1", channelId: "a", text: "Post one", sentAt: null, notes: [{ text: "Older note", by: "Sam", at: "2026-11-01T10:00:00Z" }, { text: "  ", by: "Sam", at: "2026-11-02T10:00:00Z" }] }]
       : [{ id: "p2", channelId: "b", text: "Post two", sentAt: null, notes: [{ text: "Newer note", by: null, at: "2026-11-03T10:00:00Z" }] }, { id: "p3", channelId: "gone", text: "x", sentAt: null, notes: [{ text: "On a disconnected account", by: "Sam", at: "2026-11-04T10:00:00Z" }] }]);
     const notes = await teamNotes({ token: "t", channels: [ch("a", "o1"), ch("b", "o2")] }, read);
@@ -36,7 +36,7 @@ describe("feedbackForNote", () => {
     const key = listed[0].key;
     // Eleven newer notes on another organization's account push the picked one past the first list.
     const newer: SentPost[] = Array.from({ length: 11 }, (_, i) => ({ id: `n${i}`, channelId: "b", text: "x", sentAt: null, notes: [sam(`Newer ${i}`, `2026-11-0${2 + (i % 7)}T10:00:00Z`)] }));
-    const read = vi.fn(async (_t: string, org: string) => (org === "o1" ? [picked] : newer));
+    const read = vi.fn<(t: string, org: string) => Promise<SentPost[]>>(async (_t: string, org: string) => (org === "o1" ? [picked] : newer));
     const b = { token: "t", channels: [ch("a", "o1"), ch("b", "o2")], posts: [] };
     const r = await feedbackForNote("u1", async () => b, key, read);
     expect(r.ok).toBe(true);

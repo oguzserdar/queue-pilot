@@ -6,6 +6,7 @@ import "server-only";
  */
 
 import { createHmac } from "node:crypto";
+import * as z from "zod";
 import { fit } from "./text-fit";
 
 export { fit };
@@ -20,26 +21,47 @@ export class TelegramError extends Error {
   }
 }
 
-async function call<T>(token: string, method: string, body: Record<string, unknown>, doFetch: Fetch): Promise<T> {
+// What each answer must hold, checked instead of trusted (core.telegram.org/bots/api#making-requests).
+const Envelope = z.object({
+  ok: z.unknown().optional(),
+  result: z.unknown().optional(),
+  description: z.string().optional().catch(undefined),
+  parameters: z.object({ retry_after: z.number().optional().catch(undefined) }).optional().catch(undefined),
+}).catch({});
+const MessageShape = z.object({
+  text: z.string().optional().catch(undefined),
+  chat: z.object({ id: z.number(), title: z.string().optional().catch(undefined), type: z.string() }),
+});
+const UpdateShape = z.object({
+  update_id: z.number(),
+  message: MessageShape.optional().catch(undefined),
+  channel_post: MessageShape.optional().catch(undefined),
+});
+const Updates = z.array(UpdateShape);
+const SentMessage = z.object({
+  message_id: z.number(),
+  chat: z.object({ username: z.string().optional().catch(undefined) }).optional().catch(undefined),
+});
+
+async function call<T>(token: string, method: string, body: Record<string, unknown>, doFetch: Fetch, shape: z.ZodType<T>): Promise<T> {
   const res = await doFetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(10_000),
   });
-  const json = (await res.json().catch(() => null)) as { ok?: boolean; result?: T; description?: string; parameters?: { retry_after?: number } } | null;
+  const raw: unknown = await res.json().catch(() => null);
   // Only Telegram's own refusal (a 4xx with ok:false) means nothing was posted. A 5xx or an answer we cannot read may
   // still have posted, so it is a plain error, which callers treat as "may have been sent".
-  if (res.status >= 500 || !json) throw new Error(`Telegram answered ${res.status} without a readable result`);
+  if (res.status >= 500 || !raw) throw new Error(`Telegram answered ${res.status} without a readable result`);
+  const json = Envelope.parse(raw);
   if (!json.ok) throw new TelegramError(json.description ?? `Telegram answered ${res.status}`, json.parameters?.retry_after);
-  return json.result as T;
+  const result = shape.safeParse(json.result);
+  if (!result.success) throw new Error(`Telegram answered ${res.status} without a readable result`);
+  return result.data;
 }
 
-type Update = {
-  update_id: number;
-  message?: { text?: string; chat: { id: number; title?: string; type: string } };
-  channel_post?: { text?: string; chat: { id: number; title?: string; type: string } };
-};
+type Update = z.infer<typeof UpdateShape>;
 
 const WORDS = ["amber", "birch", "cedar", "delta", "ember", "fjord", "grove", "harbor", "indigo", "juniper", "kelp", "lumen", "maple", "nectar", "orbit", "pine"];
 
@@ -86,7 +108,7 @@ export async function drainConnectCodes(token: string, keep: (codes: SeenCode[])
   let offset: number | undefined;
   let found = 0;
   for (let page = 0; page < MAX_UPDATE_PAGES; page++) {
-    const updates = await call<Update[]>(token, "getUpdates", { allowed_updates: ["message", "channel_post"], limit: 100, ...(offset ? { offset } : {}) }, doFetch);
+    const updates = await call(token, "getUpdates", { allowed_updates: ["message", "channel_post"], limit: 100, ...(offset ? { offset } : {}) }, doFetch, Updates);
     if (updates.length === 0) break;
     const codes = connectMessages(updates);
     if (codes.length) await keep(codes);
@@ -94,7 +116,7 @@ export async function drainConnectCodes(token: string, keep: (codes: SeenCode[])
     offset = updates[updates.length - 1].update_id + 1;
     if (updates.length < 100) {
       // Confirm the last page too, so the next check starts after it.
-      await call<Update[]>(token, "getUpdates", { offset, limit: 1, timeout: 0 }, doFetch);
+      await call(token, "getUpdates", { offset, limit: 1, timeout: 0 }, doFetch, z.unknown());
       break;
     }
   }
@@ -115,7 +137,7 @@ export async function sendCopy(
   const text = post.link && !post.text.includes(post.link) ? `${post.text}\n\n${post.link}` : post.text;
   if (post.imageUrl) {
     try {
-      const r = await call<{ message_id: number }>(token, "sendPhoto", { chat_id: chatId, photo: post.imageUrl, caption: fit(text, CAPTION_LIMIT) }, doFetch);
+      const r = await call(token, "sendPhoto", { chat_id: chatId, photo: post.imageUrl, caption: fit(text, CAPTION_LIMIT) }, doFetch, SentMessage);
       return { messageId: r.message_id };
     } catch (e) {
       // Telegram refuses some images (format, size). The text still goes out; a rate limit or a lost chat does not
@@ -123,7 +145,7 @@ export async function sendCopy(
       if (!(e instanceof TelegramError) || e.retryAfterSeconds !== undefined || /chat not found|kicked|not enough rights/i.test(e.message)) throw e;
     }
   }
-  const r = await call<{ message_id: number }>(token, "sendMessage", { chat_id: chatId, text: fit(text, TEXT_LIMIT) }, doFetch);
+  const r = await call(token, "sendMessage", { chat_id: chatId, text: fit(text, TEXT_LIMIT) }, doFetch, SentMessage);
   return { messageId: r.message_id };
 }
 
@@ -133,7 +155,7 @@ export async function sendCopy(
  */
 export async function postText(token: string, chatId: number, text: string, doFetch: Fetch = fetch): Promise<{ messageId: number; username: string | null }> {
   if (text.length > TEXT_LIMIT) throw new TelegramError(`Telegram takes up to ${TEXT_LIMIT} characters; this is ${text.length}.`);
-  const r = await call<{ message_id: number; chat: { username?: string } }>(token, "sendMessage", { chat_id: chatId, text }, doFetch);
+  const r = await call(token, "sendMessage", { chat_id: chatId, text }, doFetch, SentMessage);
   return { messageId: r.message_id, username: r.chat?.username ?? null };
 }
 

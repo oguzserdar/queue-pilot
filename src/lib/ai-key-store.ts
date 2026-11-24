@@ -10,6 +10,17 @@ import { decryptSecret, encryptSecret, maskSecret } from "./secrets";
 export const PROVIDERS = { anthropic: "Anthropic (Claude)", openai: "OpenAI (ChatGPT)", openrouter: "OpenRouter (any model)" } as const;
 export type Provider = keyof typeof PROVIDERS;
 
+/** Whether a stored or sent string names a provider Queue Pilot knows. */
+export function isProvider(v: string): v is Provider {
+  return Object.hasOwn(PROVIDERS, v);
+}
+
+/** The stored provider. Only set() writes the row, with a known provider, so any other value is a broken row. */
+function storedProvider(v: string): Provider {
+  if (!isProvider(v)) throw new Error(`The saved AI key names an unknown provider (${v}).`);
+  return v;
+}
+
 /** The provider a pasted key belongs to, from its published prefix; null when it matches neither. */
 export function providerOf(key: string): Provider | null {
   const k = key.trim();
@@ -33,7 +44,7 @@ export type AiKeyStore = {
 export function postgresAiKeyStore(masterKeyHex: string): AiKeyStore {
   const read = async (userId: string) => {
     const [row] = await db().select().from(aiKey).where(eq(aiKey.userId, userId));
-    return row ? { provider: row.provider as Provider, key: decryptSecret(row.keyEnc, masterKeyHex), model: row.model } : null;
+    return row ? { provider: storedProvider(row.provider), key: decryptSecret(row.keyEnc, masterKeyHex), model: row.model } : null;
   };
   return {
     get: read,

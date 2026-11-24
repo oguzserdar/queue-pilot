@@ -118,7 +118,7 @@ Buffer schedules and publishes. After Buffer publishes a post, Queue Pilot can c
 | Refresh | 1 |
 | **First session** | **13** |
 
-Queue Pilot uses 37 of the 49 operations in Buffer's API. [Every operation it uses](docs/buffer-api-notes.md#every-buffer-operation-queue-pilot-uses) is listed with what it does, along with why the other 12 are not used, and a test keeps that list matched to the code.
+Queue Pilot uses 37 of the 50 operations in Buffer's API. [Every operation it uses](docs/buffer-api-notes.md#every-buffer-operation-queue-pilot-uses) is listed with what it does, along with why the other 12 are not used, and a test keeps that list matched to the code.
 
 Measured by `src/lib/session-cost.test.ts`, which runs the real code against a fake Buffer that counts every call. Sign-in is counted as 1. On the live site on 7 Nov, looking up teammates took 1 request, down from 4.
 
@@ -146,7 +146,7 @@ This runs the app and Postgres, applies migrations on start, and runs the daily 
 
 When the health check answers, open `/admin` and become the admin as in step 4 above. Step 5's command cannot reach this database from outside Docker. To add or restore an admin later, run it inside: `docker compose exec db psql -U queuepilot queuepilot -c "update \"user\" set role = 'admin' where lower(email) = lower('you@example.com')"`. It answers `UPDATE 1` when it worked, and `UPDATE 0` when that person has not signed in yet.
 
-You can also skip the build. Each release publishes the app as an image at `ghcr.io/oguzserdar/queue-pilot`, for amd64 and arm64, tagged with the version, such as `1.0.0`. Run it on any container host with the variables from `.env.example`, `DATABASE_URL` included, and with a restart policy, because the app stops when the database is not up yet. It applies migrations when it starts and listens on port 3000. Have the host make the two calls the `cron` service in `docker-compose.yml` makes, each with `Authorization: Bearer <CRON_SECRET>`. They are `/api/cron/due` every 30 seconds and `/api/cron/echo` once a day.
+You can also skip the build. Each release publishes the app as an image at `ghcr.io/oguzserdar/queue-pilot`, for amd64 and arm64, tagged with the version, such as `1.0.0`. Run it on any container host with the variables from `.env.example`, `DATABASE_URL` included, and with a restart policy, because the app stops when the database is not up yet. It applies migrations when it starts and listens on port 3000. Have the host make the calls the `cron` service in `docker-compose.yml` makes, each with `Authorization: Bearer <CRON_SECRET>`. They are `/api/cron/due` every 30 seconds, `/api/cron/replies` every minute (automatic replies to Mastodon and Bluesky mentions), and `/api/cron/echo` once a day. On Vercel, the Hobby plan runs crons at most once a day, so automatic replies need the Pro plan's per-minute cron or any outside caller of `/api/cron/replies`. The Docker setup has it built in.
 
 ### Updating and backups
 
@@ -177,6 +177,10 @@ Startup values stay in the server's environment only and are not in `/admin`: `D
 | `DISCORD_CLIENT_ID` | Discord application ID | From the Discord Developer Portal, General Information. It is public and goes in the Add to server link. | none |
 | `DISCORD_CLIENT_SECRET` | Discord client secret | From the Discord Developer Portal, OAuth2. Used when someone adds the bot to their server. | none |
 | `DISCORD_BOT_TOKEN` | Discord bot token | From the Discord Developer Portal, Bot. Discord copies turn on when the application ID, client secret and this are all set. | none |
+| `META_APP_ID` | App ID | From your app's dashboard on developers.facebook.com. Public. | none |
+| `META_APP_SECRET` | App secret | Signs every webhook Meta sends here, so a request without the right signature is refused. Stored encrypted, never shown again. | none |
+| `META_WEBHOOK_VERIFY_TOKEN` | Webhook verify token | Any long random text. Paste the same text in your app's Webhooks settings. Meta sends it back once to confirm the address. Stored encrypted. | none |
+| `AGENT_SIGNUP` | Agent sign-up | on or off. When off, POST /v1/agent/identity answers registration_disabled. Agents already signed up keep working and can still be claimed. | off |
 
 The budget is enforced by Queue Pilot: before each built-in AI action it compares what was spent with the budget, and it records each action's real cost. It does not limit the key at your provider, so also set a spend limit there.
 

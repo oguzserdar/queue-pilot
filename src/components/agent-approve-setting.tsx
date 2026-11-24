@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setAgentApproveMode } from "@/app/(app)/actions";
+import { setAgentApproveMode } from "@/app/(app)/settings-actions";
 import type { ApproveMode } from "@/lib/agent-permission";
 import SegmentedControl from "@/registry/components/segmented-control/segmented-control";
 import styles from "./settings-view.module.css";
@@ -12,14 +12,18 @@ const HELP: Record<ApproveMode, string> = {
   off: "Your AI can write and fix drafts. Only you schedule them, here or in Buffer.",
 };
 
+/** One of the three modes this control offers. */
+const isApproveMode = (v: string): v is ApproveMode => Object.keys(HELP).includes(v);
+
 /** Settings → AI: whether ChatGPT or Claude may approve drafts, and whether they must ask first. Saves on change. */
 export function AgentApproveSetting({ mode: initial, example }: { mode: ApproveMode; example?: boolean }) {
   const [mode, setMode] = useState<ApproveMode>(initial);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const change = (next: string) => {
+    if (!isApproveMode(next)) return;
     const before = mode;
-    setMode(next as ApproveMode);
+    setMode(next);
     setMessage(null);
     if (example) { setMode(before); setMessage({ ok: false, text: "Sign in with Buffer first." }); return; }
     start(async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
 import { PilotMark } from "./landing/pilot-mark";
@@ -30,18 +30,27 @@ const read = (): { clicks: number; dismissed: number } => {
 };
 const write = (v: { clicks: number; dismissed: number }) => { try { sessionStorage.setItem(KEY, JSON.stringify(v)); } catch { /* private window: the count lives for this page only */ } };
 
+/** Whether the saved count calls for the card right now. */
+const dueNow = () => { const s = read(); return nudgeDue(s.clicks, s.dismissed); };
+/** The server has no visit count, so the card starts closed. */
+const notDueOnServer = () => false;
+/** The count changes only through this card's own click listener, which opens the card itself. */
+const noStorageEvents = () => () => {};
+
 /**
  * In the demo only: after a few clicks, a small card asks the visitor to do the same with their own Buffer queue.
  * It counts presses on buttons and links anywhere in the app, survives moving between screens for the visit, and
  * comes back once more after "Keep exploring", never a third time.
  */
 export function DemoNudge() {
-  const [open, setOpen] = useState(false);
+  // Due already when the page opens (counted on earlier screens of this visit); after that, clicks and closing decide.
+  const dueOnLoad = useSyncExternalStore(noStorageEvents, dueNow, notDueOnServer);
+  const [shown, setOpen] = useState<boolean | null>(null);
+  const open = shown ?? dueOnLoad;
   useEffect(() => {
     let state = read();
-    if (nudgeDue(state.clicks, state.dismissed)) setOpen(true);
     const onClick = (e: MouseEvent) => {
-      const hit = (e.target as Element | null)?.closest("button, a, [role=button], [role=tab]");
+      const hit = e.target instanceof Element ? e.target.closest("button, a, [role=button], [role=tab]") : null;
       if (!hit || hit.closest("[data-demo-nudge]")) return;
       state = { ...state, clicks: state.clicks + 1 };
       write(state);

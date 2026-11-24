@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import type { Rule } from "@/lib/rules"
 
 vi.mock("@/app/(app)/review-actions", () => ({}))
-vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn() }) }))
+vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn<ReturnType<typeof import("@/registry/components/toast-stack/toast-stack").useToastStack>["toast"]>() }) }))
 const { RuleRouting } = await import("./rule-routing")
 
 const shared = { id: "s", kind: "guidance", text: "Make one concrete point.", channels: "all", level: "warn" } as Rule

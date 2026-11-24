@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addRule, dismissFirstRule, findFirstRules, type FirstRuleOffer } from "@/app/(app)/actions";
+import { addRule, dismissFirstRule, findFirstRules, type FirstRuleOffer } from "@/app/(app)/rule-actions";
 import { findRulesInComments } from "@/app/(app)/review-actions";
 import { Button } from "@/registry/components/button/button";
 import { EXAMPLE_FIRST_RULES } from "@/lib/example-first-rules";
@@ -10,10 +10,23 @@ import styles from "./playbook-view.module.css";
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-const proofLine = (o: FirstRuleOffer, source: Source) =>
-  o.proof.kind === "posts"
-    ? `Followed in ${o.proof.followed} of your ${o.proof.of} ${o.where} posts`
-    : `From ${o.proof.by ? `${o.proof.by}'s ${source === "comments" ? "comment" : "note"}` : source === "comments" ? "a comment" : "a note"}${o.proof.at ? `, ${day(o.proof.at)}` : ""}, on a ${o.where} ${source === "comments" ? "draft" : "post"}`;
+/** Who left the note or comment a rule came from: "Sam's comment", or "a note" when the author is unknown. */
+function proofAuthor(by: string | null, source: Source): string {
+  const thing = source === "comments" ? "comment" : "note";
+  return by ? `${by}'s ${thing}` : `a ${thing}`;
+}
+
+/** The proof line under a rule: how many posts follow it, or which note or comment asked for it. */
+function proofLine(o: FirstRuleOffer, source: Source): string {
+  if (o.proof.kind === "posts") return `Followed in ${o.proof.followed} of your ${o.proof.of} ${o.where} posts`;
+  return `From ${proofAuthor(o.proof.by, source)}${o.proof.at ? `, ${day(o.proof.at)}` : ""}, on a ${o.where} ${source === "comments" ? "draft" : "post"}`;
+}
+
+/** The find button's words: reading while it runs, Look again once something was read, otherwise the first ask. */
+function findLabel(pending: boolean, found: boolean, copy: { find: string; reading: string }): string {
+  if (pending) return copy.reading;
+  return found ? "Look again" : copy.find;
+}
 
 type Source = "posts" | "comments";
 
@@ -60,7 +73,7 @@ export function FirstRulesFinder({ open = false, onExampleKeep, source = "posts"
     <section className={open ? styles.offer : styles.block} aria-labelledby={`first-rules-${source}`}>
       <h2 id={`first-rules-${source}`} className={styles.h2}>{copy.title}</h2>
       <p className={styles.muted}>{copy.intro}</p>
-      <div><Button variant={open && !found ? "primary" : "secondary"} size="sm" disabled={pending} onClick={find}>{pending ? copy.reading : found ? "Look again" : copy.find}</Button></div>
+      <div><Button variant={open && !found ? "primary" : "secondary"} size="sm" disabled={pending} onClick={find}>{findLabel(pending, found !== null, copy)}</Button></div>
       {message && <p className={styles.problem} role="alert">{message}</p>}
       {found && found.offers.length === 0 && <p className={styles.muted} role="status">{copy.none}</p>}
       {found && found.skipped.length > 0 && <p className={styles.muted}>Skipped {found.skipped.join(", ")}: fewer than 10 sent posts.</p>}
@@ -91,7 +104,10 @@ export function FirstRulesFinder({ open = false, onExampleKeep, source = "posts"
               <Button variant="primary" size="sm" disabled={pending} onClick={() => start(async () => {
                 if (onExampleKeep) { onExampleKeep(o); setHandled((h) => ({ ...h, [i]: "kept" })); return; }
                 const r = await addRule({ kind: "guidance", text: o.text, channels: o.accountIds?.length ? "all" : o.channels, accountIds: o.accountIds, level: "warn" });
-                if (r.ok) { setHandled((h) => ({ ...h, [i]: "kept" })); if (r.id) setKeptIds((k) => ({ ...k, [i]: r.id! })); } else setMessage(r.message);
+                if (!r.ok) { setMessage(r.message); return; }
+                setHandled((h) => ({ ...h, [i]: "kept" }));
+                const id = r.id;
+                if (id) setKeptIds((k) => ({ ...k, [i]: id }));
               })}>Keep</Button>
               <Button variant="ghost" size="sm" disabled={pending} onClick={() => start(async () => {
                 if (onExampleKeep) { setHandled((h) => ({ ...h, [i]: "dropped" })); return; }

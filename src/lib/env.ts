@@ -53,6 +53,11 @@ export function clearOperatorSettingsCache(): void {
 }
 
 /** One setting by the registry's rule; a failed read of the saved values falls back to the environment and is marked. */
+/** Each key with its read value, typed by the keys asked for: the record holds exactly those keys. */
+function byKey<K extends SettingKey>(keys: readonly K[], values: { value: string | null }[]): Record<K, string | null> {
+  return z.record(z.enum(keys), z.string().nullable()).parse(Object.fromEntries(keys.map((k, i) => [k, values[i].value])));
+}
+
 async function readSetting(key: SettingKey, src: SettingsSource): Promise<{ value: string | null; ok: boolean }> {
   try {
     return { value: (await resolveSetting(src.store, key, src.master, src.env))?.value ?? null, ok: true };
@@ -82,7 +87,7 @@ export async function cachedOperatorSettings<K extends SettingKey>(keys: readonl
     void promise.then((r) => { if (!r.ok && cache.get(key) === entry) cache.delete(key); });
     return promise;
   }));
-  return Object.fromEntries(keys.map((k, i) => [k, values[i].value])) as Record<K, string | null>;
+  return byKey(keys, values);
 }
 
 /**
@@ -94,7 +99,7 @@ export async function cachedOperatorSettings<K extends SettingKey>(keys: readonl
 export async function operatorSettings<K extends SettingKey>(keys: readonly K[], src?: SettingsSource): Promise<Record<K, string | null>> {
   if (!src) return cachedOperatorSettings(keys, deploymentSource(), deploymentCache);
   const values = await Promise.all(keys.map((key) => readSetting(key, src)));
-  return Object.fromEntries(keys.map((k, i) => [k, values[i].value])) as Record<K, string | null>;
+  return byKey(keys, values);
 }
 
 /** One operator setting by the same rule as {@link operatorSettings}; null when none is set. */

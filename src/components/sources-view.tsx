@@ -6,7 +6,6 @@ import { useConfirmed } from "./use-confirmed";
 import { BUFFER_CHANNELS_URL } from "@/lib/connect-links";
 import { ArrowUpRight } from "lucide-react";
 
-import { SignInButton } from "./sign-in-button";
 
 import { useState, useTransition } from "react";
 import { ConfirmButton } from "./confirm-button";
@@ -14,11 +13,16 @@ import { Button } from "@/registry/components/button/button";
 import { useToastStack } from "@/registry/components/toast-stack/toast-stack";
 import { Input } from "@/registry/components/input/input";
 import { addSource, checkTelegramConnect, disconnectEcho, discordInstallLink, removeSource, telegramConnectInfo } from "@/app/(app)/actions";
-import { Switch } from "@/registry/components/switch/switch";
 import { channelCheck } from "@/lib/preflight";
 import { channels } from "@/lib/demo-data";
 import { ChannelIcon } from "./channel-icon";
 import styles from "./sources-view.module.css";
+
+/** The add-feed button's words: busy while checking, a tick once added, otherwise the plain action. */
+function feedButtonLabel(pending: boolean, added: boolean): string {
+  if (pending) return "Checking the feed…";
+  return added ? "✓ Added" : "Add feed";
+}
 
 export type LiveChannel = { id: string; name: string; service: string; isDisconnected: boolean; isLocked: boolean; isQueuePaused: boolean };
 
@@ -39,7 +43,7 @@ const EXAMPLE = {
   // Both connected, as Delivery shows each post also going out on Telegram and Discord.
   copies: [{ kind: "telegram" as const, label: "@thisweekinai" }, { kind: "discord" as const, label: "This Week in AI #announcements" }],
   discordResult: null,
-  posts: [{ postId: "example-1", kind: "telegram" as const, label: "@thisweekinai", text: "This week's issue is out: three model releases and what changed for builders.", status: "sent" as const, link: null, error: null, at: "2026-11-06T16:00:00.000Z", sendAt: null, late: false, followsBuffer: false }],
+  posts: [{ postId: "example-1", kind: "telegram" as const, target: "", label: "@thisweekinai", text: "This week's issue is out: three model releases and what changed for builders.", status: "sent" as const, link: null, error: null, at: "2026-11-06T16:00:00.000Z", sendAt: null, late: false, followsBuffer: false }],
 };
 
 /** Sources: the signed-in person's own, or the example account's on the same screen. */
@@ -67,7 +71,7 @@ function LiveSources({ sources }: Extract<SourcesProps, { mode: "live" }>) {
 }
 
 /** Buffer's channels as Queue Pilot sees them, and the Telegram and Discord copies of published posts. Shown in Settings. */
-export type ChannelsPanelProps = { channels: LiveChannel[]; copies: LiveCopy[]; discordResult: string | null; posts: DirectPostView[]; /** Bookmarks for the next older and newer pages of posts. */ postPages?: { older: string | null; newer: string | null }; loadTargets?: () => Promise<PostTargets> };
+export type ChannelsPanelProps = { /** Signed in without Buffer: no Buffer section, and the copy text says Queue Pilot posts itself. */ noBuffer?: boolean; channels: LiveChannel[]; copies: LiveCopy[]; discordResult: string | null; posts: DirectPostView[]; /** Bookmarks for the next older and newer pages of posts. */ postPages?: { older: string | null; newer: string | null }; loadTargets?: () => Promise<PostTargets> };
 
 /** The example account's channels and copies, for the same Settings screen a signed-in person sees. */
 export const EXAMPLE_CHANNELS: ChannelsPanelProps = {
@@ -77,10 +81,10 @@ export const EXAMPLE_CHANNELS: ChannelsPanelProps = {
 };
 
 /** The Channels tab in Settings: whether each Buffer channel can post, then the Telegram and Discord copies. */
-export function ChannelsPanel({ channels, copies, discordResult, posts, postPages, loadTargets }: ChannelsPanelProps) {
+export function ChannelsPanel({ noBuffer = false, channels, copies, discordResult, posts, postPages, loadTargets }: ChannelsPanelProps) {
   return (
     <>
-      <section aria-labelledby="ch" className={styles.block}>
+      {!noBuffer && <section aria-labelledby="ch" className={styles.block}>
         <div className={styles.blockHead}>
           <h2 id="ch" className={styles.h2}>Your Buffer channels</h2>
         </div>
@@ -106,15 +110,15 @@ export function ChannelsPanel({ channels, copies, discordResult, posts, postPage
             })}
           </ul>
         )}
-      </section>
+      </section>}
 
       <section aria-labelledby="copies" className={styles.block}>
         <div className={styles.blockHead}>
           <h2 id="copies" className={styles.h2}>Telegram and Discord</h2>
         </div>
-        <p className={styles.foot}>Buffer schedules and publishes. After it publishes a post, Queue Pilot can post the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>
+        {noBuffer ? <p className={styles.foot}>Queue Pilot posts to your Telegram channel and Discord channel itself, from Write a post below, now or at a time you pick.</p> : <p className={styles.foot}>Buffer schedules and publishes. After it publishes a post, Queue Pilot can post the same text in your Telegram channel and Discord channel. It looks for newly published posts once a day on its own, and again whenever you open Queue Pilot or your AI uses it, so a copy can arrive a while after the post.</p>}
         <Copies copies={copies} discordResult={discordResult} />
-        {copies.length > 0 && <PostComposer recent={posts} pages={postPages} loadTargets={loadTargets} />}
+        <PostComposer recent={posts} pages={postPages} loadTargets={loadTargets} />
       </section>
     </>
   );
@@ -178,7 +182,7 @@ function Material({ sources }: { sources: LiveSource[] }) {
           error={message?.tone === "bad" ? message.text : undefined}
         />
         <Button type="submit" variant="primary" disabled={pending || (!url.trim() && !added)}>
-          {pending ? "Checking the feed…" : added ? "✓ Added" : "Add feed"}
+          {feedButtonLabel(pending, added)}
         </Button>
       </form>
       <p className={styles.addHint}>For example yourname.substack.com/feed or github.com/you/app/releases.atom</p>

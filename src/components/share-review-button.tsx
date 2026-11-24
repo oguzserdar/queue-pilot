@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { shareForReview } from "@/app/(app)/review-actions";
 import { Button } from "@/registry/components/button/button";
 import { Checkbox } from "@/registry/components/checkbox/checkbox";
@@ -26,8 +26,12 @@ export function ShareReviewButton({ drafts, openSignal = 0, example = false }: {
   const [pending, start] = useTransition();
 
   const show = () => { setPicked(new Set(drafts.slice(0, 30).map((d) => d.id))); setUrl(null); setMessage(null); setOpen(true); };
-  // A palette action opens the dialog without a click.
-  useEffect(() => { if (openSignal) show(); }, [openSignal]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A palette action opens the dialog without a click: each new signal opens it once, including one there at first render.
+  const [seenSignal, setSeenSignal] = useState(0);
+  if (seenSignal !== openSignal) {
+    setSeenSignal(openSignal);
+    if (openSignal) show();
+  }
   const toggle = (id: string, on: boolean) => setPicked((s) => { const n = new Set(s); if (on && n.size < 30) n.add(id); else n.delete(id); return n; });
   const share = () => start(async () => {
     // The example account has nothing to share; say so instead of making a link.

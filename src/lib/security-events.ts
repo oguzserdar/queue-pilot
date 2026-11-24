@@ -14,11 +14,13 @@ import { capAppName } from "./app-identity";
 import { NETWORKS } from "./rules";
 
 /** Actions that change what goes out or remove something, recorded with who did them. */
-export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted", "note_deleted", "direct_post_sent"] as const;
+export const ACTION_EVENTS = ["app_connected", "drafts_approved", "draft_deleted", "content_item_deleted", "tag_deleted", "snippet_deleted", "note_deleted", "direct_post_sent", "moved_to_draft"] as const;
 export type ActionEventKind = (typeof ACTION_EVENTS)[number];
 
 /** "announcement_sent" is the name direct posts were recorded under on 8 Nov before the rename; old rows keep it. */
 export type SecurityEventKind = "sign_in" | "app_revoked" | "account_deleted" | "announcement_sent" | ActionEventKind;
+const SECURITY_EVENT_KINDS = ["sign_in", "app_revoked", "account_deleted", "announcement_sent", ...ACTION_EVENTS] as const satisfies readonly SecurityEventKind[];
+const isEventKind = (v: string): v is SecurityEventKind => SECURITY_EVENT_KINDS.some((k) => k === v);
 
 export type SecurityEvent = {
   event: SecurityEventKind;
@@ -120,7 +122,8 @@ export async function securityEventPage(userId: string, from: PageFrom = {}, lim
         .map((r) => ({ ...r, key: r.row.id })),
   });
   return {
-    events: page.rows.map((r) => ({ event: r.event as SecurityEventKind, detail: r.detail ?? null, ip: r.ip, userAgent: r.userAgent, createdAt: r.createdAt.toISOString() })),
+    // Every row is written with a known kind (recordSecurityEvent); a row under any other name has no words to show.
+    events: page.rows.flatMap((r) => (isEventKind(r.event) ? [{ event: r.event, detail: r.detail ?? null, ip: r.ip, userAgent: r.userAgent, createdAt: r.createdAt.toISOString() }] : [])),
     older: page.older,
     newer: page.newer,
   };

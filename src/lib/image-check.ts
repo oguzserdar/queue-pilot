@@ -4,9 +4,11 @@
  */
 import "server-only";
 import type { Check } from "./preflight";
-import { BlockedAddressError, safeFetch } from "./safe-fetch";
+import { BlockedAddressError, safeFetch, type HttpAnswer } from "./safe-fetch";
 
 type Fetch = typeof fetch;
+/** How the check reaches the link: the guarded safeFetch in production, any fetch in tests. */
+type Get = (url: URL, init: { method: "GET"; headers: Record<string, string>; signal: AbortSignal }) => Promise<HttpAnswer>;
 
 /**
  * Opens an image link the way a publisher would, without downloading the whole file.
@@ -14,7 +16,7 @@ type Fetch = typeof fetch;
  */
 export async function imageLinkCheck(url: string, opts: { fetchImpl?: Fetch; timeoutMs?: number } = {}): Promise<Check> {
   const name = "Image link loads";
-  const doFetch: Fetch = opts.fetchImpl ?? ((u, i) => safeFetch(new URL(String(u)), { headers: i?.headers as Record<string, string>, signal: i?.signal ?? undefined }));
+  const doFetch: Get = opts.fetchImpl ?? ((u, i) => safeFetch(u, { headers: i.headers, signal: i.signal }));
   let parsed: URL;
   try {
     parsed = new URL(url);

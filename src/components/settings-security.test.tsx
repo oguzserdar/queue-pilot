@@ -5,9 +5,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }), usePathname: () => "/settings", useSearchParams: () => new URLSearchParams() }));
-vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["refresh"]>(), push: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["push"]>(), replace: vi.fn<ReturnType<typeof import("next/navigation").useRouter>["replace"]>() }), usePathname: () => "/settings", useSearchParams: () => new URLSearchParams() }));
+vi.mock("@/registry/components/toast-stack/toast-stack", () => ({ useToastStack: () => ({ toast: vi.fn<ReturnType<typeof import("@/registry/components/toast-stack/toast-stack").useToastStack>["toast"]>() }) }));
 vi.mock("@/app/(app)/actions", () => ({}));
+vi.mock("@/app/(app)/settings-actions", () => ({}));
 vi.mock("@/app/(app)/settings/actions", () => ({}));
 
 const { SettingsView } = await import("./settings-view");

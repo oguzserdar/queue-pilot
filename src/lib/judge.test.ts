@@ -134,7 +134,7 @@ describe("judgeDrafts", () => {
 
   it("throws when the decision call fails, so the drafts are reported as not checked", async () => {
     const failing = { ...deciding(() => ({})).model, doDecide: async () => { throw new Error("401"); } };
-    await expect(judgeDrafts({ decider: failing, explainer: answering({}) }, [german], [broth])).rejects.toThrow();
+    await expect(judgeDrafts({ decider: failing, explainer: answering({}) }, [german], [broth])).rejects.toThrow("401");
   });
 
   it("makes no call when no rule applies on the network", async () => {

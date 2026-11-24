@@ -46,7 +46,7 @@ export function isTypingTarget(el: Element | null): boolean {
   if (!el) return false;
   const tag = el.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-  if ((el as HTMLElement).isContentEditable) return true;
+  if ("isContentEditable" in el && el.isContentEditable === true) return true;
   const role = el.getAttribute("role");
   if (role && TYPING_ROLES.has(role)) return true;
   return !!el.closest('[role="dialog"], [role="alertdialog"]');

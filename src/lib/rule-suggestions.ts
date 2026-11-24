@@ -1,5 +1,6 @@
 /** User-bound, signed suggestions: keeping one cannot substitute another user's rule or fabricated evidence. */
 import { createHmac, timingSafeEqual } from "node:crypto";
+import * as z from "zod";
 import { currentOffers, currentRewrites } from "./read-back";
 import { fixToRule } from "./fix-offers";
 import { firstRuleKey, channelsByOrganization, pastPosts, proposeFirstRules } from "./day-one-rules";
@@ -12,11 +13,22 @@ import { wroteIds } from "./written-store";
 import { postgresRulesStore } from "./rules-store";
 import { judgeModelFor } from "./judge-model";
 import { postgresReviewStore, reviewNotes } from "./review-store";
-import { parseNewRule, ruleInput, type NewRule } from "./rules";
+import { parseNewRule, ruleInput, storedRuleSpec, type NewRule } from "./rules";
 import type { WriteBuffer } from "./write-slots-for-user";
 import type { TeamNote } from "./note-feedback";
 
-type Suggestion = { key: string; rule: NewRule; fixes: number; evidence: unknown };
+type Suggestion = { key: string; rule: NewRule; fixes: number; evidence?: unknown };
+type Found = { suggestions: Suggestion[]; note: string };
+
+// A signed token's body, read instead of trusted; the checks below still decide whether it holds.
+const SignedBody = z.object({ userId: z.unknown().optional(), expires: z.unknown().optional(), suggestion: z.unknown().optional() });
+const SignedSuggestion = z.looseObject({ key: z.string(), rule: z.unknown().optional(), fixes: z.number(), evidence: z.unknown().optional() });
+const ReviewEvidence = z.object({ kind: z.unknown().optional(), networks: z.unknown().optional() });
+
+/** Whether a value is a plain object whose fields can be read by name. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
 function secret() {
   const key = process.env.SESSION_SECRET;
   if (!key) throw new Error("Rule suggestions are unavailable just now.");
@@ -33,86 +45,96 @@ export function verifySuggestion(userId: string, token: string, now = Date.now()
     const expected = createHmac("sha256", secret()).update(parts[0]).digest();
     const actual = Buffer.from(parts[1], "base64url");
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
-    const value = JSON.parse(Buffer.from(parts[0], "base64url").toString());
-    if (value.userId !== userId || !Number.isFinite(value.expires) || value.expires <= now) return null;
-    const s = value.suggestion as Suggestion;
-    if (!s || typeof s.key !== "string" || s.key.length > 500 || !Number.isInteger(s.fixes) || s.fixes < 0) return null;
-    const parsed = parseNewRule(ruleInput(s.rule));
+    const value = SignedBody.safeParse(JSON.parse(Buffer.from(parts[0], "base64url").toString()));
+    if (!value.success) return null;
+    const { expires } = value.data;
+    if (value.data.userId !== userId || typeof expires !== "number" || !Number.isFinite(expires) || expires <= now) return null;
+    const read = SignedSuggestion.safeParse(value.data.suggestion);
+    if (!read.success) return null;
+    const s = read.data;
+    if (s.key.length > 500 || !Number.isInteger(s.fixes) || s.fixes < 0) return null;
+    const signedRule = storedRuleSpec(s.rule);
+    const parsed = parseNewRule(ruleInput(signedRule));
     if (typeof parsed === "string") return null;
-    return { ...s, rule: { ...parsed, text: s.rule.text } };
+    return { ...s, rule: { ...parsed, text: signedRule.text } };
   } catch { return null; }
+}
+
+/**
+ * Rules from fixes repeated in two drafts. Code finds the repeats for free. Two matching edits can still be chance or
+ * a one-off fact, so a model decides which ones are lasting preferences before any is offered. No repeats, no AI action.
+ */
+async function fixSuggestions(userId: string, dismissed: Set<string>): Promise<Found> {
+  const candidates = (await currentOffers(userId)).filter(o => !dismissed.has(o.key));
+  if (!candidates.length) return { suggestions: [], note: "No fix repeated in two drafts on one account yet." };
+  // The same unchanged repeats were checked recently: reuse that answer, with no AI action and no AI rate limit.
+  const verdicts = postgresVerdictStore();
+  const key = checkKey(candidates);
+  const busy = { suggestions: [], note: "Queue Pilot is already checking these repeats. Ask again in a minute." };
+  const saved = await verdicts.get(userId, key);
+  if (saved?.kind === "busy") return busy;
+  if (saved?.kind === "answer") return confirmedSuggestions(candidates, saved.verdicts, false);
+  const l = await limit("ai", userId);
+  if (!l.ok) return { suggestions: [], note: "Too many AI requests just now. Try again in a minute." };
+  const token = await verdicts.claim(userId, key);
+  if (!token) return busy;
+  const jm = await judgeModelFor(userId).catch(async (e) => { await verdicts.release(userId, key, token); throw e; });
+  if (!jm) { await verdicts.release(userId, key, token); throw new Error("AI learning is unavailable. Check built-in AI or your own key in Settings."); }
+  try {
+    const answers = await askVerdicts(jm.judges.explainer, candidates, AbortSignal.timeout(ASK_DEADLINE_MS));
+    const unanswered = !complete(candidates, answers);
+    // Only a complete answer is saved. A failed save only means the next check asks again.
+    const keep = unanswered ? verdicts.release(userId, key, token) : verdicts.put(userId, key, token, answers);
+    await keep.catch((e) => console.error(JSON.stringify({ event: "qp-fix-verdict-save-failed", message: e instanceof Error ? e.message : String(e) })));
+    return confirmedSuggestions(candidates, answers, unanswered);
+  } catch (e) { await verdicts.release(userId, key, token).catch(() => {}); await jm.giveBack(); throw e; }
+  finally { await jm.settle(); }
+}
+
+/** The repeats the model called lasting preferences, as suggestions, with a note when none is offered. */
+function confirmedSuggestions(candidates: Awaited<ReturnType<typeof currentOffers>>, answers: Parameters<typeof preferencesFrom>[1], unanswered: boolean): Found {
+  const confirmed = preferencesFrom(candidates, answers);
+  const suggestions = confirmed.map(o => ({ key: o.key, rule: fixToRule(o.fix, o.network, o.channelId, o.sentence), fixes: o.count, evidence: { fix: o.fix, channelId: o.channelId, network: o.network, count: o.count, examples: o.examples, why: o.why } }));
+  if (!suggestions.length && unanswered) return { suggestions, note: "The AI did not answer every repeat clearly. Ask again to check them again." };
+  if (!suggestions.length) return { suggestions, note: `Found ${candidates.length} repeated ${candidates.length === 1 ? "fix" : "fixes"}, but none looked like a lasting preference. One-off facts and chance matches are not offered.` };
+  return { suggestions, note: "" };
+}
+
+/** Rules learned from rewrites, reviewers' comments or past posts. Evidence is gathered before an AI action is reserved. */
+async function learnedSuggestions(userId: string, mode: "rewrites" | "past_posts" | "comments", loadBuffer: () => Promise<WriteBuffer>, store: ReturnType<typeof postgresRulesStore>): Promise<Found> {
+  // Gather evidence before reserving an AI action. An empty account costs nothing.
+  const rewrites = mode === "rewrites" ? await currentRewrites(userId) : null;
+  // Reviewers' comments on review links, read as notes: their drafts are Queue Pilot's writing, never a style to learn.
+  const commented = mode === "comments" ? reviewNotes(await postgresReviewStore().list(userId)) : null;
+  if (commented && !commented.length) return { suggestions: [], note: "No review comments yet. Share drafts for review first." };
+  const b = mode === "past_posts" ? await loadBuffer() : null;
+  const sent = b ? (await Promise.all([...channelsByOrganization(b.channels)].map(([org, ids]) => listRecentSent(b.token, org, ids)))).flat() : [];
+  if (rewrites && rewrites.rewrites.length < 2) return { suggestions: [], note: "Rewrite at least two Queue Pilot drafts in Buffer first." };
+  if (b && !sent.length) return { suggestions: [], note: "Buffer has no sent posts for your channels yet." };
+  const jm = await judgeModelFor(userId);
+  if (!jm) throw new Error("AI learning is unavailable. Check built-in AI or your own key in Settings.");
+  try {
+    if (rewrites) {
+      return { suggestions: (await proposeRules(jm.judges.explainer, rewrites.rewrites, rewrites.rules)).map(p => ({ key: firstRuleKey(p.rule), rule: p.rule, fixes: p.evidence.length, evidence: p.evidence })), note: "" };
+    }
+    if (commented) {
+      const found = await proposeFirstRules(jm.judges.explainer, jm.judges, commented, await store.list(userId), { notesOnly: true });
+      return { suggestions: found.offers.map(p => ({ key: firstRuleKey(p.rule), rule: p.rule, fixes: 0, evidence: p.proof })), note: "" };
+    }
+    if (b) {
+      const ours = await wroteIds(userId, ...sent.map(p => p.id));
+      const found = await proposeFirstRules(jm.judges.explainer, jm.judges, pastPosts(b.channels, sent.filter(p => !ours.has(p.id))), await store.list(userId));
+      return { suggestions: found.offers.map(p => ({ key: firstRuleKey(p.rule), rule: p.rule, fixes: 0, evidence: p.proof })), note: found.skipped.length ? `Not enough posts on: ${found.skipped.join(", ")}.` : "" };
+    }
+    return { suggestions: [], note: "" };
+  } catch (e) { await jm.giveBack(); throw e; }
+  finally { await jm.settle(); }
 }
 
 export async function ruleSuggestions(userId: string, mode: "fixes" | "rewrites" | "past_posts" | "comments", loadBuffer: () => Promise<WriteBuffer>) {
   const store = postgresRulesStore();
   const dismissed = await store.dismissed(userId);
-  let suggestions: Suggestion[] = [];
-  let note = "";
-  if (mode === "fixes") {
-    // Code finds the repeats for free. Two matching edits can still be chance or a one-off fact, so a model decides
-    // which ones are lasting preferences before any is offered. No repeats, no AI action.
-    const candidates = (await currentOffers(userId)).filter(o => !dismissed.has(o.key));
-    if (!candidates.length) return { suggestions: [], note: "No fix repeated in two drafts on one account yet." };
-    // The same unchanged repeats were checked recently: reuse that answer, with no AI action and no AI rate limit.
-    const verdicts = postgresVerdictStore();
-    const key = checkKey(candidates);
-    const busy = { suggestions: [], note: "Queue Pilot is already checking these repeats. Ask again in a minute." };
-    const saved = await verdicts.get(userId, key);
-    if (saved?.kind === "busy") return busy;
-    let answers = saved?.kind === "answer" ? saved.verdicts : null;
-    let jm: Awaited<ReturnType<typeof judgeModelFor>> = null;
-    let token: string | null = null;
-    if (!answers) {
-      const l = await limit("ai", userId);
-      if (!l.ok) return { suggestions: [], note: "Too many AI requests just now. Try again in a minute." };
-      token = await verdicts.claim(userId, key);
-      if (!token) return busy;
-      const claimed = token;
-      jm = await judgeModelFor(userId).catch(async (e) => { await verdicts.release(userId, key, claimed); throw e; });
-      if (!jm) { await verdicts.release(userId, key, claimed); throw new Error("AI learning is unavailable. Check built-in AI or your own key in Settings."); }
-    }
-    try {
-      let unanswered = false;
-      if (!answers) {
-        answers = await askVerdicts(jm!.judges.explainer, candidates, AbortSignal.timeout(ASK_DEADLINE_MS));
-        unanswered = !complete(candidates, answers);
-        // Only a complete answer is saved. A failed save only means the next check asks again.
-        const keep = unanswered ? verdicts.release(userId, key, token!) : verdicts.put(userId, key, token!, answers);
-        await keep.catch((e) => console.error(JSON.stringify({ event: "qp-fix-verdict-save-failed", message: e instanceof Error ? e.message : String(e) })));
-      }
-      const confirmed = preferencesFrom(candidates, answers);
-      suggestions = confirmed.map(o => ({ key: o.key, rule: fixToRule(o.fix, o.network, o.channelId, o.sentence), fixes: o.count, evidence: { fix: o.fix, channelId: o.channelId, network: o.network, count: o.count, examples: o.examples, why: o.why } }));
-      if (!suggestions.length && unanswered) note = "The AI did not answer every repeat clearly. Ask again to check them again.";
-      else if (!suggestions.length) note = `Found ${candidates.length} repeated ${candidates.length === 1 ? "fix" : "fixes"}, but none looked like a lasting preference. One-off facts and chance matches are not offered.`;
-    } catch (e) { if (token) await verdicts.release(userId, key, token).catch(() => {}); await jm?.giveBack(); throw e; }
-    finally { await jm?.settle(); }
-  } else {
-    // Gather evidence before reserving an AI action. An empty account costs nothing.
-    const rewrites = mode === "rewrites" ? await currentRewrites(userId) : null;
-    // Reviewers' comments on review links, read as notes: their drafts are Queue Pilot's writing, never a style to learn.
-    const commented = mode === "comments" ? reviewNotes(await postgresReviewStore().list(userId)) : null;
-    if (commented && !commented.length) return { suggestions: [], note: "No review comments yet. Share drafts for review first." };
-    const b = mode === "past_posts" ? await loadBuffer() : null;
-    const sent = b ? (await Promise.all([...channelsByOrganization(b.channels)].map(([org, ids]) => listRecentSent(b.token, org, ids)))).flat() : [];
-    if (rewrites && rewrites.rewrites.length < 2) return { suggestions: [], note: "Rewrite at least two Queue Pilot drafts in Buffer first." };
-    if (b && !sent.length) return { suggestions: [], note: "Buffer has no sent posts for your channels yet." };
-    const jm = await judgeModelFor(userId);
-    if (!jm) throw new Error("AI learning is unavailable. Check built-in AI or your own key in Settings.");
-    try {
-      if (rewrites) {
-        suggestions = (await proposeRules(jm.judges.explainer, rewrites.rewrites, rewrites.rules)).map(p => ({ key: firstRuleKey(p.rule), rule: p.rule, fixes: p.evidence.length, evidence: p.evidence }));
-      } else if (commented) {
-        const found = await proposeFirstRules(jm.judges.explainer, jm.judges, commented, await store.list(userId), { notesOnly: true });
-        suggestions = found.offers.map(p => ({ key: firstRuleKey(p.rule), rule: p.rule, fixes: 0, evidence: p.proof }));
-      } else if (b) {
-        const ours = await wroteIds(userId, ...sent.map(p => p.id));
-        const found = await proposeFirstRules(jm.judges.explainer, jm.judges, pastPosts(b.channels, sent.filter(p => !ours.has(p.id))), await store.list(userId));
-        suggestions = found.offers.map(p => ({ key: firstRuleKey(p.rule), rule: p.rule, fixes: 0, evidence: p.proof }));
-        note = found.skipped.length ? `Not enough posts on: ${found.skipped.join(", ")}.` : "";
-      }
-    } catch (e) { await jm.giveBack(); throw e; }
-    finally { await jm.settle(); }
-  }
+  const { suggestions, note } = mode === "fixes" ? await fixSuggestions(userId, dismissed) : await learnedSuggestions(userId, mode, loadBuffer, store);
   const bounded = suggestions.filter(s => !dismissed.has(s.key)).map(s => {
     const serialized = JSON.stringify(s.evidence);
     return serialized.length > 12_000 ? { ...s, evidence: { excerpt: serialized.slice(0, 12_000), truncated: true } } : s;
@@ -129,7 +151,8 @@ export type KeepScope = { level: "accounts" } | { level: "network"; network: str
  */
 export function atScope(s: Suggestion, scope?: KeepScope): Suggestion["rule"] | null {
   if (!scope || scope.level === "accounts") return s.rule;
-  const ev = s.evidence as { kind?: unknown; networks?: unknown } | undefined;
+  const read = ReviewEvidence.safeParse(s.evidence);
+  const ev = read.success ? read.data : undefined;
   if (ev?.kind !== "review" || s.rule.kind !== "guidance") return null;
   const { accountIds: _accounts, ...rest } = s.rule;
   if (scope.level === "shared") return { ...rest, channels: "all" };
@@ -163,7 +186,7 @@ export async function applySuggestion(userId: string, token: string, action: "ke
   const s = { ...signed, rule };
   const store = postgresRulesStore();
   if (action === "dismiss") { await store.dismiss(userId, s.key); return { ok: true, message: "Suggestion dismissed." }; }
-  const ev = s.evidence && typeof s.evidence === "object" && !Array.isArray(s.evidence) ? s.evidence as Record<string, unknown> : null;
+  const ev = isRecord(s.evidence) ? s.evidence : null;
   if (ev?.kind === "note" && !(await noteStillThere(ev, readNotes))) return { ok: false, message: "That note is no longer on its post in Buffer, or it changed. Read the notes again." };
   if ((await store.dismissed(userId)).has(s.key)) return { ok: false, message: "That suggestion was dismissed. List suggestions again." };
   const existing = (await store.list(userId)).find(r => r.text === s.rule.text && JSON.stringify(r.channels) === JSON.stringify(s.rule.channels) && JSON.stringify(r.accountIds ?? []) === JSON.stringify(s.rule.accountIds ?? []));

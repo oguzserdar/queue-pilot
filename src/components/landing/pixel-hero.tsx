@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { WeekModel } from "@/lib/week-model";
-import { BOARD, HERO_LOOP, HERO_SIZE, STEP_AT, drawHero, drawQuote, layoutWeek, stepAnchor } from "./pixel-hero-scene";
+import { BOARD, HERO_LOOP, HERO_SIZE, STEP_AT, drawHero, drawQuote, layoutWeek, quoteShowing, stepAnchor } from "./pixel-hero-scene";
 import styles from "./pixel-hero.module.css";
 import { TimerRing } from "./timer-ring";
 
@@ -30,6 +30,24 @@ const sceneAt = (real: number) => {
   return { step: i, t: STEP_AT[i] + ((r - REAL_AT[i]) / READ[i]) * (SCENE_END[i] - STEP_AT[i]) };
 };
 
+/** Reduced motion, followed live: the hero then holds the finished week instead of playing. */
+const REDUCED = "(prefers-reduced-motion: reduce)";
+function subscribeReduced(onChange: () => void): () => void {
+  const m = matchMedia(REDUCED);
+  m.addEventListener("change", onChange);
+  return () => m.removeEventListener("change", onChange);
+}
+const readReduced = () => matchMedia(REDUCED).matches;
+const motionOnServer = () => false;
+/** The finished week shown under reduced motion: the last step, near the end of the loop. */
+const STILL = { step: 4, t: HERO_LOOP - 2 };
+
+/** Which side the popover leans to, so it stays inside the board near its left and right edges. */
+function popEdge(x: number): "left" | "right" | undefined {
+  if (x > HERO_SIZE.width * 0.62) return "right";
+  return x < HERO_SIZE.width * 0.3 ? "left" : undefined;
+}
+
 /**
  * The homepage hero as pixel art (pixel-hero-scene.ts): Alex's demo week, drawn at 192x80 and scaled up crisp, playing
  * the five steps on a loop with the step's title and sentence underneath. Twelve frames a second, only while on screen;
@@ -38,10 +56,15 @@ const sceneAt = (real: number) => {
 export function PixelHero({ week }: { week: WeekModel }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const top = useRef<HTMLCanvasElement>(null);
-  const [blur, setBlur] = useState(false);
   const [onScreen, setOnScreen] = useState(true);
   const cards = useMemo(() => layoutWeek(week), [week]);
-  const [step, setStep] = useState(0);
+  const still = useSyncExternalStore(subscribeReduced, readReduced, motionOnServer);
+  // The step showing, and whether the board blurs behind the quote panel like a page behind a modal: set by the
+  // animation loop, or fixed on the finished week under reduced motion.
+  const [playingStep, setStep] = useState(0);
+  const [playingBlur, setBlur] = useState(false);
+  const step = still ? STILL.step : playingStep;
+  const blur = still ? quoteShowing(cards, STILL.t) : playingBlur;
   // A popover in the lower half opens upward, so it never runs past the board's bottom edge.
   const anchor = useMemo(() => {
     const a = stepAnchor(cards, step);
@@ -51,8 +74,8 @@ export function PixelHero({ week }: { week: WeekModel }) {
     const g = ref.current?.getContext("2d"), q = top.current?.getContext("2d");
     if (!ref.current || !g || !q) return;
     // The board and the quote panel are separate layers, so the board can blur behind the panel like a page behind a modal.
-    const draw = (at: number) => { drawHero(g, cards, at); setBlur(drawQuote(q, cards, at)); };
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { draw(HERO_LOOP - 2); setStep(4); return; }
+    const draw = (at: number) => { drawHero(g, cards, at); return drawQuote(q, cards, at); };
+    if (still) { draw(STILL.t); return; }
     let t = 0, last = performance.now(), frame = 0, inView = false, tick = 0;
     const loop = (now: number) => {
       t += (now - last) / 1000;
@@ -60,7 +83,7 @@ export function PixelHero({ week }: { week: WeekModel }) {
       if (now - tick > 83) {
         tick = now;
         const at = sceneAt(t);
-        draw(at.t);
+        setBlur(draw(at.t));
         setStep(at.step);
       }
       if (inView) frame = requestAnimationFrame(loop);
@@ -74,7 +97,7 @@ export function PixelHero({ week }: { week: WeekModel }) {
     });
     seen.observe(ref.current);
     return () => { cancelAnimationFrame(frame); seen.disconnect(); };
-  }, [cards]);
+  }, [cards, still]);
   return (
     <figure className={styles.hero}>
       <div className={styles.layers} data-blur={blur || undefined}>
@@ -83,7 +106,7 @@ export function PixelHero({ week }: { week: WeekModel }) {
         <div className={styles.frame} data-field-frame="" data-field-cells={BOARD.w} style={{ left: `${(BOARD.x / HERO_SIZE.width) * 100}%`, top: `${(BOARD.y / HERO_SIZE.height) * 100}%`, width: `${(BOARD.w / HERO_SIZE.width) * 100}%`, height: `${(BOARD.h / HERO_SIZE.height) * 100}%` }} />
         <canvas ref={top} width={HERO_SIZE.width} height={HERO_SIZE.height} className={styles.top} aria-hidden="true" />
         {/* The step's words sit on the board, beside the part they are about, like the pointer tour's popovers. */}
-        <div key={step} className={styles.pop} data-place={anchor.place} data-edge={anchor.x > HERO_SIZE.width * 0.62 ? "right" : anchor.x < HERO_SIZE.width * 0.3 ? "left" : undefined}
+        <div key={step} className={styles.pop} data-place={anchor.place} data-edge={popEdge(anchor.x)}
           style={{ left: `${(anchor.x / HERO_SIZE.width) * 100}%`, top: `${(anchor.y / HERO_SIZE.height) * 100}%` }} aria-hidden="true">
           <span className={styles.head}><span className={styles.n}>{step + 1}/{STEPS.length}</span><TimerRing key={step} ms={READ[step] * 1000} paused={!onScreen} /></span>
           <b>{STEPS[step].title}</b>

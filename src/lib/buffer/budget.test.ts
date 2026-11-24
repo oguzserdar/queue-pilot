@@ -6,7 +6,6 @@
  */
 import { migratedPglite } from "@/test/migrated-pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pg = await migratedPglite();
@@ -59,7 +58,7 @@ describe("shared Buffer allowance", () => {
 
   it("counts a retried request twice and asks Buffer nothing extra to learn its usage", async () => {
     await seed(100);
-    const fetchImpl = vi.fn()
+    const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(reply(99, 429, { "retry-after": "1" }))
       .mockResolvedValueOnce(reply(98));
     const { requests } = await withBudget("create_tag", "u1", () => bufferQuery("tok", "{x}", undefined, { fetchImpl, sleep: async () => {}, now: () => T0 + 1 }));
@@ -108,7 +107,7 @@ describe("shared Buffer allowance", () => {
 
   it("stops before Buffer when the shared count cannot be read", async () => {
     dbState.broken = true;
-    const fetchImpl = vi.fn(async () => reply(50));
+    const fetchImpl = vi.fn<typeof fetch>(async () => reply(50));
     await expect(bufferQuery("tok", "{x}", undefined, { fetchImpl, now: () => T0 })).rejects.toBeInstanceOf(BufferAllowanceUnknownError);
     expect(fetchImpl).not.toHaveBeenCalled();
   });

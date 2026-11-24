@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addRule, findRulesInRewrites, type RewriteProposal } from "@/app/(app)/actions";
+import { addRule, findRulesInRewrites, type RewriteProposal } from "@/app/(app)/rule-actions";
 import { Button } from "@/registry/components/button/button";
 import styles from "./playbook-view.module.css";
 

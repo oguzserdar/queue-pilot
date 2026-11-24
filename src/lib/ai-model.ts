@@ -37,9 +37,12 @@ export function decisionModelFor(cfg: AiConfig): DecisionModel | null {
 /** An error written for the person; never contains the key. */
 export class AiError extends Error {}
 
+/** Each provider's name in a sentence. */
+const PROVIDER_NAMES = { anthropic: "Anthropic", openrouter: "OpenRouter", openai: "OpenAI" } as const satisfies Record<Provider, string>;
+
 /** Turns an AI SDK error into a sentence for the person. Provider bodies are trimmed and any key-like text removed. */
 export function aiErrorMessage(e: unknown, provider: Provider): string {
-  const name = provider === "anthropic" ? "Anthropic" : provider === "openrouter" ? "OpenRouter" : "OpenAI";
+  const name = PROVIDER_NAMES[provider];
   if (APICallError.isInstance(e)) {
     if (e.statusCode === 401 || e.statusCode === 403) return `${name} refused the key. Check it in Settings.`;
     if (e.statusCode === 429) return `${name} said the key is over its limit or out of credit. Try again later.`;

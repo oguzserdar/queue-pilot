@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 // private research notes. Integrations Queue Pilot talks to (Buffer, the AI providers, Telegram, Discord) are fine.
 // A research/ folder link is caught; a public URL whose path only ends in "-research/" (Google's blog section
 // "models-and-research/", cited by the example evidence) is not a private note.
-const BANNED = /\b(Cal\.com|cal\.diy|calcom|Formbricks|Documenso|Postiz|Plausible|Umami|Discourse|WordPress|LibreChat|Dify|Unkey|Fly ?Whenever|AgentDock|Seller Desk|Deputy|Vale|Hootsuite|Sprout Social|Later\.com|Typefully|Hypefury|Publer|Metricool)\b|(?<![-\w])research\//i;
+const BANNED = /\b(Cal\.com|cal\.diy|calcom|Formbricks|Documenso|Postiz|ManyChat|Many Chat|Plausible|Umami|Discourse|WordPress|LibreChat|Dify|Unkey|Fly ?Whenever|AgentDock|Seller Desk|Deputy|Vale|Hootsuite|Sprout Social|Later\.com|Typefully|Hypefury|Publer|Metricool)\b|(?<![-\w])research\//i;
 const ROOT = join(__dirname, "../..");
 const SKIP = new Set(["node_modules", ".next", "fixtures", "drizzle", ".git"]);
 
@@ -14,7 +14,8 @@ function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     if (SKIP.has(name)) return [];
     const p = join(dir, name);
-    return statSync(p).isDirectory() ? files(p) : /\.(ts|tsx|mjs|css|md|yml|yaml)$/.test(name) ? [p] : [];
+    if (statSync(p).isDirectory()) return files(p);
+    return /\.(ts|tsx|mjs|css|md|yml|yaml)$/.test(name) ? [p] : [];
   });
 }
 

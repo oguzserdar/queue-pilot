@@ -30,18 +30,18 @@ describe("verifierFor", () => {
 
 describe("exchangeCode", () => {
   it("posts the code and verifier and returns the person's key", async () => {
-    const fetchImpl = vi.fn(async () => Response.json({ key: KEY }));
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ key: KEY }));
     expect(await exchangeCode("c1", "v1", fetchImpl as unknown as typeof fetch)).toBe(KEY);
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://openrouter.ai/api/v1/auth/keys");
     expect(JSON.parse(init.body as string)).toEqual({ code: "c1", code_verifier: "v1", code_challenge_method: "S256" });
   });
   it("refuses an answer that is not an OpenRouter key", async () => {
-    const fetchImpl = vi.fn(async () => Response.json({ key: "sk-proj-something-else-entirely" }));
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ key: "sk-proj-something-else-entirely" }));
     await expect(exchangeCode("c1", "v1", fetchImpl as unknown as typeof fetch)).rejects.toBeInstanceOf(OpenRouterConnectError);
   });
   it("reports a refused code plainly", async () => {
-    const fetchImpl = vi.fn(async () => new Response("{}", { status: 400 }));
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response("{}", { status: 400 }));
     await expect(exchangeCode("c1", "v1", fetchImpl as unknown as typeof fetch)).rejects.toThrow("did not accept the sign-in (400)");
   });
 });

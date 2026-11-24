@@ -19,6 +19,76 @@ import styles from "./week-view.module.css";
 /** The empty slot being written into: its id (absent in example mode), how the week names it, and its network. */
 export type ComposerSlot = { id?: string; name: string; service?: string };
 
+/** Asks before typed text is thrown away: keep writing, or discard it. */
+function DiscardQuestion({ onKeep, onDiscard }: { onKeep: () => void; onDiscard: () => void }) {
+  return (
+    <>
+      <p className={styles.problem} role="alert">Throw away this post? It is not saved anywhere.</p>
+      <div className={styles.composerActions}>
+        <Button variant="secondary" autoFocus onClick={onKeep}>Keep writing</Button>
+        <Button variant="danger" onClick={onDiscard}>Discard</Button>
+      </div>
+    </>
+  );
+}
+
+/** Under the text: the save shortcut and the count against the channel's limit, then what stops the save. */
+function ComposerChecks({ platform, limit, used, overBy, unfilled, problem }: { platform: ReturnType<typeof usePlatform>; limit: number | null; used: number; overBy: number; unfilled: string[]; problem: string | null }) {
+  const over = overBy > 0;
+  return (
+    <>
+      <div className={styles.composerFoot}>
+        <span><Kbd size="sm">{formatShortcut("mod+enter", platform).text}</Kbd> saves</span>
+        {limit !== null && <span className={`tnum ${over ? styles.over : ""}`} aria-live="polite">{used.toLocaleString("en-GB")} / {limit.toLocaleString("en-GB")}</span>}
+      </div>
+      {over && <p className={styles.problem} role="alert">Too long for this channel by {overBy.toLocaleString("en-GB")} characters.</p>}
+      {unfilled.length > 0 && <p className={styles.problem} role="status">Fill in {unfilled.map((n) => `{{${n}}}`).join(", ")} before saving.</p>}
+      {problem && <p className={styles.problem} role="alert">{problem}</p>}
+    </>
+  );
+}
+
+/** Writing the post: templates and hashtag sets, the text, what stops the save, and Save or Write it with my AI. */
+function PostEditor({ slotId, text, busy, doing, platform, limit, used, overBy, unfilled, problem, onInsert, onText, onSave, onWrite }: {
+  slotId: string | undefined;
+  text: string;
+  busy: boolean;
+  doing: "save" | "write" | null;
+  platform: ReturnType<typeof usePlatform>;
+  limit: number | null;
+  used: number;
+  overBy: number;
+  unfilled: string[];
+  problem: string | null;
+  onInsert: (piece: string) => void;
+  onText: (text: string) => void;
+  onSave: () => void;
+  onWrite: () => void;
+}) {
+  return (
+    <>
+      {slotId && <ComposerLibrary key={slotId} slotId={slotId} onInsert={onInsert} disabled={busy} />}
+      <Textarea
+        label="Post"
+        autoFocus
+        value={text}
+        rows={6}
+        onChange={(e) => onText(e.target.value)}
+        onKeyDown={(e) => { if ((e.key === "Enter" || e.key === "s") && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSave(); } }}
+      />
+      <ComposerChecks platform={platform} limit={limit} used={used} overBy={overBy} unfilled={unfilled} problem={problem} />
+      <div className={styles.composerActions}>
+        <Button variant="primary" disabled={busy || !text.trim() || overBy > 0 || unfilled.length > 0} onClick={onSave}>
+          {busy && doing === "save" ? "Saving…" : "Save draft"}
+        </Button>
+        <Button variant="secondary" disabled={busy} onClick={onWrite}>
+          {busy && doing === "write" ? "Writing… this takes up to a minute" : "Write it with my AI"}
+        </Button>
+      </div>
+    </>
+  );
+}
+
 /**
  * Clicking an empty slot opens a composer for that channel and time: write the post yourself, or let your AI write it
  * from your new material. Both save a Buffer draft through the same playbook check as every save. The text box takes
@@ -33,10 +103,12 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
   const [doing, setDoing] = useState<"save" | "write" | null>(null);
   const router = useRouter();
   const platform = usePlatform();
-  const canSave = live && slot?.id !== undefined;
+  const slotId = live ? slot?.id : undefined;
+  const canSave = slotId !== undefined;
   const limit = slot?.service ? limitFor(slot.service) : null;
   const used = slot?.service ? countFor(slot.service, text) : text.length;
-  const over = limit !== null && used > limit;
+  const overBy = limit === null ? 0 : used - limit;
+  const over = overBy > 0;
   // A template's {{placeholders}} must be filled before the draft can be saved.
   const unfilled = placeholdersIn(text);
   /** Puts a template or a saved hashtag set into the post: into an empty post as it is, otherwise after what is written. */
@@ -57,9 +129,19 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
     onClose(r.title ? `${done} ${r.title}` : done);
   };
   const save = () => {
-    if (!canSave || busy || !text.trim() || over || unfilled.length) return;
+    if (slotId === undefined || busy || !text.trim() || over || unfilled.length) return;
     setDoing("save");
-    start(async () => finish(await saveSlotDraft(slot!.id!, text), "Draft saved."));
+    start(async () => finish(await saveSlotDraft(slotId, text), "Draft saved."));
+  };
+  const write = () => {
+    if (slotId === undefined) return;
+    setDoing("write");
+    start(async () => {
+      const r = await writeSlotDraft(slotId);
+      // Nothing saved is a problem to read here, with the reasons, not a success that closes the dialog.
+      if (r.ok && !r.saved.length) { suggest(r.next); return setProblem(["Nothing was saved.", ...r.refused.map((x) => x.reason), r.note].filter(Boolean).join(" ")); }
+      finish(r.ok ? { ok: true, title: r.flags[0] ? `Check: ${r.flags[0].rule}.` : r.note, next: r.next } : r, "Draft written.");
+    });
   };
 
   return (
@@ -67,50 +149,15 @@ export function SlotComposer({ slot, live, onClose }: { slot: ComposerSlot | nul
       {slot && (
         <DialogContent className={styles.dialog} title={`New post: ${slot.name}`} description={canSave ? "Saved as a Buffer draft for you to approve." : "This is the example account. Sign in with Buffer to write into your own empty times, yourself or with your AI."}>
           <div className={styles.composer}>
-            {!canSave ? (
+            {!canSave && (
               <div className={styles.composerActions}>
                 <SignInButton variant="primary" size="md" />
               </div>
-            ) : confirmDiscard ? (
-              <>
-                <p className={styles.problem} role="alert">Throw away this post? It is not saved anywhere.</p>
-                <div className={styles.composerActions}>
-                  <Button variant="secondary" autoFocus onClick={() => setConfirmDiscard(false)}>Keep writing</Button>
-                  <Button variant="danger" onClick={close}>Discard</Button>
-                </div>
-              </>
-            ) : (
-              <>
-                {slot.id && <ComposerLibrary key={slot.id} slotId={slot.id} onInsert={insert} disabled={busy} />}
-                <Textarea
-                  label="Post"
-                  autoFocus
-                  value={text}
-                  rows={6}
-                  onChange={(e) => { setText(e.target.value); setProblem(null); }}
-                  onKeyDown={(e) => { if ((e.key === "Enter" || e.key === "s") && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); } }}
-                />
-                <div className={styles.composerFoot}>
-                  <span><Kbd size="sm">{formatShortcut("mod+enter", platform).text}</Kbd> saves</span>
-                  {limit !== null && <span className={`tnum ${over ? styles.over : ""}`} aria-live="polite">{used.toLocaleString("en-GB")} / {limit.toLocaleString("en-GB")}</span>}
-                </div>
-                {over && <p className={styles.problem} role="alert">Too long for this channel by {(used - limit!).toLocaleString("en-GB")} characters.</p>}
-                {unfilled.length > 0 && <p className={styles.problem} role="status">Fill in {unfilled.map((n) => `{{${n}}}`).join(", ")} before saving.</p>}
-                {problem && <p className={styles.problem} role="alert">{problem}</p>}
-                <div className={styles.composerActions}>
-                  <Button variant="primary" disabled={busy || !text.trim() || over || unfilled.length > 0} onClick={save}>
-                    {busy && doing === "save" ? "Saving…" : "Save draft"}
-                  </Button>
-                  <Button variant="secondary" disabled={busy} onClick={() => { setDoing("write"); start(async () => {
-                    const r = await writeSlotDraft(slot.id!);
-                    // Nothing saved is a problem to read here, with the reasons, not a success that closes the dialog.
-                    if (r.ok && !r.saved.length) { suggest(r.next); return setProblem(["Nothing was saved.", ...r.refused.map((x) => x.reason), r.note].filter(Boolean).join(" ")); }
-                    finish(r.ok ? { ok: true, title: r.flags[0] ? `Check: ${r.flags[0].rule}.` : r.note, next: r.next } : r, "Draft written.");
-                  }); }}>
-                    {busy && doing === "write" ? "Writing… this takes up to a minute" : "Write it with my AI"}
-                  </Button>
-                </div>
-              </>
+            )}
+            {canSave && confirmDiscard && <DiscardQuestion onKeep={() => setConfirmDiscard(false)} onDiscard={close} />}
+            {canSave && !confirmDiscard && (
+              <PostEditor slotId={slot.id} text={text} busy={busy} doing={doing} platform={platform} limit={limit} used={used} overBy={overBy} unfilled={unfilled} problem={problem}
+                onInsert={insert} onText={(t) => { setText(t); setProblem(null); }} onSave={save} onWrite={write} />
             )}
           </div>
         </DialogContent>

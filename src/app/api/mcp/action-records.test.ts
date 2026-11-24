@@ -5,15 +5,16 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { mcpToolSource } from "@/test/mcp-tool-sources";
 
 const src = (p: string) => readFileSync(join(__dirname, "../../..", p), "utf8");
-const route = src("app/api/mcp/route.ts");
+const route = mcpToolSource();
 const items = src("lib/mcp-content-items.ts");
 const actions = src("app/(app)/actions.ts");
 /** The source of one registered tool, from its name to the next registration. */
 const tool = (file: string, name: string) => {
-  const start = file.indexOf(`"${name}"`, file.indexOf("registerTool("));
-  const end = file.indexOf("registerTool(", start);
+  const start = file.indexOf(`"${name}"`, file.indexOf("registerGuardedTool("));
+  const end = file.indexOf("registerGuardedTool(", start);
   return file.slice(start, end === -1 ? undefined : end);
 };
 /** The source of one exported server action. */

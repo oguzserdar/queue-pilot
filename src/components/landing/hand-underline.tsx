@@ -27,10 +27,16 @@ function seeded(seed: number) {
  * random, the two curve handles sit at a random split along the line, and every point is nudged. Long lines wobble
  * less, as a steady hand would. `offset` is the largest nudge in pixels.
  */
+/** How much a stroke of this length wobbles: fully up to 200px, easing down to 0.4 by 500px, then steady. */
+function strokeGain(len: number): number {
+  if (len < 200) return 1;
+  return len > 500 ? 0.4 : -0.0016668 * len + 1.233334;
+}
+
 function stroke(x1: number, x2: number, y: number, offset: number, rnd: () => number) {
   const roughness = 1.5;
   const len = Math.abs(x2 - x1);
-  const gain = len < 200 ? 1 : len > 500 ? 0.4 : -0.0016668 * len + 1.233334;
+  const gain = strokeGain(len);
   // A random value between -x and x, scaled by how rough and how long the line is.
   const jitter = (x: number) => roughness * gain * (rnd() * 2 * x - x);
   const bow = jitter((offset * (x1 - x2)) / 200);

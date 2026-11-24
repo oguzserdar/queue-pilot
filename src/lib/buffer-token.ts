@@ -37,6 +37,11 @@ export const pgAdvisoryLock: WithLock = async (key, fn) => {
   }
 };
 
+/** The person signed up with email and has no Buffer account connected. Pages show an empty Buffer side, never an error. */
+export class NoBufferAccount extends Error {
+  constructor() { super("This Queue Pilot account has no Buffer account connected, so Buffer is not available. Mastodon and Bluesky posts still work."); }
+}
+
 const inFlight = new Map<string, Promise<string>>();
 
 export function bufferAccessToken(auth: Auth, userId: string, withLock: WithLock = pgAdvisoryLock): Promise<string> {
@@ -46,7 +51,7 @@ export function bufferAccessToken(auth: Auth, userId: string, withLock: WithLock
   const promise = withLock(`buffer-token:${userId}`, async () => {
     const accounts = await (await auth.$context).internalAdapter.findAccounts(userId);
     const buffer = accounts.find((a) => a.providerId === BUFFER_PROVIDER_ID);
-    if (!buffer) throw new Error("This Queue Pilot account has no Buffer connection");
+    if (!buffer) throw new NoBufferAccount();
     const { accessToken } = await auth.api.getAccessToken({ body: { accountId: buffer.id, userId } });
     if (!accessToken) throw new Error("Buffer sign-in expired; sign in to Queue Pilot again");
     return accessToken;

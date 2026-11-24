@@ -20,10 +20,69 @@ const APPS = ["Claude", "ChatGPT", "Grok", ...TERMINAL, "Other"];
 const CONNECTION_CHECK = "Use Queue Pilot to read my setup status and list my drafts. Show the real draft count. Do not change, schedule or publish anything.";
 const FIRST_TASK = "Then show me one preview post for my next empty time, written from my newest post. Show it here and do not save anything.";
 
-const ago = (iso: string) => {
+/** How long ago an app last called: "just now", minutes, hours, or the date after a day. */
+function ago(iso: string): string {
   const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-};
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  if (m < 1440) return `${Math.round(m / 60)} h ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+type ReachedApp = ApprovedApp & { lastUsedAt: string };
+
+/** The approved apps that have called Queue Pilot, most recent first. */
+function reachedApps(approved: ApprovedApp[] | null): ReachedApp[] {
+  return (approved ?? []).filter((a): a is ReachedApp => !!a.lastUsedAt).sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt));
+}
+
+/** The channel count on the Buffer line: all of them, or how many of them are connected. */
+function channelCount(channels: SetupAccount["channels"]): string {
+  const connected = channels.filter((c) => !c.disconnected).length;
+  if (connected === channels.length) return `${channels.length} channel${channels.length === 1 ? "" : "s"}`;
+  return `${connected} of ${channels.length} channels`;
+}
+
+/** The Buffer line of the connection check: the account read from Buffer and its channels, or nothing signed in. */
+function BufferFact({ account, example }: { account: SetupAccount | null; example: boolean }) {
+  if (!account) return null;
+  if (!account.channels.length) {
+    return (
+      <p className={styles.fact}>
+        {/* The line is a two-column grid: an empty first cell keeps the words in the wide column, without a check. */}
+        <span aria-hidden="true" />
+        <span>Buffer: {account.email}, no channels yet. Add one in Buffer, then come back.{" "}
+        {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
+      </p>
+    );
+  }
+  return (
+    <p className={styles.fact}>
+      <span className={styles.okMark} aria-hidden="true" />
+      <span>Buffer: {account.email}, {channelCount(account.channels)} connected ({account.channels.filter((c) => !c.disconnected).map((c) => c.name).join(", ")}){account.channels.some((c) => c.disconnected) ? `; ${account.channels.filter((c) => c.disconnected).map((c) => c.name).join(", ")} disconnected` : ""}.{" "}
+      {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
+    </p>
+  );
+}
+
+/** Which AI apps have called Queue Pilot, or the message to send when none has yet. */
+function ReachedFact({ approved }: { approved: ApprovedApp[] | null }) {
+  const reached = reachedApps(approved);
+  if (!reached.length) {
+    return (
+      <div className={styles.action}>
+        <p className={styles.muted}>No AI app has reached Queue Pilot yet. Send this check from your AI. It changes nothing.</p>
+        <CopyButton value={CONNECTION_CHECK} label="Copy connection check" />
+      </div>
+    );
+  }
+  return (
+    <p className={styles.fact}>
+      <span className={styles.okMark} aria-hidden="true" />
+      <span>{reached.map((a) => `${a.brand ?? a.name} reached Queue Pilot ${ago(a.lastUsedAt)}`).join(". ")}.</span>
+    </p>
+  );
+}
 
 /**
  * Finish setting up: four numbered steps at the top of Connect. Pick the AI app, which picks one main action (a setup
@@ -46,7 +105,6 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
 }) {
   const [app, setApp] = useState<string>(initialApp);
   const terminal = TERMINAL.includes(app);
-  const reached = (approved ?? []).filter((a) => a.lastUsedAt).sort((a, b) => b.lastUsedAt!.localeCompare(a.lastUsedAt!));
 
   return (
     <section className={styles.setup} aria-labelledby="setup-title">
@@ -81,31 +139,8 @@ export function SetupSteps({ origin, account, approved, example, openApp, initia
 
         <li className={styles.step}>
           <h3 className={styles.stepTitle}>Check your AI is connected</h3>
-          {account && !account.channels.length ? (
-            <p className={styles.fact}>
-              {/* The line is a two-column grid: an empty first cell keeps the words in the wide column, without a check. */}
-              <span aria-hidden="true" />
-              <span>Buffer: {account.email}, no channels yet. Add one in Buffer, then come back.{" "}
-              {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
-            </p>
-          ) : account ? (
-            <p className={styles.fact}>
-              <span className={styles.okMark} aria-hidden="true" />
-              <span>Buffer: {account.email}, {account.channels.filter((c) => !c.disconnected).length === account.channels.length ? `${account.channels.length} channel${account.channels.length === 1 ? "" : "s"}` : `${account.channels.filter((c) => !c.disconnected).length} of ${account.channels.length} channels`} connected ({account.channels.filter((c) => !c.disconnected).map((c) => c.name).join(", ")}){account.channels.some((c) => c.disconnected) ? `; ${account.channels.filter((c) => c.disconnected).map((c) => c.name).join(", ")} disconnected` : ""}.{" "}
-              {!example && <a href="/sign-in">Not you? Sign in again</a>}</span>
-            </p>
-          ) : null}
-          {reached.length ? (
-            <p className={styles.fact}>
-              <span className={styles.okMark} aria-hidden="true" />
-              <span>{reached.map((a) => `${a.brand ?? a.name} reached Queue Pilot ${ago(a.lastUsedAt!)}`).join(". ")}.</span>
-            </p>
-          ) : (
-            <div className={styles.action}>
-              <p className={styles.muted}>No AI app has reached Queue Pilot yet. Send this check from your AI. It changes nothing.</p>
-              <CopyButton value={CONNECTION_CHECK} label="Copy connection check" />
-            </div>
-          )}
+          <BufferFact account={account} example={example} />
+          <ReachedFact approved={approved} />
         </li>
 
       </ol>

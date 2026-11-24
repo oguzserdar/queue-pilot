@@ -6,10 +6,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { BufferApiError } from "@/lib/buffer/client"
 
-vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn() }))
+vi.mock("@/lib/current-user", () => ({ bufferForReading: vi.fn<typeof import("@/lib/current-user").bufferForReading>() }))
 vi.mock("@/db", () => ({ db: () => { throw new Error("Unexpected database call") } }))
-const buffer = { calls: [] as { q: string; v: Record<string, any> }[], answer: (() => ({})) as (q: string, v: Record<string, any>) => unknown }
-vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: async (_t: string, q: string, v: Record<string, any>) => { buffer.calls.push({ q, v }); const a = buffer.answer(q, v); if (a instanceof Error) throw a; return a } }))
+const buffer = { calls: [] as { q: string; v: Record<string, unknown> }[], answer: (() => ({})) as (q: string, v: Record<string, unknown>) => unknown }
+vi.mock("@/lib/buffer/client", async (original) => ({ ...await original<typeof import("@/lib/buffer/client")>(), bufferQuery: async (_t: string, q: string, v: Record<string, unknown>) => { buffer.calls.push({ q, v }); const a = buffer.answer(q, v); if (a instanceof Error) throw a; return a } }))
 
 const { bufferForReading } = await import("@/lib/current-user")
 const { readComposerSnippets, readComposerTemplates } = await import("./library-actions")
@@ -37,7 +37,7 @@ describe("composer templates", () => {
     // Four pages of one per read, then a fifth: the first read stops at its budget with a cursor.
     let n = 0
     buffer.answer = (q, v) => {
-      expect(v.input.organizationId).toBe("org")
+      expect((v.input as { organizationId: string }).organizationId).toBe("org")
       n++
       return page("postTemplates", [tpl(`p${n}`, n === 2 ? "private" : "public")], n < 5 ? `c${n}` : null)
     }

@@ -2,7 +2,7 @@
 
 Where Queue Pilot is heading. What has shipped is in [CHANGELOG.md](CHANGELOG.md).
 
-Free and open source, from the first draft to the post going out. Nothing goes out until you approve it.
+Free and open source, from the first draft to the post going out. You approve posts before they go out. You choose which accounts can send automatic replies.
 
 Queue Pilot is meant to be where you start when you want to build something on Buffer. Take it, run your own copy, change what you like. It's MIT, and nothing is held back for a paid version.
 
@@ -28,6 +28,17 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 - **Team notes from the new field.** Buffer deprecated `Post.notes` on 9 Nov ("Legacy Notes. Use collaborationNotes."). Queue Pilot still reads it in one place, where it learns rules from the notes on your sent posts. That read moves to `collaborationNotes`, which every other notes feature already uses, one aliased request for all posts so it costs no more of Buffer's limit.
 - **A check for deprecated fields.** The schema test already catches a renamed field. It will also flag any field Queue Pilot reads that Buffer marks deprecated, so the next one shows up in the tests, not in Discord.
 
+## In 1.1
+
+- **The posting machinery, used for messages.** The queue, playbook and checks that handle a post answer comments and messages, send a DM to someone who asked for a guide, a link or a code, and carry customer conversations. Every reply is checked against your rules first, and each person gets one DM per post, within the time the network allows.
+- **Direct posting to more networks.** Just like Telegram and Discord in 1.0, more networks get their own direct path, with posting times per account, beside your Buffer queue.
+- **Run your copy from chat.** With admin access, every action that changes your copy is going to be available through the MCP connector, so you manage it by chatting with ChatGPT or Claude. You can take that access away in Settings.
+- **Images, in your own visual style.** Instagram, Pinterest and TikTok need a photo or video on every post, and YouTube needs a video. Queue Pilot writes text only for now, so it says so before it writes and leaves those times to you. Images come next. Queue Pilot learns how your posts look the way it learned how you write, from the images you already published. You pick which of your posts count as your style.
+  - **Your own photos first.** When you add a photo, Queue Pilot fits it to each network instead of replacing it: the crop, the size and any words on the image, in your style.
+  - **New images when you want them.** It makes them with an image model you choose: ChatGPT's own image model when you work from chat and the app can hand the image over, or a gateway such as OpenRouter, Vercel AI Gateway or fal for Queue Pilot's own writer. Which route comes first is still open.
+  - **You approve each image.** An image goes into Buffer only after you say it is fine. On a network that needs one, the draft waits in Queue Pilot until then. The model and the prompt are saved beside it.
+  - **Hosted where Buffer can read it.** Buffer takes an image only as a public link and has no upload. Queue Pilot stores each image you approved at a link that is hard to guess and keeps it there until the post is out. Most chat apps cannot hand an image file to a connector yet. Where one can, an image made in the chat comes along.
+
 ## Next: teams and clients
 
 - **Workspaces.** One per team or client, each with its own accounts, playbook and voice.
@@ -39,14 +50,13 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 
 - **Plans and limits.** Whoever runs a copy sets plans: accounts, drafts and AI use per month.
 - **Payments.** Add your payment keys in the admin page. Without them, every feature stays open.
-- **Sign-up with a trial.** A new person signs in, gets a trial and picks a plan, all on their own.
+- **Trials.** Email sign-up is in 1.1 for copies that can send mail. Starting a trial and choosing a plan come next.
 - **Usage you can see.** Each workspace sees what it has used this month. The admin sees every workspace.
 - **AI on any plan.** The copy's own AI with a monthly allowance, or each workspace's own key.
 
 ## Next: for the people who run a copy
 
 - **An admin page for the whole copy.** Workspaces, plans, usage, and pause or restore.
-- **The admin side through your AI.** The same connector, for whoever runs the copy: settings, budget and usage, with the same checks as the admin page.
 - **Export and delete per workspace.** Account export and deletion ship today. Each workspace gets the same.
 - **An API and webhooks,** next to the AI connector.
 
@@ -55,4 +65,4 @@ Sign in with Buffer and see your real week. Drafts from the AI you already use: 
 - Learn from results: what performed, as well as what you changed
 - Your own name, logo and domain on the app
 - Starting setups for a type of work: a newsletter, a product team, an agency, a local shop
-- More places to publish. Telegram and Discord today, more destinations next, each with the same approval step
+- More places to publish, each with the same approval step

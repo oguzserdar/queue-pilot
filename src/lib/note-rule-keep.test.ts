@@ -38,7 +38,7 @@ describe("keeping a note rule", () => {
   });
 
   it("does not read the notes for other suggestions", async () => {
-    const read = vi.fn(async () => []);
+    const read = vi.fn<() => Promise<import("./note-feedback").TeamNote[]>>(async () => []);
     const fromEdits = { ...fromNote, key: "fix:k", evidence: { fix: {}, count: 2 } };
     expect((await applySuggestion("a", signSuggestion("a", fromEdits), "keep", undefined, read)).ok).toBe(true);
     expect(read).not.toHaveBeenCalled();

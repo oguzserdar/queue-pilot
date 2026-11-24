@@ -32,11 +32,11 @@ describe("fromOpenAi", () => {
 });
 
 describe("listModels", () => {
-  const reply = (status: number, body: unknown) => vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status }));
+  const reply = (status: number, body: unknown) => vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(body), { status }));
   it("asks Anthropic with the key header and reads the list", async () => {
     const f = reply(200, { data: [{ id: "claude-sonnet-new", line: "sonnet", lifecycle: "active" }] });
     expect((await listModels("anthropic", "sk-ant-k", f)).recommended).toBe("claude-sonnet-new");
-    expect(f.mock.calls[0][1].headers["x-api-key"]).toBe("sk-ant-k");
+    expect((f.mock.calls[0][1]!.headers as Record<string, string>)["x-api-key"]).toBe("sk-ant-k");
   });
   it("turns a refused key into a plain message", async () => {
     await expect(listModels("openai", "sk-bad", reply(401, {}))).rejects.toThrow(new ModelListError("OpenAI refused this key."));
@@ -63,7 +63,7 @@ describe("fromOpenRouter", () => {
 
 describe("listModels for OpenRouter", () => {
   it("reads the key's own model list with the key as a bearer token, following pages", async () => {
-    const fetchImpl = vi.fn()
+    const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ data: [{ id: "a/b", supported_parameters: ["structured_outputs"] }], links: { next: "/api/v1/models/user?offset=1" } }))
       .mockResolvedValueOnce(Response.json({ data: [{ id: "c/d", supported_parameters: ["structured_outputs"] }] }));
     const list = await listModels("openrouter", "sk-or-v1-key", fetchImpl as unknown as typeof fetch);
@@ -74,7 +74,7 @@ describe("listModels for OpenRouter", () => {
     expect(fetchImpl.mock.calls[1][0]).toBe("https://openrouter.ai/api/v1/models/user?offset=1");
   });
   it("says OpenRouter refused the key on 401", async () => {
-    const fetchImpl = vi.fn(async () => new Response("{}", { status: 401 }));
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response("{}", { status: 401 }));
     await expect(listModels("openrouter", "bad", fetchImpl as unknown as typeof fetch)).rejects.toThrow("OpenRouter refused this key.");
   });
 });

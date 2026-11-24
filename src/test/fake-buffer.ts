@@ -1,18 +1,22 @@
-/** One query sent to the fake Buffer. */
-export type Call = { query: string; variables: Record<string, any> };
+/** A post in a save request, as Queue Pilot sends it to Buffer. Only the fields tests read are named. */
+export type SentPost = { channelId: string; text: string; dueAt?: string; saveToDraft?: boolean; [field: string]: unknown };
+/** The `input` (or `team`) object of a request. Only the fields tests read are named. */
+export type CallInput = { posts?: SentPost[]; channelId?: string; channelIds?: string[]; date?: string; organizationId?: string; filter?: Record<string, unknown>; scope?: unknown; [field: string]: unknown };
+/** One query sent to the fake Buffer, with its GraphQL variables. */
+export type Call = { query: string; variables: { input?: CallInput; team?: CallInput; [name: string]: unknown } };
 
 /**
  * A fake Buffer that records every mutation and answers it the way the test says. Daily-limit checks are recorded
  * apart in `limitCalls` and answered by `limits` (default: nobody is at the limit).
  */
-export function fakeBuffer(answer: (call: Call) => unknown, limits: (call: Call) => unknown = (c) => ({ dailyPostingLimits: c.variables.input.channelIds.map((channelId: string) => ({ channelId, isAtLimit: false, limit: null, scheduled: 0, sent: 0 })) })) {
+export function fakeBuffer(answer: (call: Call) => unknown, limits: (call: Call) => unknown = (c) => ({ dailyPostingLimits: c.variables.input!.channelIds!.map((channelId: string) => ({ channelId, isAtLimit: false, limit: null, scheduled: 0, sent: 0 })) })) {
   const calls: Call[] = [];
   /** One entry per limit check (one intended time and organization), however many share a request. */
   const limitCalls: Call[] = [];
   /** Each request that carried limit checks. */
   const limitRequests: Call[] = [];
   const q = (async (_token: string, query: string, variables?: Record<string, unknown>) => {
-    const call = { query, variables: variables ?? {} };
+    const call: Call = { query, variables: (variables ?? {}) as Call["variables"] };
     if (query.includes("dailyPostingLimits")) {
       limitRequests.push(call);
       // Several checks in one request, one alias each (l0, l1, ...), answered like Buffer: one key per alias.
@@ -20,7 +24,7 @@ export function fakeBuffer(answer: (call: Call) => unknown, limits: (call: Call)
       if (aliases.length) {
         const out: Record<string, unknown> = {};
         for (const [, alias, v] of aliases) {
-          const one = { query, variables: { input: call.variables[v] } };
+          const one: Call = { query, variables: { input: call.variables[v] as CallInput } };
           limitCalls.push(one);
           const l = limits(one);
           if (l instanceof Error) throw l;
@@ -37,6 +41,6 @@ export function fakeBuffer(answer: (call: Call) => unknown, limits: (call: Call)
     const a = answer(call);
     if (a instanceof Error) throw a;
     return a;
-  }) as any;
+  }) as typeof import("@/lib/buffer/client").bufferQuery;
   return { q, calls, limitCalls, limitRequests };
 }

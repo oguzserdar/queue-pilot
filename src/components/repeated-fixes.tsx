@@ -16,6 +16,34 @@ export function readingLine(repeats: number, edits: number): string {
 
 type State = { kind: "reading" } | { kind: "read"; offers: RepeatedFix[]; note: string } | { kind: "failed"; message: string };
 
+/** The state an answer leads to: the confirmed offers and note, or the reason it failed. */
+function stateFor(r: RepeatedFixesResult): State {
+  return r.ok ? { kind: "read", offers: r.offers, note: r.note } : { kind: "failed", message: r.message };
+}
+
+/** The first state: reading, unless a development screen fixed the answer. */
+function initialState(preview: RepeatedFixesResult | "reading" | undefined): State {
+  if (!preview || preview === "reading") return { kind: "reading" };
+  return stateFor(preview);
+}
+
+/** Asks the server for the model's answer and shows it; a failed call shows a plain reason with Try again. */
+function readRepeats(setState: (s: State) => void) {
+  setState({ kind: "reading" });
+  void checkRepeatedFixes().then(
+    (r) => setState(stateFor(r)),
+    () => setState({ kind: "failed", message: "Queue Pilot could not read your edits just now. Try again in a minute." }),
+  );
+}
+
+/** One offer: what was done with it once settled, or the offer itself with Keep as a rule and Not now. */
+function OfferRow({ offer: o, handled, pending, onSettle }: { offer: RepeatedFix; handled: "kept" | "aside" | undefined; pending: boolean; onSettle: (action: "kept" | "aside") => void }) {
+  if (handled === "kept") return <p className={styles.done} role="status">Kept in your playbook: {o.rule}</p>;
+  if (handled === "aside") return <p className={styles.muted} role="status">Set aside. Queue Pilot won&apos;t offer this fix again.</p>;
+  return <SameFixOffer pending={pending} content={{ title: o.drafts === 2 ? "You made the same fix twice" : `You made the same fix in ${o.drafts} drafts`, before: o.before, after: o.after, change: o.change, where: o.where, rule: o.rule, why: o.why }}
+    onKeep={() => onSettle("kept")} onDismiss={() => onSettle("aside")} />;
+}
+
 /**
  * The live Playbook's same-fix offer, at #fixes. Shown when a fix was repeated across drafts; on opening it asks the
  * model whether each repeat is a lasting preference (a saved answer costs nothing), then offers each one it confirmed
@@ -26,25 +54,19 @@ type State = { kind: "reading" } | { kind: "read"; offers: RepeatedFix[]; note: 
  * @param preview - Development screens only: a fixed answer (or "reading") instead of asking the server
  */
 export function RepeatedFixes({ repeats, edits, preview }: { repeats: number; edits: number; preview?: RepeatedFixesResult | "reading" }) {
-  const [state, setState] = useState<State>(!preview || preview === "reading" ? { kind: "reading" } : preview.ok ? { kind: "read", offers: preview.offers, note: preview.note } : { kind: "failed", message: preview.message });
+  const [state, setState] = useState<State>(() => initialState(preview));
   const [handled, setHandled] = useState<Record<string, "kept" | "aside">>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, start] = useTransition();
   // One check per visit, even when React runs effects twice in development: a second ask would find the first busy.
   const asked = useRef(false);
 
-  const check = () => {
-    setState({ kind: "reading" });
-    void checkRepeatedFixes().then(
-      (r) => setState(r.ok ? { kind: "read", offers: r.offers, note: r.note } : { kind: "failed", message: r.message }),
-      () => setState({ kind: "failed", message: "Queue Pilot could not read your edits just now. Try again in a minute." }),
-    );
-  };
+  const check = () => readRepeats(setState);
   useEffect(() => {
     if (asked.current || preview) return;
     asked.current = true;
-    check();
-  }, []);
+    readRepeats(setState);
+  }, [preview]);
 
   const settle = (o: RepeatedFix, action: "kept" | "aside") => start(async () => {
     setProblem(null);
@@ -76,10 +98,7 @@ export function RepeatedFixes({ repeats, edits, preview }: { repeats: number; ed
       )}
       {state.kind === "read" && state.offers.length === 0 && <p className={styles.muted} role="status">{state.note}</p>}
       {state.kind === "read" && state.offers.map((o) =>
-        handled[o.token] === "kept" ? <p key={o.token} className={styles.done} role="status">Kept in your playbook: {o.rule}</p>
-        : handled[o.token] === "aside" ? <p key={o.token} className={styles.muted} role="status">Set aside. Queue Pilot won&apos;t offer this fix again.</p>
-        : <SameFixOffer key={o.token} pending={pending} content={{ title: o.drafts === 2 ? "You made the same fix twice" : `You made the same fix in ${o.drafts} drafts`, before: o.before, after: o.after, change: o.change, where: o.where, rule: o.rule, why: o.why }}
-            onKeep={() => settle(o, "kept")} onDismiss={() => settle(o, "aside")} />,
+        <OfferRow key={o.token} offer={o} handled={handled[o.token]} pending={pending} onSettle={(action) => settle(o, action)} />,
       )}
       {problem && <p className={styles.problem} role="alert">{problem}</p>}
     </div>

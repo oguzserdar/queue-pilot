@@ -47,14 +47,14 @@ describe("recoverFillDrafts", () => {
   it("records an adopted draft as ours before marking its record, and marks the rest failed", async () => {
     const order: string[] = [];
     const other = "ch@2026-11-17T14:06:00.000Z";
-    const deps = { open: async () => [row(), row({ slotId: other })], record: vi.fn(async () => { order.push("record"); }), settle: vi.fn(async () => { order.push("settle"); }) };
+    const deps = { open: async () => [row(), row({ slotId: other })], record: vi.fn<Parameters<typeof recoverFillDrafts>[3]["record"]>(async () => { order.push("record"); }), settle: vi.fn<Parameters<typeof recoverFillDrafts>[3]["settle"]>(async () => { order.push("settle"); }) };
     expect(await recoverFillDrafts("u", [post()], () => "twitter", deps, now)).toBe(2);
     expect(order).toEqual(["record", "settle"]);
     expect(deps.record).toHaveBeenCalledWith("u", [{ postId: "p1", network: "twitter", text: "Soup night.", verdicts: null }]);
     expect(deps.settle).toHaveBeenCalledWith("u", [expect.objectContaining({ slotId, kind: "adopt" }), expect.objectContaining({ slotId: other, kind: "fail" })]);
   });
   it("writes nothing when there is nothing to settle", async () => {
-    const deps = { open: async () => [], record: vi.fn(), settle: vi.fn() };
+    const deps = { open: async () => [], record: vi.fn<Parameters<typeof recoverFillDrafts>[3]["record"]>(), settle: vi.fn<Parameters<typeof recoverFillDrafts>[3]["settle"]>() };
     expect(await recoverFillDrafts("u", [], () => "twitter", deps, now)).toBe(0);
     expect(deps.record).not.toHaveBeenCalled(); expect(deps.settle).not.toHaveBeenCalled();
   });
